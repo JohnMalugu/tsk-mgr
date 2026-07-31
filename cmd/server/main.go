@@ -5,12 +5,7 @@ import (
 	"time"
 )
 
-type Task struct {
-	ID 			int
-	Title 		string
-	DueDate		time.Time
-	Completed	bool
-}
+
 
 func IsOverdue(task Task) bool {
 
