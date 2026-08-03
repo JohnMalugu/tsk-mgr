@@ -11,6 +11,7 @@ func IsOverdue(task Task) bool {
 
 	return task.DueDate.Before(time.Now())
 }
+
 func GetTaskStatus(task Task) string {
 
 	if task.Completed {
