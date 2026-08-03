@@ -24,6 +24,7 @@ func GetTaskStatus(task Task) string {
 
 	return "On track"
 }
+
 func main() {
 	task := Task {
 		ID:			1,
