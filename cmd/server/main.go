@@ -24,7 +24,7 @@ func GetTaskStatus(task Task) string {
 
 	return "On track"
 }
-//git
+//gota import that
 func main() {
 	task := Task {
 		ID:			1,
