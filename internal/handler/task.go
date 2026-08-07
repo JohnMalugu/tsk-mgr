@@ -1,6 +1,5 @@
 package handler
 
-package handler
 
 import (
 	"encoding/json"
