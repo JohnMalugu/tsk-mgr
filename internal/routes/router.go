@@ -1,6 +1,5 @@
 package routes
 
-cat > internal/routes/router.go << 'EOF'
 package routes
 
 import (
