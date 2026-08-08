@@ -28,4 +28,3 @@ func Router(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 	json.NewEncoder(w).Encode(map[string]string{"error": "Route not found"})
 }
-EOF
