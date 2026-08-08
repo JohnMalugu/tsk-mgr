@@ -1,6 +1,5 @@
 package routes
 
-
 import (
 	"encoding/json"
 	"fmt"
