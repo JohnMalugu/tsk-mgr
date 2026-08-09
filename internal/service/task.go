@@ -41,3 +41,4 @@ func CreateTask(task model.Task) model.Task {
 	tasks = append(tasks, task)
 	return task
 }
+EOF
