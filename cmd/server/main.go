@@ -1,38 +1,29 @@
+cat > cmd/server/main.go << 'EOF'
 package main
 
 import (
 	"fmt"
-	"time"
+	"log"
+	"net/http"
+
+	"github.com/yourusername/task-manager-api/internal/routes"
 )
 
-
-
-func IsOverdue(task Task) bool {
-
-	return task.DueDate.Before(time.Now())
-}
-
-func GetTaskStatus(task Task) string {
-
-	if task.Completed {
-		return "Task Completed"
-	}
-
-	if IsOverdue(task) {
-		return "OverDue"
-	}
-
-	return "On track"
-}
-//gota import that
 func main() {
-	task := Task {
-		ID:			1,
-		Title: 		"Buy gloceries",
-		DueDate: 	time.Now().AddDate(0, 0, 3),
-		Completed: 	false,
+	// Register the router for all requests
+	http.HandleFunc("/", routes.Router)
 
+	// Start the server
+	port := ":8080"
+	fmt.Printf("🚀 Server running on http://localhost:8080\n")
+	fmt.Printf("📚 Endpoints:\n")
+	fmt.Printf("   GET    http://localhost:8080/tasks\n")
+	fmt.Printf("   POST   http://localhost:8080/tasks\n")
+	fmt.Printf("   GET    http://localhost:8080/tasks/{id}\n")
+	fmt.Printf("\n")
+
+	if err := http.ListenAndServe(port, nil); err != nil {
+		log.Fatal(err)
 	}
-
-	fmt.Println(GetTaskStatus(task))
 }
+EOF
