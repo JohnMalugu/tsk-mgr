@@ -1,4 +1,3 @@
-cat > cmd/server/main.go << 'EOF'
 package main
 
 import (
