@@ -26,4 +26,3 @@ func main() {
 		log.Fatal(err)
 	}
 }
-EOF
