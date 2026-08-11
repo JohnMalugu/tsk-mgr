@@ -1,6 +1,5 @@
 package tskmgr
 
-cat > tools.go << 'EOF'
 //go:build tools
 // +build tools
 
