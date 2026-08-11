@@ -1,3 +1,5 @@
 module github.com/JohnMalugu/tsk-mgr-api
 
-go 1.21.9
+go 1.24.0
+
+require github.com/golang-migrate/migrate/v4 v4.19.1 // indirect
