@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/yourusername/task-manager-api/internal/routes"
+	"github.com/JohnMalugu/tsk-mgr-api/internal/routes"
 )
 
 func main() {
