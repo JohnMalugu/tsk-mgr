@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/yourusername/task-manager-api/internal/handler"
+	"github.com/JohnMalugu/tsk-mgr-api/internal/handler"
 )
 
 // Router directs HTTP requests to the correct handler
