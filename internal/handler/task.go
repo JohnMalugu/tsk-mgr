@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/yourusername/task-manager-api/internal/model"
+	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
 
 // HandleTasks handles GET and POST requests for /tasks
