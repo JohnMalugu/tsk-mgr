@@ -3,7 +3,7 @@ package service
 import (
 	"time"
 
-	"github.com/yourusername/task-manager-api/internal/model"
+	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
 
 // In-memory storage (we'll use database later)
