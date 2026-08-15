@@ -19,6 +19,7 @@ type ErrorResponse struct {
 	TraceID   string    `json:"traceId,omitempty"`
 }
 
+// AppError represents an application error
 type AppError struct {
 	Code       int    // HTTP status code
 	Message    string // Error message
