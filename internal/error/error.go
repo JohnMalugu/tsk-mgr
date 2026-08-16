@@ -9,3 +9,4 @@ type ErrorResponse struct {
 	Path      string    `json:"path"`
 	TraceID   string    `json:"traceId,omitempty"`
 }
+
