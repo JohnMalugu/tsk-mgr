@@ -1,5 +1,12 @@
 package error
 
+import (
+	"encoding/json"
+	"log"
+	"net/http"
+	"time"
+)
+
 // ErrorResponse represents a standard error response
 type ErrorResponse struct {
 	Status    int       `json:"status"`
@@ -12,8 +19,8 @@ type ErrorResponse struct {
 
 // AppError represents an application error
 type AppError struct {
-	Code       int    // HTTP status code
-	Message    string // Error message
+	Code        int    // HTTP status code
+	Message     string // Error message
 	InternalErr error  // Original error (for logging)
 }
 
@@ -25,7 +32,6 @@ func NewAppError(code int, message string, internalErr error) *AppError {
 		InternalErr: internalErr,
 	}
 }
-
 
 // RespondWithError sends an error response to the client
 func RespondWithError(w http.ResponseWriter, r *http.Request, appErr *AppError) {
@@ -57,7 +63,6 @@ func RespondWithSuccess(w http.ResponseWriter, data interface{}, statusCode int)
 	json.NewEncoder(w).Encode(data)
 }
 
-
 // Common errors
 var (
 	// Client errors
@@ -78,5 +83,4 @@ var (
 		"The request conflicts with existing data",
 		nil,
 	)
-	
 )
