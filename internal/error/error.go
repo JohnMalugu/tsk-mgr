@@ -67,5 +67,9 @@ var (
 		nil,
 	)
 
-	
+	ErrNotFound = NewAppError(
+		http.StatusNotFound,
+		"The requested resource was not found",
+		nil,
+	)
 )
