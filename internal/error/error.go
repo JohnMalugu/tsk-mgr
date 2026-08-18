@@ -26,6 +26,7 @@ func NewAppError(code int, message string, internalErr error) *AppError {
 	}
 }
 
+
 // RespondWithError sends an error response to the client
 func RespondWithError(w http.ResponseWriter, r *http.Request, appErr *AppError) {
 	// Log the error (for debugging)
