@@ -26,3 +26,25 @@ func NewAppError(code int, message string, internalErr error) *AppError {
 	}
 }
 
+// RespondWithError sends an error response to the client
+func RespondWithError(w http.ResponseWriter, r *http.Request, appErr *AppError) {
+	// Log the error (for debugging)
+	if appErr.InternalErr != nil {
+		log.Printf("[ERROR] %s %s - %d: %v", r.Method, r.URL.Path, appErr.Code, appErr.InternalErr)
+	} else {
+		log.Printf("[ERROR] %s %s - %d: %s", r.Method, r.URL.Path, appErr.Code, appErr.Message)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(appErr.Code)
+
+	errorResponse := ErrorResponse{
+		Status:    appErr.Code,
+		Error:     http.StatusText(appErr.Code),
+		Message:   appErr.Message,
+		Timestamp: time.Now().UTC(),
+		Path:      r.URL.Path,
+	}
+
+	json.NewEncoder(w).Encode(errorResponse)
+}
