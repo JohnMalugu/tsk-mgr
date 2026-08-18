@@ -16,3 +16,12 @@ type AppError struct {
 	Message    string // Error message
 	InternalErr error  // Original error (for logging)
 }
+
+// NewAppError creates a new AppError
+func NewAppError(code int, message string, internalErr error) *AppError {
+	return &AppError{
+		Code:        code,
+		Message:     message,
+		InternalErr: internalErr,
+	}
+}
