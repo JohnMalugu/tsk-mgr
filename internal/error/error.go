@@ -57,6 +57,7 @@ func RespondWithSuccess(w http.ResponseWriter, data interface{}, statusCode int)
 	json.NewEncoder(w).Encode(data)
 }
 
+
 // Common errors
 var (
 	// Client errors
