@@ -73,5 +73,9 @@ var (
 		nil,
 	)
 
-	
+	ErrConflict = NewAppError(
+		http.StatusConflict,
+		"The request conflicts with existing data",
+		nil,
+	)
 )
