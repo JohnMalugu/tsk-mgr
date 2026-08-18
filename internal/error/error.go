@@ -49,3 +49,4 @@ func RespondWithError(w http.ResponseWriter, r *http.Request, appErr *AppError) 
 
 	json.NewEncoder(w).Encode(errorResponse)
 }
+
