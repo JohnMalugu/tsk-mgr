@@ -25,3 +25,4 @@ func NewAppError(code int, message string, internalErr error) *AppError {
 		InternalErr: internalErr,
 	}
 }
+
