@@ -97,5 +97,9 @@ var (
 		nil,
 	)
 
-	
+	ErrDatabaseError = NewAppError(
+		http.StatusInternalServerError,
+		"Database operation failed",
+		nil,
+	)
 )
