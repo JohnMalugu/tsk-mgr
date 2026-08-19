@@ -84,5 +84,9 @@ var (
 		nil,
 	)
 
-	
+	ErrValidation = NewAppError(
+		http.StatusBadRequest,
+		"Validation failed",
+		nil,
+	)
 )
