@@ -91,5 +91,9 @@ var (
 	)
 
 	// Server errors
-	
+	ErrInternalServer = NewAppError(
+		http.StatusInternalServerError,
+		"An internal server error occurred",
+		nil,
+	)
 )
