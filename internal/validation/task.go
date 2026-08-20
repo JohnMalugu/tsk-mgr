@@ -32,4 +32,12 @@ func ValidateTask(task *model.Task) []ValidationError {
 			Message: "Title must be less than 255 characters",
 		})
 	}
+
+	// Validate due date
+	if task.DueDate.IsZero() {
+		errors = append(errors, ValidationError{
+			Field:   "dueDate",
+			Message: "Due date cannot be empty",
+		})
+	}
 }
