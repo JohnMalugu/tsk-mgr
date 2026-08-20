@@ -25,4 +25,11 @@ func ValidateTask(task *model.Task) []ValidationError {
 			Message: "Title cannot be empty",
 		})
 	}
+
+	if len(task.Title) > 255 {
+		errors = append(errors, ValidationError{
+			Field:   "title",
+			Message: "Title must be less than 255 characters",
+		})
+	}
 }
