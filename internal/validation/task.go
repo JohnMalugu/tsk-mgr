@@ -46,5 +46,5 @@ func ValidateTask(task *model.Task) []ValidationError {
 		// So we just warn, don't error
 	}
 
-	
+	return errors
 }
