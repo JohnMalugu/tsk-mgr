@@ -45,6 +45,5 @@ func ValidateTask(task *model.Task) []ValidationError {
 		// Actually, tasks CAN be due in the past (if overdue)
 		// So we just warn, don't error
 	}
-
 	return errors
 }
