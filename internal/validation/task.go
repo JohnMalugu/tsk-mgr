@@ -18,5 +18,11 @@ type ValidationError struct {
 func ValidateTask(task *model.Task) []ValidationError {
 	var errors []ValidationError
 
-	
+	// Validate title
+	if strings.TrimSpace(task.Title) == "" {
+		errors = append(errors, ValidationError{
+			Field:   "title",
+			Message: "Title cannot be empty",
+		})
+	}
 }
