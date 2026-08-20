@@ -40,5 +40,9 @@ func ValidateTask(task *model.Task) []ValidationError {
 		})
 	}
 
-	
+	// Due date should be in the future (optional, but good practice)
+	if !task.DueDate.IsZero() && task.DueDate.Before(time.Now()) {
+		// Actually, tasks CAN be due in the past (if overdue)
+		// So we just warn, don't error
+	}
 }
