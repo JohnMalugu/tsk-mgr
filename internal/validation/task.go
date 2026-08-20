@@ -14,3 +14,7 @@ type ValidationError struct {
 	Message string `json:"message"`
 }
 
+// ValidateTask validates a task
+func ValidateTask(task *model.Task) []ValidationError {
+	var errors []ValidationError
+}
