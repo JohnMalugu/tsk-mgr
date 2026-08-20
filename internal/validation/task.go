@@ -2,9 +2,9 @@ package validation
 
 import (
 	"fmt"
+	"github.com/yourusername/task-manager-api/internal/model"
 	"strings"
 	"time"
-	"github.com/yourusername/task-manager-api/internal/model"
 )
 
 // ValidationError holds validation errors
