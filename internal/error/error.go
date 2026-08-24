@@ -65,6 +65,7 @@ func RespondWithSuccess(w http.ResponseWriter, data interface{}, statusCode int)
 
 // Common errors
 var (
+	
 	// Client errors
 	ErrBadRequest = NewAppError(
 		http.StatusBadRequest,
