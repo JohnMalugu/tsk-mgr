@@ -1,10 +1,10 @@
 package validation
 
 import (
-	"fmt"
-	"github.com/yourusername/task-manager-api/internal/model"
 	"strings"
 	"time"
+
+	"github.com/yourusername/task-manager-api/internal/model"
 )
 
 // ValidationError holds validation errors
@@ -24,7 +24,6 @@ func ValidateTask(task *model.Task) []ValidationError {
 			Message: "Title cannot be empty",
 		})
 	}
-	
 
 	if len(task.Title) > 255 {
 		errors = append(errors, ValidationError{
