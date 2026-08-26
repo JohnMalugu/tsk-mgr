@@ -13,3 +13,7 @@ type RecoveryMiddleware struct {
 	next http.Handler
 }
 
+// NewRecoveryMiddleware creates a new recovery middleware
+func NewRecoveryMiddleware(next http.Handler) *RecoveryMiddleware {
+	return &RecoveryMiddleware{next: next}
+}
