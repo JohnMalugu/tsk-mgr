@@ -17,3 +17,4 @@ type RecoveryMiddleware struct {
 func NewRecoveryMiddleware(next http.Handler) *RecoveryMiddleware {
 	return &RecoveryMiddleware{next: next}
 }
+
