@@ -12,3 +12,7 @@ import (
 	"github.com/yourusername/task-manager-api/internal/validation"
 )
 
+// Handler holds dependencies for all handlers
+type Handler struct {
+	taskService *service.TaskService
+}
