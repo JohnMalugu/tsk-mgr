@@ -43,4 +43,3 @@ func (h *Handler) HandleTasks(w http.ResponseWriter, r *http.Request) {
 	apierror.RespondWithError(w, r, appErr)
 }
 
-// HandleTasks handles GET and POST requests for /tasks
