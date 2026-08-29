@@ -28,10 +28,7 @@ func (h *Handler) HandleTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method == http.MethodPost {
-		h.HandleCreateTask(w, r)
-		return
-	}
+	
 
 	appErr := &apierror.AppError{
 		Code:    http.StatusMethodNotAllowed,
