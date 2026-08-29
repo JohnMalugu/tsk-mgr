@@ -36,5 +36,8 @@ func (h *Handler) HandleTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	
+	appErr := &apierror.AppError{
+		Code:    http.StatusMethodNotAllowed,
+		Message: "Method not allowed",
+	}
 }
