@@ -35,6 +35,4 @@ func (h *Handler) HandleTasks(w http.ResponseWriter, r *http.Request) {
 		h.HandleCreateTask(w, r)
 		return
 	}
-
-	
 }
