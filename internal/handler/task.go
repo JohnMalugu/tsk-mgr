@@ -9,7 +9,7 @@ import (
 	"github.com/JohnMalugu/task-manager-api/internal/error"
 	"github.com/JohnMalugu/task-manager-api/internal/model"
 	"github.com/JohnMalugu/task-manager-api/internal/service"
-	"github.com/john/task-manager-api/internal/validation"
+	"github.com/JohnMalugu/task-manager-api/internal/validation"
 )
 
 // Handler holds dependencies for all handlers
