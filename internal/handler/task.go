@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 
 	"github.com/JohnMalugu/task-manager-api/internal/error"
 	"github.com/JohnMalugu/task-manager-api/internal/model"
