@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/JohnMalugu/task-manager-api/internal/error"
 	"github.com/JohnMalugu/task-manager-api/internal/model"
