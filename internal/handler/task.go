@@ -1,9 +1,6 @@
 package handler
 
-import (
-	"net/http"
 
-)
 
 // Handler holds dependencies for all handlers
 type Handler struct {
