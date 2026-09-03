@@ -3,10 +3,6 @@ package handler
 import (
 	"net/http"
 
-	"github.com/JohnMalugu/task-manager-api/internal/error"
-	"github.com/JohnMalugu/task-manager-api/internal/model"
-	"github.com/JohnMalugu/task-manager-api/internal/service"
-	"github.com/JohnMalugu/task-manager-api/internal/validation"
 )
 
 // Handler holds dependencies for all handlers
