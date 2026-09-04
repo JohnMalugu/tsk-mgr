@@ -15,9 +15,5 @@ func NewHandler(taskService *service.TaskService) *Handler {
 }
 
 // HandleTasks handles GET and POST requests for /tasks
-func (h *Handler) HandleTasks(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		h.HandleGetAllTasks(w, r)
-		return
-	}
+
 }
