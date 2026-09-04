@@ -14,6 +14,4 @@ func NewHandler(taskService *service.TaskService) *Handler {
 	}
 }
 
-// HandleTasks handles GET and POST requests for /tasks
-
 }
