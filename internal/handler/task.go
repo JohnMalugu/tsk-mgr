@@ -23,6 +23,4 @@ func (h *Handler) HandleTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
-
 }
