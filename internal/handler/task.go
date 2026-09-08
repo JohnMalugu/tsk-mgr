@@ -10,8 +10,4 @@ type Handler struct {
 }
 
 // NewHandler creates a new Handler
-func NewHandler(taskService *service.TaskService) *Handler {
-	return &Handler{
-		taskService: taskService,
-	}
-}
+ 
