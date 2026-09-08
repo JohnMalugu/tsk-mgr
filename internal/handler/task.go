@@ -9,5 +9,3 @@ type Handler struct {
 	taskService *service.TaskService
 }
 
-// NewHandler creates a new Handler
- 
