@@ -16,4 +16,9 @@ func NewHandler(taskService *service.TaskService) *Handler {
 	}
 }
 
-
+func (h *Handler) HandleTasks(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		h.HandleGetAllTasks(w, r)
+		return
+	}
+}
