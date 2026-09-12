@@ -14,7 +14,4 @@ func NewHandler(taskService *service.TaskService) *Handler {
 	return &Handler{
 		taskService: taskService,
 	}
-}
-
-// HandleTasks handles GET and POST requests for /tasks
-
+} 
