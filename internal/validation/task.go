@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yourusername/task-manager-api/internal/model"
+	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
 
 // ValidationError holds validation errors
