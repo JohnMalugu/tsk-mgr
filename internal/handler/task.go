@@ -74,3 +74,7 @@ func respondJSON(w http.ResponseWriter, status int, value interface{}) {
 func respondError(w http.ResponseWriter, r *http.Request, status int, message string) {
 	appError.RespondWithError(w, r, appError.NewAppError(status, message, nil))
 }
+
+func respondError(w http.ResponseWriter, r *http.Request, status int, message string) {
+	appError.RespondWithError(w, r, appError.NewAppError(status, message, nil))
+}
