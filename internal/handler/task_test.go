@@ -108,6 +108,17 @@ func TestHandleTasksRejectsInvalidPagination(t *testing.T) {
 	}
 }
 
+func TestHandleTasksRejectsNegativeOffset(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/tasks?offset=-1", nil)
+	recorder := httptest.NewRecorder()
+
+	HandleTasks(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
+	}
+}
+
 func TestHandleTaskByIDRejectsInvalidID(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks/not-an-id", nil)
 	recorder := httptest.NewRecorder()
