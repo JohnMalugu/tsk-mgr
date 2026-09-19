@@ -77,6 +77,37 @@ func TestHandleTasksFiltersByTitle(t *testing.T) {
 	}
 }
 
+func TestHandleTasksPaginatesResults(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/tasks?offset=1&limit=1", nil)
+	recorder := httptest.NewRecorder()
+
+	HandleTasks(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	}
+	var tasks []struct {
+		ID int `json:"id"`
+	}
+	if err := json.NewDecoder(recorder.Body).Decode(&tasks); err != nil {
+		t.Fatalf("decode paginated tasks: %v", err)
+	}
+	if len(tasks) != 1 || tasks[0].ID != 2 {
+		t.Fatalf("expected task 2, got %#v", tasks)
+	}
+}
+
+func TestHandleTasksRejectsInvalidPagination(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/tasks?limit=101", nil)
+	recorder := httptest.NewRecorder()
+
+	HandleTasks(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
+	}
+}
+
 func TestHandleTaskByIDRejectsInvalidID(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks/not-an-id", nil)
 	recorder := httptest.NewRecorder()
