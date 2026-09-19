@@ -22,13 +22,13 @@ func init() {
 	nextID = 3
 }
 
-// GetAllTasks returns all tasks
+// GetAllTasks returns the first page of all tasks.
 func GetAllTasks() []model.Task {
-	return GetTasks(nil, "")
+	return GetTasks(nil, "", 0, 20)
 }
 
-// GetTasks returns tasks matching the optional completion and title filters.
-func GetTasks(completed *bool, search string) []model.Task {
+// GetTasks returns a page of tasks matching the optional filters.
+func GetTasks(completed *bool, search string, offset, limit int) []model.Task {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -43,7 +43,14 @@ func GetTasks(completed *bool, search string) []model.Task {
 		}
 		result = append(result, task)
 	}
-	return result
+	if offset >= len(result) {
+		return []model.Task{}
+	}
+	end := offset + limit
+	if end > len(result) {
+		end = len(result)
+	}
+	return result[offset:end]
 }
 
 // GetTaskByID returns a task by ID
