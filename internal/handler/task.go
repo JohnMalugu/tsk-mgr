@@ -16,13 +16,31 @@ import (
 func HandleTasks(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		respondJSON(w, http.StatusOK, service.GetAllTasks())
+		completed, err := completionFilter(r)
+		if err != nil {
+			respondError(w, r, http.StatusBadRequest, "completed must be true or false")
+			return
+		}
+		respondJSON(w, http.StatusOK, service.GetTasks(completed, r.URL.Query().Get("q")))
 	case http.MethodPost:
 		createTask(w, r)
 	default:
 		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
 		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
 	}
+}
+
+func completionFilter(r *http.Request) (*bool, error) {
+	value := r.URL.Query().Get("completed")
+	if value == "" {
+		return nil, nil
+	}
+
+	completed, err := strconv.ParseBool(value)
+	if err != nil {
+		return nil, err
+	}
+	return &completed, nil
 }
 
 // HandleTaskByID handles requests for /tasks/{id}.
