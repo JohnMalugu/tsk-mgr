@@ -27,6 +27,39 @@ func TestHandleTasksGet(t *testing.T) {
 	}
 }
 
+func TestHandleTasksFiltersByCompletion(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/tasks?completed=true", nil)
+	recorder := httptest.NewRecorder()
+
+	HandleTasks(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	}
+	var tasks []struct {
+		Completed bool `json:"completed"`
+	}
+	if err := json.NewDecoder(recorder.Body).Decode(&tasks); err != nil {
+		t.Fatalf("decode filtered tasks: %v", err)
+	}
+	for _, task := range tasks {
+		if !task.Completed {
+			t.Fatal("expected only completed tasks")
+		}
+	}
+}
+
+func TestHandleTasksRejectsInvalidCompletionFilter(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/tasks?completed=maybe", nil)
+	recorder := httptest.NewRecorder()
+
+	HandleTasks(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
+	}
+}
+
 func TestHandleTaskByIDRejectsInvalidID(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks/not-an-id", nil)
 	recorder := httptest.NewRecorder()
