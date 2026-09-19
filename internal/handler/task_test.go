@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -32,5 +35,50 @@ func TestHandleTaskByIDRejectsInvalidID(t *testing.T) {
 
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
+	}
+}
+
+func TestHandleTaskByIDUpdatesTask(t *testing.T) {
+	body := bytes.NewBufferString(`{"title":"Updated task","dueDate":"2030-01-02T15:04:05Z","completed":true}`)
+	request := httptest.NewRequest(http.MethodPut, "/tasks/2", body)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	HandleTaskByID(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), `"title":"Updated task"`) {
+		t.Fatalf("expected updated task in response, got %q", recorder.Body.String())
+	}
+}
+
+func TestHandleTaskByIDDeletesTask(t *testing.T) {
+	body := bytes.NewBufferString(`{"title":"Temporary task","dueDate":"2030-01-02T15:04:05Z"}`)
+	createRequest := httptest.NewRequest(http.MethodPost, "/tasks", body)
+	createRecorder := httptest.NewRecorder()
+	HandleTasks(createRecorder, createRequest)
+
+	if createRecorder.Code != http.StatusCreated {
+		t.Fatalf("expected task creation status %d, got %d", http.StatusCreated, createRecorder.Code)
+	}
+
+	var task struct {
+		ID int `json:"id"`
+	}
+	if err := json.NewDecoder(createRecorder.Body).Decode(&task); err != nil {
+		t.Fatalf("decode created task: %v", err)
+	}
+
+	deleteRequest := httptest.NewRequest(http.MethodDelete, "/tasks/"+strconv.Itoa(task.ID), nil)
+	deleteRecorder := httptest.NewRecorder()
+	HandleTaskByID(deleteRecorder, deleteRequest)
+
+	if deleteRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected status %d, got %d", http.StatusNoContent, deleteRecorder.Code)
+	}
+	if deleteRecorder.Body.Len() != 0 {
+		t.Fatalf("expected empty delete response, got %q", deleteRecorder.Body.String())
 	}
 }
