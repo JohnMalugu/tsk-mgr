@@ -60,6 +60,23 @@ func TestHandleTasksRejectsInvalidCompletionFilter(t *testing.T) {
 	}
 }
 
+func TestHandleTasksFiltersByTitle(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/tasks?q=grocer", nil)
+	recorder := httptest.NewRecorder()
+
+	HandleTasks(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), "Buy groceries") {
+		t.Fatalf("expected matching task in response, got %q", recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), "Learn Go") {
+		t.Fatalf("expected non-matching task to be excluded, got %q", recorder.Body.String())
+	}
+}
+
 func TestHandleTaskByIDRejectsInvalidID(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks/not-an-id", nil)
 	recorder := httptest.NewRecorder()
