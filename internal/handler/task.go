@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -21,13 +22,38 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, http.StatusBadRequest, "completed must be true or false")
 			return
 		}
-		respondJSON(w, http.StatusOK, service.GetTasks(completed, r.URL.Query().Get("q")))
+		offset, limit, err := pagination(r)
+		if err != nil {
+			respondError(w, r, http.StatusBadRequest, err.Error())
+			return
+		}
+		respondJSON(w, http.StatusOK, service.GetTasks(completed, r.URL.Query().Get("q"), offset, limit))
 	case http.MethodPost:
 		createTask(w, r)
 	default:
 		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
 		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
 	}
+}
+
+func pagination(r *http.Request) (int, int, error) {
+	offset, err := queryInt(r, "offset", 0)
+	if err != nil || offset < 0 {
+		return 0, 0, fmt.Errorf("offset must be a non-negative integer")
+	}
+	limit, err := queryInt(r, "limit", 20)
+	if err != nil || limit < 1 || limit > 100 {
+		return 0, 0, fmt.Errorf("limit must be between 1 and 100")
+	}
+	return offset, limit, nil
+}
+
+func queryInt(r *http.Request, name string, fallback int) (int, error) {
+	value := r.URL.Query().Get(name)
+	if value == "" {
+		return fallback, nil
+	}
+	return strconv.Atoi(value)
 }
 
 func completionFilter(r *http.Request) (*bool, error) {
