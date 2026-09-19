@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -23,11 +24,25 @@ func init() {
 
 // GetAllTasks returns all tasks
 func GetAllTasks() []model.Task {
+	return GetTasks(nil, "")
+}
+
+// GetTasks returns tasks matching the optional completion and title filters.
+func GetTasks(completed *bool, search string) []model.Task {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	result := make([]model.Task, len(tasks))
-	copy(result, tasks)
+	search = strings.ToLower(strings.TrimSpace(search))
+	result := make([]model.Task, 0, len(tasks))
+	for _, task := range tasks {
+		if completed != nil && task.Completed != *completed {
+			continue
+		}
+		if search != "" && !strings.Contains(strings.ToLower(task.Title), search) {
+			continue
+		}
+		result = append(result, task)
+	}
 	return result
 }
 
@@ -38,7 +53,8 @@ func GetTaskByID(id int) *model.Task {
 
 	for i, task := range tasks {
 		if task.ID == id {
-			return &tasks[i]
+			result := tasks[i]
+			return &result
 		}
 	}
 	return nil
