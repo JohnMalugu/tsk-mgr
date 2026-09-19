@@ -27,8 +27,8 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 
 // HandleTaskByID handles requests for /tasks/{id}.
 func HandleTaskByID(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", http.MethodGet)
+	if r.Method != http.MethodGet && r.Method != http.MethodPut && r.Method != http.MethodDelete {
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPut+", "+http.MethodDelete)
 		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
@@ -40,29 +40,62 @@ func HandleTaskByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task := service.GetTaskByID(id)
-	if task == nil {
-		respondError(w, r, http.StatusNotFound, "task not found")
-		return
+	switch r.Method {
+	case http.MethodGet:
+		task := service.GetTaskByID(id)
+		if task == nil {
+			respondError(w, r, http.StatusNotFound, "task not found")
+			return
+		}
+		respondJSON(w, http.StatusOK, task)
+	case http.MethodPut:
+		updateTask(w, r, id)
+	case http.MethodDelete:
+		if !service.DeleteTask(id) {
+			respondError(w, r, http.StatusNotFound, "task not found")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
-	respondJSON(w, http.StatusOK, task)
 }
 
 func createTask(w http.ResponseWriter, r *http.Request) {
+	task, ok := decodeTask(w, r)
+	if !ok {
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, service.CreateTask(task))
+}
+
+func updateTask(w http.ResponseWriter, r *http.Request, id int) {
+	task, ok := decodeTask(w, r)
+	if !ok {
+		return
+	}
+
+	updated := service.UpdateTask(id, task)
+	if updated == nil {
+		respondError(w, r, http.StatusNotFound, "task not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, updated)
+}
+
+func decodeTask(w http.ResponseWriter, r *http.Request) (model.Task, bool) {
 	var task model.Task
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&task); err != nil {
 		respondError(w, r, http.StatusBadRequest, "request body must be valid JSON")
-		return
+		return model.Task{}, false
 	}
 
 	if errors := validation.ValidateTask(&task); len(errors) > 0 {
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{"errors": errors})
-		return
+		return model.Task{}, false
 	}
-
-	respondJSON(w, http.StatusCreated, service.CreateTask(task))
+	return task, true
 }
 
 func respondJSON(w http.ResponseWriter, status int, value interface{}) {
