@@ -82,3 +82,17 @@ func TestHandleTaskByIDDeletesTask(t *testing.T) {
 		t.Fatalf("expected empty delete response, got %q", deleteRecorder.Body.String())
 	}
 }
+
+func TestHandleTaskByIDRejectsUnsupportedMethod(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPatch, "/tasks/1", nil)
+	recorder := httptest.NewRecorder()
+
+	HandleTaskByID(recorder, request)
+
+	if recorder.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, recorder.Code)
+	}
+	if allow := recorder.Header().Get("Allow"); allow != "GET, PUT, DELETE" {
+		t.Fatalf("expected Allow header %q, got %q", "GET, PUT, DELETE", allow)
+	}
+}
