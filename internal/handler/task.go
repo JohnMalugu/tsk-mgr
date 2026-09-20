@@ -27,7 +27,12 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, http.StatusBadRequest, err.Error())
 			return
 		}
-		respondJSON(w, http.StatusOK, service.GetTasks(completed, r.URL.Query().Get("q"), offset, limit))
+		sortBy, descending, err := sorting(r)
+		if err != nil {
+			respondError(w, r, http.StatusBadRequest, err.Error())
+			return
+		}
+		respondJSON(w, http.StatusOK, service.GetTasks(completed, r.URL.Query().Get("q"), offset, limit, sortBy, descending))
 	case http.MethodPost:
 		createTask(w, r)
 	default:
@@ -54,6 +59,25 @@ func queryInt(r *http.Request, name string, fallback int) (int, error) {
 		return fallback, nil
 	}
 	return strconv.Atoi(value)
+}
+
+func sorting(r *http.Request) (string, bool, error) {
+	sortBy := r.URL.Query().Get("sort")
+	if sortBy == "" {
+		sortBy = "id"
+	}
+	if sortBy != "id" && sortBy != "title" && sortBy != "dueDate" {
+		return "", false, fmt.Errorf("sort must be id, title, or dueDate")
+	}
+
+	order := r.URL.Query().Get("order")
+	if order == "" || order == "asc" {
+		return sortBy, false, nil
+	}
+	if order == "desc" {
+		return sortBy, true, nil
+	}
+	return "", false, fmt.Errorf("order must be asc or desc")
 }
 
 func completionFilter(r *http.Request) (*bool, error) {
