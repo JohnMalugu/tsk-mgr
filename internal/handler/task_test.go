@@ -97,6 +97,26 @@ func TestHandleTasksSortsByTitleDescending(t *testing.T) {
 	}
 }
 
+func TestHandleTasksSortsByDueDateAscending(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/tasks?sort=dueDate", nil)
+	recorder := httptest.NewRecorder()
+
+	HandleTasks(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	}
+	var tasks []struct {
+		ID int `json:"id"`
+	}
+	if err := json.NewDecoder(recorder.Body).Decode(&tasks); err != nil {
+		t.Fatalf("decode due-date sorted tasks: %v", err)
+	}
+	if len(tasks) < 2 || tasks[0].ID != 1 {
+		t.Fatalf("expected overdue task first, got %#v", tasks)
+	}
+}
+
 func TestHandleTasksRejectsInvalidSort(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks?sort=priority", nil)
 	recorder := httptest.NewRecorder()
