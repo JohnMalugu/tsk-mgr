@@ -1,6 +1,7 @@
 package service
 
 import (
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -24,11 +25,11 @@ func init() {
 
 // GetAllTasks returns the first page of all tasks.
 func GetAllTasks() []model.Task {
-	return GetTasks(nil, "", 0, 20)
+	return GetTasks(nil, "", 0, 20, "id", false)
 }
 
 // GetTasks returns a page of tasks matching the optional filters.
-func GetTasks(completed *bool, search string, offset, limit int) []model.Task {
+func GetTasks(completed *bool, search string, offset, limit int, sortBy string, descending bool) []model.Task {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -43,6 +44,37 @@ func GetTasks(completed *bool, search string, offset, limit int) []model.Task {
 		}
 		result = append(result, task)
 	}
+	sort.SliceStable(result, func(i, j int) bool {
+		comparison := 0
+		switch sortBy {
+		case "title":
+			left, right := strings.ToLower(result[i].Title), strings.ToLower(result[j].Title)
+			if left < right {
+				comparison = -1
+			} else if left > right {
+				comparison = 1
+			}
+		case "dueDate":
+			if result[i].DueDate.Before(result[j].DueDate) {
+				comparison = -1
+			} else if result[i].DueDate.After(result[j].DueDate) {
+				comparison = 1
+			}
+		default:
+			if result[i].ID < result[j].ID {
+				comparison = -1
+			} else if result[i].ID > result[j].ID {
+				comparison = 1
+			}
+		}
+		if comparison == 0 {
+			comparison = result[i].ID - result[j].ID
+		}
+		if descending {
+			return comparison > 0
+		}
+		return comparison < 0
+	})
 	if offset >= len(result) {
 		return []model.Task{}
 	}
