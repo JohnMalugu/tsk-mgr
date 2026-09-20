@@ -108,6 +108,17 @@ func TestHandleTasksRejectsInvalidSort(t *testing.T) {
 	}
 }
 
+func TestHandleTasksRejectsInvalidOrder(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/tasks?order=random", nil)
+	recorder := httptest.NewRecorder()
+
+	HandleTasks(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
+	}
+}
+
 func TestHandleTasksPaginatesResults(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks?offset=1&limit=1", nil)
 	recorder := httptest.NewRecorder()
