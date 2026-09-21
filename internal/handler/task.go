@@ -182,6 +182,16 @@ func HandleTaskComplete(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, updated)
 }
 
+func HandleTaskSummary(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, service.GetTaskSummary())
+}
+
 func updateTask(w http.ResponseWriter, r *http.Request, id int) {
 	task, ok := decodeTask(w, r)
 	if !ok {
