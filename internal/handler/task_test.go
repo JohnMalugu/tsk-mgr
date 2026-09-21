@@ -181,6 +181,43 @@ func TestHandleTasksRejectsNegativeOffset(t *testing.T) {
 	}
 }
 
+func TestHandleTaskCompleteMarksCompleted(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPatch, "/tasks/1/complete", nil)
+	recorder := httptest.NewRecorder()
+
+	HandleTaskComplete(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), `"completed":true`) {
+		t.Fatalf("expected completed task in response, got %q", recorder.Body.String())
+	}
+}
+
+func TestHandleTaskCompleteRejectsMissingTask(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPatch, "/tasks/999/complete", nil)
+	recorder := httptest.NewRecorder()
+
+	HandleTaskComplete(recorder, request)
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, recorder.Code)
+	}
+}
+
+func TestHandleTaskCompleteRejectsInvalidJSON(t *testing.T) {
+	body := bytes.NewBufferString(`{"completed":"yes"}`)
+	request := httptest.NewRequest(http.MethodPatch, "/tasks/1/complete", body)
+	recorder := httptest.NewRecorder()
+
+	HandleTaskComplete(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
+	}
+}
+
 func TestHandleTaskByIDRejectsInvalidID(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks/not-an-id", nil)
 	recorder := httptest.NewRecorder()
