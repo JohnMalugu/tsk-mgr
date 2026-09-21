@@ -139,3 +139,23 @@ func DeleteTask(id int) bool {
 	}
 	return false
 }
+
+// CompleteTask marks a task as completed and returns it.
+func CompleteTask(id int) *model.Task {
+	return SetTaskCompletion(id, true)
+}
+
+// SetTaskCompletion updates the completion state of a task and returns it.
+func SetTaskCompletion(id int, completed bool) *model.Task {
+	mu.Lock()
+	defer mu.Unlock()
+
+	for i := range tasks {
+		if tasks[i].ID == id {
+			tasks[i].Completed = completed
+			updated := tasks[i]
+			return &updated
+		}
+	}
+	return nil
+}
