@@ -15,7 +15,14 @@ var nextID int = 1
 var mu sync.RWMutex
 
 func init() {
-	// Initialize sample data
+	ResetTasks()
+}
+
+// ResetTasks restores the default in-memory task seed.
+func ResetTasks() {
+	mu.Lock()
+	defer mu.Unlock()
+
 	tasks = []model.Task{
 		{ID: 1, Title: "Buy groceries", DueDate: time.Now().AddDate(0, 0, -1), Completed: false},
 		{ID: 2, Title: "Learn Go", DueDate: time.Now().AddDate(0, 0, 3), Completed: false},
@@ -23,9 +30,35 @@ func init() {
 	nextID = 3
 }
 
+type TaskSummary struct {
+	Total     int `json:"total"`
+	Completed int `json:"completed"`
+	Pending   int `json:"pending"`
+	Overdue   int `json:"overdue"`
+}
+
 // GetAllTasks returns the first page of all tasks.
 func GetAllTasks() []model.Task {
 	return GetTasks(nil, "", 0, 20, "id", false)
+}
+
+// GetTaskSummary returns aggregate task counts.
+func GetTaskSummary() TaskSummary {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	summary := TaskSummary{Total: len(tasks)}
+	for _, task := range tasks {
+		if task.Completed {
+			summary.Completed++
+			continue
+		}
+		summary.Pending++
+		if task.DueDate.Before(time.Now()) {
+			summary.Overdue++
+		}
+	}
+	return summary
 }
 
 // GetTasks returns a page of tasks matching the optional filters.
