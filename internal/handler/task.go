@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -134,6 +136,50 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusCreated, service.CreateTask(task))
+}
+
+func HandleTaskComplete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		w.Header().Set("Allow", http.MethodPatch)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	idText := strings.TrimPrefix(r.URL.Path, "/tasks/")
+	idText = strings.TrimSuffix(idText, "/complete")
+	id, err := strconv.Atoi(idText)
+	if err != nil || id < 1 {
+		respondError(w, r, http.StatusBadRequest, "task id must be a positive integer")
+		return
+	}
+
+	completed := true
+	if r.Body != nil {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			respondError(w, r, http.StatusBadRequest, "request body must be valid JSON")
+			return
+		}
+		if len(bytes.TrimSpace(body)) > 0 {
+			var payload struct {
+				Completed *bool `json:"completed"`
+			}
+			if err := json.Unmarshal(body, &payload); err != nil {
+				respondError(w, r, http.StatusBadRequest, "request body must be valid JSON")
+				return
+			}
+			if payload.Completed != nil {
+				completed = *payload.Completed
+			}
+		}
+	}
+
+	updated := service.SetTaskCompletion(id, completed)
+	if updated == nil {
+		respondError(w, r, http.StatusNotFound, "task not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, updated)
 }
 
 func updateTask(w http.ResponseWriter, r *http.Request, id int) {
