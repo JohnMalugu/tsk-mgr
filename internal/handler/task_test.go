@@ -8,9 +8,16 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
 )
 
+func resetTaskFixture() {
+	service.ResetTasks()
+}
+
 func TestHandleTasksGet(t *testing.T) {
+	resetTaskFixture()
 	request := httptest.NewRequest(http.MethodGet, "/tasks", nil)
 	recorder := httptest.NewRecorder()
 
@@ -182,6 +189,7 @@ func TestHandleTasksRejectsNegativeOffset(t *testing.T) {
 }
 
 func TestHandleTaskCompleteMarksCompleted(t *testing.T) {
+	resetTaskFixture()
 	request := httptest.NewRequest(http.MethodPatch, "/tasks/1/complete", nil)
 	recorder := httptest.NewRecorder()
 
@@ -196,6 +204,7 @@ func TestHandleTaskCompleteMarksCompleted(t *testing.T) {
 }
 
 func TestHandleTaskCompleteRejectsMissingTask(t *testing.T) {
+	resetTaskFixture()
 	request := httptest.NewRequest(http.MethodPatch, "/tasks/999/complete", nil)
 	recorder := httptest.NewRecorder()
 
@@ -207,6 +216,7 @@ func TestHandleTaskCompleteRejectsMissingTask(t *testing.T) {
 }
 
 func TestHandleTaskCompleteRejectsInvalidJSON(t *testing.T) {
+	resetTaskFixture()
 	body := bytes.NewBufferString(`{"completed":"yes"}`)
 	request := httptest.NewRequest(http.MethodPatch, "/tasks/1/complete", body)
 	recorder := httptest.NewRecorder()
@@ -215,6 +225,40 @@ func TestHandleTaskCompleteRejectsInvalidJSON(t *testing.T) {
 
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
+	}
+}
+
+func TestHandleTasksSummaryReturnsCounts(t *testing.T) {
+	resetTaskFixture()
+	request := httptest.NewRequest(http.MethodGet, "/tasks/summary", nil)
+	recorder := httptest.NewRecorder()
+
+	HandleTaskSummary(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	}
+
+	var summary struct {
+		Total     int `json:"total"`
+		Completed int `json:"completed"`
+		Pending   int `json:"pending"`
+		Overdue   int `json:"overdue"`
+	}
+	if err := json.NewDecoder(recorder.Body).Decode(&summary); err != nil {
+		t.Fatalf("decode task summary: %v", err)
+	}
+	if summary.Total != 2 {
+		t.Fatalf("expected total 2, got %d", summary.Total)
+	}
+	if summary.Completed != 0 {
+		t.Fatalf("expected completed 0, got %d", summary.Completed)
+	}
+	if summary.Pending != 2 {
+		t.Fatalf("expected pending 2, got %d", summary.Pending)
+	}
+	if summary.Overdue != 1 {
+		t.Fatalf("expected overdue 1, got %d", summary.Overdue)
 	}
 }
 
@@ -230,6 +274,7 @@ func TestHandleTaskByIDRejectsInvalidID(t *testing.T) {
 }
 
 func TestHandleTaskByIDUpdatesTask(t *testing.T) {
+	resetTaskFixture()
 	body := bytes.NewBufferString(`{"title":"Updated task","dueDate":"2030-01-02T15:04:05Z","completed":true}`)
 	request := httptest.NewRequest(http.MethodPut, "/tasks/2", body)
 	request.Header.Set("Content-Type", "application/json")
@@ -246,6 +291,7 @@ func TestHandleTaskByIDUpdatesTask(t *testing.T) {
 }
 
 func TestHandleTaskByIDDeletesTask(t *testing.T) {
+	resetTaskFixture()
 	body := bytes.NewBufferString(`{"title":"Temporary task","dueDate":"2030-01-02T15:04:05Z"}`)
 	createRequest := httptest.NewRequest(http.MethodPost, "/tasks", body)
 	createRecorder := httptest.NewRecorder()
