@@ -18,6 +18,11 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if strings.HasSuffix(r.URL.Path, "/complete") && strings.HasPrefix(r.URL.Path, "/tasks/") {
+		handler.HandleTaskComplete(w, r)
+		return
+	}
+
 	if strings.HasPrefix(r.URL.Path, "/tasks/") {
 		handler.HandleTaskByID(w, r)
 		return
