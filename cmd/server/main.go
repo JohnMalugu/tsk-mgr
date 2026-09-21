@@ -17,10 +17,12 @@ func main() {
 	fmt.Printf("🚀 Server running on http://localhost:8080\n")
 	fmt.Printf("📚 Endpoints:\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks\n")
+	fmt.Printf("   GET    http://localhost:8080/tasks/summary\n")
 	fmt.Printf("   POST   http://localhost:8080/tasks\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/{id}\n")
 	fmt.Printf("   PUT    http://localhost:8080/tasks/{id}\n")
 	fmt.Printf("   DELETE http://localhost:8080/tasks/{id}\n")
+	fmt.Printf("   PATCH  http://localhost:8080/tasks/{id}/complete\n")
 	fmt.Printf("\n")
 
 	if err := http.ListenAndServe(port, nil); err != nil {
