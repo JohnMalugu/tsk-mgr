@@ -24,8 +24,8 @@ func ResetTasks() {
 	defer mu.Unlock()
 
 	tasks = []model.Task{
-		{ID: 1, Title: "Buy groceries", DueDate: time.Now().AddDate(0, 0, -1), Completed: false},
-		{ID: 2, Title: "Learn Go", DueDate: time.Now().AddDate(0, 0, 3), Completed: false},
+		{ID: 1, Title: "Buy groceries", DueDate: time.Now().AddDate(0, 0, -1), Completed: false, Priority: "medium"},
+		{ID: 2, Title: "Learn Go", DueDate: time.Now().AddDate(0, 0, 3), Completed: false, Priority: "low"},
 	}
 	nextID = 3
 }
@@ -39,7 +39,7 @@ type TaskSummary struct {
 
 // GetAllTasks returns the first page of all tasks.
 func GetAllTasks() []model.Task {
-	return GetTasks(nil, "", 0, 20, "id", false)
+	return GetTasks(nil, "", nil, 0, 20, "id", false)
 }
 
 // GetTaskSummary returns aggregate task counts.
@@ -62,7 +62,7 @@ func GetTaskSummary() TaskSummary {
 }
 
 // GetTasks returns a page of tasks matching the optional filters.
-func GetTasks(completed *bool, search string, offset, limit int, sortBy string, descending bool) []model.Task {
+func GetTasks(completed *bool, search string, priority *string, offset, limit int, sortBy string, descending bool) []model.Task {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -70,6 +70,9 @@ func GetTasks(completed *bool, search string, offset, limit int, sortBy string, 
 	result := make([]model.Task, 0, len(tasks))
 	for _, task := range tasks {
 		if completed != nil && task.Completed != *completed {
+			continue
+		}
+		if priority != nil && strings.ToLower(task.Priority) != strings.ToLower(*priority) {
 			continue
 		}
 		if search != "" && !strings.Contains(strings.ToLower(task.Title), search) {
