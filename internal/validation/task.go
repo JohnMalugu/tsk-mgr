@@ -32,6 +32,17 @@ func ValidateTask(task *model.Task) []ValidationError {
 		})
 	}
 
+	if task.Priority != "" {
+		switch strings.ToLower(task.Priority) {
+		case "low", "medium", "high":
+		default:
+			errors = append(errors, ValidationError{
+				Field:   "priority",
+				Message: "Priority must be low, medium, or high",
+			})
+		}
+	}
+
 	// Validate due date
 	if task.DueDate.IsZero() {
 		errors = append(errors, ValidationError{
