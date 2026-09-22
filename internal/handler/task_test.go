@@ -188,6 +188,49 @@ func TestHandleTasksRejectsInvalidPriority(t *testing.T) {
 	}
 }
 
+func TestHandleTasksFiltersByTag(t *testing.T) {
+	resetTaskFixture()
+	body := bytes.NewBufferString(`{"title":"Errand run","dueDate":"2030-01-02T15:04:05Z","tags":["home","errands"]}`)
+	createRequest := httptest.NewRequest(http.MethodPost, "/tasks", body)
+	createRecorder := httptest.NewRecorder()
+	HandleTasks(createRecorder, createRequest)
+
+	if createRecorder.Code != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d", http.StatusCreated, createRecorder.Code)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/tasks?tag=home", nil)
+	recorder := httptest.NewRecorder()
+	HandleTasks(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	}
+	var tasks []struct {
+		Tags []string `json:"tags"`
+	}
+	if err := json.NewDecoder(recorder.Body).Decode(&tasks); err != nil {
+		t.Fatalf("decode tagged tasks: %v", err)
+	}
+	if len(tasks) == 0 {
+		t.Fatal("expected at least one task with the requested tag")
+	}
+	for _, task := range tasks {
+		if !contains(task.Tags, "home") {
+			t.Fatalf("expected only home-tagged tasks, got %#v", tasks)
+		}
+	}
+}
+
+func contains(items []string, target string) bool {
+	for _, item := range items {
+		if strings.EqualFold(item, target) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestHandleTasksPaginatesResults(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks?offset=1&limit=1", nil)
 	recorder := httptest.NewRecorder()
