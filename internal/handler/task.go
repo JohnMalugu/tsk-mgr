@@ -24,6 +24,11 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, http.StatusBadRequest, "completed must be true or false")
 			return
 		}
+		priority, err := priorityFilter(r)
+		if err != nil {
+			respondError(w, r, http.StatusBadRequest, "priority must be low, medium, or high")
+			return
+		}
 		offset, limit, err := pagination(r)
 		if err != nil {
 			respondError(w, r, http.StatusBadRequest, err.Error())
@@ -34,7 +39,7 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, http.StatusBadRequest, err.Error())
 			return
 		}
-		respondJSON(w, http.StatusOK, service.GetTasks(completed, r.URL.Query().Get("q"), offset, limit, sortBy, descending))
+		respondJSON(w, http.StatusOK, service.GetTasks(completed, r.URL.Query().Get("q"), priority, offset, limit, sortBy, descending))
 	case http.MethodPost:
 		createTask(w, r)
 	default:
@@ -93,6 +98,20 @@ func completionFilter(r *http.Request) (*bool, error) {
 		return nil, err
 	}
 	return &completed, nil
+}
+
+func priorityFilter(r *http.Request) (*string, error) {
+	value := r.URL.Query().Get("priority")
+	if value == "" {
+		return nil, nil
+	}
+
+	switch strings.ToLower(value) {
+	case "low", "medium", "high":
+		return &value, nil
+	default:
+		return nil, fmt.Errorf("invalid priority")
+	}
 }
 
 // HandleTaskByID handles requests for /tasks/{id}.
