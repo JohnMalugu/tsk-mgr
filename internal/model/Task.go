@@ -8,4 +8,5 @@ type Task struct {
 	DueDate   time.Time `json:"dueDate"`
 	Completed bool      `json:"completed"`
 	Priority  string    `json:"priority"`
+	Tags      []string  `json:"tags"`
 }
