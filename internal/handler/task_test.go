@@ -146,6 +146,48 @@ func TestHandleTasksRejectsInvalidOrder(t *testing.T) {
 	}
 }
 
+func TestHandleTasksFiltersByPriority(t *testing.T) {
+	resetTaskFixture()
+	body := bytes.NewBufferString(`{"title":"Critical task","dueDate":"2030-01-02T15:04:05Z","priority":"high"}`)
+	createRequest := httptest.NewRequest(http.MethodPost, "/tasks", body)
+	createRecorder := httptest.NewRecorder()
+	HandleTasks(createRecorder, createRequest)
+
+	if createRecorder.Code != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d", http.StatusCreated, createRecorder.Code)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/tasks?priority=high", nil)
+	recorder := httptest.NewRecorder()
+	HandleTasks(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	}
+	var tasks []struct {
+		Priority string `json:"priority"`
+	}
+	if err := json.NewDecoder(recorder.Body).Decode(&tasks); err != nil {
+		t.Fatalf("decode priority-filtered tasks: %v", err)
+	}
+	for _, task := range tasks {
+		if task.Priority != "high" {
+			t.Fatalf("expected only high priority tasks, got %#v", tasks)
+		}
+	}
+}
+
+func TestHandleTasksRejectsInvalidPriority(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/tasks?priority=urgent", nil)
+	recorder := httptest.NewRecorder()
+
+	HandleTasks(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
+	}
+}
+
 func TestHandleTasksPaginatesResults(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks?offset=1&limit=1", nil)
 	recorder := httptest.NewRecorder()
