@@ -43,6 +43,15 @@ func ValidateTask(task *model.Task) []ValidationError {
 		}
 	}
 
+	for _, tag := range task.Tags {
+		if strings.TrimSpace(tag) == "" {
+			errors = append(errors, ValidationError{
+				Field:   "tags",
+				Message: "Tags cannot contain empty values",
+			})
+		}
+	}
+
 	// Validate due date
 	if task.DueDate.IsZero() {
 		errors = append(errors, ValidationError{
