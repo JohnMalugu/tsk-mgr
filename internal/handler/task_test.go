@@ -288,6 +288,47 @@ func TestHandleTaskCompleteMarksCompleted(t *testing.T) {
 	}
 }
 
+func TestHandleBulkCompleteMarksTasksCompleted(t *testing.T) {
+	resetTaskFixture()
+	body := bytes.NewBufferString(`{"ids":[1,2]}`)
+	request := httptest.NewRequest(http.MethodPost, "/tasks/bulk/complete", body)
+	recorder := httptest.NewRecorder()
+
+	HandleBulkComplete(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), `"updated":2`) {
+		t.Fatalf("expected two updated tasks, got %q", recorder.Body.String())
+	}
+}
+
+func TestHandleBulkCompleteRejectsMissingTask(t *testing.T) {
+	resetTaskFixture()
+	body := bytes.NewBufferString(`{"ids":[1,999]}`)
+	request := httptest.NewRequest(http.MethodPost, "/tasks/bulk/complete", body)
+	recorder := httptest.NewRecorder()
+
+	HandleBulkComplete(recorder, request)
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, recorder.Code)
+	}
+}
+
+func TestHandleBulkCompleteRejectsEmptyIDs(t *testing.T) {
+	body := bytes.NewBufferString(`{"ids":[]}`)
+	request := httptest.NewRequest(http.MethodPost, "/tasks/bulk/complete", body)
+	recorder := httptest.NewRecorder()
+
+	HandleBulkComplete(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
+	}
+}
+
 func TestHandleTaskCompleteRejectsMissingTask(t *testing.T) {
 	resetTaskFixture()
 	request := httptest.NewRequest(http.MethodPatch, "/tasks/999/complete", nil)
