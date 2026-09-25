@@ -23,6 +23,11 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.URL.Path == "/tasks/bulk/complete" {
+		handler.HandleBulkComplete(w, r)
+		return
+	}
+
 	if strings.HasSuffix(r.URL.Path, "/complete") && strings.HasPrefix(r.URL.Path, "/tasks/") {
 		handler.HandleTaskComplete(w, r)
 		return
