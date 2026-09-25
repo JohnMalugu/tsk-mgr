@@ -18,6 +18,7 @@ func main() {
 	fmt.Printf("📚 Endpoints:\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/summary\n")
+	fmt.Printf("   POST   http://localhost:8080/tasks/bulk/complete\n")
 	fmt.Printf("   POST   http://localhost:8080/tasks\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/{id}\n")
 	fmt.Printf("   PUT    http://localhost:8080/tasks/{id}\n")
