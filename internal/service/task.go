@@ -37,6 +37,11 @@ type TaskSummary struct {
 	Overdue   int `json:"overdue"`
 }
 
+type BulkUpdateResult struct {
+	Tasks   []model.Task `json:"tasks"`
+	Updated int          `json:"updated"`
+}
+
 // GetAllTasks returns the first page of all tasks.
 func GetAllTasks() []model.Task {
 	return GetTasks(nil, "", nil, nil, 0, 20, "id", false)
@@ -206,4 +211,32 @@ func SetTaskCompletion(id int, completed bool) *model.Task {
 		}
 	}
 	return nil
+}
+
+// BulkSetTaskCompletion updates several tasks atomically.
+func BulkSetTaskCompletion(ids []int, completed bool) (BulkUpdateResult, bool) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	positions := make([]int, 0, len(ids))
+	for _, id := range ids {
+		position := -1
+		for i := range tasks {
+			if tasks[i].ID == id {
+				position = i
+				break
+			}
+		}
+		if position == -1 {
+			return BulkUpdateResult{}, false
+		}
+		positions = append(positions, position)
+	}
+
+	updated := make([]model.Task, 0, len(positions))
+	for _, position := range positions {
+		tasks[position].Completed = completed
+		updated = append(updated, tasks[position])
+	}
+	return BulkUpdateResult{Tasks: updated, Updated: len(updated)}, true
 }
