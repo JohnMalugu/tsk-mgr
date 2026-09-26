@@ -268,6 +268,15 @@ func HandleTaskSummary(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, service.GetTaskSummary())
 }
 
+func HandleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 func HandleBulkComplete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)

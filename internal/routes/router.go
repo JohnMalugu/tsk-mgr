@@ -12,6 +12,10 @@ import (
 // Router directs HTTP requests to the correct handler
 func Router(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("[%s] %s\n", r.Method, r.URL.Path)
+	if r.URL.Path == "/health" {
+		handler.HandleHealth(w, r)
+		return
+	}
 
 	if r.URL.Path == "/tasks" {
 		handler.HandleTasks(w, r)
