@@ -1,6 +1,10 @@
 package service
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
+)
 
 func TestGetTaskByIDReturnsCopy(t *testing.T) {
 	task := GetTaskByID(1)
@@ -72,5 +76,13 @@ func TestBulkDeleteTasksIsAtomic(t *testing.T) {
 	}
 	if len(GetAllTasks()) != 0 {
 		t.Fatal("expected no tasks to remain")
+	}
+}
+
+func TestCreateTaskNormalizesTags(t *testing.T) {
+	ResetTasks()
+	created := CreateTask(model.Task{Title: "Tagged", Tags: []string{" home ", "Home", "work"}})
+	if len(created.Tags) != 2 || created.Tags[0] != "home" || created.Tags[1] != "work" {
+		t.Fatalf("expected trimmed, unique tags, got %#v", created.Tags)
 	}
 }

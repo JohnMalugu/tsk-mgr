@@ -61,6 +61,21 @@ func contains(items []string, target string) bool {
 	return false
 }
 
+func normalizeTags(tags []string) []string {
+	result := make([]string, 0, len(tags))
+	seen := make(map[string]struct{}, len(tags))
+	for _, tag := range tags {
+		tag = strings.TrimSpace(tag)
+		key := strings.ToLower(tag)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, tag)
+	}
+	return result
+}
+
 // GetTaskSummary returns aggregate task counts.
 func GetTaskSummary() TaskSummary {
 	mu.RLock()
@@ -206,6 +221,7 @@ func CreateTask(task model.Task) model.Task {
 	mu.Lock()
 	defer mu.Unlock()
 
+	task.Tags = normalizeTags(task.Tags)
 	task.ID = nextID
 	nextID++
 	tasks = append(tasks, task)
@@ -219,6 +235,7 @@ func UpdateTask(id int, task model.Task) *model.Task {
 
 	for i := range tasks {
 		if tasks[i].ID == id {
+			task.Tags = normalizeTags(task.Tags)
 			task.ID = id
 			tasks[i] = task
 			updated := tasks[i]
