@@ -44,7 +44,7 @@ type BulkUpdateResult struct {
 
 // GetAllTasks returns the first page of all tasks.
 func GetAllTasks() []model.Task {
-	return GetTasks(nil, "", nil, nil, nil, nil, 0, 20, "id", false)
+	return GetTasks(nil, nil, "", nil, nil, nil, nil, 0, 20, "id", false)
 }
 
 func contains(items []string, target string) bool {
@@ -76,7 +76,7 @@ func GetTaskSummary() TaskSummary {
 }
 
 // GetTasks returns a page of tasks matching the optional filters.
-func GetTasks(completed *bool, search string, priority *string, tag *string, dueAfter, dueBefore *time.Time, offset, limit int, sortBy string, descending bool) []model.Task {
+func GetTasks(completed, overdue *bool, search string, priority *string, tag *string, dueAfter, dueBefore *time.Time, offset, limit int, sortBy string, descending bool) []model.Task {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -84,6 +84,10 @@ func GetTasks(completed *bool, search string, priority *string, tag *string, due
 	result := make([]model.Task, 0, len(tasks))
 	for _, task := range tasks {
 		if completed != nil && task.Completed != *completed {
+			continue
+		}
+		isOverdue := !task.Completed && task.DueDate.Before(time.Now())
+		if overdue != nil && isOverdue != *overdue {
 			continue
 		}
 		if priority != nil && strings.ToLower(task.Priority) != strings.ToLower(*priority) {

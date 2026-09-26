@@ -25,6 +25,11 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, http.StatusBadRequest, "completed must be true or false")
 			return
 		}
+		overdue, err := overdueFilter(r)
+		if err != nil {
+			respondError(w, r, http.StatusBadRequest, "overdue must be true or false")
+			return
+		}
 		priority, err := priorityFilter(r)
 		if err != nil {
 			respondError(w, r, http.StatusBadRequest, "priority must be low, medium, or high")
@@ -59,7 +64,7 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, http.StatusBadRequest, err.Error())
 			return
 		}
-		respondJSON(w, http.StatusOK, service.GetTasks(completed, r.URL.Query().Get("q"), priority, tag, dueAfter, dueBefore, offset, limit, sortBy, descending))
+		respondJSON(w, http.StatusOK, service.GetTasks(completed, overdue, r.URL.Query().Get("q"), priority, tag, dueAfter, dueBefore, offset, limit, sortBy, descending))
 	case http.MethodPost:
 		createTask(w, r)
 	default:
@@ -130,6 +135,18 @@ func completionFilter(r *http.Request) (*bool, error) {
 		return nil, err
 	}
 	return &completed, nil
+}
+
+func overdueFilter(r *http.Request) (*bool, error) {
+	value := r.URL.Query().Get("overdue")
+	if value == "" {
+		return nil, nil
+	}
+	overdue, err := strconv.ParseBool(value)
+	if err != nil {
+		return nil, err
+	}
+	return &overdue, nil
 }
 
 func priorityFilter(r *http.Request) (*string, error) {

@@ -56,6 +56,19 @@ func TestHandleTasksFiltersByCompletion(t *testing.T) {
 	}
 }
 
+func TestHandleTasksFiltersOverdue(t *testing.T) {
+	resetTaskFixture()
+	request := httptest.NewRequest(http.MethodGet, "/tasks?overdue=true", nil)
+	recorder := httptest.NewRecorder()
+	HandleTasks(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), `"id":1`) || strings.Contains(recorder.Body.String(), `"id":2`) {
+		t.Fatalf("expected only overdue task 1, got %q", recorder.Body.String())
+	}
+}
+
 func TestHandleTasksRejectsInvalidCompletionFilter(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks?completed=maybe", nil)
 	recorder := httptest.NewRecorder()
