@@ -3,6 +3,7 @@ package validation
 import (
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
@@ -29,6 +30,12 @@ func ValidateTask(task *model.Task) []ValidationError {
 		errors = append(errors, ValidationError{
 			Field:   "title",
 			Message: "Title must be less than 255 characters",
+		})
+	}
+	if utf8.RuneCountInString(task.Description) > 5000 {
+		errors = append(errors, ValidationError{
+			Field:   "description",
+			Message: "Description must be 5000 characters or less",
 		})
 	}
 
