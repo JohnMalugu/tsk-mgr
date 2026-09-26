@@ -91,6 +91,17 @@ func TestHandleTasksRejectsTrailingJSON(t *testing.T) {
 	}
 }
 
+func TestHandleTasksRejectsOversizedBody(t *testing.T) {
+	resetTaskFixture()
+	body := `{"title":"` + strings.Repeat("a", 1<<20) + `","dueDate":"2030-01-02T15:04:05Z"}`
+	request := httptest.NewRequest(http.MethodPost, "/tasks", strings.NewReader(body))
+	recorder := httptest.NewRecorder()
+	HandleTasks(recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
+	}
+}
+
 func TestHandleTasksFiltersByTitle(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks?q=grocer", nil)
 	recorder := httptest.NewRecorder()

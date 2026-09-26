@@ -333,6 +333,7 @@ func updateTask(w http.ResponseWriter, r *http.Request, id int) {
 
 func decodeTask(w http.ResponseWriter, r *http.Request) (model.Task, bool) {
 	var task model.Task
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&task); err != nil {
