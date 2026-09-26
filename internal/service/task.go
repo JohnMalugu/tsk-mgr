@@ -113,6 +113,25 @@ func GetTasks(completed *bool, search string, priority *string, tag *string, off
 			} else if result[i].DueDate.After(result[j].DueDate) {
 				comparison = 1
 			}
+		case "priority":
+			priorityRank := func(priority string) int {
+				switch strings.ToLower(priority) {
+				case "low":
+					return 1
+				case "medium":
+					return 2
+				case "high":
+					return 3
+				default:
+					return 0
+				}
+			}
+			left, right := priorityRank(result[i].Priority), priorityRank(result[j].Priority)
+			if left < right {
+				comparison = -1
+			} else if left > right {
+				comparison = 1
+			}
 		default:
 			if result[i].ID < result[j].ID {
 				comparison = -1

@@ -78,8 +78,8 @@ func sorting(r *http.Request) (string, bool, error) {
 	if sortBy == "" {
 		sortBy = "id"
 	}
-	if sortBy != "id" && sortBy != "title" && sortBy != "dueDate" {
-		return "", false, fmt.Errorf("sort must be id, title, or dueDate")
+	if sortBy != "id" && sortBy != "title" && sortBy != "dueDate" && sortBy != "priority" {
+		return "", false, fmt.Errorf("sort must be id, title, dueDate, or priority")
 	}
 
 	order := r.URL.Query().Get("order")
