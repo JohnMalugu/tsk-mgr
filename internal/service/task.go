@@ -102,7 +102,16 @@ func GetTasks(completed, overdue *bool, search string, priority *string, tag *st
 		if dueBefore != nil && task.DueDate.After(*dueBefore) {
 			continue
 		}
-		if search != "" && !strings.Contains(strings.ToLower(task.Title), search) {
+		matchesSearch := strings.Contains(strings.ToLower(task.Title), search)
+		if search != "" && !matchesSearch {
+			for _, tag := range task.Tags {
+				if strings.Contains(strings.ToLower(tag), search) {
+					matchesSearch = true
+					break
+				}
+			}
+		}
+		if search != "" && !matchesSearch {
 			continue
 		}
 		result = append(result, task)

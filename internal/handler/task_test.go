@@ -97,6 +97,19 @@ func TestHandleTasksFiltersByTitle(t *testing.T) {
 	}
 }
 
+func TestHandleTasksSearchesTags(t *testing.T) {
+	resetTaskFixture()
+	request := httptest.NewRequest(http.MethodGet, "/tasks?q=errands", nil)
+	recorder := httptest.NewRecorder()
+	HandleTasks(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), "Buy groceries") || strings.Contains(recorder.Body.String(), "Learn Go") {
+		t.Fatalf("expected search to match the errands tag only, got %q", recorder.Body.String())
+	}
+}
+
 func TestHandleTasksFiltersByDueDateRange(t *testing.T) {
 	resetTaskFixture()
 	for _, payload := range []string{
