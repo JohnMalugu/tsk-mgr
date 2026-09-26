@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/routes"
@@ -35,7 +40,28 @@ func main() {
 		WriteTimeout:      15 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	if err := server.ListenAndServe(); err != nil {
-		log.Fatal(err)
+	serverErrors := make(chan error, 1)
+	go func() {
+		serverErrors <- server.ListenAndServe()
+	}()
+
+	shutdownSignals := make(chan os.Signal, 1)
+	signal.Notify(shutdownSignals, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(shutdownSignals)
+
+	select {
+	case err := <-serverErrors:
+		if !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal(err)
+		}
+	case <-shutdownSignals:
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := server.Shutdown(ctx); err != nil {
+			log.Printf("graceful shutdown failed: %v", err)
+			if closeErr := server.Close(); closeErr != nil {
+				log.Printf("forced shutdown failed: %v", closeErr)
+			}
+		}
 	}
 }
