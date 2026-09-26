@@ -339,6 +339,10 @@ func decodeTask(w http.ResponseWriter, r *http.Request) (model.Task, bool) {
 		respondError(w, r, http.StatusBadRequest, "request body must be valid JSON")
 		return model.Task{}, false
 	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		respondError(w, r, http.StatusBadRequest, "request body must contain a single JSON value")
+		return model.Task{}, false
+	}
 
 	if errors := validation.ValidateTask(&task); len(errors) > 0 {
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{"errors": errors})

@@ -80,6 +80,17 @@ func TestHandleTasksRejectsInvalidCompletionFilter(t *testing.T) {
 	}
 }
 
+func TestHandleTasksRejectsTrailingJSON(t *testing.T) {
+	resetTaskFixture()
+	body := strings.NewReader(`{"title":"Task","dueDate":"2030-01-02T15:04:05Z"} {}`)
+	request := httptest.NewRequest(http.MethodPost, "/tasks", body)
+	recorder := httptest.NewRecorder()
+	HandleTasks(recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
+	}
+}
+
 func TestHandleTasksFiltersByTitle(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks?q=grocer", nil)
 	recorder := httptest.NewRecorder()
