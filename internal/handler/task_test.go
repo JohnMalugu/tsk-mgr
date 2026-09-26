@@ -225,6 +225,24 @@ func TestHandleTasksSortsByPriority(t *testing.T) {
 	}
 }
 
+func TestHandleTasksSortsByCompletion(t *testing.T) {
+	resetTaskFixture()
+	service.SetTaskCompletion(2, true)
+	request := httptest.NewRequest(http.MethodGet, "/tasks?sort=completed&order=desc", nil)
+	recorder := httptest.NewRecorder()
+	HandleTasks(recorder, request)
+	var tasks []struct {
+		ID        int  `json:"id"`
+		Completed bool `json:"completed"`
+	}
+	if err := json.NewDecoder(recorder.Body).Decode(&tasks); err != nil {
+		t.Fatalf("decode completion-sorted tasks: %v", err)
+	}
+	if len(tasks) != 2 || !tasks[0].Completed || tasks[0].ID != 2 {
+		t.Fatalf("expected completed tasks first, got %#v", tasks)
+	}
+}
+
 func TestHandleTasksRejectsInvalidOrder(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks?order=random", nil)
 	recorder := httptest.NewRecorder()

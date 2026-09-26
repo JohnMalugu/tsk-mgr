@@ -119,6 +119,12 @@ func GetTasks(completed, overdue *bool, search string, priority *string, tag *st
 	sort.SliceStable(result, func(i, j int) bool {
 		comparison := 0
 		switch sortBy {
+		case "completed":
+			if !result[i].Completed && result[j].Completed {
+				comparison = -1
+			} else if result[i].Completed && !result[j].Completed {
+				comparison = 1
+			}
 		case "title":
 			left, right := strings.ToLower(result[i].Title), strings.ToLower(result[j].Title)
 			if left < right {
