@@ -94,3 +94,18 @@ func TestCreateTaskDefaultsPriority(t *testing.T) {
 		t.Fatalf("expected medium priority by default, got %q", created.Priority)
 	}
 }
+
+func TestUpdateTaskPreservesCreatedAt(t *testing.T) {
+	ResetTasks()
+	original := GetTaskByID(1)
+	updated := UpdateTask(1, model.Task{Title: "Updated", DueDate: original.DueDate})
+	if updated == nil {
+		t.Fatal("expected task to update")
+	}
+	if !updated.CreatedAt.Equal(original.CreatedAt) {
+		t.Fatalf("expected createdAt %v to be preserved, got %v", original.CreatedAt, updated.CreatedAt)
+	}
+	if updated.UpdatedAt.IsZero() {
+		t.Fatal("expected updatedAt to be set")
+	}
+}

@@ -221,10 +221,13 @@ func CreateTask(task model.Task) model.Task {
 	mu.Lock()
 	defer mu.Unlock()
 
+	now := time.Now()
 	task.Tags = normalizeTags(task.Tags)
 	if task.Priority == "" {
 		task.Priority = "medium"
 	}
+	task.CreatedAt = now
+	task.UpdatedAt = now
 	task.ID = nextID
 	nextID++
 	tasks = append(tasks, task)
@@ -238,6 +241,8 @@ func UpdateTask(id int, task model.Task) *model.Task {
 
 	for i := range tasks {
 		if tasks[i].ID == id {
+			task.CreatedAt = tasks[i].CreatedAt
+			task.UpdatedAt = time.Now()
 			task.Tags = normalizeTags(task.Tags)
 			if task.Priority == "" {
 				task.Priority = "medium"
