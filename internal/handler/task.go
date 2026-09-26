@@ -173,8 +173,8 @@ func tagFilter(r *http.Request) (*string, error) {
 
 // HandleTaskByID handles requests for /tasks/{id}.
 func HandleTaskByID(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet && r.Method != http.MethodPut && r.Method != http.MethodDelete {
-		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPut+", "+http.MethodDelete)
+	if r.Method != http.MethodGet && r.Method != http.MethodPut && r.Method != http.MethodPatch && r.Method != http.MethodDelete {
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPut+", "+http.MethodPatch+", "+http.MethodDelete)
 		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
@@ -196,6 +196,8 @@ func HandleTaskByID(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, task)
 	case http.MethodPut:
 		updateTask(w, r, id)
+	case http.MethodPatch:
+		patchTask(w, r, id)
 	case http.MethodDelete:
 		if !service.DeleteTask(id) {
 			respondError(w, r, http.StatusNotFound, "task not found")
@@ -357,6 +359,64 @@ func updateTask(w http.ResponseWriter, r *http.Request, id int) {
 	}
 
 	updated := service.UpdateTask(id, task)
+	if updated == nil {
+		respondError(w, r, http.StatusNotFound, "task not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, updated)
+}
+
+func patchTask(w http.ResponseWriter, r *http.Request, id int) {
+	var patch struct {
+		Title       *string    `json:"title"`
+		Description *string    `json:"description"`
+		DueDate     *time.Time `json:"dueDate"`
+		Completed   *bool      `json:"completed"`
+		Priority    *string    `json:"priority"`
+		Tags        *[]string  `json:"tags"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&patch); err != nil {
+		respondError(w, r, http.StatusBadRequest, "request body must be valid JSON")
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		respondError(w, r, http.StatusBadRequest, "request body must contain a single JSON value")
+		return
+	}
+	if patch.Title == nil && patch.Description == nil && patch.DueDate == nil && patch.Completed == nil && patch.Priority == nil && patch.Tags == nil {
+		respondError(w, r, http.StatusBadRequest, "at least one task field must be provided")
+		return
+	}
+	task := service.GetTaskByID(id)
+	if task == nil {
+		respondError(w, r, http.StatusNotFound, "task not found")
+		return
+	}
+	if patch.Title != nil {
+		task.Title = *patch.Title
+	}
+	if patch.Description != nil {
+		task.Description = *patch.Description
+	}
+	if patch.DueDate != nil {
+		task.DueDate = *patch.DueDate
+	}
+	if patch.Completed != nil {
+		task.Completed = *patch.Completed
+	}
+	if patch.Priority != nil {
+		task.Priority = *patch.Priority
+	}
+	if patch.Tags != nil {
+		task.Tags = *patch.Tags
+	}
+	if validationErrors := validation.ValidateTask(task); len(validationErrors) > 0 {
+		respondJSON(w, http.StatusBadRequest, map[string]interface{}{"errors": validationErrors})
+		return
+	}
+	updated := service.UpdateTask(id, *task)
 	if updated == nil {
 		respondError(w, r, http.StatusNotFound, "task not found")
 		return

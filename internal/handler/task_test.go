@@ -546,6 +546,26 @@ func TestHandleTaskByIDUpdatesTask(t *testing.T) {
 	}
 }
 
+func TestHandleTaskByIDPatchesTask(t *testing.T) {
+	resetTaskFixture()
+	request := httptest.NewRequest(http.MethodPatch, "/tasks/1", strings.NewReader(`{"description":"Bring reusable bags"}`))
+	recorder := httptest.NewRecorder()
+	HandleTaskByID(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, recorder.Code, recorder.Body.String())
+	}
+	var task struct {
+		Title       string `json:"title"`
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(recorder.Body).Decode(&task); err != nil {
+		t.Fatalf("decode patched task: %v", err)
+	}
+	if task.Title != "Buy groceries" || task.Description != "Bring reusable bags" {
+		t.Fatalf("expected description-only patch, got %#v", task)
+	}
+}
+
 func TestHandleTaskByIDDeletesTask(t *testing.T) {
 	resetTaskFixture()
 	body := bytes.NewBufferString(`{"title":"Temporary task","dueDate":"2030-01-02T15:04:05Z"}`)
@@ -577,7 +597,7 @@ func TestHandleTaskByIDDeletesTask(t *testing.T) {
 }
 
 func TestHandleTaskByIDRejectsUnsupportedMethod(t *testing.T) {
-	request := httptest.NewRequest(http.MethodPatch, "/tasks/1", nil)
+	request := httptest.NewRequest(http.MethodPost, "/tasks/1", nil)
 	recorder := httptest.NewRecorder()
 
 	HandleTaskByID(recorder, request)
@@ -585,7 +605,7 @@ func TestHandleTaskByIDRejectsUnsupportedMethod(t *testing.T) {
 	if recorder.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, recorder.Code)
 	}
-	if allow := recorder.Header().Get("Allow"); allow != "GET, PUT, DELETE" {
-		t.Fatalf("expected Allow header %q, got %q", "GET, PUT, DELETE", allow)
+	if allow := recorder.Header().Get("Allow"); allow != "GET, PUT, PATCH, DELETE" {
+		t.Fatalf("expected Allow header %q, got %q", "GET, PUT, PATCH, DELETE", allow)
 	}
 }
