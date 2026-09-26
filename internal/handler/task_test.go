@@ -125,13 +125,54 @@ func TestHandleTasksSortsByDueDateAscending(t *testing.T) {
 }
 
 func TestHandleTasksRejectsInvalidSort(t *testing.T) {
-	request := httptest.NewRequest(http.MethodGet, "/tasks?sort=priority", nil)
+	request := httptest.NewRequest(http.MethodGet, "/tasks?sort=unknown", nil)
 	recorder := httptest.NewRecorder()
 
 	HandleTasks(recorder, request)
 
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
+	}
+}
+
+func TestHandleTasksSortsByPriority(t *testing.T) {
+	resetTaskFixture()
+	body := bytes.NewBufferString(`{"title":"Urgent task","dueDate":"2030-01-02T15:04:05Z","priority":"high"}`)
+	createRequest := httptest.NewRequest(http.MethodPost, "/tasks", body)
+	createRecorder := httptest.NewRecorder()
+	HandleTasks(createRecorder, createRequest)
+	if createRecorder.Code != http.StatusCreated {
+		t.Fatalf("expected task creation status %d, got %d", http.StatusCreated, createRecorder.Code)
+	}
+
+	for _, test := range []struct {
+		order string
+		want  []int
+	}{
+		{order: "asc", want: []int{2, 1, 3}},
+		{order: "desc", want: []int{3, 1, 2}},
+	} {
+		request := httptest.NewRequest(http.MethodGet, "/tasks?sort=priority&order="+test.order, nil)
+		recorder := httptest.NewRecorder()
+		HandleTasks(recorder, request)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("order %s: expected status %d, got %d", test.order, http.StatusOK, recorder.Code)
+		}
+
+		var tasks []struct {
+			ID int `json:"id"`
+		}
+		if err := json.NewDecoder(recorder.Body).Decode(&tasks); err != nil {
+			t.Fatalf("decode priority-sorted tasks: %v", err)
+		}
+		if len(tasks) != len(test.want) {
+			t.Fatalf("order %s: expected %d tasks, got %#v", test.order, len(test.want), tasks)
+		}
+		for index, task := range tasks {
+			if task.ID != test.want[index] {
+				t.Fatalf("order %s: expected task IDs %v, got %#v", test.order, test.want, tasks)
+			}
+		}
 	}
 }
 
