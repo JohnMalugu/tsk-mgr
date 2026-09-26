@@ -496,10 +496,11 @@ func TestHandleTasksSummaryReturnsCounts(t *testing.T) {
 	}
 
 	var summary struct {
-		Total     int `json:"total"`
-		Completed int `json:"completed"`
-		Pending   int `json:"pending"`
-		Overdue   int `json:"overdue"`
+		Total      int            `json:"total"`
+		Completed  int            `json:"completed"`
+		Pending    int            `json:"pending"`
+		Overdue    int            `json:"overdue"`
+		ByPriority map[string]int `json:"byPriority"`
 	}
 	if err := json.NewDecoder(recorder.Body).Decode(&summary); err != nil {
 		t.Fatalf("decode task summary: %v", err)
@@ -515,6 +516,9 @@ func TestHandleTasksSummaryReturnsCounts(t *testing.T) {
 	}
 	if summary.Overdue != 1 {
 		t.Fatalf("expected overdue 1, got %d", summary.Overdue)
+	}
+	if summary.ByPriority["medium"] != 1 || summary.ByPriority["low"] != 1 || summary.ByPriority["high"] != 0 {
+		t.Fatalf("unexpected priority counts: %#v", summary.ByPriority)
 	}
 }
 

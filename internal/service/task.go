@@ -32,10 +32,11 @@ func ResetTasks() {
 }
 
 type TaskSummary struct {
-	Total     int `json:"total"`
-	Completed int `json:"completed"`
-	Pending   int `json:"pending"`
-	Overdue   int `json:"overdue"`
+	Total      int            `json:"total"`
+	Completed  int            `json:"completed"`
+	Pending    int            `json:"pending"`
+	Overdue    int            `json:"overdue"`
+	ByPriority map[string]int `json:"byPriority"`
 }
 
 type BulkUpdateResult struct {
@@ -82,8 +83,12 @@ func GetTaskSummary() TaskSummary {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	summary := TaskSummary{Total: len(tasks)}
+	summary := TaskSummary{Total: len(tasks), ByPriority: map[string]int{"low": 0, "medium": 0, "high": 0}}
 	for _, task := range tasks {
+		priority := strings.ToLower(task.Priority)
+		if _, ok := summary.ByPriority[priority]; ok {
+			summary.ByPriority[priority]++
+		}
 		if task.Completed {
 			summary.Completed++
 			continue
