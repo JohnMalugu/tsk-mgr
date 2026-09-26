@@ -42,6 +42,11 @@ type BulkUpdateResult struct {
 	Updated int          `json:"updated"`
 }
 
+type BulkDeleteResult struct {
+	Deleted []int `json:"deleted"`
+	Count   int   `json:"count"`
+}
+
 // GetAllTasks returns the first page of all tasks.
 func GetAllTasks() []model.Task {
 	return GetTasks(nil, nil, "", nil, nil, nil, nil, 0, 20, "id", false)
@@ -283,4 +288,39 @@ func BulkSetTaskCompletion(ids []int, completed bool) (BulkUpdateResult, bool) {
 		updated = append(updated, tasks[position])
 	}
 	return BulkUpdateResult{Tasks: updated, Updated: len(updated)}, true
+}
+
+// BulkDeleteTasks removes all requested tasks only when every ID exists.
+func BulkDeleteTasks(ids []int) (BulkDeleteResult, bool) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	requested := make(map[int]struct{}, len(ids))
+	for _, id := range ids {
+		requested[id] = struct{}{}
+	}
+	for id := range requested {
+		found := false
+		for _, task := range tasks {
+			if task.ID == id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return BulkDeleteResult{}, false
+		}
+	}
+
+	deleted := make([]int, 0, len(requested))
+	remaining := make([]model.Task, 0, len(tasks)-len(requested))
+	for _, task := range tasks {
+		if _, ok := requested[task.ID]; ok {
+			deleted = append(deleted, task.ID)
+			continue
+		}
+		remaining = append(remaining, task)
+	}
+	tasks = remaining
+	return BulkDeleteResult{Deleted: deleted, Count: len(deleted)}, true
 }

@@ -57,3 +57,20 @@ func TestBulkSetTaskCompletionDoesNotPartiallyUpdate(t *testing.T) {
 		t.Fatal("expected task 1 to remain unchanged")
 	}
 }
+
+func TestBulkDeleteTasksIsAtomic(t *testing.T) {
+	ResetTasks()
+	if _, ok := BulkDeleteTasks([]int{1, 999}); ok {
+		t.Fatal("expected deletion to reject a missing task")
+	}
+	if GetTaskByID(1) == nil {
+		t.Fatal("expected existing task to remain after rejected deletion")
+	}
+	result, ok := BulkDeleteTasks([]int{1, 2})
+	if !ok || result.Count != 2 || len(result.Deleted) != 2 {
+		t.Fatalf("expected both tasks deleted, got %#v, ok=%v", result, ok)
+	}
+	if len(GetAllTasks()) != 0 {
+		t.Fatal("expected no tasks to remain")
+	}
+}
