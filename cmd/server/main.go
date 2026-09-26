@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/routes"
 )
@@ -26,7 +27,15 @@ func main() {
 	fmt.Printf("   PATCH  http://localhost:8080/tasks/{id}/complete\n")
 	fmt.Printf("\n")
 
-	if err := http.ListenAndServe(port, nil); err != nil {
+	server := &http.Server{
+		Addr:              port,
+		Handler:           nil,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }
