@@ -98,6 +98,9 @@ func TestCreateTaskDefaultsPriority(t *testing.T) {
 func TestUpdateTaskPreservesCreatedAt(t *testing.T) {
 	ResetTasks()
 	original := GetTaskByID(1)
+	if original.CreatedAt.IsZero() || original.UpdatedAt.IsZero() {
+		t.Fatal("expected seeded task timestamps to be initialized")
+	}
 	updated := UpdateTask(1, model.Task{Title: "Updated", DueDate: original.DueDate})
 	if updated == nil {
 		t.Fatal("expected task to update")

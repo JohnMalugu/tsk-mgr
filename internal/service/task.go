@@ -23,9 +23,10 @@ func ResetTasks() {
 	mu.Lock()
 	defer mu.Unlock()
 
+	now := time.Now()
 	tasks = []model.Task{
-		{ID: 1, Title: "Buy groceries", DueDate: time.Now().AddDate(0, 0, -1), Completed: false, Priority: "medium", Tags: []string{"home", "errands"}},
-		{ID: 2, Title: "Learn Go", DueDate: time.Now().AddDate(0, 0, 3), Completed: false, Priority: "low", Tags: []string{"study"}},
+		{ID: 1, Title: "Buy groceries", CreatedAt: now, UpdatedAt: now, DueDate: now.AddDate(0, 0, -1), Completed: false, Priority: "medium", Tags: []string{"home", "errands"}},
+		{ID: 2, Title: "Learn Go", CreatedAt: now, UpdatedAt: now, DueDate: now.AddDate(0, 0, 3), Completed: false, Priority: "low", Tags: []string{"study"}},
 	}
 	nextID = 3
 }
