@@ -222,6 +222,9 @@ func CreateTask(task model.Task) model.Task {
 	defer mu.Unlock()
 
 	task.Tags = normalizeTags(task.Tags)
+	if task.Priority == "" {
+		task.Priority = "medium"
+	}
 	task.ID = nextID
 	nextID++
 	tasks = append(tasks, task)
@@ -236,6 +239,9 @@ func UpdateTask(id int, task model.Task) *model.Task {
 	for i := range tasks {
 		if tasks[i].ID == id {
 			task.Tags = normalizeTags(task.Tags)
+			if task.Priority == "" {
+				task.Priority = "medium"
+			}
 			task.ID = id
 			tasks[i] = task
 			updated := tasks[i]

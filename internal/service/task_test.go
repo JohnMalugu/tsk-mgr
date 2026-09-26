@@ -86,3 +86,11 @@ func TestCreateTaskNormalizesTags(t *testing.T) {
 		t.Fatalf("expected trimmed, unique tags, got %#v", created.Tags)
 	}
 }
+
+func TestCreateTaskDefaultsPriority(t *testing.T) {
+	ResetTasks()
+	created := CreateTask(model.Task{Title: "No priority"})
+	if created.Priority != "medium" {
+		t.Fatalf("expected medium priority by default, got %q", created.Priority)
+	}
+}
