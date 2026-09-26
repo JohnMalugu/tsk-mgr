@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	appError "github.com/JohnMalugu/tsk-mgr-api/internal/error"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -34,6 +35,20 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, http.StatusBadRequest, "tag filter is invalid")
 			return
 		}
+		dueAfter, err := dateFilter(r, "dueAfter")
+		if err != nil {
+			respondError(w, r, http.StatusBadRequest, "dueAfter must be an RFC3339 timestamp")
+			return
+		}
+		dueBefore, err := dateFilter(r, "dueBefore")
+		if err != nil {
+			respondError(w, r, http.StatusBadRequest, "dueBefore must be an RFC3339 timestamp")
+			return
+		}
+		if dueAfter != nil && dueBefore != nil && dueAfter.After(*dueBefore) {
+			respondError(w, r, http.StatusBadRequest, "dueAfter must not be later than dueBefore")
+			return
+		}
 		offset, limit, err := pagination(r)
 		if err != nil {
 			respondError(w, r, http.StatusBadRequest, err.Error())
@@ -44,13 +59,25 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, http.StatusBadRequest, err.Error())
 			return
 		}
-		respondJSON(w, http.StatusOK, service.GetTasks(completed, r.URL.Query().Get("q"), priority, tag, offset, limit, sortBy, descending))
+		respondJSON(w, http.StatusOK, service.GetTasks(completed, r.URL.Query().Get("q"), priority, tag, dueAfter, dueBefore, offset, limit, sortBy, descending))
 	case http.MethodPost:
 		createTask(w, r)
 	default:
 		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
 		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
 	}
+}
+
+func dateFilter(r *http.Request, name string) (*time.Time, error) {
+	value := r.URL.Query().Get(name)
+	if value == "" {
+		return nil, nil
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return nil, err
+	}
+	return &parsed, nil
 }
 
 func pagination(r *http.Request) (int, int, error) {

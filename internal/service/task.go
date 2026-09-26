@@ -44,7 +44,7 @@ type BulkUpdateResult struct {
 
 // GetAllTasks returns the first page of all tasks.
 func GetAllTasks() []model.Task {
-	return GetTasks(nil, "", nil, nil, 0, 20, "id", false)
+	return GetTasks(nil, "", nil, nil, nil, nil, 0, 20, "id", false)
 }
 
 func contains(items []string, target string) bool {
@@ -76,7 +76,7 @@ func GetTaskSummary() TaskSummary {
 }
 
 // GetTasks returns a page of tasks matching the optional filters.
-func GetTasks(completed *bool, search string, priority *string, tag *string, offset, limit int, sortBy string, descending bool) []model.Task {
+func GetTasks(completed *bool, search string, priority *string, tag *string, dueAfter, dueBefore *time.Time, offset, limit int, sortBy string, descending bool) []model.Task {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -90,6 +90,12 @@ func GetTasks(completed *bool, search string, priority *string, tag *string, off
 			continue
 		}
 		if tag != nil && !contains(task.Tags, *tag) {
+			continue
+		}
+		if dueAfter != nil && task.DueDate.Before(*dueAfter) {
+			continue
+		}
+		if dueBefore != nil && task.DueDate.After(*dueBefore) {
 			continue
 		}
 		if search != "" && !strings.Contains(strings.ToLower(task.Title), search) {

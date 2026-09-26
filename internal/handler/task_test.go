@@ -84,6 +84,29 @@ func TestHandleTasksFiltersByTitle(t *testing.T) {
 	}
 }
 
+func TestHandleTasksFiltersByDueDateRange(t *testing.T) {
+	resetTaskFixture()
+	for _, payload := range []string{
+		`{"title":"June task","dueDate":"2030-06-15T12:00:00Z"}`,
+		`{"title":"July task","dueDate":"2030-07-15T12:00:00Z"}`,
+	} {
+		recorder := httptest.NewRecorder()
+		HandleTasks(recorder, httptest.NewRequest(http.MethodPost, "/tasks", strings.NewReader(payload)))
+		if recorder.Code != http.StatusCreated {
+			t.Fatalf("expected task creation status %d, got %d", http.StatusCreated, recorder.Code)
+		}
+	}
+	request := httptest.NewRequest(http.MethodGet, "/tasks?dueAfter=2030-06-01T00:00:00Z&dueBefore=2030-06-30T23:59:59Z", nil)
+	recorder := httptest.NewRecorder()
+	HandleTasks(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), "June task") || strings.Contains(recorder.Body.String(), "July task") {
+		t.Fatalf("expected only June task in range, got %q", recorder.Body.String())
+	}
+}
+
 func TestHandleTasksSortsByTitleDescending(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks?sort=title&order=desc", nil)
 	recorder := httptest.NewRecorder()
