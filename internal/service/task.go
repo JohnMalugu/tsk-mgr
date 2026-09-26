@@ -358,3 +358,37 @@ func BulkDeleteTasks(ids []int) (BulkDeleteResult, bool) {
 	tasks = remaining
 	return BulkDeleteResult{Deleted: deleted, Count: len(deleted)}, true
 }
+
+// BulkSetTaskPriority updates priority only when every requested ID exists.
+func BulkSetTaskPriority(ids []int, priority string) (BulkUpdateResult, bool) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	positions := make([]int, 0, len(ids))
+	seen := make(map[int]struct{}, len(ids))
+	for _, id := range ids {
+		if _, duplicate := seen[id]; duplicate {
+			continue
+		}
+		seen[id] = struct{}{}
+		position := -1
+		for i := range tasks {
+			if tasks[i].ID == id {
+				position = i
+				break
+			}
+		}
+		if position < 0 {
+			return BulkUpdateResult{}, false
+		}
+		positions = append(positions, position)
+	}
+
+	updated := make([]model.Task, 0, len(positions))
+	for _, position := range positions {
+		tasks[position].Priority = priority
+		tasks[position].UpdatedAt = time.Now()
+		updated = append(updated, tasks[position])
+	}
+	return BulkUpdateResult{Tasks: updated, Updated: len(updated)}, true
+}

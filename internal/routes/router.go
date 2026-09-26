@@ -35,6 +35,10 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		handler.HandleBulkDelete(w, r)
 		return
 	}
+	if r.URL.Path == "/tasks/bulk/priority" {
+		handler.HandleBulkPriority(w, r)
+		return
+	}
 
 	if strings.HasSuffix(r.URL.Path, "/complete") && strings.HasPrefix(r.URL.Path, "/tasks/") {
 		handler.HandleTaskComplete(w, r)

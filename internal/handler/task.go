@@ -352,6 +352,45 @@ func HandleBulkDelete(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, result)
 }
 
+func HandleBulkPriority(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var payload struct {
+		IDs      []int  `json:"ids"`
+		Priority string `json:"priority"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&payload); err != nil {
+		respondError(w, r, http.StatusBadRequest, "request body must be valid JSON")
+		return
+	}
+	if len(payload.IDs) == 0 {
+		respondError(w, r, http.StatusBadRequest, "ids must contain at least one task id")
+		return
+	}
+	priority := strings.ToLower(strings.TrimSpace(payload.Priority))
+	if priority != "low" && priority != "medium" && priority != "high" {
+		respondError(w, r, http.StatusBadRequest, "priority must be low, medium, or high")
+		return
+	}
+	for _, id := range payload.IDs {
+		if id < 1 {
+			respondError(w, r, http.StatusBadRequest, "task ids must be positive integers")
+			return
+		}
+	}
+	result, ok := service.BulkSetTaskPriority(payload.IDs, priority)
+	if !ok {
+		respondError(w, r, http.StatusNotFound, "one or more tasks not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, result)
+}
+
 func updateTask(w http.ResponseWriter, r *http.Request, id int) {
 	task, ok := decodeTask(w, r)
 	if !ok {

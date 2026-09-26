@@ -95,6 +95,20 @@ func TestCreateTaskDefaultsPriority(t *testing.T) {
 	}
 }
 
+func TestBulkSetTaskPriorityIsAtomic(t *testing.T) {
+	ResetTasks()
+	if _, ok := BulkSetTaskPriority([]int{1, 999}, "high"); ok {
+		t.Fatal("expected update to reject a missing task")
+	}
+	if task := GetTaskByID(1); task == nil || task.Priority != "medium" {
+		t.Fatal("expected existing task priority to remain unchanged")
+	}
+	result, ok := BulkSetTaskPriority([]int{1, 2}, "high")
+	if !ok || result.Updated != 2 {
+		t.Fatalf("expected two tasks updated, got %#v, ok=%v", result, ok)
+	}
+}
+
 func TestUpdateTaskPreservesCreatedAt(t *testing.T) {
 	ResetTasks()
 	original := GetTaskByID(1)
