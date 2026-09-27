@@ -222,6 +222,34 @@ func GetTaskByID(id int) *model.Task {
 	return nil
 }
 
+// GetTaskDependencies returns copies of all prerequisite tasks for a task ID.
+func GetTaskDependencies(id int) ([]model.Task, bool) {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	var task *model.Task
+	for i := range tasks {
+		if tasks[i].ID == id {
+			task = &tasks[i]
+			break
+		}
+	}
+	if task == nil {
+		return nil, false
+	}
+
+	dependencies := make([]model.Task, 0, len(task.DependsOn))
+	for _, dependencyID := range task.DependsOn {
+		for _, candidate := range tasks {
+			if candidate.ID == dependencyID {
+				dependencies = append(dependencies, candidate)
+				break
+			}
+		}
+	}
+	return dependencies, true
+}
+
 // CreateTask creates a new task
 func CreateTask(task model.Task) model.Task {
 	mu.Lock()

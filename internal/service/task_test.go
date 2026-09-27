@@ -24,6 +24,17 @@ func TestGetTaskByIDReturnsCopy(t *testing.T) {
 	}
 }
 
+func TestGetTaskDependenciesDistinguishesEmptyFromMissing(t *testing.T) {
+	ResetTasks()
+	dependencies, found := GetTaskDependencies(1)
+	if !found || dependencies == nil || len(dependencies) != 0 {
+		t.Fatalf("expected existing task with empty dependency list, got %#v, found=%v", dependencies, found)
+	}
+	if _, found := GetTaskDependencies(999); found {
+		t.Fatal("expected missing task to be reported")
+	}
+}
+
 func TestGetTasksReturnsEmptyPageBeyondResults(t *testing.T) {
 	page := GetTasks(nil, nil, "", nil, nil, nil, nil, 100, 20, "id", false)
 	if page == nil {
