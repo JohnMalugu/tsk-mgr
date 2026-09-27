@@ -1,12 +1,22 @@
 package service
 
 import (
+	"errors"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
+)
+
+var (
+	ErrTaskNotFound            = errors.New("task not found")
+	ErrDependencySelfReference = errors.New("task cannot depend on itself")
+	ErrDependencyAlreadyExists = errors.New("dependency already exists")
+	ErrDependencyCycle         = errors.New("dependency would create a cycle")
+	ErrTaskIsPrerequisite      = errors.New("task is a prerequisite for other tasks")
+	ErrTaskBlocked             = errors.New("task has incomplete prerequisites")
 )
 
 // In-memory storage (we'll use database later)

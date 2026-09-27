@@ -1,10 +1,20 @@
 package service
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
+
+func TestDependencyErrorsAreDistinct(t *testing.T) {
+	if errors.Is(ErrDependencyCycle, ErrDependencyAlreadyExists) {
+		t.Fatal("cycle and duplicate errors must remain distinct")
+	}
+	if ErrTaskBlocked.Error() != "task has incomplete prerequisites" {
+		t.Fatalf("unexpected blocked-task error: %q", ErrTaskBlocked)
+	}
+}
 
 func TestGetTaskByIDReturnsCopy(t *testing.T) {
 	task := GetTaskByID(1)
