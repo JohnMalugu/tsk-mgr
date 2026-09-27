@@ -67,6 +67,22 @@ func TestAddTaskDependencyRejectsInvalidGraphEdges(t *testing.T) {
 	}
 }
 
+func TestRemoveTaskDependencyUpdatesGraph(t *testing.T) {
+	ResetTasks()
+	if _, err := AddTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RemoveTaskDependency(1, 2); err != nil {
+		t.Fatalf("remove dependency: %v", err)
+	}
+	if _, err := RemoveTaskDependency(1, 2); !errors.Is(err, ErrDependencyNotFound) {
+		t.Fatalf("expected absent-edge error, got %v", err)
+	}
+	if _, err := RemoveTaskDependency(999, 2); !errors.Is(err, ErrTaskNotFound) {
+		t.Fatalf("expected missing-task error, got %v", err)
+	}
+}
+
 func TestGetTasksReturnsEmptyPageBeyondResults(t *testing.T) {
 	page := GetTasks(nil, nil, "", nil, nil, nil, nil, 100, 20, "id", false)
 	if page == nil {

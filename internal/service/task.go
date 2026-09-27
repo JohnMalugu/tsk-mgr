@@ -14,6 +14,7 @@ var (
 	ErrTaskNotFound            = errors.New("task not found")
 	ErrDependencySelfReference = errors.New("task cannot depend on itself")
 	ErrDependencyAlreadyExists = errors.New("dependency already exists")
+	ErrDependencyNotFound      = errors.New("dependency not found")
 	ErrDependencyCycle         = errors.New("dependency would create a cycle")
 	ErrTaskIsPrerequisite      = errors.New("task is a prerequisite for other tasks")
 	ErrTaskBlocked             = errors.New("task has incomplete prerequisites")
@@ -317,6 +318,30 @@ func AddTaskDependency(taskID, dependencyID int) (*model.Task, error) {
 	updated := tasks[taskPosition]
 	updated.DependsOn = append([]int(nil), updated.DependsOn...)
 	return &updated, nil
+}
+
+// RemoveTaskDependency removes dependencyID from taskID's prerequisites.
+func RemoveTaskDependency(taskID, dependencyID int) (*model.Task, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	for i := range tasks {
+		if tasks[i].ID != taskID {
+			continue
+		}
+		for dependencyIndex, existingID := range tasks[i].DependsOn {
+			if existingID != dependencyID {
+				continue
+			}
+			tasks[i].DependsOn = append(tasks[i].DependsOn[:dependencyIndex], tasks[i].DependsOn[dependencyIndex+1:]...)
+			tasks[i].UpdatedAt = time.Now()
+			updated := tasks[i]
+			updated.DependsOn = append([]int(nil), updated.DependsOn...)
+			return &updated, nil
+		}
+		return nil, ErrDependencyNotFound
+	}
+	return nil, ErrTaskNotFound
 }
 
 // CreateTask creates a new task
