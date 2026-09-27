@@ -418,6 +418,21 @@ func TestHandleTaskCompleteMarksCompleted(t *testing.T) {
 	}
 }
 
+func TestHandleTaskCompleteRejectsBlockedTask(t *testing.T) {
+	resetTaskFixture()
+	if _, err := service.AddTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	HandleTaskComplete(recorder, httptest.NewRequest(http.MethodPatch, "/tasks/1/complete", nil))
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusConflict, recorder.Code, recorder.Body.String())
+	}
+	if task := service.GetTaskByID(1); task == nil || task.Completed {
+		t.Fatal("blocked task must remain incomplete")
+	}
+}
+
 func TestHandleBulkCompleteMarksTasksCompleted(t *testing.T) {
 	resetTaskFixture()
 	body := bytes.NewBufferString(`{"ids":[1,2]}`)
@@ -431,6 +446,22 @@ func TestHandleBulkCompleteMarksTasksCompleted(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), `"updated":2`) {
 		t.Fatalf("expected two updated tasks, got %q", recorder.Body.String())
+	}
+}
+
+func TestHandleBulkCompleteRejectsBlockedBatchAtomically(t *testing.T) {
+	resetTaskFixture()
+	if _, err := service.AddTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	body := strings.NewReader(`{"ids":[1]}`)
+	HandleBulkComplete(recorder, httptest.NewRequest(http.MethodPost, "/tasks/bulk/complete", body))
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("expected status %d, got %d", http.StatusConflict, recorder.Code)
+	}
+	if task := service.GetTaskByID(1); task == nil || task.Completed {
+		t.Fatal("rejected bulk completion must not mutate task")
 	}
 }
 

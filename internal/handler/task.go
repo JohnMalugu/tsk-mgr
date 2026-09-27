@@ -257,9 +257,13 @@ func HandleTaskComplete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	updated := service.SetTaskCompletion(id, completed)
-	if updated == nil {
-		respondError(w, r, http.StatusNotFound, "task not found")
+	updated, err := service.SetTaskCompletionChecked(id, completed)
+	if err != nil {
+		if errors.Is(err, service.ErrTaskBlocked) {
+			respondError(w, r, http.StatusConflict, err.Error())
+		} else {
+			respondError(w, r, http.StatusNotFound, err.Error())
+		}
 		return
 	}
 	respondJSON(w, http.StatusOK, updated)
@@ -399,9 +403,13 @@ func HandleBulkComplete(w http.ResponseWriter, r *http.Request) {
 	if payload.Completed != nil {
 		completed = *payload.Completed
 	}
-	result, ok := service.BulkSetTaskCompletion(payload.IDs, completed)
-	if !ok {
-		respondError(w, r, http.StatusNotFound, "one or more tasks not found")
+	result, err := service.BulkSetTaskCompletionChecked(payload.IDs, completed)
+	if err != nil {
+		if errors.Is(err, service.ErrTaskBlocked) {
+			respondError(w, r, http.StatusConflict, err.Error())
+		} else {
+			respondError(w, r, http.StatusNotFound, "one or more tasks not found")
+		}
 		return
 	}
 	respondJSON(w, http.StatusOK, result)
