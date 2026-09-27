@@ -45,6 +45,28 @@ func TestGetTaskDependenciesDistinguishesEmptyFromMissing(t *testing.T) {
 	}
 }
 
+func TestAddTaskDependencyRejectsInvalidGraphEdges(t *testing.T) {
+	ResetTasks()
+	if _, err := AddTaskDependency(1, 1); !errors.Is(err, ErrDependencySelfReference) {
+		t.Fatalf("expected self-reference error, got %v", err)
+	}
+	if _, err := AddTaskDependency(1, 999); !errors.Is(err, ErrTaskNotFound) {
+		t.Fatalf("expected missing-task error, got %v", err)
+	}
+	if _, err := AddTaskDependency(1, 2); err != nil {
+		t.Fatalf("add first edge: %v", err)
+	}
+	if _, err := AddTaskDependency(1, 2); !errors.Is(err, ErrDependencyAlreadyExists) {
+		t.Fatalf("expected duplicate-edge error, got %v", err)
+	}
+	if _, err := AddTaskDependency(2, 1); !errors.Is(err, ErrDependencyCycle) {
+		t.Fatalf("expected cycle error, got %v", err)
+	}
+	if task := GetTaskByID(2); task == nil || len(task.DependsOn) != 0 {
+		t.Fatal("cycle rejection must not mutate the graph")
+	}
+}
+
 func TestGetTasksReturnsEmptyPageBeyondResults(t *testing.T) {
 	page := GetTasks(nil, nil, "", nil, nil, nil, nil, 100, 20, "id", false)
 	if page == nil {

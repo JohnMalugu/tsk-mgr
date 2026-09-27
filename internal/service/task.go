@@ -260,6 +260,65 @@ func GetTaskDependencies(id int) ([]model.Task, bool) {
 	return dependencies, true
 }
 
+// AddTaskDependency makes dependencyID a prerequisite of taskID.
+func AddTaskDependency(taskID, dependencyID int) (*model.Task, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	taskPosition, dependencyPosition := -1, -1
+	for i := range tasks {
+		if tasks[i].ID == taskID {
+			taskPosition = i
+		}
+		if tasks[i].ID == dependencyID {
+			dependencyPosition = i
+		}
+	}
+	if taskPosition < 0 || dependencyPosition < 0 {
+		return nil, ErrTaskNotFound
+	}
+	if taskID == dependencyID {
+		return nil, ErrDependencySelfReference
+	}
+	for _, existing := range tasks[taskPosition].DependsOn {
+		if existing == dependencyID {
+			return nil, ErrDependencyAlreadyExists
+		}
+	}
+
+	visited := make(map[int]struct{})
+	var reachesTask func(int) bool
+	reachesTask = func(currentID int) bool {
+		if currentID == taskID {
+			return true
+		}
+		if _, seen := visited[currentID]; seen {
+			return false
+		}
+		visited[currentID] = struct{}{}
+		for _, current := range tasks {
+			if current.ID == currentID {
+				for _, prerequisiteID := range current.DependsOn {
+					if reachesTask(prerequisiteID) {
+						return true
+					}
+				}
+				break
+			}
+		}
+		return false
+	}
+	if reachesTask(dependencyID) {
+		return nil, ErrDependencyCycle
+	}
+
+	tasks[taskPosition].DependsOn = append(tasks[taskPosition].DependsOn, dependencyID)
+	tasks[taskPosition].UpdatedAt = time.Now()
+	updated := tasks[taskPosition]
+	updated.DependsOn = append([]int(nil), updated.DependsOn...)
+	return &updated, nil
+}
+
 // CreateTask creates a new task
 func CreateTask(task model.Task) model.Task {
 	mu.Lock()
