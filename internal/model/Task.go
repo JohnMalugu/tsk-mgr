@@ -12,4 +12,5 @@ type Task struct {
 	Completed   bool      `json:"completed"`
 	Priority    string    `json:"priority"`
 	Tags        []string  `json:"tags"`
+	DependsOn   []int     `json:"dependsOn"`
 }
