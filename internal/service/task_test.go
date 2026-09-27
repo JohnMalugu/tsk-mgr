@@ -82,6 +82,51 @@ func TestReplaceTaskDependenciesIsAtomicAndCycleSafe(t *testing.T) {
 	}
 }
 
+func TestCompletedTaskCannotReceiveIncompletePrerequisite(t *testing.T) {
+	ResetTasks()
+	if _, err := SetTaskCompletionChecked(1, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddTaskDependency(1, 2); !errors.Is(err, ErrTaskBlocked) {
+		t.Fatalf("expected dependency add rejection, got %v", err)
+	}
+	if _, err := ReplaceTaskDependencies(1, []int{2}); !errors.Is(err, ErrTaskBlocked) {
+		t.Fatalf("expected dependency replacement rejection, got %v", err)
+	}
+	if _, err := CreateTaskWithDependencies(model.Task{Title: "Already complete", Completed: true}, []int{2}); !errors.Is(err, ErrTaskBlocked) {
+		t.Fatalf("expected completed-task creation rejection, got %v", err)
+	}
+	if _, err := UpdateTaskWithDependencies(1, model.Task{Title: "Still complete", Completed: true}, []int{2}); !errors.Is(err, ErrTaskBlocked) {
+		t.Fatalf("expected completed-task update rejection, got %v", err)
+	}
+}
+
+func TestPrerequisiteCannotBeUncompletedWhileDependentIsComplete(t *testing.T) {
+	ResetTasks()
+	if _, err := AddTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BulkSetTaskCompletionChecked([]int{1, 2}, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetTaskCompletionChecked(2, false); !errors.Is(err, ErrTaskBlocked) {
+		t.Fatalf("expected prerequisite reset to be rejected, got %v", err)
+	}
+	if _, err := BulkSetTaskCompletionChecked([]int{2}, false); !errors.Is(err, ErrTaskBlocked) {
+		t.Fatalf("expected partial reset batch to be rejected, got %v", err)
+	}
+	prerequisite := GetTaskByID(2)
+	if prerequisite == nil {
+		t.Fatal("expected prerequisite task to exist")
+	}
+	if _, err := UpdateTaskWithDependencies(2, model.Task{Title: prerequisite.Title, DueDate: prerequisite.DueDate, Completed: false}, prerequisite.DependsOn); !errors.Is(err, ErrTaskBlocked) {
+		t.Fatalf("expected full update reset to be rejected, got %v", err)
+	}
+	if _, err := BulkSetTaskCompletionChecked([]int{1, 2}, false); err != nil {
+		t.Fatalf("expected dependent and prerequisite to reset together, got %v", err)
+	}
+}
+
 func TestRemoveTaskDependencyUpdatesGraph(t *testing.T) {
 	ResetTasks()
 	if _, err := AddTaskDependency(1, 2); err != nil {
