@@ -326,6 +326,9 @@ func AddTaskDependency(taskID, dependencyID int) (*model.Task, error) {
 	if taskID == dependencyID {
 		return nil, ErrDependencySelfReference
 	}
+	if tasks[taskPosition].Completed && !tasks[dependencyPosition].Completed {
+		return nil, ErrTaskBlocked
+	}
 	for _, existing := range tasks[taskPosition].DependsOn {
 		if existing == dependencyID {
 			return nil, ErrDependencyAlreadyExists
@@ -420,6 +423,9 @@ func ReplaceTaskDependencies(taskID int, dependencyIDs []int) (*model.Task, erro
 		seen[dependencyID] = struct{}{}
 		validated = append(validated, dependencyID)
 	}
+	if tasks[taskPosition].Completed && hasIncompleteDependencyIDsLocked(validated) {
+		return nil, ErrTaskBlocked
+	}
 
 	original := tasks[taskPosition].DependsOn
 	tasks[taskPosition].DependsOn = validated
@@ -479,6 +485,9 @@ func CreateTaskWithDependencies(task model.Task, dependencyIDs []int) (model.Tas
 		}
 		seen[dependencyID] = struct{}{}
 	}
+	if task.Completed && hasIncompleteDependencyIDsLocked(dependencyIDs) {
+		return model.Task{}, ErrTaskBlocked
+	}
 	now := time.Now()
 	task.Tags = normalizeTags(task.Tags)
 	if task.Priority == "" {
@@ -508,6 +517,9 @@ func UpdateTaskWithDependencies(id int, task model.Task, dependencyIDs []int) (*
 		if tasks[i].ID == id {
 			if err := validateDependencySetLocked(id, dependencyIDs); err != nil {
 				return nil, err
+			}
+			if task.Completed && hasIncompleteDependencyIDsLocked(dependencyIDs) {
+				return nil, ErrTaskBlocked
 			}
 			task.CreatedAt = tasks[i].CreatedAt
 			task.UpdatedAt = time.Now()
@@ -632,7 +644,11 @@ func SetTaskCompletionChecked(id int, completed bool) (*model.Task, error) {
 }
 
 func hasIncompletePrerequisiteLocked(task model.Task) bool {
-	for _, dependencyID := range task.DependsOn {
+	return hasIncompleteDependencyIDsLocked(task.DependsOn)
+}
+
+func hasIncompleteDependencyIDsLocked(dependencyIDs []int) bool {
+	for _, dependencyID := range dependencyIDs {
 		for _, dependency := range tasks {
 			if dependency.ID == dependencyID && !dependency.Completed {
 				return true

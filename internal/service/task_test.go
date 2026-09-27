@@ -82,6 +82,25 @@ func TestReplaceTaskDependenciesIsAtomicAndCycleSafe(t *testing.T) {
 	}
 }
 
+func TestCompletedTaskCannotReceiveIncompletePrerequisite(t *testing.T) {
+	ResetTasks()
+	if _, err := SetTaskCompletionChecked(1, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddTaskDependency(1, 2); !errors.Is(err, ErrTaskBlocked) {
+		t.Fatalf("expected dependency add rejection, got %v", err)
+	}
+	if _, err := ReplaceTaskDependencies(1, []int{2}); !errors.Is(err, ErrTaskBlocked) {
+		t.Fatalf("expected dependency replacement rejection, got %v", err)
+	}
+	if _, err := CreateTaskWithDependencies(model.Task{Title: "Already complete", Completed: true}, []int{2}); !errors.Is(err, ErrTaskBlocked) {
+		t.Fatalf("expected completed-task creation rejection, got %v", err)
+	}
+	if _, err := UpdateTaskWithDependencies(1, model.Task{Title: "Still complete", Completed: true}, []int{2}); !errors.Is(err, ErrTaskBlocked) {
+		t.Fatalf("expected completed-task update rejection, got %v", err)
+	}
+}
+
 func TestRemoveTaskDependencyUpdatesGraph(t *testing.T) {
 	ResetTasks()
 	if _, err := AddTaskDependency(1, 2); err != nil {
