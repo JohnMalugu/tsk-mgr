@@ -137,6 +137,30 @@ func TestSetTaskCompletionRejectsBlockedTask(t *testing.T) {
 	}
 }
 
+func TestBulkCompletionAcceptsPrerequisiteInSameBatch(t *testing.T) {
+	ResetTasks()
+	if _, err := AddTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	result, err := BulkSetTaskCompletionChecked([]int{1, 2}, true)
+	if err != nil || result.Updated != 2 {
+		t.Fatalf("expected both tasks to complete atomically, result=%#v err=%v", result, err)
+	}
+}
+
+func TestBulkCompletionRejectsBlockedBatchWithoutMutation(t *testing.T) {
+	ResetTasks()
+	if _, err := AddTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BulkSetTaskCompletionChecked([]int{1}, true); !errors.Is(err, ErrTaskBlocked) {
+		t.Fatalf("expected blocked-task error, got %v", err)
+	}
+	if task := GetTaskByID(1); task == nil || task.Completed {
+		t.Fatal("rejected batch must leave task incomplete")
+	}
+}
+
 func TestGetTasksReturnsEmptyPageBeyondResults(t *testing.T) {
 	page := GetTasks(nil, nil, "", nil, nil, nil, nil, 100, 20, "id", false)
 	if page == nil {

@@ -469,11 +469,22 @@ func hasIncompletePrerequisiteLocked(task model.Task) bool {
 
 // BulkSetTaskCompletion updates several tasks atomically.
 func BulkSetTaskCompletion(ids []int, completed bool) (BulkUpdateResult, bool) {
+	result, err := BulkSetTaskCompletionChecked(ids, completed)
+	return result, err == nil
+}
+
+// BulkSetTaskCompletionChecked validates task existence and prerequisite state before mutation.
+func BulkSetTaskCompletionChecked(ids []int, completed bool) (BulkUpdateResult, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
 	positions := make([]int, 0, len(ids))
+	seen := make(map[int]struct{}, len(ids))
 	for _, id := range ids {
+		if _, duplicate := seen[id]; duplicate {
+			continue
+		}
+		seen[id] = struct{}{}
 		position := -1
 		for i := range tasks {
 			if tasks[i].ID == id {
@@ -482,17 +493,36 @@ func BulkSetTaskCompletion(ids []int, completed bool) (BulkUpdateResult, bool) {
 			}
 		}
 		if position == -1 {
-			return BulkUpdateResult{}, false
+			return BulkUpdateResult{}, ErrTaskNotFound
 		}
 		positions = append(positions, position)
+	}
+	if completed {
+		selected := make(map[int]struct{}, len(positions))
+		for _, position := range positions {
+			selected[tasks[position].ID] = struct{}{}
+		}
+		for _, position := range positions {
+			for _, dependencyID := range tasks[position].DependsOn {
+				if _, included := selected[dependencyID]; included {
+					continue
+				}
+				for _, dependency := range tasks {
+					if dependency.ID == dependencyID && !dependency.Completed {
+						return BulkUpdateResult{}, ErrTaskBlocked
+					}
+				}
+			}
+		}
 	}
 
 	updated := make([]model.Task, 0, len(positions))
 	for _, position := range positions {
 		tasks[position].Completed = completed
+		tasks[position].UpdatedAt = time.Now()
 		updated = append(updated, tasks[position])
 	}
-	return BulkUpdateResult{Tasks: updated, Updated: len(updated)}, true
+	return BulkUpdateResult{Tasks: updated, Updated: len(updated)}, nil
 }
 
 // BulkDeleteTasks removes all requested tasks only when every ID exists.
