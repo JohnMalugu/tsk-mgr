@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -271,8 +272,8 @@ func HandleTaskSummary(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleTaskDependencies(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", http.MethodGet)
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
 		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
@@ -280,6 +281,31 @@ func HandleTaskDependencies(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(strings.TrimPrefix(path, "/tasks/"))
 	if err != nil || id < 1 {
 		respondError(w, r, http.StatusBadRequest, "task id must be a positive integer")
+		return
+	}
+	if r.Method == http.MethodPost {
+		var payload struct {
+			DependsOn int `json:"dependsOn"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&payload); err != nil || payload.DependsOn < 1 {
+			respondError(w, r, http.StatusBadRequest, "dependsOn must be a positive task id")
+			return
+		}
+		task, err := service.AddTaskDependency(id, payload.DependsOn)
+		if err != nil {
+			switch {
+			case errors.Is(err, service.ErrTaskNotFound):
+				respondError(w, r, http.StatusNotFound, err.Error())
+			case errors.Is(err, service.ErrDependencySelfReference), errors.Is(err, service.ErrDependencyAlreadyExists), errors.Is(err, service.ErrDependencyCycle):
+				respondError(w, r, http.StatusConflict, err.Error())
+			default:
+				respondError(w, r, http.StatusInternalServerError, "could not add dependency")
+			}
+			return
+		}
+		respondJSON(w, http.StatusCreated, task)
 		return
 	}
 	dependencies, found := service.GetTaskDependencies(id)

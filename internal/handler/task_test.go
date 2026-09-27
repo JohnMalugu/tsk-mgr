@@ -570,6 +570,20 @@ func TestHandleTaskByIDPatchesTask(t *testing.T) {
 	}
 }
 
+func TestHandleTaskDependenciesAddsPrerequisite(t *testing.T) {
+	resetTaskFixture()
+	body := strings.NewReader(`{"dependsOn":2}`)
+	request := httptest.NewRequest(http.MethodPost, "/tasks/1/dependencies", body)
+	recorder := httptest.NewRecorder()
+	HandleTaskDependencies(recorder, request)
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusCreated, recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), `"dependsOn":[2]`) {
+		t.Fatalf("expected updated dependency IDs, got %q", recorder.Body.String())
+	}
+}
+
 func TestHandleTaskByIDDeletesTask(t *testing.T) {
 	resetTaskFixture()
 	body := bytes.NewBufferString(`{"title":"Temporary task","dueDate":"2030-01-02T15:04:05Z"}`)
