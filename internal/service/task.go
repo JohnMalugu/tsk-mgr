@@ -389,6 +389,73 @@ func RemoveTaskDependency(taskID, dependencyID int) (*model.Task, error) {
 	return nil, ErrTaskNotFound
 }
 
+// ReplaceTaskDependencies replaces a task's prerequisite set after validating graph integrity.
+func ReplaceTaskDependencies(taskID int, dependencyIDs []int) (*model.Task, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	taskPosition := -1
+	positions := make(map[int]int, len(tasks))
+	for i := range tasks {
+		positions[tasks[i].ID] = i
+		if tasks[i].ID == taskID {
+			taskPosition = i
+		}
+	}
+	if taskPosition < 0 {
+		return nil, ErrTaskNotFound
+	}
+	validated := make([]int, 0, len(dependencyIDs))
+	seen := make(map[int]struct{}, len(dependencyIDs))
+	for _, dependencyID := range dependencyIDs {
+		if dependencyID == taskID {
+			return nil, ErrDependencySelfReference
+		}
+		if _, duplicate := seen[dependencyID]; duplicate {
+			return nil, ErrDependencyAlreadyExists
+		}
+		if _, exists := positions[dependencyID]; !exists {
+			return nil, ErrTaskNotFound
+		}
+		seen[dependencyID] = struct{}{}
+		validated = append(validated, dependencyID)
+	}
+
+	original := tasks[taskPosition].DependsOn
+	tasks[taskPosition].DependsOn = validated
+	for _, dependencyID := range validated {
+		visited := make(map[int]struct{})
+		var reachesTask func(int) bool
+		reachesTask = func(currentID int) bool {
+			if currentID == taskID {
+				return true
+			}
+			if _, visitedAlready := visited[currentID]; visitedAlready {
+				return false
+			}
+			visited[currentID] = struct{}{}
+			position, exists := positions[currentID]
+			if !exists {
+				return false
+			}
+			for _, prerequisiteID := range tasks[position].DependsOn {
+				if reachesTask(prerequisiteID) {
+					return true
+				}
+			}
+			return false
+		}
+		if reachesTask(dependencyID) {
+			tasks[taskPosition].DependsOn = original
+			return nil, ErrDependencyCycle
+		}
+	}
+	tasks[taskPosition].UpdatedAt = time.Now()
+	updated := tasks[taskPosition]
+	updated.DependsOn = append([]int(nil), updated.DependsOn...)
+	return &updated, nil
+}
+
 // CreateTask creates a new task
 func CreateTask(task model.Task) model.Task {
 	mu.Lock()

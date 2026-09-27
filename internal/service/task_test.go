@@ -67,6 +67,21 @@ func TestAddTaskDependencyRejectsInvalidGraphEdges(t *testing.T) {
 	}
 }
 
+func TestReplaceTaskDependenciesIsAtomicAndCycleSafe(t *testing.T) {
+	ResetTasks()
+	created := CreateTask(model.Task{Title: "Third task"})
+	if _, err := AddTaskDependency(2, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReplaceTaskDependencies(1, []int{created.ID, 2}); !errors.Is(err, ErrDependencyCycle) {
+		t.Fatalf("expected cycle error, got %v", err)
+	}
+	task := GetTaskByID(1)
+	if task == nil || len(task.DependsOn) != 0 {
+		t.Fatalf("expected original dependency set preserved, got %#v", task)
+	}
+}
+
 func TestRemoveTaskDependencyUpdatesGraph(t *testing.T) {
 	ResetTasks()
 	if _, err := AddTaskDependency(1, 2); err != nil {
