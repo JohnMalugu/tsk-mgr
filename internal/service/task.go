@@ -47,6 +47,7 @@ type TaskSummary struct {
 	Completed  int            `json:"completed"`
 	Pending    int            `json:"pending"`
 	Overdue    int            `json:"overdue"`
+	Blocked    int            `json:"blocked"`
 	ByPriority map[string]int `json:"byPriority"`
 }
 
@@ -96,6 +97,9 @@ func GetTaskSummary() TaskSummary {
 
 	summary := TaskSummary{Total: len(tasks), ByPriority: map[string]int{"low": 0, "medium": 0, "high": 0}}
 	for _, task := range tasks {
+		if hasIncompletePrerequisiteLocked(task) {
+			summary.Blocked++
+		}
 		priority := strings.ToLower(task.Priority)
 		if _, ok := summary.ByPriority[priority]; ok {
 			summary.ByPriority[priority]++

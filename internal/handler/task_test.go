@@ -500,6 +500,7 @@ func TestHandleTasksSummaryReturnsCounts(t *testing.T) {
 		Completed  int            `json:"completed"`
 		Pending    int            `json:"pending"`
 		Overdue    int            `json:"overdue"`
+		Blocked    int            `json:"blocked"`
 		ByPriority map[string]int `json:"byPriority"`
 	}
 	if err := json.NewDecoder(recorder.Body).Decode(&summary); err != nil {
@@ -519,6 +520,24 @@ func TestHandleTasksSummaryReturnsCounts(t *testing.T) {
 	}
 	if summary.ByPriority["medium"] != 1 || summary.ByPriority["low"] != 1 || summary.ByPriority["high"] != 0 {
 		t.Fatalf("unexpected priority counts: %#v", summary.ByPriority)
+	}
+}
+
+func TestHandleTasksSummaryCountsBlockedTasks(t *testing.T) {
+	resetTaskFixture()
+	if _, err := service.AddTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	HandleTaskSummary(recorder, httptest.NewRequest(http.MethodGet, "/tasks/summary", nil))
+	var summary struct {
+		Blocked int `json:"blocked"`
+	}
+	if err := json.NewDecoder(recorder.Body).Decode(&summary); err != nil {
+		t.Fatal(err)
+	}
+	if summary.Blocked != 1 {
+		t.Fatalf("expected one blocked task, got %d", summary.Blocked)
 	}
 }
 
