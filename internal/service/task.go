@@ -458,9 +458,27 @@ func ReplaceTaskDependencies(taskID int, dependencyIDs []int) (*model.Task, erro
 
 // CreateTask creates a new task
 func CreateTask(task model.Task) model.Task {
+	created, _ := CreateTaskWithDependencies(task, task.DependsOn)
+	return created
+}
+
+// CreateTaskWithDependencies creates a task and validates its prerequisites atomically.
+func CreateTaskWithDependencies(task model.Task, dependencyIDs []int) (model.Task, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
+	for _, dependencyID := range dependencyIDs {
+		if dependencyID < 1 || findTaskPositionLocked(dependencyID) < 0 {
+			return model.Task{}, ErrTaskNotFound
+		}
+	}
+	seen := make(map[int]struct{}, len(dependencyIDs))
+	for _, dependencyID := range dependencyIDs {
+		if _, duplicate := seen[dependencyID]; duplicate {
+			return model.Task{}, ErrDependencyAlreadyExists
+		}
+		seen[dependencyID] = struct{}{}
+	}
 	now := time.Now()
 	task.Tags = normalizeTags(task.Tags)
 	if task.Priority == "" {
@@ -469,18 +487,28 @@ func CreateTask(task model.Task) model.Task {
 	task.CreatedAt = now
 	task.UpdatedAt = now
 	task.ID = nextID
+	task.DependsOn = append([]int(nil), dependencyIDs...)
 	nextID++
 	tasks = append(tasks, task)
-	return task
+	return task, nil
 }
 
 // UpdateTask replaces an existing task and returns the updated task.
 func UpdateTask(id int, task model.Task) *model.Task {
+	updated, _ := UpdateTaskWithDependencies(id, task, task.DependsOn)
+	return updated
+}
+
+// UpdateTaskWithDependencies atomically replaces task fields and validates prerequisites.
+func UpdateTaskWithDependencies(id int, task model.Task, dependencyIDs []int) (*model.Task, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
 	for i := range tasks {
 		if tasks[i].ID == id {
+			if err := validateDependencySetLocked(id, dependencyIDs); err != nil {
+				return nil, err
+			}
 			task.CreatedAt = tasks[i].CreatedAt
 			task.UpdatedAt = time.Now()
 			task.Tags = normalizeTags(task.Tags)
@@ -488,9 +516,65 @@ func UpdateTask(id int, task model.Task) *model.Task {
 				task.Priority = "medium"
 			}
 			task.ID = id
+			task.DependsOn = append([]int(nil), dependencyIDs...)
 			tasks[i] = task
 			updated := tasks[i]
-			return &updated
+			return &updated, nil
+		}
+	}
+	return nil, ErrTaskNotFound
+}
+
+func findTaskPositionLocked(id int) int {
+	for i := range tasks {
+		if tasks[i].ID == id {
+			return i
+		}
+	}
+	return -1
+}
+
+func validateDependencySetLocked(taskID int, dependencyIDs []int) error {
+	if findTaskPositionLocked(taskID) < 0 {
+		return ErrTaskNotFound
+	}
+	seen := make(map[int]struct{}, len(dependencyIDs))
+	for _, dependencyID := range dependencyIDs {
+		if dependencyID == taskID {
+			return ErrDependencySelfReference
+		}
+		if _, duplicate := seen[dependencyID]; duplicate {
+			return ErrDependencyAlreadyExists
+		}
+		if findTaskPositionLocked(dependencyID) < 0 {
+			return ErrTaskNotFound
+		}
+		seen[dependencyID] = struct{}{}
+	}
+	visited := make(map[int]struct{})
+	var reachesTask func(int) bool
+	reachesTask = func(currentID int) bool {
+		if currentID == taskID {
+			return true
+		}
+		if _, seen := visited[currentID]; seen {
+			return false
+		}
+		visited[currentID] = struct{}{}
+		position := findTaskPositionLocked(currentID)
+		if position < 0 {
+			return false
+		}
+		for _, prerequisiteID := range tasks[position].DependsOn {
+			if reachesTask(prerequisiteID) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, dependencyID := range dependencyIDs {
+		if reachesTask(dependencyID) {
+			return ErrDependencyCycle
 		}
 	}
 	return nil

@@ -603,6 +603,32 @@ func TestHandleTaskDependenciesAddsPrerequisite(t *testing.T) {
 	}
 }
 
+func TestCreateTaskWithPrerequisiteIDs(t *testing.T) {
+	resetTaskFixture()
+	body := strings.NewReader(`{"title":"Prepare report","dueDate":"2030-01-02T15:04:05Z","dependsOn":[2]}`)
+	recorder := httptest.NewRecorder()
+	HandleTasks(recorder, httptest.NewRequest(http.MethodPost, "/tasks", body))
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusCreated, recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), `"dependsOn":[2]`) {
+		t.Fatalf("expected dependency IDs in response, got %q", recorder.Body.String())
+	}
+}
+
+func TestCreateTaskRejectsUnknownPrerequisite(t *testing.T) {
+	resetTaskFixture()
+	body := strings.NewReader(`{"title":"Prepare report","dueDate":"2030-01-02T15:04:05Z","dependsOn":[999]}`)
+	recorder := httptest.NewRecorder()
+	HandleTasks(recorder, httptest.NewRequest(http.MethodPost, "/tasks", body))
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, recorder.Code)
+	}
+	if len(service.GetAllTasks()) != 2 {
+		t.Fatal("invalid prerequisite reference must not create a task")
+	}
+}
+
 func TestHandleReadyTasksExcludesBlockedTasks(t *testing.T) {
 	resetTaskFixture()
 	if _, err := service.AddTaskDependency(1, 2); err != nil {

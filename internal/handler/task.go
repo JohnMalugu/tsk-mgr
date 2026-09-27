@@ -213,8 +213,12 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-
-	respondJSON(w, http.StatusCreated, service.CreateTask(task))
+	created, err := service.CreateTaskWithDependencies(task, task.DependsOn)
+	if err != nil {
+		respondDependencyError(w, r, err)
+		return
+	}
+	respondJSON(w, http.StatusCreated, created)
 }
 
 func HandleTaskComplete(w http.ResponseWriter, r *http.Request) {
@@ -481,9 +485,9 @@ func updateTask(w http.ResponseWriter, r *http.Request, id int) {
 		return
 	}
 
-	updated := service.UpdateTask(id, task)
-	if updated == nil {
-		respondError(w, r, http.StatusNotFound, "task not found")
+	updated, err := service.UpdateTaskWithDependencies(id, task, task.DependsOn)
+	if err != nil {
+		respondDependencyError(w, r, err)
 		return
 	}
 	respondJSON(w, http.StatusOK, updated)
@@ -497,6 +501,7 @@ func patchTask(w http.ResponseWriter, r *http.Request, id int) {
 		Completed   *bool      `json:"completed"`
 		Priority    *string    `json:"priority"`
 		Tags        *[]string  `json:"tags"`
+		DependsOn   *[]int     `json:"dependsOn"`
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
 	decoder.DisallowUnknownFields()
@@ -508,7 +513,7 @@ func patchTask(w http.ResponseWriter, r *http.Request, id int) {
 		respondError(w, r, http.StatusBadRequest, "request body must contain a single JSON value")
 		return
 	}
-	if patch.Title == nil && patch.Description == nil && patch.DueDate == nil && patch.Completed == nil && patch.Priority == nil && patch.Tags == nil {
+	if patch.Title == nil && patch.Description == nil && patch.DueDate == nil && patch.Completed == nil && patch.Priority == nil && patch.Tags == nil && patch.DependsOn == nil {
 		respondError(w, r, http.StatusBadRequest, "at least one task field must be provided")
 		return
 	}
@@ -535,13 +540,16 @@ func patchTask(w http.ResponseWriter, r *http.Request, id int) {
 	if patch.Tags != nil {
 		task.Tags = *patch.Tags
 	}
+	if patch.DependsOn != nil {
+		task.DependsOn = *patch.DependsOn
+	}
 	if validationErrors := validation.ValidateTask(task); len(validationErrors) > 0 {
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{"errors": validationErrors})
 		return
 	}
-	updated := service.UpdateTask(id, *task)
-	if updated == nil {
-		respondError(w, r, http.StatusNotFound, "task not found")
+	updated, err := service.UpdateTaskWithDependencies(id, *task, task.DependsOn)
+	if err != nil {
+		respondDependencyError(w, r, err)
 		return
 	}
 	respondJSON(w, http.StatusOK, updated)
@@ -566,6 +574,17 @@ func decodeTask(w http.ResponseWriter, r *http.Request) (model.Task, bool) {
 		return model.Task{}, false
 	}
 	return task, true
+}
+
+func respondDependencyError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, service.ErrTaskNotFound):
+		respondError(w, r, http.StatusNotFound, err.Error())
+	case errors.Is(err, service.ErrDependencySelfReference), errors.Is(err, service.ErrDependencyAlreadyExists), errors.Is(err, service.ErrDependencyCycle):
+		respondError(w, r, http.StatusConflict, err.Error())
+	default:
+		respondError(w, r, http.StatusInternalServerError, "could not update dependencies")
+	}
 }
 
 func respondJSON(w http.ResponseWriter, status int, value interface{}) {
