@@ -389,6 +389,13 @@ func DeleteTask(id int) bool {
 	mu.Lock()
 	defer mu.Unlock()
 
+	for _, task := range tasks {
+		for _, dependencyID := range task.DependsOn {
+			if dependencyID == id {
+				return false
+			}
+		}
+	}
 	for i := range tasks {
 		if tasks[i].ID == id {
 			tasks = append(tasks[:i], tasks[i+1:]...)
@@ -465,6 +472,16 @@ func BulkDeleteTasks(ids []int) (BulkDeleteResult, bool) {
 		}
 		if !found {
 			return BulkDeleteResult{}, false
+		}
+	}
+	for _, task := range tasks {
+		if _, deletingDependent := requested[task.ID]; deletingDependent {
+			continue
+		}
+		for _, dependencyID := range task.DependsOn {
+			if _, deletingPrerequisite := requested[dependencyID]; deletingPrerequisite {
+				return BulkDeleteResult{}, false
+			}
 		}
 	}
 

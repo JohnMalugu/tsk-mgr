@@ -83,6 +83,25 @@ func TestRemoveTaskDependencyUpdatesGraph(t *testing.T) {
 	}
 }
 
+func TestDeleteTaskRejectsReferencedPrerequisite(t *testing.T) {
+	ResetTasks()
+	if _, err := AddTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	if DeleteTask(2) {
+		t.Fatal("expected prerequisite deletion to be rejected")
+	}
+	if GetTaskByID(2) == nil {
+		t.Fatal("referenced prerequisite must remain stored")
+	}
+	if _, ok := BulkDeleteTasks([]int{2}); ok {
+		t.Fatal("expected bulk prerequisite deletion to be rejected")
+	}
+	if GetTaskByID(2) == nil {
+		t.Fatal("rejected bulk delete must not mutate tasks")
+	}
+}
+
 func TestGetTasksReturnsEmptyPageBeyondResults(t *testing.T) {
 	page := GetTasks(nil, nil, "", nil, nil, nil, nil, 100, 20, "id", false)
 	if page == nil {
