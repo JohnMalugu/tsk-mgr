@@ -17,3 +17,12 @@ func TestHealthRoute(t *testing.T) {
 		t.Fatalf("unexpected health response: %q", recorder.Body.String())
 	}
 }
+
+func TestDependenciesRouteIsDispatched(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/tasks/1/dependencies", nil)
+	recorder := httptest.NewRecorder()
+	Router(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected dependency route status %d, got %d", http.StatusOK, recorder.Code)
+	}
+}

@@ -270,6 +270,26 @@ func HandleTaskSummary(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, service.GetTaskSummary())
 }
 
+func HandleTaskDependencies(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	path := strings.TrimSuffix(r.URL.Path, "/dependencies")
+	id, err := strconv.Atoi(strings.TrimPrefix(path, "/tasks/"))
+	if err != nil || id < 1 {
+		respondError(w, r, http.StatusBadRequest, "task id must be a positive integer")
+		return
+	}
+	dependencies, found := service.GetTaskDependencies(id)
+	if !found {
+		respondError(w, r, http.StatusNotFound, "task not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, dependencies)
+}
+
 func HandleHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
