@@ -102,6 +102,22 @@ func TestDeleteTaskRejectsReferencedPrerequisite(t *testing.T) {
 	}
 }
 
+func TestIsTaskBlockedFollowsPrerequisiteCompletion(t *testing.T) {
+	ResetTasks()
+	if _, err := AddTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	blocked, found := IsTaskBlocked(1)
+	if !found || !blocked {
+		t.Fatalf("expected task to be blocked, got blocked=%v found=%v", blocked, found)
+	}
+	SetTaskCompletion(2, true)
+	blocked, found = IsTaskBlocked(1)
+	if !found || blocked {
+		t.Fatalf("expected task to become unblocked, got blocked=%v found=%v", blocked, found)
+	}
+}
+
 func TestGetTasksReturnsEmptyPageBeyondResults(t *testing.T) {
 	page := GetTasks(nil, nil, "", nil, nil, nil, nil, 100, 20, "id", false)
 	if page == nil {

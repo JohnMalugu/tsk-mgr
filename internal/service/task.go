@@ -261,6 +261,27 @@ func GetTaskDependencies(id int) ([]model.Task, bool) {
 	return dependencies, true
 }
 
+// IsTaskBlocked reports whether a task has any incomplete prerequisite.
+func IsTaskBlocked(id int) (bool, bool) {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	for _, task := range tasks {
+		if task.ID != id {
+			continue
+		}
+		for _, dependencyID := range task.DependsOn {
+			for _, dependency := range tasks {
+				if dependency.ID == dependencyID && !dependency.Completed {
+					return true, true
+				}
+			}
+		}
+		return false, true
+	}
+	return false, false
+}
+
 // AddTaskDependency makes dependencyID a prerequisite of taskID.
 func AddTaskDependency(taskID, dependencyID int) (*model.Task, error) {
 	mu.Lock()
