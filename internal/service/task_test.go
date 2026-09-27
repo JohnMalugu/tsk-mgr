@@ -161,6 +161,24 @@ func TestBulkCompletionRejectsBlockedBatchWithoutMutation(t *testing.T) {
 	}
 }
 
+func TestGetReadyTasksExcludesBlockedAndCompletedTasks(t *testing.T) {
+	ResetTasks()
+	if _, err := AddTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	ready := GetReadyTasks()
+	if len(ready) != 1 || ready[0].ID != 2 {
+		t.Fatalf("expected only prerequisite task 2 to be ready, got %#v", ready)
+	}
+	if _, err := SetTaskCompletionChecked(2, true); err != nil {
+		t.Fatal(err)
+	}
+	ready = GetReadyTasks()
+	if len(ready) != 1 || ready[0].ID != 1 {
+		t.Fatalf("expected completed task excluded and dependent ready, got %#v", ready)
+	}
+}
+
 func TestGetTasksReturnsEmptyPageBeyondResults(t *testing.T) {
 	page := GetTasks(nil, nil, "", nil, nil, nil, nil, 100, 20, "id", false)
 	if page == nil {
