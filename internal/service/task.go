@@ -433,17 +433,38 @@ func CompleteTask(id int) *model.Task {
 
 // SetTaskCompletion updates the completion state of a task and returns it.
 func SetTaskCompletion(id int, completed bool) *model.Task {
+	updated, _ := SetTaskCompletionChecked(id, completed)
+	return updated
+}
+
+// SetTaskCompletionChecked atomically updates completion and validates prerequisites.
+func SetTaskCompletionChecked(id int, completed bool) (*model.Task, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
 	for i := range tasks {
 		if tasks[i].ID == id {
+			if completed && hasIncompletePrerequisiteLocked(tasks[i]) {
+				return nil, ErrTaskBlocked
+			}
 			tasks[i].Completed = completed
+			tasks[i].UpdatedAt = time.Now()
 			updated := tasks[i]
-			return &updated
+			return &updated, nil
 		}
 	}
-	return nil
+	return nil, ErrTaskNotFound
+}
+
+func hasIncompletePrerequisiteLocked(task model.Task) bool {
+	for _, dependencyID := range task.DependsOn {
+		for _, dependency := range tasks {
+			if dependency.ID == dependencyID && !dependency.Completed {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // BulkSetTaskCompletion updates several tasks atomically.
