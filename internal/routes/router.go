@@ -30,6 +30,10 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		handler.HandleTaskDependencies(w, r)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/tasks/") && strings.Contains(r.URL.Path, "/dependencies/") {
+		handler.HandleTaskDependency(w, r)
+		return
+	}
 
 	if r.URL.Path == "/tasks/bulk/complete" {
 		handler.HandleBulkComplete(w, r)

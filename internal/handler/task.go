@@ -316,6 +316,35 @@ func HandleTaskDependencies(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, dependencies)
 }
 
+func HandleTaskDependency(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		w.Header().Set("Allow", http.MethodDelete)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/tasks/"), "/dependencies/")
+	if len(parts) != 2 {
+		respondError(w, r, http.StatusBadRequest, "dependency route is invalid")
+		return
+	}
+	taskID, taskErr := strconv.Atoi(parts[0])
+	dependencyID, dependencyErr := strconv.Atoi(parts[1])
+	if taskErr != nil || dependencyErr != nil || taskID < 1 || dependencyID < 1 {
+		respondError(w, r, http.StatusBadRequest, "task ids must be positive integers")
+		return
+	}
+	_, err := service.RemoveTaskDependency(taskID, dependencyID)
+	if err != nil {
+		if errors.Is(err, service.ErrDependencyNotFound) {
+			respondError(w, r, http.StatusNotFound, err.Error())
+		} else {
+			respondError(w, r, http.StatusNotFound, err.Error())
+		}
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func HandleHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)

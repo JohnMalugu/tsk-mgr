@@ -584,6 +584,23 @@ func TestHandleTaskDependenciesAddsPrerequisite(t *testing.T) {
 	}
 }
 
+func TestHandleTaskDependencyDeletesPrerequisite(t *testing.T) {
+	resetTaskFixture()
+	if _, err := service.AddTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodDelete, "/tasks/1/dependencies/2", nil)
+	recorder := httptest.NewRecorder()
+	HandleTaskDependency(recorder, request)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("expected status %d, got %d", http.StatusNoContent, recorder.Code)
+	}
+	dependencies, found := service.GetTaskDependencies(1)
+	if !found || len(dependencies) != 0 {
+		t.Fatalf("expected prerequisite removed, got %#v", dependencies)
+	}
+}
+
 func TestHandleTaskByIDDeletesTask(t *testing.T) {
 	resetTaskFixture()
 	body := bytes.NewBufferString(`{"title":"Temporary task","dueDate":"2030-01-02T15:04:05Z"}`)
