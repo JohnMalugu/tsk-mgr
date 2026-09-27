@@ -271,6 +271,15 @@ func HandleTaskSummary(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, service.GetTaskSummary())
 }
 
+func HandleReadyTasks(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	respondJSON(w, http.StatusOK, service.GetReadyTasks())
+}
+
 func HandleTaskDependencies(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)

@@ -584,6 +584,22 @@ func TestHandleTaskDependenciesAddsPrerequisite(t *testing.T) {
 	}
 }
 
+func TestHandleReadyTasksExcludesBlockedTasks(t *testing.T) {
+	resetTaskFixture()
+	if _, err := service.AddTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/tasks/ready", nil)
+	recorder := httptest.NewRecorder()
+	HandleReadyTasks(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+	}
+	if strings.Contains(recorder.Body.String(), `"id":1`) || !strings.Contains(recorder.Body.String(), `"id":2`) {
+		t.Fatalf("expected only ready prerequisite task, got %q", recorder.Body.String())
+	}
+}
+
 func TestHandleTaskDependencyDeletesPrerequisite(t *testing.T) {
 	resetTaskFixture()
 	if _, err := service.AddTaskDependency(1, 2); err != nil {
