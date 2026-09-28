@@ -43,6 +43,17 @@ func TestGetTaskByIDReturnsCopy(t *testing.T) {
 	}
 }
 
+func TestGetTaskChecklistReturnsCopyAndDistinguishesMissing(t *testing.T) {
+	ResetTasks()
+	items, found := GetTaskChecklist(1)
+	if !found || items == nil || len(items) != 0 {
+		t.Fatalf("expected existing task with empty checklist, got %#v, found=%v", items, found)
+	}
+	if _, found := GetTaskChecklist(999); found {
+		t.Fatal("expected missing task to be reported")
+	}
+}
+
 func TestResetTasksResetsChecklistItemSequence(t *testing.T) {
 	nextChecklistItemID = 19
 	ResetTasks()

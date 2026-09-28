@@ -243,6 +243,20 @@ func GetTaskByID(id int) *model.Task {
 	return nil
 }
 
+// GetTaskChecklist returns a copy of a task's checklist.
+func GetTaskChecklist(taskID int) ([]model.ChecklistItem, bool) {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	for _, task := range tasks {
+		if task.ID == taskID {
+			items := append([]model.ChecklistItem{}, task.Checklist...)
+			return items, true
+		}
+	}
+	return nil, false
+}
+
 // GetTaskDependencies returns copies of all prerequisite tasks for a task ID.
 func GetTaskDependencies(id int) ([]model.Task, bool) {
 	mu.RLock()
