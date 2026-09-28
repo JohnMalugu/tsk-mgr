@@ -99,6 +99,24 @@ func TestUpdateChecklistItemTextPreservesState(t *testing.T) {
 	}
 }
 
+func TestDeleteChecklistItem(t *testing.T) {
+	ResetTasks()
+	item, err := AddChecklistItem(1, "remove me")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteChecklistItem(1, item.ID); err != nil {
+		t.Fatal(err)
+	}
+	items, _ := GetTaskChecklist(1)
+	if len(items) != 0 {
+		t.Fatalf("expected empty checklist after deletion, got %#v", items)
+	}
+	if err := DeleteChecklistItem(1, item.ID); !errors.Is(err, ErrChecklistItemNotFound) {
+		t.Fatalf("expected missing-item error, got %v", err)
+	}
+}
+
 func TestResetTasksResetsChecklistItemSequence(t *testing.T) {
 	nextChecklistItemID = 19
 	ResetTasks()

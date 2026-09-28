@@ -330,6 +330,27 @@ func UpdateChecklistItemText(taskID, itemID int, text string) (model.ChecklistIt
 	return model.ChecklistItem{}, ErrTaskNotFound
 }
 
+// DeleteChecklistItem removes one checklist item from a task.
+func DeleteChecklistItem(taskID, itemID int) error {
+	mu.Lock()
+	defer mu.Unlock()
+
+	for taskIndex := range tasks {
+		if tasks[taskIndex].ID != taskID {
+			continue
+		}
+		for itemIndex := range tasks[taskIndex].Checklist {
+			if tasks[taskIndex].Checklist[itemIndex].ID == itemID {
+				tasks[taskIndex].Checklist = append(tasks[taskIndex].Checklist[:itemIndex], tasks[taskIndex].Checklist[itemIndex+1:]...)
+				tasks[taskIndex].UpdatedAt = time.Now()
+				return nil
+			}
+		}
+		return ErrChecklistItemNotFound
+	}
+	return ErrTaskNotFound
+}
+
 // GetTaskDependencies returns copies of all prerequisite tasks for a task ID.
 func GetTaskDependencies(id int) ([]model.Task, bool) {
 	mu.RLock()
