@@ -351,6 +351,42 @@ func DeleteChecklistItem(taskID, itemID int) error {
 	return ErrTaskNotFound
 }
 
+// ReorderChecklist reorders all checklist items using a complete ordered ID list.
+func ReorderChecklist(taskID int, orderedIDs []int) ([]model.ChecklistItem, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	for taskIndex := range tasks {
+		if tasks[taskIndex].ID != taskID {
+			continue
+		}
+		items := tasks[taskIndex].Checklist
+		if len(orderedIDs) != len(items) {
+			return nil, ErrChecklistOrderInvalid
+		}
+		byID := make(map[int]model.ChecklistItem, len(items))
+		for _, item := range items {
+			byID[item.ID] = item
+		}
+		ordered := make([]model.ChecklistItem, 0, len(items))
+		for _, id := range orderedIDs {
+			item, exists := byID[id]
+			if !exists {
+				return nil, ErrChecklistOrderInvalid
+			}
+			ordered = append(ordered, item)
+			delete(byID, id)
+		}
+		if len(byID) != 0 {
+			return nil, ErrChecklistOrderInvalid
+		}
+		tasks[taskIndex].Checklist = ordered
+		tasks[taskIndex].UpdatedAt = time.Now()
+		return append([]model.ChecklistItem(nil), ordered...), nil
+	}
+	return nil, ErrTaskNotFound
+}
+
 // GetTaskDependencies returns copies of all prerequisite tasks for a task ID.
 func GetTaskDependencies(id int) ([]model.Task, bool) {
 	mu.RLock()

@@ -117,6 +117,23 @@ func TestDeleteChecklistItem(t *testing.T) {
 	}
 }
 
+func TestReorderChecklistRequiresExactItemSet(t *testing.T) {
+	ResetTasks()
+	first, _ := AddChecklistItem(1, "first")
+	second, _ := AddChecklistItem(1, "second")
+	ordered, err := ReorderChecklist(1, []int{second.ID, first.ID})
+	if err != nil || len(ordered) != 2 || ordered[0].ID != second.ID {
+		t.Fatalf("expected reversed order, got %#v err=%v", ordered, err)
+	}
+	if _, err := ReorderChecklist(1, []int{second.ID, second.ID}); !errors.Is(err, ErrChecklistOrderInvalid) {
+		t.Fatalf("expected duplicate ID rejection, got %v", err)
+	}
+	after, _ := GetTaskChecklist(1)
+	if len(after) != 2 || after[0].ID != second.ID || after[1].ID != first.ID {
+		t.Fatalf("invalid reorder must preserve current order, got %#v", after)
+	}
+}
+
 func TestResetTasksResetsChecklistItemSequence(t *testing.T) {
 	nextChecklistItemID = 19
 	ResetTasks()
