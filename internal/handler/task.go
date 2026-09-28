@@ -425,7 +425,47 @@ func handleChecklistItem(w http.ResponseWriter, r *http.Request, taskID int, ite
 		respondError(w, r, http.StatusBadRequest, "checklist item id must be a positive integer")
 		return
 	}
-	w.Header().Set("Allow", http.MethodPatch+", "+http.MethodDelete)
+	if r.Method != http.MethodPatch && r.Method != http.MethodDelete {
+		w.Header().Set("Allow", http.MethodPatch+", "+http.MethodDelete)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if r.Method == http.MethodPatch {
+		var patch struct {
+			Text      *string `json:"text"`
+			Completed *bool   `json:"completed"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&patch); err != nil {
+			respondError(w, r, http.StatusBadRequest, "request body must be valid JSON")
+			return
+		}
+		if patch.Text == nil && patch.Completed == nil {
+			respondError(w, r, http.StatusBadRequest, "text or completed must be provided")
+			return
+		}
+		if patch.Text != nil {
+			item, err := service.UpdateChecklistItemText(taskID, itemID, *patch.Text)
+			if err != nil {
+				respondChecklistError(w, r, err)
+				return
+			}
+			if patch.Completed == nil {
+				respondJSON(w, http.StatusOK, item)
+				return
+			}
+		}
+		if patch.Completed != nil {
+			item, err := service.SetChecklistItemCompletion(taskID, itemID, *patch.Completed)
+			if err != nil {
+				respondChecklistError(w, r, err)
+				return
+			}
+			respondJSON(w, http.StatusOK, item)
+		}
+		return
+	}
 	respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
 }
 

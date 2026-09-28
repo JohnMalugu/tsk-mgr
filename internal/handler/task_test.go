@@ -693,6 +693,20 @@ func TestHandleTaskDependencyDeletesPrerequisite(t *testing.T) {
 	}
 }
 
+func TestPatchChecklistItemUpdatesCompletion(t *testing.T) {
+	resetTaskFixture()
+	item, err := service.AddChecklistItem(1, "Draft")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := strings.NewReader(`{"completed":true}`)
+	recorder := httptest.NewRecorder()
+	HandleTaskChecklist(recorder, httptest.NewRequest(http.MethodPatch, "/tasks/1/checklist/"+strconv.Itoa(item.ID), body))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"completed":true`) {
+		t.Fatalf("unexpected checklist item PATCH: %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestHandleTaskByIDDeletesTask(t *testing.T) {
 	resetTaskFixture()
 	body := bytes.NewBufferString(`{"title":"Temporary task","dueDate":"2030-01-02T15:04:05Z"}`)
