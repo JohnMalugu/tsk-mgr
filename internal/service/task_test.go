@@ -126,7 +126,6 @@ func TestPrerequisiteCannotBeUncompletedWhileDependentIsComplete(t *testing.T) {
 		t.Fatalf("expected dependent and prerequisite to reset together, got %v", err)
 	}
 }
-
 func TestRemoveTaskDependencyUpdatesGraph(t *testing.T) {
 	ResetTasks()
 	if _, err := AddTaskDependency(1, 2); err != nil {
