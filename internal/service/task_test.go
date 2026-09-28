@@ -54,6 +54,21 @@ func TestGetTaskChecklistReturnsCopyAndDistinguishesMissing(t *testing.T) {
 	}
 }
 
+func TestAddChecklistItemTrimsTextAndAssignsID(t *testing.T) {
+	ResetTasks()
+	item, err := AddChecklistItem(1, "  buy milk  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item.ID != 1 || item.Text != "buy milk" || item.Completed {
+		t.Fatalf("unexpected checklist item: %#v", item)
+	}
+	items, _ := GetTaskChecklist(1)
+	if len(items) != 1 || items[0] != item {
+		t.Fatalf("expected item stored on task, got %#v", items)
+	}
+}
+
 func TestResetTasksResetsChecklistItemSequence(t *testing.T) {
 	nextChecklistItemID = 19
 	ResetTasks()

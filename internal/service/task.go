@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
@@ -255,6 +256,31 @@ func GetTaskChecklist(taskID int) ([]model.ChecklistItem, bool) {
 		}
 	}
 	return nil, false
+}
+
+// AddChecklistItem appends a new checklist item to a task.
+func AddChecklistItem(taskID int, text string) (model.ChecklistItem, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	text = strings.TrimSpace(text)
+	if text == "" || utf8.RuneCountInString(text) > 250 {
+		return model.ChecklistItem{}, ErrChecklistTextInvalid
+	}
+	for i := range tasks {
+		if tasks[i].ID != taskID {
+			continue
+		}
+		if len(tasks[i].Checklist) >= 100 {
+			return model.ChecklistItem{}, ErrChecklistLimitReached
+		}
+		item := model.ChecklistItem{ID: nextChecklistItemID, Text: text}
+		nextChecklistItemID++
+		tasks[i].Checklist = append(tasks[i].Checklist, item)
+		tasks[i].UpdatedAt = time.Now()
+		return item, nil
+	}
+	return model.ChecklistItem{}, ErrTaskNotFound
 }
 
 // GetTaskDependencies returns copies of all prerequisite tasks for a task ID.
