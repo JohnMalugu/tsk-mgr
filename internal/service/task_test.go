@@ -99,6 +99,23 @@ func TestUpdateChecklistItemTextPreservesState(t *testing.T) {
 	}
 }
 
+func TestUpdateChecklistItemAppliesFieldsAtomically(t *testing.T) {
+	ResetTasks()
+	item, err := AddChecklistItem(1, "draft")
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalidText := "  "
+	completed := true
+	if _, err := UpdateChecklistItem(1, item.ID, &invalidText, &completed); !errors.Is(err, ErrChecklistTextInvalid) {
+		t.Fatalf("expected text validation error, got %v", err)
+	}
+	items, _ := GetTaskChecklist(1)
+	if items[0].Completed || items[0].Text != "draft" {
+		t.Fatalf("invalid update partially mutated item: %#v", items[0])
+	}
+}
+
 func TestDeleteChecklistItem(t *testing.T) {
 	ResetTasks()
 	item, err := AddChecklistItem(1, "remove me")

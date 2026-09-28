@@ -361,6 +361,41 @@ func UpdateChecklistItemText(taskID, itemID int, text string) (model.ChecklistIt
 	return model.ChecklistItem{}, ErrTaskNotFound
 }
 
+// UpdateChecklistItem atomically applies provided text and completion changes.
+func UpdateChecklistItem(taskID, itemID int, text *string, completed *bool) (model.ChecklistItem, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	if text != nil {
+		trimmed := strings.TrimSpace(*text)
+		if trimmed == "" || utf8.RuneCountInString(trimmed) > 250 {
+			return model.ChecklistItem{}, ErrChecklistTextInvalid
+		}
+		text = &trimmed
+	}
+	for taskIndex := range tasks {
+		if tasks[taskIndex].ID != taskID {
+			continue
+		}
+		for itemIndex := range tasks[taskIndex].Checklist {
+			item := &tasks[taskIndex].Checklist[itemIndex]
+			if item.ID != itemID {
+				continue
+			}
+			if text != nil {
+				item.Text = *text
+			}
+			if completed != nil {
+				item.Completed = *completed
+			}
+			tasks[taskIndex].UpdatedAt = time.Now()
+			return *item, nil
+		}
+		return model.ChecklistItem{}, ErrChecklistItemNotFound
+	}
+	return model.ChecklistItem{}, ErrTaskNotFound
+}
+
 // DeleteChecklistItem removes one checklist item from a task.
 func DeleteChecklistItem(taskID, itemID int) error {
 	mu.Lock()

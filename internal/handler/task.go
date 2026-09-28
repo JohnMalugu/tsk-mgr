@@ -445,25 +445,12 @@ func handleChecklistItem(w http.ResponseWriter, r *http.Request, taskID int, ite
 			respondError(w, r, http.StatusBadRequest, "text or completed must be provided")
 			return
 		}
-		if patch.Text != nil {
-			item, err := service.UpdateChecklistItemText(taskID, itemID, *patch.Text)
-			if err != nil {
-				respondChecklistError(w, r, err)
-				return
-			}
-			if patch.Completed == nil {
-				respondJSON(w, http.StatusOK, item)
-				return
-			}
+		item, err := service.UpdateChecklistItem(taskID, itemID, patch.Text, patch.Completed)
+		if err != nil {
+			respondChecklistError(w, r, err)
+			return
 		}
-		if patch.Completed != nil {
-			item, err := service.SetChecklistItemCompletion(taskID, itemID, *patch.Completed)
-			if err != nil {
-				respondChecklistError(w, r, err)
-				return
-			}
-			respondJSON(w, http.StatusOK, item)
-		}
+		respondJSON(w, http.StatusOK, item)
 		return
 	}
 	respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
