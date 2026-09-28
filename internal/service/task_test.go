@@ -34,6 +34,14 @@ func TestGetTaskByIDReturnsCopy(t *testing.T) {
 	}
 }
 
+func TestResetTasksResetsChecklistItemSequence(t *testing.T) {
+	nextChecklistItemID = 19
+	ResetTasks()
+	if nextChecklistItemID != 1 {
+		t.Fatalf("expected checklist ID sequence to reset to 1, got %d", nextChecklistItemID)
+	}
+}
+
 func TestGetTaskDependenciesDistinguishesEmptyFromMissing(t *testing.T) {
 	ResetTasks()
 	dependencies, found := GetTaskDependencies(1)

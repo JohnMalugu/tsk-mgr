@@ -23,6 +23,7 @@ var (
 // In-memory storage (we'll use database later)
 var tasks []model.Task
 var nextID int = 1
+var nextChecklistItemID int = 1
 var mu sync.RWMutex
 
 func init() {
@@ -40,6 +41,7 @@ func ResetTasks() {
 		{ID: 2, Title: "Learn Go", CreatedAt: now, UpdatedAt: now, DueDate: now.AddDate(0, 0, 3), Completed: false, Priority: "low", Tags: []string{"study"}},
 	}
 	nextID = 3
+	nextChecklistItemID = 1
 }
 
 type TaskSummary struct {
