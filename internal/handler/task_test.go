@@ -726,6 +726,31 @@ func TestDeleteChecklistItemThroughHandler(t *testing.T) {
 	}
 }
 
+func TestChecklistAPIRejectsInvalidAndExcessiveItems(t *testing.T) {
+	resetTaskFixture()
+	empty := httptest.NewRecorder()
+	HandleTaskChecklist(empty, httptest.NewRequest(http.MethodPost, "/tasks/1/checklist", strings.NewReader(`{"text":"   "}`)))
+	if empty.Code != http.StatusBadRequest {
+		t.Fatalf("expected empty text status %d, got %d", http.StatusBadRequest, empty.Code)
+	}
+	longText := strings.Repeat("界", 251)
+	long := httptest.NewRecorder()
+	HandleTaskChecklist(long, httptest.NewRequest(http.MethodPost, "/tasks/1/checklist", strings.NewReader(`{"text":"`+longText+`"}`)))
+	if long.Code != http.StatusBadRequest {
+		t.Fatalf("expected long text status %d, got %d", http.StatusBadRequest, long.Code)
+	}
+	for i := 0; i < 100; i++ {
+		if _, err := service.AddChecklistItem(1, "item"); err != nil {
+			t.Fatalf("add item %d: %v", i+1, err)
+		}
+	}
+	limit := httptest.NewRecorder()
+	HandleTaskChecklist(limit, httptest.NewRequest(http.MethodPost, "/tasks/1/checklist", strings.NewReader(`{"text":"one too many"}`)))
+	if limit.Code != http.StatusConflict {
+		t.Fatalf("expected limit status %d, got %d", http.StatusConflict, limit.Code)
+	}
+}
+
 func TestHandleTaskByIDDeletesTask(t *testing.T) {
 	resetTaskFixture()
 	body := bytes.NewBufferString(`{"title":"Temporary task","dueDate":"2030-01-02T15:04:05Z"}`)
