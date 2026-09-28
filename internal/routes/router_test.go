@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -68,5 +69,17 @@ func TestChecklistCollectionRouteSupportsGetAndPost(t *testing.T) {
 	Router(postRecorder, httptest.NewRequest(http.MethodPost, "/tasks/1/checklist", strings.NewReader(`{"text":"Review draft"}`)))
 	if postRecorder.Code != http.StatusCreated || !strings.Contains(postRecorder.Body.String(), `"text":"Review draft"`) {
 		t.Fatalf("unexpected checklist POST response: %d %s", postRecorder.Code, postRecorder.Body.String())
+	}
+}
+
+func TestChecklistOrderRoute(t *testing.T) {
+	service.ResetTasks()
+	first, _ := service.AddChecklistItem(1, "first")
+	second, _ := service.AddChecklistItem(1, "second")
+	body := `{"ids":[` + fmt.Sprint(second.ID) + `,` + fmt.Sprint(first.ID) + `]}`
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodPut, "/tasks/1/checklist/order", strings.NewReader(body)))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"id":2`) {
+		t.Fatalf("unexpected checklist order response: %d %s", recorder.Code, recorder.Body.String())
 	}
 }

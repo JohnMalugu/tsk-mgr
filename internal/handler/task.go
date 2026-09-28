@@ -408,6 +408,39 @@ func HandleTaskChecklist(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func HandleChecklistOrder(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		w.Header().Set("Allow", http.MethodPut)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	idText := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/tasks/"), "/checklist/order")
+	taskID, err := strconv.Atoi(idText)
+	if err != nil || taskID < 1 {
+		respondError(w, r, http.StatusBadRequest, "task id must be a positive integer")
+		return
+	}
+	var payload struct {
+		IDs []int `json:"ids"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&payload); err != nil {
+		respondError(w, r, http.StatusBadRequest, "request body must be valid JSON")
+		return
+	}
+	items, err := service.ReorderChecklist(taskID, payload.IDs)
+	if err != nil {
+		if errors.Is(err, service.ErrChecklistOrderInvalid) {
+			respondError(w, r, http.StatusConflict, err.Error())
+		} else {
+			respondChecklistError(w, r, err)
+		}
+		return
+	}
+	respondJSON(w, http.StatusOK, items)
+}
+
 func respondChecklistError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, service.ErrTaskNotFound), errors.Is(err, service.ErrChecklistItemNotFound):
