@@ -84,6 +84,21 @@ func TestSetChecklistItemCompletion(t *testing.T) {
 	}
 }
 
+func TestUpdateChecklistItemTextPreservesState(t *testing.T) {
+	ResetTasks()
+	item, err := AddChecklistItem(1, "draft")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetChecklistItemCompletion(1, item.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := UpdateChecklistItemText(1, item.ID, "  review  ")
+	if err != nil || updated.ID != item.ID || updated.Text != "review" || !updated.Completed {
+		t.Fatalf("expected text-only update, got %#v err=%v", updated, err)
+	}
+}
+
 func TestResetTasksResetsChecklistItemSequence(t *testing.T) {
 	nextChecklistItemID = 19
 	ResetTasks()

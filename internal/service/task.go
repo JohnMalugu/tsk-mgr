@@ -304,6 +304,32 @@ func SetChecklistItemCompletion(taskID, itemID int, completed bool) (model.Check
 	return model.ChecklistItem{}, ErrTaskNotFound
 }
 
+// UpdateChecklistItemText changes an item's text without changing its identity or completion state.
+func UpdateChecklistItemText(taskID, itemID int, text string) (model.ChecklistItem, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	text = strings.TrimSpace(text)
+	if text == "" || utf8.RuneCountInString(text) > 250 {
+		return model.ChecklistItem{}, ErrChecklistTextInvalid
+	}
+	for taskIndex := range tasks {
+		if tasks[taskIndex].ID != taskID {
+			continue
+		}
+		for itemIndex := range tasks[taskIndex].Checklist {
+			item := &tasks[taskIndex].Checklist[itemIndex]
+			if item.ID == itemID {
+				item.Text = text
+				tasks[taskIndex].UpdatedAt = time.Now()
+				return *item, nil
+			}
+		}
+		return model.ChecklistItem{}, ErrChecklistItemNotFound
+	}
+	return model.ChecklistItem{}, ErrTaskNotFound
+}
+
 // GetTaskDependencies returns copies of all prerequisite tasks for a task ID.
 func GetTaskDependencies(id int) ([]model.Task, bool) {
 	mu.RLock()
