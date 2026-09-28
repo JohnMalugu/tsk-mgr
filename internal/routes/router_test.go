@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -92,5 +93,36 @@ func TestChecklistProgressRoute(t *testing.T) {
 	Router(recorder, httptest.NewRequest(http.MethodGet, "/tasks/1/checklist/progress", nil))
 	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"percent":100`) {
 		t.Fatalf("unexpected checklist progress response: %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestChecklistLifecycleThroughRouter(t *testing.T) {
+	service.ResetTasks()
+	created := httptest.NewRecorder()
+	Router(created, httptest.NewRequest(http.MethodPost, "/tasks/1/checklist", strings.NewReader(`{"text":"Ship feature"}`)))
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create status %d: %s", created.Code, created.Body.String())
+	}
+	var item struct {
+		ID int `json:"id"`
+	}
+	if err := json.NewDecoder(created.Body).Decode(&item); err != nil {
+		t.Fatal(err)
+	}
+	itemPath := "/tasks/1/checklist/" + fmt.Sprint(item.ID)
+	patched := httptest.NewRecorder()
+	Router(patched, httptest.NewRequest(http.MethodPatch, itemPath, strings.NewReader(`{"completed":true}`)))
+	if patched.Code != http.StatusOK {
+		t.Fatalf("patch status %d: %s", patched.Code, patched.Body.String())
+	}
+	progress := httptest.NewRecorder()
+	Router(progress, httptest.NewRequest(http.MethodGet, "/tasks/1/checklist/progress", nil))
+	if progress.Code != http.StatusOK || !strings.Contains(progress.Body.String(), `"percent":100`) {
+		t.Fatalf("progress response %d: %s", progress.Code, progress.Body.String())
+	}
+	deleted := httptest.NewRecorder()
+	Router(deleted, httptest.NewRequest(http.MethodDelete, itemPath, nil))
+	if deleted.Code != http.StatusNoContent {
+		t.Fatalf("delete status %d", deleted.Code)
 	}
 }
