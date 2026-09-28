@@ -18,6 +18,10 @@ var (
 	ErrDependencyCycle         = errors.New("dependency would create a cycle")
 	ErrTaskIsPrerequisite      = errors.New("task is a prerequisite for other tasks")
 	ErrTaskBlocked             = errors.New("task has incomplete prerequisites")
+	ErrChecklistItemNotFound   = errors.New("checklist item not found")
+	ErrChecklistTextInvalid    = errors.New("checklist item text is required")
+	ErrChecklistLimitReached   = errors.New("task checklist item limit reached")
+	ErrChecklistOrderInvalid   = errors.New("checklist order must contain every item exactly once")
 )
 
 // In-memory storage (we'll use database later)

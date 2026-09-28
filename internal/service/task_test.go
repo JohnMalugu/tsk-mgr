@@ -16,6 +16,15 @@ func TestDependencyErrorsAreDistinct(t *testing.T) {
 	}
 }
 
+func TestChecklistErrorsAreDistinct(t *testing.T) {
+	if errors.Is(ErrChecklistItemNotFound, ErrTaskNotFound) {
+		t.Fatal("missing checklist item and missing task must be distinct")
+	}
+	if ErrChecklistOrderInvalid.Error() != "checklist order must contain every item exactly once" {
+		t.Fatalf("unexpected checklist order error: %q", ErrChecklistOrderInvalid)
+	}
+}
+
 func TestGetTaskByIDReturnsCopy(t *testing.T) {
 	task := GetTaskByID(1)
 	if task == nil {
