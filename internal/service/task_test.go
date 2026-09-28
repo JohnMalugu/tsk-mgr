@@ -134,6 +134,28 @@ func TestReorderChecklistRequiresExactItemSet(t *testing.T) {
 	}
 }
 
+func TestGetChecklistProgress(t *testing.T) {
+	ResetTasks()
+	if _, err := AddChecklistItem(1, "first"); err != nil {
+		t.Fatal(err)
+	}
+	second, err := AddChecklistItem(1, "second")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetChecklistItemCompletion(1, second.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	progress, found := GetChecklistProgress(1)
+	if !found || progress.Total != 2 || progress.Completed != 1 || progress.Remaining != 1 || progress.Percent != 50 {
+		t.Fatalf("unexpected progress: %#v found=%v", progress, found)
+	}
+	empty, _ := GetChecklistProgress(2)
+	if empty.Total != 0 || empty.Percent != 0 {
+		t.Fatalf("expected empty checklist progress, got %#v", empty)
+	}
+}
+
 func TestResetTasksResetsChecklistItemSequence(t *testing.T) {
 	nextChecklistItemID = 19
 	ResetTasks()

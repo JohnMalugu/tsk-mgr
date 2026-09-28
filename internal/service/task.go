@@ -68,6 +68,13 @@ type BulkDeleteResult struct {
 	Count   int   `json:"count"`
 }
 
+type ChecklistProgress struct {
+	Total     int `json:"total"`
+	Completed int `json:"completed"`
+	Remaining int `json:"remaining"`
+	Percent   int `json:"percent"`
+}
+
 // GetAllTasks returns the first page of all tasks.
 func GetAllTasks() []model.Task {
 	return GetTasks(nil, nil, "", nil, nil, nil, nil, 0, 20, "id", false)
@@ -256,6 +263,30 @@ func GetTaskChecklist(taskID int) ([]model.ChecklistItem, bool) {
 		}
 	}
 	return nil, false
+}
+
+// GetChecklistProgress returns aggregate completion progress for a task checklist.
+func GetChecklistProgress(taskID int) (ChecklistProgress, bool) {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	for _, task := range tasks {
+		if task.ID != taskID {
+			continue
+		}
+		progress := ChecklistProgress{Total: len(task.Checklist)}
+		for _, item := range task.Checklist {
+			if item.Completed {
+				progress.Completed++
+			}
+		}
+		progress.Remaining = progress.Total - progress.Completed
+		if progress.Total > 0 {
+			progress.Percent = progress.Completed * 100 / progress.Total
+		}
+		return progress, true
+	}
+	return ChecklistProgress{}, false
 }
 
 // AddChecklistItem appends a new checklist item to a task.
