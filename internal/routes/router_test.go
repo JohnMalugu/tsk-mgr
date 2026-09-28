@@ -56,3 +56,17 @@ func TestDependenciesRouteIsDispatched(t *testing.T) {
 		t.Fatalf("expected dependency route status %d, got %d", http.StatusOK, recorder.Code)
 	}
 }
+
+func TestChecklistCollectionRouteSupportsGetAndPost(t *testing.T) {
+	service.ResetTasks()
+	getRecorder := httptest.NewRecorder()
+	Router(getRecorder, httptest.NewRequest(http.MethodGet, "/tasks/1/checklist", nil))
+	if getRecorder.Code != http.StatusOK || getRecorder.Body.String() != "[]\n" {
+		t.Fatalf("unexpected checklist GET response: %d %s", getRecorder.Code, getRecorder.Body.String())
+	}
+	postRecorder := httptest.NewRecorder()
+	Router(postRecorder, httptest.NewRequest(http.MethodPost, "/tasks/1/checklist", strings.NewReader(`{"text":"Review draft"}`)))
+	if postRecorder.Code != http.StatusCreated || !strings.Contains(postRecorder.Body.String(), `"text":"Review draft"`) {
+		t.Fatalf("unexpected checklist POST response: %d %s", postRecorder.Code, postRecorder.Body.String())
+	}
+}

@@ -30,6 +30,10 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		handler.HandleReadyTasks(w, r)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/tasks/") && strings.Contains(r.URL.Path, "/checklist") {
+		handler.HandleTaskChecklist(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/tasks/") && strings.HasSuffix(r.URL.Path, "/dependencies") {
 		handler.HandleTaskDependencies(w, r)
 		return

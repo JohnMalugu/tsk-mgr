@@ -362,6 +362,73 @@ func HandleTaskDependency(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func HandleTaskChecklist(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/tasks/")
+	parts := strings.Split(path, "/checklist")
+	if len(parts) != 2 {
+		respondError(w, r, http.StatusBadRequest, "checklist route is invalid")
+		return
+	}
+	taskID, err := strconv.Atoi(parts[0])
+	if err != nil || taskID < 1 {
+		respondError(w, r, http.StatusBadRequest, "task id must be a positive integer")
+		return
+	}
+	if parts[1] != "" {
+		handleChecklistItem(w, r, taskID, strings.TrimPrefix(parts[1], "/"))
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		items, found := service.GetTaskChecklist(taskID)
+		if !found {
+			respondError(w, r, http.StatusNotFound, "task not found")
+			return
+		}
+		respondJSON(w, http.StatusOK, items)
+	case http.MethodPost:
+		var payload struct {
+			Text string `json:"text"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&payload); err != nil {
+			respondError(w, r, http.StatusBadRequest, "request body must be valid JSON")
+			return
+		}
+		item, err := service.AddChecklistItem(taskID, payload.Text)
+		if err != nil {
+			respondChecklistError(w, r, err)
+			return
+		}
+		respondJSON(w, http.StatusCreated, item)
+	default:
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func respondChecklistError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, service.ErrTaskNotFound), errors.Is(err, service.ErrChecklistItemNotFound):
+		respondError(w, r, http.StatusNotFound, err.Error())
+	case errors.Is(err, service.ErrChecklistLimitReached):
+		respondError(w, r, http.StatusConflict, err.Error())
+	default:
+		respondError(w, r, http.StatusBadRequest, err.Error())
+	}
+}
+
+func handleChecklistItem(w http.ResponseWriter, r *http.Request, taskID int, itemIDText string) {
+	itemID, err := strconv.Atoi(itemIDText)
+	if err != nil || itemID < 1 {
+		respondError(w, r, http.StatusBadRequest, "checklist item id must be a positive integer")
+		return
+	}
+	w.Header().Set("Allow", http.MethodPatch+", "+http.MethodDelete)
+	respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+}
+
 func HandleHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
