@@ -83,3 +83,14 @@ func TestChecklistOrderRoute(t *testing.T) {
 		t.Fatalf("unexpected checklist order response: %d %s", recorder.Code, recorder.Body.String())
 	}
 }
+
+func TestChecklistProgressRoute(t *testing.T) {
+	service.ResetTasks()
+	item, _ := service.AddChecklistItem(1, "finish")
+	service.SetChecklistItemCompletion(1, item.ID, true)
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodGet, "/tasks/1/checklist/progress", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"percent":100`) {
+		t.Fatalf("unexpected checklist progress response: %d %s", recorder.Code, recorder.Body.String())
+	}
+}

@@ -441,6 +441,26 @@ func HandleChecklistOrder(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, items)
 }
 
+func HandleChecklistProgress(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	idText := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/tasks/"), "/checklist/progress")
+	taskID, err := strconv.Atoi(idText)
+	if err != nil || taskID < 1 {
+		respondError(w, r, http.StatusBadRequest, "task id must be a positive integer")
+		return
+	}
+	progress, found := service.GetChecklistProgress(taskID)
+	if !found {
+		respondError(w, r, http.StatusNotFound, "task not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, progress)
+}
+
 func respondChecklistError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, service.ErrTaskNotFound), errors.Is(err, service.ErrChecklistItemNotFound):
