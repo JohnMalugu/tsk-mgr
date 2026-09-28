@@ -707,6 +707,25 @@ func TestPatchChecklistItemUpdatesCompletion(t *testing.T) {
 	}
 }
 
+func TestDeleteChecklistItemThroughHandler(t *testing.T) {
+	resetTaskFixture()
+	item, err := service.AddChecklistItem(1, "temporary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "/tasks/1/checklist/" + strconv.Itoa(item.ID)
+	recorder := httptest.NewRecorder()
+	HandleTaskChecklist(recorder, httptest.NewRequest(http.MethodDelete, path, nil))
+	if recorder.Code != http.StatusNoContent || recorder.Body.Len() != 0 {
+		t.Fatalf("unexpected checklist DELETE response: %d %q", recorder.Code, recorder.Body.String())
+	}
+	missing := httptest.NewRecorder()
+	HandleTaskChecklist(missing, httptest.NewRequest(http.MethodDelete, path, nil))
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("expected missing item status %d, got %d", http.StatusNotFound, missing.Code)
+	}
+}
+
 func TestHandleTaskByIDDeletesTask(t *testing.T) {
 	resetTaskFixture()
 	body := bytes.NewBufferString(`{"title":"Temporary task","dueDate":"2030-01-02T15:04:05Z"}`)

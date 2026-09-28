@@ -453,7 +453,11 @@ func handleChecklistItem(w http.ResponseWriter, r *http.Request, taskID int, ite
 		respondJSON(w, http.StatusOK, item)
 		return
 	}
-	respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+	if err := service.DeleteChecklistItem(taskID, itemID); err != nil {
+		respondChecklistError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func HandleHealth(w http.ResponseWriter, r *http.Request) {
