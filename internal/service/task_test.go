@@ -69,6 +69,21 @@ func TestAddChecklistItemTrimsTextAndAssignsID(t *testing.T) {
 	}
 }
 
+func TestSetChecklistItemCompletion(t *testing.T) {
+	ResetTasks()
+	item, err := AddChecklistItem(1, "draft")
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := SetChecklistItemCompletion(1, item.ID, true)
+	if err != nil || !updated.Completed {
+		t.Fatalf("expected item completion, item=%#v err=%v", updated, err)
+	}
+	if _, err := SetChecklistItemCompletion(1, 999, true); !errors.Is(err, ErrChecklistItemNotFound) {
+		t.Fatalf("expected missing-item error, got %v", err)
+	}
+}
+
 func TestResetTasksResetsChecklistItemSequence(t *testing.T) {
 	nextChecklistItemID = 19
 	ResetTasks()

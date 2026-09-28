@@ -283,6 +283,27 @@ func AddChecklistItem(taskID int, text string) (model.ChecklistItem, error) {
 	return model.ChecklistItem{}, ErrTaskNotFound
 }
 
+// SetChecklistItemCompletion updates one checklist item's completion state.
+func SetChecklistItemCompletion(taskID, itemID int, completed bool) (model.ChecklistItem, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	for taskIndex := range tasks {
+		if tasks[taskIndex].ID != taskID {
+			continue
+		}
+		for itemIndex := range tasks[taskIndex].Checklist {
+			if tasks[taskIndex].Checklist[itemIndex].ID == itemID {
+				tasks[taskIndex].Checklist[itemIndex].Completed = completed
+				tasks[taskIndex].UpdatedAt = time.Now()
+				return tasks[taskIndex].Checklist[itemIndex], nil
+			}
+		}
+		return model.ChecklistItem{}, ErrChecklistItemNotFound
+	}
+	return model.ChecklistItem{}, ErrTaskNotFound
+}
+
 // GetTaskDependencies returns copies of all prerequisite tasks for a task ID.
 func GetTaskDependencies(id int) ([]model.Task, bool) {
 	mu.RLock()
