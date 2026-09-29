@@ -737,6 +737,7 @@ func CreateTaskWithDependencies(task model.Task, dependencyIDs []int) (model.Tas
 	task.DependsOn = append([]int(nil), dependencyIDs...)
 	nextID++
 	tasks = append(tasks, task)
+	recordActivityLocked(task.ID, "created", "Task created: "+task.Title)
 	return task, nil
 }
 

@@ -474,6 +474,18 @@ func TestCreateTaskDefaultsPriority(t *testing.T) {
 	}
 }
 
+func TestCreateTaskRecordsActivity(t *testing.T) {
+	ResetTasks()
+	created, err := CreateTaskWithDependencies(model.Task{Title: "Plan release"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := GetActivityLog()
+	if len(events) != 1 || events[0].TaskID != created.ID || events[0].Action != "created" || events[0].Summary != "Task created: Plan release" {
+		t.Fatalf("unexpected creation activity: %#v", events)
+	}
+}
+
 func TestBulkSetTaskPriorityIsAtomic(t *testing.T) {
 	ResetTasks()
 	if _, ok := BulkSetTaskPriority([]int{1, 999}, "high"); ok {
