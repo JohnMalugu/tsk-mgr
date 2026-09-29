@@ -870,6 +870,7 @@ func DeleteTask(id int) bool {
 	}
 	for i := range tasks {
 		if tasks[i].ID == id {
+			recordActivityLocked(id, "deleted", "Task deleted: "+tasks[i].Title)
 			tasks = append(tasks[:i], tasks[i+1:]...)
 			return true
 		}
@@ -1046,6 +1047,7 @@ func BulkDeleteTasks(ids []int) (BulkDeleteResult, bool) {
 	for _, task := range tasks {
 		if _, ok := requested[task.ID]; ok {
 			deleted = append(deleted, task.ID)
+			recordActivityLocked(task.ID, "deleted", "Task deleted: "+task.Title)
 			continue
 		}
 		remaining = append(remaining, task)

@@ -326,6 +326,17 @@ func TestDeleteTaskRejectsReferencedPrerequisite(t *testing.T) {
 	}
 }
 
+func TestDeleteTaskRecordsActivityBeforeRemoval(t *testing.T) {
+	ResetTasks()
+	if !DeleteTask(1) {
+		t.Fatal("expected task deletion")
+	}
+	events := GetActivityLog()
+	if len(events) != 1 || events[0].TaskID != 1 || events[0].Action != "deleted" || events[0].Summary != "Task deleted: Buy groceries" {
+		t.Fatalf("unexpected deletion activity: %#v", events)
+	}
+}
+
 func TestIsTaskBlockedFollowsPrerequisiteCompletion(t *testing.T) {
 	ResetTasks()
 	if _, err := AddTaskDependency(1, 2); err != nil {
