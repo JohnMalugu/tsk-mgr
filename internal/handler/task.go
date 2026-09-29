@@ -533,7 +533,12 @@ func HandleActivity(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	respondJSON(w, http.StatusOK, service.GetActivities(nil, r.URL.Query().Get("action"), nil, nil, offset, limit))
+	from, to, err := activityTimeRange(r)
+	if err != nil {
+		respondError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, service.GetActivities(nil, r.URL.Query().Get("action"), from, to, offset, limit))
 }
 
 func HandleTaskActivity(w http.ResponseWriter, r *http.Request) {
@@ -553,7 +558,27 @@ func HandleTaskActivity(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	respondJSON(w, http.StatusOK, service.GetActivities(&taskID, r.URL.Query().Get("action"), nil, nil, offset, limit))
+	from, to, err := activityTimeRange(r)
+	if err != nil {
+		respondError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, service.GetActivities(&taskID, r.URL.Query().Get("action"), from, to, offset, limit))
+}
+
+func activityTimeRange(r *http.Request) (*time.Time, *time.Time, error) {
+	from, err := dateFilter(r, "from")
+	if err != nil {
+		return nil, nil, fmt.Errorf("from must be an RFC3339 timestamp")
+	}
+	to, err := dateFilter(r, "to")
+	if err != nil {
+		return nil, nil, fmt.Errorf("to must be an RFC3339 timestamp")
+	}
+	if from != nil && to != nil && from.After(*to) {
+		return nil, nil, fmt.Errorf("from must not be later than to")
+	}
+	return from, to, nil
 }
 
 func HandleBulkComplete(w http.ResponseWriter, r *http.Request) {

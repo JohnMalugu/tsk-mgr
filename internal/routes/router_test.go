@@ -71,6 +71,20 @@ func TestActivityRouteFiltersByAction(t *testing.T) {
 	}
 }
 
+func TestActivityRouteValidatesTimeWindow(t *testing.T) {
+	service.ResetTasks()
+	invalid := httptest.NewRecorder()
+	Router(invalid, httptest.NewRequest(http.MethodGet, "/activity?from=not-a-date", nil))
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("expected malformed timestamp status %d, got %d", http.StatusBadRequest, invalid.Code)
+	}
+	reversed := httptest.NewRecorder()
+	Router(reversed, httptest.NewRequest(http.MethodGet, "/activity?from=2026-09-29T13:00:00Z&to=2026-09-29T12:00:00Z", nil))
+	if reversed.Code != http.StatusBadRequest {
+		t.Fatalf("expected reversed window status %d, got %d", http.StatusBadRequest, reversed.Code)
+	}
+}
+
 func TestTaskDependencyWorkflowThroughRouter(t *testing.T) {
 	service.ResetTasks()
 	addRequest := httptest.NewRequest(http.MethodPost, "/tasks/1/dependencies", strings.NewReader(`{"dependsOn":2}`))
