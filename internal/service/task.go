@@ -349,8 +349,12 @@ func SetChecklistItemCompletion(taskID, itemID int, completed bool) (model.Check
 		}
 		for itemIndex := range tasks[taskIndex].Checklist {
 			if tasks[taskIndex].Checklist[itemIndex].ID == itemID {
+				wasCompleted := tasks[taskIndex].Checklist[itemIndex].Completed
 				tasks[taskIndex].Checklist[itemIndex].Completed = completed
 				tasks[taskIndex].UpdatedAt = time.Now()
+				if wasCompleted != completed {
+					recordChecklistCompletionActivityLocked(tasks[taskIndex].ID, tasks[taskIndex].Checklist[itemIndex])
+				}
 				return tasks[taskIndex].Checklist[itemIndex], nil
 			}
 		}
@@ -375,8 +379,12 @@ func UpdateChecklistItemText(taskID, itemID int, text string) (model.ChecklistIt
 		for itemIndex := range tasks[taskIndex].Checklist {
 			item := &tasks[taskIndex].Checklist[itemIndex]
 			if item.ID == itemID {
+				oldText := item.Text
 				item.Text = text
 				tasks[taskIndex].UpdatedAt = time.Now()
+				if oldText != text {
+					recordActivityLocked(taskID, "checklist_item_updated", "Updated checklist item: "+text)
+				}
 				return *item, nil
 			}
 		}
@@ -406,18 +414,37 @@ func UpdateChecklistItem(taskID, itemID int, text *string, completed *bool) (mod
 			if item.ID != itemID {
 				continue
 			}
-			if text != nil {
+			changed := false
+			completionChanged := completed != nil && item.Completed != *completed
+			if text != nil && item.Text != *text {
 				item.Text = *text
+				changed = true
 			}
-			if completed != nil {
+			if completed != nil && item.Completed != *completed {
 				item.Completed = *completed
+				changed = true
 			}
-			tasks[taskIndex].UpdatedAt = time.Now()
+			if changed {
+				tasks[taskIndex].UpdatedAt = time.Now()
+				if completionChanged {
+					recordChecklistCompletionActivityLocked(taskID, *item)
+				} else {
+					recordActivityLocked(taskID, "checklist_item_updated", "Updated checklist item: "+item.Text)
+				}
+			}
 			return *item, nil
 		}
 		return model.ChecklistItem{}, ErrChecklistItemNotFound
 	}
 	return model.ChecklistItem{}, ErrTaskNotFound
+}
+
+func recordChecklistCompletionActivityLocked(taskID int, item model.ChecklistItem) {
+	if item.Completed {
+		recordActivityLocked(taskID, "checklist_item_completed", "Completed checklist item: "+item.Text)
+		return
+	}
+	recordActivityLocked(taskID, "checklist_item_reopened", "Reopened checklist item: "+item.Text)
 }
 
 // DeleteChecklistItem removes one checklist item from a task.
@@ -431,8 +458,10 @@ func DeleteChecklistItem(taskID, itemID int) error {
 		}
 		for itemIndex := range tasks[taskIndex].Checklist {
 			if tasks[taskIndex].Checklist[itemIndex].ID == itemID {
+				item := tasks[taskIndex].Checklist[itemIndex]
 				tasks[taskIndex].Checklist = append(tasks[taskIndex].Checklist[:itemIndex], tasks[taskIndex].Checklist[itemIndex+1:]...)
 				tasks[taskIndex].UpdatedAt = time.Now()
+				recordActivityLocked(taskID, "checklist_item_deleted", "Deleted checklist item: "+item.Text)
 				return nil
 			}
 		}
@@ -470,8 +499,18 @@ func ReorderChecklist(taskID int, orderedIDs []int) ([]model.ChecklistItem, erro
 		if len(byID) != 0 {
 			return nil, ErrChecklistOrderInvalid
 		}
+		changed := false
+		for index := range items {
+			if items[index].ID != ordered[index].ID {
+				changed = true
+				break
+			}
+		}
 		tasks[taskIndex].Checklist = ordered
-		tasks[taskIndex].UpdatedAt = time.Now()
+		if changed {
+			tasks[taskIndex].UpdatedAt = time.Now()
+			recordActivityLocked(taskID, "checklist_reordered", "Reordered task checklist")
+		}
 		return append([]model.ChecklistItem(nil), ordered...), nil
 	}
 	return nil, ErrTaskNotFound

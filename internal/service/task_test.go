@@ -163,6 +163,28 @@ func TestDeleteChecklistItem(t *testing.T) {
 	}
 }
 
+func TestChecklistMutationsRecordMeaningfulActivity(t *testing.T) {
+	ResetTasks()
+	item, err := AddChecklistItem(1, "Draft")
+	if err != nil {
+		t.Fatal(err)
+	}
+	completed := true
+	if _, err := UpdateChecklistItem(1, item.ID, nil, &completed); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpdateChecklistItem(1, item.ID, nil, &completed); err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteChecklistItem(1, item.ID); err != nil {
+		t.Fatal(err)
+	}
+	events := GetActivityLog()
+	if len(events) != 3 || events[1].Action != "checklist_item_completed" || events[2].Action != "checklist_item_deleted" {
+		t.Fatalf("expected add/complete/delete events without no-op duplicate, got %#v", events)
+	}
+}
+
 func TestReorderChecklistRequiresExactItemSet(t *testing.T) {
 	ResetTasks()
 	first, _ := AddChecklistItem(1, "first")
