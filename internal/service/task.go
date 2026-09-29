@@ -901,8 +901,12 @@ func SetTaskCompletionChecked(id int, completed bool) (*model.Task, error) {
 			if !completed && hasCompletedDependentLocked(id, nil) {
 				return nil, ErrTaskBlocked
 			}
+			wasCompleted := tasks[i].Completed
 			tasks[i].Completed = completed
 			tasks[i].UpdatedAt = time.Now()
+			if wasCompleted != completed {
+				recordCompletionActivityLocked(tasks[i])
+			}
 			updated := tasks[i]
 			return &updated, nil
 		}
@@ -986,11 +990,23 @@ func BulkSetTaskCompletionChecked(ids []int, completed bool) (BulkUpdateResult, 
 
 	updated := make([]model.Task, 0, len(positions))
 	for _, position := range positions {
+		wasCompleted := tasks[position].Completed
 		tasks[position].Completed = completed
 		tasks[position].UpdatedAt = time.Now()
+		if wasCompleted != completed {
+			recordCompletionActivityLocked(tasks[position])
+		}
 		updated = append(updated, tasks[position])
 	}
 	return BulkUpdateResult{Tasks: updated, Updated: len(updated)}, nil
+}
+
+func recordCompletionActivityLocked(task model.Task) {
+	if task.Completed {
+		recordActivityLocked(task.ID, "completed", "Task completed: "+task.Title)
+		return
+	}
+	recordActivityLocked(task.ID, "reopened", "Task reopened: "+task.Title)
 }
 
 // BulkDeleteTasks removes all requested tasks only when every ID exists.

@@ -385,6 +385,23 @@ func TestBulkCompletionRejectsBlockedBatchWithoutMutation(t *testing.T) {
 	}
 }
 
+func TestCompletionTransitionsRecordOnce(t *testing.T) {
+	ResetTasks()
+	if _, err := SetTaskCompletionChecked(1, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetTaskCompletionChecked(1, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetTaskCompletionChecked(1, false); err != nil {
+		t.Fatal(err)
+	}
+	events := GetActivityLog()
+	if len(events) != 2 || events[0].Action != "completed" || events[1].Action != "reopened" {
+		t.Fatalf("expected one event per transition, got %#v", events)
+	}
+}
+
 func TestGetReadyTasksExcludesBlockedAndCompletedTasks(t *testing.T) {
 	ResetTasks()
 	if _, err := AddTaskDependency(1, 2); err != nil {
