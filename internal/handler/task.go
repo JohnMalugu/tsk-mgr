@@ -533,7 +533,7 @@ func HandleActivity(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	respondJSON(w, http.StatusOK, service.GetActivities(nil, "", nil, nil, offset, limit))
+	respondJSON(w, http.StatusOK, service.GetActivities(nil, r.URL.Query().Get("action"), nil, nil, offset, limit))
 }
 
 func HandleTaskActivity(w http.ResponseWriter, r *http.Request) {
@@ -553,7 +553,7 @@ func HandleTaskActivity(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	respondJSON(w, http.StatusOK, service.GetActivities(&taskID, "", nil, nil, offset, limit))
+	respondJSON(w, http.StatusOK, service.GetActivities(&taskID, r.URL.Query().Get("action"), nil, nil, offset, limit))
 }
 
 func HandleBulkComplete(w http.ResponseWriter, r *http.Request) {

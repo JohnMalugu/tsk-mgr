@@ -60,6 +60,17 @@ func TestActivityRouteSupportsPagination(t *testing.T) {
 	}
 }
 
+func TestActivityRouteFiltersByAction(t *testing.T) {
+	service.ResetTasks()
+	task := service.CreateTask(model.Task{Title: "Filtered task"})
+	service.SetTaskCompletion(task.ID, true)
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodGet, "/tasks/"+fmt.Sprint(task.ID)+"/activity?action=completed", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"total":1`) || !strings.Contains(recorder.Body.String(), `"action":"completed"`) {
+		t.Fatalf("unexpected action-filtered activity response: %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestTaskDependencyWorkflowThroughRouter(t *testing.T) {
 	service.ResetTasks()
 	addRequest := httptest.NewRequest(http.MethodPost, "/tasks/1/dependencies", strings.NewReader(`{"dependsOn":2}`))
