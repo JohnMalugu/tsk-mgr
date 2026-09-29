@@ -98,11 +98,55 @@ type ChecklistProgress struct {
 	Percent   int `json:"percent"`
 }
 
+type ActivityPage struct {
+	Activities []model.Activity `json:"activities"`
+	Total      int              `json:"total"`
+	Offset     int              `json:"offset"`
+	Limit      int              `json:"limit"`
+}
+
 // GetAllTasks returns the first page of all tasks.
 func GetAllTasks() []model.Task {
 	return GetTasks(nil, nil, "", nil, nil, nil, nil, 0, 20, "id", false)
 }
 
+// GetActivities returns a filtered page ordered from newest to oldest.
+func GetActivities(taskID *int, action string, from, to *time.Time, offset, limit int) ActivityPage {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	filtered := make([]model.Activity, 0, len(activities))
+	for _, activity := range activities {
+		if taskID != nil && activity.TaskID != *taskID {
+			continue
+		}
+		if action != "" && activity.Action != action {
+			continue
+		}
+		if from != nil && activity.OccurredAt.Before(*from) {
+			continue
+		}
+		if to != nil && activity.OccurredAt.After(*to) {
+			continue
+		}
+		filtered = append(filtered, activity)
+	}
+	sort.Slice(filtered, func(i, j int) bool {
+		if filtered[i].OccurredAt.Equal(filtered[j].OccurredAt) {
+			return filtered[i].ID > filtered[j].ID
+		}
+		return filtered[i].OccurredAt.After(filtered[j].OccurredAt)
+	})
+	total := len(filtered)
+	if offset >= total {
+		return ActivityPage{Activities: []model.Activity{}, Total: total, Offset: offset, Limit: limit}
+	}
+	end := offset + limit
+	if end < offset || end > total {
+		end = total
+	}
+	return ActivityPage{Activities: filtered[offset:end], Total: total, Offset: offset, Limit: limit}
+}
 func contains(items []string, target string) bool {
 	for _, item := range items {
 		if strings.EqualFold(item, target) {

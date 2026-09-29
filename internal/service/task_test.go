@@ -34,6 +34,24 @@ func TestResetTasksClearsActivityLogAndSequence(t *testing.T) {
 	}
 }
 
+func TestGetActivitiesFiltersAndPaginatesNewestFirst(t *testing.T) {
+	ResetTasks()
+	CreateTask(model.Task{Title: "First"})
+	CreateTask(model.Task{Title: "Second"})
+	action := "created"
+	page := GetActivities(nil, action, nil, nil, 1, 1)
+	if page.Total != 2 || page.Offset != 1 || page.Limit != 1 || len(page.Activities) != 1 {
+		t.Fatalf("unexpected activity page metadata: %#v", page)
+	}
+	if page.Activities[0].Summary != "Task created: First" {
+		t.Fatalf("expected second-newest event, got %#v", page.Activities[0])
+	}
+	taskID := page.Activities[0].TaskID
+	filtered := GetActivities(&taskID, action, nil, nil, 0, 10)
+	if filtered.Total != 1 || len(filtered.Activities) != 1 {
+		t.Fatalf("expected one task-filtered event, got %#v", filtered)
+	}
+}
 func TestChecklistErrorsAreDistinct(t *testing.T) {
 	if errors.Is(ErrChecklistItemNotFound, ErrTaskNotFound) {
 		t.Fatal("missing checklist item and missing task must be distinct")
