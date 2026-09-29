@@ -47,6 +47,8 @@ var nextChecklistItemID int = 1
 var nextActivityID int = 1
 var mu sync.RWMutex
 
+const maxActivityEvents = 10000
+
 func init() {
 	ResetTasks()
 }
@@ -76,6 +78,9 @@ func recordActivityLocked(taskID int, action, summary string) {
 		OccurredAt: time.Now().UTC(),
 	})
 	nextActivityID++
+	if len(activities) > maxActivityEvents {
+		activities = append([]model.Activity(nil), activities[len(activities)-maxActivityEvents:]...)
+	}
 }
 
 // GetActivityLog returns a snapshot of all recorded task activity.

@@ -34,6 +34,22 @@ func TestResetTasksClearsActivityLogAndSequence(t *testing.T) {
 	}
 }
 
+func TestActivityLogRetainsNewestEventsWithinLimit(t *testing.T) {
+	ResetTasks()
+	mu.Lock()
+	for index := 0; index < maxActivityEvents+2; index++ {
+		recordActivityLocked(1, "updated", "event")
+	}
+	mu.Unlock()
+	events := GetActivityLog()
+	if len(events) != maxActivityEvents {
+		t.Fatalf("expected %d retained events, got %d", maxActivityEvents, len(events))
+	}
+	if events[0].ID != 3 || events[len(events)-1].ID != maxActivityEvents+2 {
+		t.Fatalf("expected newest event window, got IDs %d through %d", events[0].ID, events[len(events)-1].ID)
+	}
+}
+
 func TestGetActivitiesFiltersAndPaginatesNewestFirst(t *testing.T) {
 	ResetTasks()
 	CreateTask(model.Task{Title: "First"})
