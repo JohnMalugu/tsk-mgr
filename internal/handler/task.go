@@ -531,6 +531,21 @@ func HandleActivity(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, service.GetActivities(nil, "", nil, nil, 0, 20))
 }
 
+func HandleTaskActivity(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	idText := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/tasks/"), "/activity")
+	taskID, err := strconv.Atoi(idText)
+	if err != nil || taskID < 1 {
+		respondError(w, r, http.StatusBadRequest, "task id must be a positive integer")
+		return
+	}
+	respondJSON(w, http.StatusOK, service.GetActivities(&taskID, "", nil, nil, 0, 20))
+}
+
 func HandleBulkComplete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)

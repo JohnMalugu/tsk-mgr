@@ -34,6 +34,16 @@ func TestGlobalActivityRoute(t *testing.T) {
 	}
 }
 
+func TestTaskActivityRouteIncludesTaskEvents(t *testing.T) {
+	service.ResetTasks()
+	created := service.CreateTask(model.Task{Title: "Timeline entry"})
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodGet, "/tasks/"+fmt.Sprint(created.ID)+"/activity", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "Task created: Timeline entry") {
+		t.Fatalf("unexpected task activity response: %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestTaskDependencyWorkflowThroughRouter(t *testing.T) {
 	service.ResetTasks()
 	addRequest := httptest.NewRequest(http.MethodPost, "/tasks/1/dependencies", strings.NewReader(`{"dependsOn":2}`))
