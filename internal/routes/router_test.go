@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
 )
 
@@ -20,6 +21,16 @@ func TestHealthRoute(t *testing.T) {
 	}
 	if recorder.Body.String() != "{\"status\":\"ok\"}\n" {
 		t.Fatalf("unexpected health response: %q", recorder.Body.String())
+	}
+}
+
+func TestGlobalActivityRoute(t *testing.T) {
+	service.ResetTasks()
+	service.CreateTask(model.Task{Title: "Timeline entry"})
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodGet, "/activity", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"action":"created"`) {
+		t.Fatalf("unexpected activity route response: %d %s", recorder.Code, recorder.Body.String())
 	}
 }
 

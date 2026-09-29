@@ -16,6 +16,10 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		handler.HandleHealth(w, r)
 		return
 	}
+	if r.URL.Path == "/activity" {
+		handler.HandleActivity(w, r)
+		return
+	}
 
 	if r.URL.Path == "/tasks" {
 		handler.HandleTasks(w, r)
