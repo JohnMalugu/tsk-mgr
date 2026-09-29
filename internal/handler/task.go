@@ -528,7 +528,12 @@ func HandleActivity(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	respondJSON(w, http.StatusOK, service.GetActivities(nil, "", nil, nil, 0, 20))
+	offset, limit, err := pagination(r)
+	if err != nil {
+		respondError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, service.GetActivities(nil, "", nil, nil, offset, limit))
 }
 
 func HandleTaskActivity(w http.ResponseWriter, r *http.Request) {
@@ -543,7 +548,12 @@ func HandleTaskActivity(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, http.StatusBadRequest, "task id must be a positive integer")
 		return
 	}
-	respondJSON(w, http.StatusOK, service.GetActivities(&taskID, "", nil, nil, 0, 20))
+	offset, limit, err := pagination(r)
+	if err != nil {
+		respondError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, service.GetActivities(&taskID, "", nil, nil, offset, limit))
 }
 
 func HandleBulkComplete(w http.ResponseWriter, r *http.Request) {

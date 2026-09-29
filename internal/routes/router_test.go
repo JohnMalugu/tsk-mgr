@@ -44,6 +44,22 @@ func TestTaskActivityRouteIncludesTaskEvents(t *testing.T) {
 	}
 }
 
+func TestActivityRouteSupportsPagination(t *testing.T) {
+	service.ResetTasks()
+	service.CreateTask(model.Task{Title: "First event"})
+	service.CreateTask(model.Task{Title: "Second event"})
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodGet, "/activity?offset=1&limit=1", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"total":2`) || !strings.Contains(recorder.Body.String(), `"limit":1`) {
+		t.Fatalf("unexpected paginated activity response: %d %s", recorder.Code, recorder.Body.String())
+	}
+	invalid := httptest.NewRecorder()
+	Router(invalid, httptest.NewRequest(http.MethodGet, "/activity?limit=0", nil))
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid pagination status %d, got %d", http.StatusBadRequest, invalid.Code)
+	}
+}
+
 func TestTaskDependencyWorkflowThroughRouter(t *testing.T) {
 	service.ResetTasks()
 	addRequest := httptest.NewRequest(http.MethodPost, "/tasks/1/dependencies", strings.NewReader(`{"dependsOn":2}`))
