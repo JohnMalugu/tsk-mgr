@@ -94,6 +94,28 @@ func TestActivityRouteRejectsUnknownAction(t *testing.T) {
 	}
 }
 
+func TestDeletedTaskActivityRemainsAvailable(t *testing.T) {
+	service.ResetTasks()
+	task := service.CreateTask(model.Task{Title: "Archived task"})
+	if !service.DeleteTask(task.ID) {
+		t.Fatal("expected task deletion")
+	}
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodGet, "/tasks/"+fmt.Sprint(task.ID)+"/activity", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"total":2`) || !strings.Contains(recorder.Body.String(), "Task deleted: Archived task") {
+		t.Fatalf("deleted task activity was not retained: %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestActivityReturnsEmptyPageForNoMatches(t *testing.T) {
+	service.ResetTasks()
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodGet, "/activity?action=deleted", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"activities":[]`) || !strings.Contains(recorder.Body.String(), `"total":0`) {
+		t.Fatalf("unexpected empty activity page: %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestTaskDependencyWorkflowThroughRouter(t *testing.T) {
 	service.ResetTasks()
 	addRequest := httptest.NewRequest(http.MethodPost, "/tasks/1/dependencies", strings.NewReader(`{"dependsOn":2}`))
