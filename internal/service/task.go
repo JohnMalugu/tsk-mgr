@@ -763,6 +763,7 @@ func UpdateTaskWithDependencies(id int, task model.Task, dependencyIDs []int) (*
 			if !task.Completed && hasCompletedDependentLocked(id, nil) {
 				return nil, ErrTaskBlocked
 			}
+			oldTitle := tasks[i].Title
 			task.CreatedAt = tasks[i].CreatedAt
 			task.UpdatedAt = time.Now()
 			task.Tags = normalizeTags(task.Tags)
@@ -772,6 +773,11 @@ func UpdateTaskWithDependencies(id int, task model.Task, dependencyIDs []int) (*
 			task.ID = id
 			task.DependsOn = append([]int(nil), dependencyIDs...)
 			tasks[i] = task
+			if oldTitle != task.Title {
+				recordActivityLocked(id, "updated", "Task renamed from "+oldTitle+" to "+task.Title)
+			} else {
+				recordActivityLocked(id, "updated", "Task updated: "+task.Title)
+			}
 			updated := tasks[i]
 			return &updated, nil
 		}

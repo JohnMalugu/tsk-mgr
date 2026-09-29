@@ -517,3 +517,16 @@ func TestUpdateTaskPreservesCreatedAt(t *testing.T) {
 		t.Fatal("expected updatedAt to be set")
 	}
 }
+
+func TestUpdateTaskRecordsRenameActivity(t *testing.T) {
+	ResetTasks()
+	original := GetTaskByID(1)
+	updated := UpdateTask(1, model.Task{Title: "Market run", DueDate: original.DueDate, DependsOn: original.DependsOn})
+	if updated == nil {
+		t.Fatal("expected task to update")
+	}
+	events := GetActivityLog()
+	if len(events) != 1 || events[0].Action != "updated" || events[0].Summary != "Task renamed from Buy groceries to Market run" {
+		t.Fatalf("unexpected update activity: %#v", events)
+	}
+}
