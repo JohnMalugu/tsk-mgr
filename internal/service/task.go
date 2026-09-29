@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -601,6 +602,7 @@ func AddTaskDependency(taskID, dependencyID int) (*model.Task, error) {
 
 	tasks[taskPosition].DependsOn = append(tasks[taskPosition].DependsOn, dependencyID)
 	tasks[taskPosition].UpdatedAt = time.Now()
+	recordActivityLocked(taskID, "dependency_added", "Added prerequisite task "+strconv.Itoa(dependencyID))
 	updated := tasks[taskPosition]
 	updated.DependsOn = append([]int(nil), updated.DependsOn...)
 	return &updated, nil
@@ -621,6 +623,7 @@ func RemoveTaskDependency(taskID, dependencyID int) (*model.Task, error) {
 			}
 			tasks[i].DependsOn = append(tasks[i].DependsOn[:dependencyIndex], tasks[i].DependsOn[dependencyIndex+1:]...)
 			tasks[i].UpdatedAt = time.Now()
+			recordActivityLocked(taskID, "dependency_removed", "Removed prerequisite task "+strconv.Itoa(dependencyID))
 			updated := tasks[i]
 			updated.DependsOn = append([]int(nil), updated.DependsOn...)
 			return &updated, nil
@@ -666,6 +669,7 @@ func ReplaceTaskDependencies(taskID int, dependencyIDs []int) (*model.Task, erro
 	}
 
 	original := tasks[taskPosition].DependsOn
+	changed := !equalIntSlices(original, validated)
 	tasks[taskPosition].DependsOn = validated
 	for _, dependencyID := range validated {
 		visited := make(map[int]struct{})
@@ -695,9 +699,24 @@ func ReplaceTaskDependencies(taskID int, dependencyIDs []int) (*model.Task, erro
 		}
 	}
 	tasks[taskPosition].UpdatedAt = time.Now()
+	if changed {
+		recordActivityLocked(taskID, "dependencies_updated", "Updated task prerequisites")
+	}
 	updated := tasks[taskPosition]
 	updated.DependsOn = append([]int(nil), updated.DependsOn...)
 	return &updated, nil
+}
+
+func equalIntSlices(left, right []int) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 // CreateTask creates a new task

@@ -232,6 +232,20 @@ func TestAddTaskDependencyRejectsInvalidGraphEdges(t *testing.T) {
 	}
 }
 
+func TestDependencyChangesRecordActivity(t *testing.T) {
+	ResetTasks()
+	if _, err := AddTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RemoveTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	events := GetActivityLog()
+	if len(events) != 2 || events[0].Action != "dependency_added" || events[1].Action != "dependency_removed" {
+		t.Fatalf("unexpected dependency activity: %#v", events)
+	}
+}
+
 func TestReplaceTaskDependenciesIsAtomicAndCycleSafe(t *testing.T) {
 	ResetTasks()
 	created := CreateTask(model.Task{Title: "Third task"})
