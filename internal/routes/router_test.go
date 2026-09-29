@@ -116,6 +116,37 @@ func TestActivityReturnsEmptyPageForNoMatches(t *testing.T) {
 	}
 }
 
+func TestActivityTimelineAcrossTaskFeatures(t *testing.T) {
+	service.ResetTasks()
+	created := service.CreateTask(model.Task{Title: "Release checklist"})
+	if _, err := service.AddTaskDependency(created.ID, 2); err != nil {
+		t.Fatal(err)
+	}
+	item, err := service.AddChecklistItem(created.ID, "Publish notes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.SetChecklistItemCompletion(created.ID, item.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.SetTaskCompletionChecked(2, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.SetTaskCompletionChecked(created.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	page := service.GetActivities(&created.ID, "", nil, nil, 0, 20)
+	want := []string{"completed", "checklist_item_completed", "checklist_item_added", "dependency_added", "created"}
+	if page.Total != len(want) || len(page.Activities) != len(want) {
+		t.Fatalf("expected %d timeline events, got %#v", len(want), page)
+	}
+	for index, action := range want {
+		if page.Activities[index].Action != action {
+			t.Fatalf("event %d: expected action %q, got %#v", index, action, page.Activities[index])
+		}
+	}
+}
+
 func TestTaskDependencyWorkflowThroughRouter(t *testing.T) {
 	service.ResetTasks()
 	addRequest := httptest.NewRequest(http.MethodPost, "/tasks/1/dependencies", strings.NewReader(`{"dependsOn":2}`))
