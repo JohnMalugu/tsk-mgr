@@ -87,6 +87,17 @@ func TestAddChecklistItemTrimsTextAndAssignsID(t *testing.T) {
 	}
 }
 
+func TestAddChecklistItemRecordsActivity(t *testing.T) {
+	ResetTasks()
+	if _, err := AddChecklistItem(1, "Review release notes"); err != nil {
+		t.Fatal(err)
+	}
+	events := GetActivityLog()
+	if len(events) != 1 || events[0].Action != "checklist_item_added" || events[0].Summary != "Added checklist item: Review release notes" {
+		t.Fatalf("unexpected checklist activity: %#v", events)
+	}
+}
+
 func TestSetChecklistItemCompletion(t *testing.T) {
 	ResetTasks()
 	item, err := AddChecklistItem(1, "draft")

@@ -332,6 +332,7 @@ func AddChecklistItem(taskID int, text string) (model.ChecklistItem, error) {
 		nextChecklistItemID++
 		tasks[i].Checklist = append(tasks[i].Checklist, item)
 		tasks[i].UpdatedAt = time.Now()
+		recordActivityLocked(taskID, "checklist_item_added", "Added checklist item: "+item.Text)
 		return item, nil
 	}
 	return model.ChecklistItem{}, ErrTaskNotFound
