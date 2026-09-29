@@ -538,7 +538,12 @@ func HandleActivity(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	respondJSON(w, http.StatusOK, service.GetActivities(nil, r.URL.Query().Get("action"), from, to, offset, limit))
+	action, err := activityActionFilter(r)
+	if err != nil {
+		respondError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, service.GetActivities(nil, action, from, to, offset, limit))
 }
 
 func HandleTaskActivity(w http.ResponseWriter, r *http.Request) {
@@ -563,7 +568,12 @@ func HandleTaskActivity(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	respondJSON(w, http.StatusOK, service.GetActivities(&taskID, r.URL.Query().Get("action"), from, to, offset, limit))
+	action, err := activityActionFilter(r)
+	if err != nil {
+		respondError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, service.GetActivities(&taskID, action, from, to, offset, limit))
 }
 
 func activityTimeRange(r *http.Request) (*time.Time, *time.Time, error) {
@@ -579,6 +589,14 @@ func activityTimeRange(r *http.Request) (*time.Time, *time.Time, error) {
 		return nil, nil, fmt.Errorf("from must not be later than to")
 	}
 	return from, to, nil
+}
+
+func activityActionFilter(r *http.Request) (string, error) {
+	action := r.URL.Query().Get("action")
+	if action != "" && !service.IsActivityAction(action) {
+		return "", fmt.Errorf("action is not a supported activity type")
+	}
+	return action, nil
 }
 
 func HandleBulkComplete(w http.ResponseWriter, r *http.Request) {

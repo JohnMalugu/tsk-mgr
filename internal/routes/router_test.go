@@ -85,6 +85,15 @@ func TestActivityRouteValidatesTimeWindow(t *testing.T) {
 	}
 }
 
+func TestActivityRouteRejectsUnknownAction(t *testing.T) {
+	service.ResetTasks()
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodGet, "/activity?action=made_up", nil))
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected unknown action status %d, got %d", http.StatusBadRequest, recorder.Code)
+	}
+}
+
 func TestTaskDependencyWorkflowThroughRouter(t *testing.T) {
 	service.ResetTasks()
 	addRequest := httptest.NewRequest(http.MethodPost, "/tasks/1/dependencies", strings.NewReader(`{"dependsOn":2}`))

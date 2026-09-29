@@ -26,6 +26,19 @@ var (
 	ErrChecklistOrderInvalid   = errors.New("checklist order must contain every item exactly once")
 )
 
+var activityActions = map[string]struct{}{
+	"created": {}, "updated": {}, "completed": {}, "reopened": {}, "deleted": {},
+	"dependency_added": {}, "dependency_removed": {}, "dependencies_updated": {},
+	"checklist_item_added": {}, "checklist_item_updated": {}, "checklist_item_completed": {},
+	"checklist_item_reopened": {}, "checklist_item_deleted": {}, "checklist_reordered": {},
+}
+
+// IsActivityAction reports whether an action is part of the activity event contract.
+func IsActivityAction(action string) bool {
+	_, ok := activityActions[action]
+	return ok
+}
+
 // In-memory storage (we'll use database later)
 var tasks []model.Task
 var activities []model.Activity
