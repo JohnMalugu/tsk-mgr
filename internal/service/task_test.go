@@ -16,6 +16,24 @@ func TestDependencyErrorsAreDistinct(t *testing.T) {
 	}
 }
 
+func TestResetTasksClearsActivityLogAndSequence(t *testing.T) {
+	ResetTasks()
+	mu.Lock()
+	recordActivityLocked(1, "created", "Task created")
+	mu.Unlock()
+	ResetTasks()
+	if events := GetActivityLog(); events == nil || len(events) != 0 {
+		t.Fatalf("expected empty activity log after reset, got %#v", events)
+	}
+	mu.Lock()
+	recordActivityLocked(1, "created", "Task created")
+	mu.Unlock()
+	events := GetActivityLog()
+	if len(events) != 1 || events[0].ID != 1 {
+		t.Fatalf("expected activity ID sequence to reset, got %#v", events)
+	}
+}
+
 func TestChecklistErrorsAreDistinct(t *testing.T) {
 	if errors.Is(ErrChecklistItemNotFound, ErrTaskNotFound) {
 		t.Fatal("missing checklist item and missing task must be distinct")

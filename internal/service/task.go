@@ -27,8 +27,10 @@ var (
 
 // In-memory storage (we'll use database later)
 var tasks []model.Task
+var activities []model.Activity
 var nextID int = 1
 var nextChecklistItemID int = 1
+var nextActivityID int = 1
 var mu sync.RWMutex
 
 func init() {
@@ -47,6 +49,26 @@ func ResetTasks() {
 	}
 	nextID = 3
 	nextChecklistItemID = 1
+	activities = nil
+	nextActivityID = 1
+}
+
+func recordActivityLocked(taskID int, action, summary string) {
+	activities = append(activities, model.Activity{
+		ID:         nextActivityID,
+		TaskID:     taskID,
+		Action:     action,
+		Summary:    summary,
+		OccurredAt: time.Now().UTC(),
+	})
+	nextActivityID++
+}
+
+// GetActivityLog returns a snapshot of all recorded task activity.
+func GetActivityLog() []model.Activity {
+	mu.RLock()
+	defer mu.RUnlock()
+	return append([]model.Activity{}, activities...)
 }
 
 type TaskSummary struct {
