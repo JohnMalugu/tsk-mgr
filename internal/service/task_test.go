@@ -740,6 +740,21 @@ func TestUpdateTaskPreservesCreatedAt(t *testing.T) {
 	}
 }
 
+func TestUpdateTaskEstimateValidatesAndRecordsChange(t *testing.T) {
+	ResetTasks()
+	updated, err := UpdateTaskEstimate(1, 45)
+	if err != nil || updated.EstimateMinutes != 45 {
+		t.Fatalf("expected estimate update, task=%#v err=%v", updated, err)
+	}
+	if _, err := UpdateTaskEstimate(1, -1); !errors.Is(err, ErrTaskEstimateInvalid) {
+		t.Fatalf("expected negative estimate error, got %v", err)
+	}
+	events := GetActivityLog()
+	if len(events) != 1 || events[0].Action != "estimate_updated" {
+		t.Fatalf("expected one estimate activity event, got %#v", events)
+	}
+}
+
 func TestUpdateTaskRecordsRenameActivity(t *testing.T) {
 	ResetTasks()
 	original := GetTaskByID(1)

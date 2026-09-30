@@ -29,13 +29,14 @@ var (
 	ErrTimeEntryNotFound       = errors.New("time entry not found")
 	ErrTimeEntryInvalid        = errors.New("time entry is invalid")
 	ErrTimeEntryOverlap        = errors.New("time entry overlaps existing tracked time")
+	ErrTaskEstimateInvalid     = errors.New("task estimate must be non-negative")
 )
 
 var activityActions = map[string]struct{}{
 	"created": {}, "updated": {}, "completed": {}, "reopened": {}, "deleted": {},
 	"dependency_added": {}, "dependency_removed": {}, "dependencies_updated": {},
 	"checklist_item_added": {}, "checklist_item_updated": {}, "checklist_item_completed": {},
-	"checklist_item_reopened": {}, "checklist_item_deleted": {}, "checklist_reordered": {},
+	"checklist_item_reopened": {}, "checklist_item_deleted": {}, "checklist_reordered": {}, "estimate_updated": {},
 	"timer_started": {}, "timer_stopped": {}, "time_logged": {}, "time_entry_deleted": {},
 }
 
@@ -488,6 +489,29 @@ func GetTaskByID(id int) *model.Task {
 		}
 	}
 	return nil
+}
+
+// UpdateTaskEstimate changes the expected task duration in minutes.
+func UpdateTaskEstimate(taskID, estimateMinutes int) (*model.Task, error) {
+	mu.Lock()
+	defer mu.Unlock()
+	if estimateMinutes < 0 {
+		return nil, ErrTaskEstimateInvalid
+	}
+	for i := range tasks {
+		if tasks[i].ID != taskID {
+			continue
+		}
+		if tasks[i].EstimateMinutes != estimateMinutes {
+			previous := tasks[i].EstimateMinutes
+			tasks[i].EstimateMinutes = estimateMinutes
+			tasks[i].UpdatedAt = time.Now()
+			recordActivityLocked(taskID, "estimate_updated", "Updated estimate from "+strconv.Itoa(previous)+" to "+strconv.Itoa(estimateMinutes)+" minutes")
+		}
+		updated := tasks[i]
+		return &updated, nil
+	}
+	return nil, ErrTaskNotFound
 }
 
 // GetTaskChecklist returns a copy of a task's checklist.
