@@ -137,6 +137,30 @@ func currentTimeEntry(entry model.TimeEntry, now time.Time) model.TimeEntry {
 	return entry
 }
 
+// StartTaskTimer starts the single active timer allowed by the service.
+func StartTaskTimer(taskID int, note string) (model.TimeEntry, error) {
+	mu.Lock()
+	defer mu.Unlock()
+	if len([]rune(strings.TrimSpace(note))) > 250 {
+		return model.TimeEntry{}, ErrTimeEntryInvalid
+	}
+	taskPosition := findTaskPositionLocked(taskID)
+	if taskPosition < 0 {
+		return model.TimeEntry{}, ErrTaskNotFound
+	}
+	for _, entry := range timeEntries {
+		if entry.EndedAt == nil {
+			return model.TimeEntry{}, ErrTimerAlreadyRunning
+		}
+	}
+	now := time.Now().UTC()
+	entry := model.TimeEntry{ID: nextTimeEntryID, TaskID: taskID, StartedAt: now, Note: strings.TrimSpace(note)}
+	nextTimeEntryID++
+	timeEntries = append(timeEntries, entry)
+	tasks[taskPosition].UpdatedAt = now
+	return currentTimeEntry(entry, now), nil
+}
+
 type TaskSummary struct {
 	Total      int            `json:"total"`
 	Completed  int            `json:"completed"`

@@ -39,6 +39,23 @@ func TestGetTaskTimeEntriesDistinguishesMissingTask(t *testing.T) {
 	}
 }
 
+func TestStartTaskTimerIsExclusive(t *testing.T) {
+	ResetTasks()
+	started, err := StartTaskTimer(1, "  Focus block  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if started.ID != 1 || started.Note != "Focus block" || started.EndedAt != nil {
+		t.Fatalf("unexpected active timer: %#v", started)
+	}
+	if _, err := StartTaskTimer(2, "another task"); !errors.Is(err, ErrTimerAlreadyRunning) {
+		t.Fatalf("expected active timer conflict, got %v", err)
+	}
+	if _, err := StartTaskTimer(999, "missing"); !errors.Is(err, ErrTaskNotFound) {
+		t.Fatalf("expected missing task error, got %v", err)
+	}
+}
+
 func TestResetTasksClearsActivityLogAndSequence(t *testing.T) {
 	ResetTasks()
 	mu.Lock()
