@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
@@ -73,6 +74,23 @@ func TestManualTimeEntryRouteAndDeletion(t *testing.T) {
 	Router(deleted, httptest.NewRequest(http.MethodDelete, "/tasks/1/time/"+fmt.Sprint(entry.ID), nil))
 	if deleted.Code != http.StatusNoContent {
 		t.Fatalf("expected deletion status %d, got %d", http.StatusNoContent, deleted.Code)
+	}
+}
+
+func TestTimeReportRouteFiltersByTaskAndTime(t *testing.T) {
+	service.ResetTasks()
+	start := time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)
+	service.AddManualTimeEntry(1, start, start.Add(time.Hour), "Planning")
+	url := "/time/report?taskId=1&from=2026-09-30T09:15:00Z&to=2026-09-30T09:45:00Z"
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodGet, url, nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"totalSeconds":1800`) {
+		t.Fatalf("unexpected time report response: %d %s", recorder.Code, recorder.Body.String())
+	}
+	invalid := httptest.NewRecorder()
+	Router(invalid, httptest.NewRequest(http.MethodGet, "/time/report?taskId=0", nil))
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid task filter status %d, got %d", http.StatusBadRequest, invalid.Code)
 	}
 }
 

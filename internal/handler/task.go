@@ -585,6 +585,29 @@ func HandleActiveTimer(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, service.GetActiveTimer())
 }
 
+func HandleTimeReport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var taskID *int
+	if value := r.URL.Query().Get("taskId"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 {
+			respondError(w, r, http.StatusBadRequest, "taskId must be a positive integer")
+			return
+		}
+		taskID = &parsed
+	}
+	from, to, err := activityTimeRange(r)
+	if err != nil {
+		respondError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, service.GetTimeReport(taskID, from, to))
+}
+
 func HandleTaskTime(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
