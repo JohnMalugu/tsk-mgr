@@ -28,6 +28,7 @@ var (
 	ErrNoActiveTimer           = errors.New("no timer is running for this task")
 	ErrTimeEntryNotFound       = errors.New("time entry not found")
 	ErrTimeEntryInvalid        = errors.New("time entry is invalid")
+	ErrTimeEntryOverlap        = errors.New("time entry overlaps existing tracked time")
 )
 
 var activityActions = map[string]struct{}{
@@ -182,6 +183,43 @@ func StopTaskTimer(taskID int) (model.TimeEntry, error) {
 		return timeEntries[i], nil
 	}
 	return model.TimeEntry{}, ErrNoActiveTimer
+}
+
+// AddManualTimeEntry records a completed time interval supplied by the caller.
+func AddManualTimeEntry(taskID int, startedAt, endedAt time.Time, note string) (model.TimeEntry, error) {
+	mu.Lock()
+	defer mu.Unlock()
+	if findTaskPositionLocked(taskID) < 0 {
+		return model.TimeEntry{}, ErrTaskNotFound
+	}
+	note = strings.TrimSpace(note)
+	if !endedAt.After(startedAt) || len([]rune(note)) > 250 {
+		return model.TimeEntry{}, ErrTimeEntryInvalid
+	}
+	startedAt = startedAt.UTC()
+	endedAt = endedAt.UTC()
+	now := time.Now()
+	for _, existing := range timeEntries {
+		existingEnd := existing.EndedAt
+		if existingEnd == nil {
+			existingEnd = &now
+		}
+		if startedAt.Before(*existingEnd) && endedAt.After(existing.StartedAt) {
+			return model.TimeEntry{}, ErrTimeEntryOverlap
+		}
+	}
+	entry := model.TimeEntry{
+		ID:              nextTimeEntryID,
+		TaskID:          taskID,
+		StartedAt:       startedAt,
+		EndedAt:         &endedAt,
+		DurationSeconds: int64(endedAt.Sub(startedAt).Seconds()),
+		Note:            note,
+	}
+	nextTimeEntryID++
+	timeEntries = append(timeEntries, entry)
+	tasks[findTaskPositionLocked(taskID)].UpdatedAt = now.UTC()
+	return entry, nil
 }
 
 type TaskSummary struct {

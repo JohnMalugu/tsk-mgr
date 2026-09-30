@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
@@ -87,6 +88,22 @@ func TestTimerTransitionsRecordActivity(t *testing.T) {
 	events := GetActivities(nil, "", nil, nil, 0, 10)
 	if events.Total != 2 || events.Activities[0].Action != "timer_stopped" || events.Activities[1].Action != "timer_started" {
 		t.Fatalf("unexpected timer activity: %#v", events)
+	}
+}
+
+func TestAddManualTimeEntryValidatesIntervalsAndOverlaps(t *testing.T) {
+	ResetTasks()
+	start := time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)
+	end := start.Add(time.Hour)
+	entry, err := AddManualTimeEntry(1, start, end, " Planning ")
+	if err != nil || entry.DurationSeconds != 3600 || entry.Note != "Planning" || entry.EndedAt == nil {
+		t.Fatalf("unexpected manual time entry: %#v err=%v", entry, err)
+	}
+	if _, err := AddManualTimeEntry(2, start.Add(30*time.Minute), end.Add(time.Hour), "Overlap"); !errors.Is(err, ErrTimeEntryOverlap) {
+		t.Fatalf("expected overlap error, got %v", err)
+	}
+	if _, err := AddManualTimeEntry(1, end, start, "Invalid"); !errors.Is(err, ErrTimeEntryInvalid) {
+		t.Fatalf("expected invalid interval error, got %v", err)
 	}
 }
 
