@@ -25,6 +25,20 @@ func TestResetTasksClearsTimeEntryState(t *testing.T) {
 	}
 }
 
+func TestGetTaskTimeEntriesDistinguishesMissingTask(t *testing.T) {
+	ResetTasks()
+	entries, found := GetTaskTimeEntries(1)
+	if !found || entries == nil || len(entries) != 0 {
+		t.Fatalf("expected empty time-entry list, got %#v found=%v", entries, found)
+	}
+	if _, found := GetTaskTimeEntries(999); found {
+		t.Fatal("expected missing task to be reported")
+	}
+	if GetActiveTimer() != nil {
+		t.Fatal("expected no active timer")
+	}
+}
+
 func TestResetTasksClearsActivityLogAndSequence(t *testing.T) {
 	ResetTasks()
 	mu.Lock()

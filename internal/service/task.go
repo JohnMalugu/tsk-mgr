@@ -98,6 +98,45 @@ func GetActivityLog() []model.Activity {
 	return append([]model.Activity{}, activities...)
 }
 
+// GetTaskTimeEntries returns a snapshot of a task's recorded time.
+func GetTaskTimeEntries(taskID int) ([]model.TimeEntry, bool) {
+	mu.RLock()
+	defer mu.RUnlock()
+	if findTaskPositionLocked(taskID) < 0 {
+		return nil, false
+	}
+	entries := make([]model.TimeEntry, 0)
+	now := time.Now()
+	for _, entry := range timeEntries {
+		if entry.TaskID != taskID {
+			continue
+		}
+		entries = append(entries, currentTimeEntry(entry, now))
+	}
+	return entries, true
+}
+
+// GetActiveTimer returns the currently running timer, if one exists.
+func GetActiveTimer() *model.TimeEntry {
+	mu.RLock()
+	defer mu.RUnlock()
+	now := time.Now()
+	for _, entry := range timeEntries {
+		if entry.EndedAt == nil {
+			active := currentTimeEntry(entry, now)
+			return &active
+		}
+	}
+	return nil
+}
+
+func currentTimeEntry(entry model.TimeEntry, now time.Time) model.TimeEntry {
+	if entry.EndedAt == nil {
+		entry.DurationSeconds = int64(now.Sub(entry.StartedAt).Seconds())
+	}
+	return entry
+}
+
 type TaskSummary struct {
 	Total      int            `json:"total"`
 	Completed  int            `json:"completed"`
