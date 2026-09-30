@@ -76,6 +76,20 @@ func TestStopTaskTimerPersistsElapsedTime(t *testing.T) {
 	}
 }
 
+func TestTimerTransitionsRecordActivity(t *testing.T) {
+	ResetTasks()
+	if _, err := StartTaskTimer(1, "Focus"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := StopTaskTimer(1); err != nil {
+		t.Fatal(err)
+	}
+	events := GetActivities(nil, "", nil, nil, 0, 10)
+	if events.Total != 2 || events.Activities[0].Action != "timer_stopped" || events.Activities[1].Action != "timer_started" {
+		t.Fatalf("unexpected timer activity: %#v", events)
+	}
+}
+
 func TestResetTasksClearsActivityLogAndSequence(t *testing.T) {
 	ResetTasks()
 	mu.Lock()

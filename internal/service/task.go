@@ -35,6 +35,7 @@ var activityActions = map[string]struct{}{
 	"dependency_added": {}, "dependency_removed": {}, "dependencies_updated": {},
 	"checklist_item_added": {}, "checklist_item_updated": {}, "checklist_item_completed": {},
 	"checklist_item_reopened": {}, "checklist_item_deleted": {}, "checklist_reordered": {},
+	"timer_started": {}, "timer_stopped": {}, "time_logged": {}, "time_entry_deleted": {},
 }
 
 // IsActivityAction reports whether an action is part of the activity event contract.
@@ -158,6 +159,7 @@ func StartTaskTimer(taskID int, note string) (model.TimeEntry, error) {
 	nextTimeEntryID++
 	timeEntries = append(timeEntries, entry)
 	tasks[taskPosition].UpdatedAt = now
+	recordActivityLocked(taskID, "timer_started", "Started timer for task: "+tasks[taskPosition].Title)
 	return currentTimeEntry(entry, now), nil
 }
 
@@ -176,6 +178,7 @@ func StopTaskTimer(taskID int) (model.TimeEntry, error) {
 		timeEntries[i].EndedAt = &endedAt
 		timeEntries[i].DurationSeconds = int64(endedAt.Sub(timeEntries[i].StartedAt).Seconds())
 		tasks[findTaskPositionLocked(taskID)].UpdatedAt = endedAt
+		recordActivityLocked(taskID, "timer_stopped", "Stopped timer after "+strconv.FormatInt(timeEntries[i].DurationSeconds, 10)+" seconds")
 		return timeEntries[i], nil
 	}
 	return model.TimeEntry{}, ErrNoActiveTimer
