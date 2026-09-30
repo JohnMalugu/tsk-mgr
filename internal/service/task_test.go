@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -54,6 +55,34 @@ func TestStartTaskTimerIsExclusive(t *testing.T) {
 	}
 	if _, err := StartTaskTimer(999, "missing"); !errors.Is(err, ErrTaskNotFound) {
 		t.Fatalf("expected missing task error, got %v", err)
+	}
+}
+
+func TestConcurrentTimerStartsHaveSingleWinner(t *testing.T) {
+	ResetTasks()
+	const attempts = 32
+	var wait sync.WaitGroup
+	results := make(chan error, attempts)
+	for index := 0; index < attempts; index++ {
+		wait.Add(1)
+		go func(taskID int) {
+			defer wait.Done()
+			_, err := StartTaskTimer(taskID, "Concurrent")
+			results <- err
+		}(index%2 + 1)
+	}
+	wait.Wait()
+	close(results)
+	winners := 0
+	for err := range results {
+		if err == nil {
+			winners++
+		} else if !errors.Is(err, ErrTimerAlreadyRunning) {
+			t.Fatalf("unexpected concurrent timer error: %v", err)
+		}
+	}
+	if winners != 1 {
+		t.Fatalf("expected exactly one active timer start, got %d", winners)
 	}
 }
 
