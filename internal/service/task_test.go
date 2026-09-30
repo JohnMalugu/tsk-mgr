@@ -107,6 +107,20 @@ func TestAddManualTimeEntryValidatesIntervalsAndOverlaps(t *testing.T) {
 	}
 }
 
+func TestManualTimeEntryRecordsActivity(t *testing.T) {
+	ResetTasks()
+	start := time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)
+	if _, err := AddManualTimeEntry(1, start, start.Add(20*time.Minute), "Planning"); err != nil {
+		t.Fatal(err)
+	}
+	page := GetActivities(ptrInt(1), "time_logged", nil, nil, 0, 10)
+	if page.Total != 1 || len(page.Activities) != 1 || page.Activities[0].Summary != "Logged 1200 seconds" {
+		t.Fatalf("unexpected manual time activity: %#v", page)
+	}
+}
+
+func ptrInt(value int) *int { return &value }
+
 func TestDeleteTimeEntryRejectsActiveTimer(t *testing.T) {
 	ResetTasks()
 	active, err := StartTaskTimer(1, "Focus")

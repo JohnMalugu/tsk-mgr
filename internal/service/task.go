@@ -278,7 +278,9 @@ func AddManualTimeEntry(taskID int, startedAt, endedAt time.Time, note string) (
 	}
 	nextTimeEntryID++
 	timeEntries = append(timeEntries, entry)
-	tasks[findTaskPositionLocked(taskID)].UpdatedAt = now.UTC()
+	taskPosition := findTaskPositionLocked(taskID)
+	tasks[taskPosition].UpdatedAt = now.UTC()
+	recordActivityLocked(taskID, "time_logged", "Logged "+strconv.FormatInt(entry.DurationSeconds, 10)+" seconds")
 	return entry, nil
 }
 
