@@ -38,6 +38,12 @@ func ValidateTask(task *model.Task) []ValidationError {
 			Message: "Description must be 5000 characters or less",
 		})
 	}
+	if task.EstimateMinutes < 0 {
+		errors = append(errors, ValidationError{
+			Field:   "estimateMinutes",
+			Message: "Estimate must be non-negative",
+		})
+	}
 
 	if task.Priority != "" {
 		switch strings.ToLower(task.Priority) {

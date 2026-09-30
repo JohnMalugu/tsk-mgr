@@ -731,13 +731,14 @@ func updateTask(w http.ResponseWriter, r *http.Request, id int) {
 
 func patchTask(w http.ResponseWriter, r *http.Request, id int) {
 	var patch struct {
-		Title       *string    `json:"title"`
-		Description *string    `json:"description"`
-		DueDate     *time.Time `json:"dueDate"`
-		Completed   *bool      `json:"completed"`
-		Priority    *string    `json:"priority"`
-		Tags        *[]string  `json:"tags"`
-		DependsOn   *[]int     `json:"dependsOn"`
+		Title           *string    `json:"title"`
+		Description     *string    `json:"description"`
+		DueDate         *time.Time `json:"dueDate"`
+		Completed       *bool      `json:"completed"`
+		Priority        *string    `json:"priority"`
+		Tags            *[]string  `json:"tags"`
+		DependsOn       *[]int     `json:"dependsOn"`
+		EstimateMinutes *int       `json:"estimateMinutes"`
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
 	decoder.DisallowUnknownFields()
@@ -749,7 +750,7 @@ func patchTask(w http.ResponseWriter, r *http.Request, id int) {
 		respondError(w, r, http.StatusBadRequest, "request body must contain a single JSON value")
 		return
 	}
-	if patch.Title == nil && patch.Description == nil && patch.DueDate == nil && patch.Completed == nil && patch.Priority == nil && patch.Tags == nil && patch.DependsOn == nil {
+	if patch.Title == nil && patch.Description == nil && patch.DueDate == nil && patch.Completed == nil && patch.Priority == nil && patch.Tags == nil && patch.DependsOn == nil && patch.EstimateMinutes == nil {
 		respondError(w, r, http.StatusBadRequest, "at least one task field must be provided")
 		return
 	}
@@ -778,6 +779,9 @@ func patchTask(w http.ResponseWriter, r *http.Request, id int) {
 	}
 	if patch.DependsOn != nil {
 		task.DependsOn = *patch.DependsOn
+	}
+	if patch.EstimateMinutes != nil {
+		task.EstimateMinutes = *patch.EstimateMinutes
 	}
 	if validationErrors := validation.ValidateTask(task); len(validationErrors) > 0 {
 		respondJSON(w, http.StatusBadRequest, map[string]interface{}{"errors": validationErrors})

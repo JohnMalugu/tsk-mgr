@@ -17,3 +17,13 @@ func TestValidateTaskRejectsOversizedDescription(t *testing.T) {
 	}
 	t.Fatal("expected a description length validation error")
 }
+
+func TestValidateTaskRejectsNegativeEstimate(t *testing.T) {
+	task := model.Task{Title: "Task", EstimateMinutes: -1}
+	for _, validationError := range ValidateTask(&task) {
+		if validationError.Field == "estimateMinutes" {
+			return
+		}
+	}
+	t.Fatal("expected estimate validation error")
+}
