@@ -219,8 +219,6 @@ func GetTimeReport(taskID *int, from, to *time.Time) TimeReport {
 		start, end := entry.StartedAt, now
 		if entry.EndedAt != nil {
 			end = *entry.EndedAt
-		} else {
-			report.ActiveCount++
 		}
 		if from != nil && start.Before(*from) {
 			start = *from
@@ -230,6 +228,9 @@ func GetTimeReport(taskID *int, from, to *time.Time) TimeReport {
 		}
 		if !end.After(start) {
 			continue
+		}
+		if entry.EndedAt == nil {
+			report.ActiveCount++
 		}
 		seconds := int64(end.Sub(start).Seconds())
 		report.TotalSeconds += seconds

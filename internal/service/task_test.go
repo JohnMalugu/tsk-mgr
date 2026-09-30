@@ -804,6 +804,18 @@ func TestGetTimeReportClipsIntervalsToWindow(t *testing.T) {
 	}
 }
 
+func TestTimeReportExcludesActiveTimerOutsideWindow(t *testing.T) {
+	ResetTasks()
+	if _, err := StartTaskTimer(1, "Current"); err != nil {
+		t.Fatal(err)
+	}
+	from := time.Now().UTC().Add(time.Hour)
+	report := GetTimeReport(nil, &from, nil)
+	if report.ActiveCount != 0 || report.TotalSeconds != 0 {
+		t.Fatalf("future window must exclude current timer, got %#v", report)
+	}
+}
+
 func TestUpdateTaskRecordsRenameActivity(t *testing.T) {
 	ResetTasks()
 	original := GetTaskByID(1)
