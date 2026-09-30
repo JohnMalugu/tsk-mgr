@@ -222,6 +222,28 @@ func AddManualTimeEntry(taskID int, startedAt, endedAt time.Time, note string) (
 	return entry, nil
 }
 
+// DeleteTimeEntry removes a completed time entry while retaining an audit event.
+func DeleteTimeEntry(taskID, entryID int) error {
+	mu.Lock()
+	defer mu.Unlock()
+	if findTaskPositionLocked(taskID) < 0 {
+		return ErrTaskNotFound
+	}
+	for index := range timeEntries {
+		entry := timeEntries[index]
+		if entry.TaskID != taskID || entry.ID != entryID {
+			continue
+		}
+		if entry.EndedAt == nil {
+			return ErrTimerAlreadyRunning
+		}
+		timeEntries = append(timeEntries[:index], timeEntries[index+1:]...)
+		recordActivityLocked(taskID, "time_entry_deleted", "Deleted time entry of "+strconv.FormatInt(entry.DurationSeconds, 10)+" seconds")
+		return nil
+	}
+	return ErrTimeEntryNotFound
+}
+
 type TaskSummary struct {
 	Total      int            `json:"total"`
 	Completed  int            `json:"completed"`

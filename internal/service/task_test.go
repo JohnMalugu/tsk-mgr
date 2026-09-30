@@ -107,6 +107,28 @@ func TestAddManualTimeEntryValidatesIntervalsAndOverlaps(t *testing.T) {
 	}
 }
 
+func TestDeleteTimeEntryRejectsActiveTimer(t *testing.T) {
+	ResetTasks()
+	active, err := StartTaskTimer(1, "Focus")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteTimeEntry(1, active.ID); !errors.Is(err, ErrTimerAlreadyRunning) {
+		t.Fatalf("expected active timer deletion rejection, got %v", err)
+	}
+	stopped, err := StopTaskTimer(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteTimeEntry(1, stopped.ID); err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := GetTaskTimeEntries(1)
+	if len(entries) != 0 {
+		t.Fatalf("expected deleted entry omitted from task time, got %#v", entries)
+	}
+}
+
 func TestResetTasksClearsActivityLogAndSequence(t *testing.T) {
 	ResetTasks()
 	mu.Lock()
