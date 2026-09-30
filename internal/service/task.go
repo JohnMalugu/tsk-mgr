@@ -24,6 +24,10 @@ var (
 	ErrChecklistTextInvalid    = errors.New("checklist item text is required")
 	ErrChecklistLimitReached   = errors.New("task checklist item limit reached")
 	ErrChecklistOrderInvalid   = errors.New("checklist order must contain every item exactly once")
+	ErrTimerAlreadyRunning     = errors.New("a timer is already running")
+	ErrNoActiveTimer           = errors.New("no timer is running for this task")
+	ErrTimeEntryNotFound       = errors.New("time entry not found")
+	ErrTimeEntryInvalid        = errors.New("time entry is invalid")
 )
 
 var activityActions = map[string]struct{}{
@@ -42,9 +46,11 @@ func IsActivityAction(action string) bool {
 // In-memory storage (we'll use database later)
 var tasks []model.Task
 var activities []model.Activity
+var timeEntries []model.TimeEntry
 var nextID int = 1
 var nextChecklistItemID int = 1
 var nextActivityID int = 1
+var nextTimeEntryID int = 1
 var mu sync.RWMutex
 
 const maxActivityEvents = 10000
@@ -67,6 +73,8 @@ func ResetTasks() {
 	nextChecklistItemID = 1
 	activities = nil
 	nextActivityID = 1
+	timeEntries = nil
+	nextTimeEntryID = 1
 }
 
 func recordActivityLocked(taskID int, action, summary string) {

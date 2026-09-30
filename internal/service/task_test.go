@@ -16,6 +16,15 @@ func TestDependencyErrorsAreDistinct(t *testing.T) {
 	}
 }
 
+func TestResetTasksClearsTimeEntryState(t *testing.T) {
+	timeEntries = []model.TimeEntry{{ID: 8, TaskID: 1}}
+	nextTimeEntryID = 9
+	ResetTasks()
+	if len(timeEntries) != 0 || nextTimeEntryID != 1 {
+		t.Fatalf("expected time tracking state reset, entries=%#v nextID=%d", timeEntries, nextTimeEntryID)
+	}
+}
+
 func TestResetTasksClearsActivityLogAndSequence(t *testing.T) {
 	ResetTasks()
 	mu.Lock()
