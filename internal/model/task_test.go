@@ -35,3 +35,18 @@ func TestTaskChecklistRoundTripsAsJSON(t *testing.T) {
 		t.Fatalf("expected checklist item round trip, got %#v", decoded.Checklist)
 	}
 }
+
+func TestTaskEstimateSerializesInMinutes(t *testing.T) {
+	task := Task{ID: 4, EstimateMinutes: 90}
+	data, err := json.Marshal(task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded Task
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.EstimateMinutes != 90 {
+		t.Fatalf("expected 90 minute estimate, got %d", decoded.EstimateMinutes)
+	}
+}
