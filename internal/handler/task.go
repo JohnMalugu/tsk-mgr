@@ -605,6 +605,61 @@ func HandleTaskTime(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]interface{}{"entries": entries, "summary": summary})
 }
 
+func HandleTaskTimer(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if strings.HasSuffix(r.URL.Path, "/timer/start") {
+		taskID, err := taskIDFromSuffix(r.URL.Path, "/timer/start")
+		if err != nil {
+			respondError(w, r, http.StatusBadRequest, "task id must be a positive integer")
+			return
+		}
+		var payload struct {
+			Note string `json:"note"`
+		}
+		if r.Body != nil {
+			decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&payload); err != nil && err != io.EOF {
+				respondError(w, r, http.StatusBadRequest, "request body must be valid JSON")
+				return
+			}
+		}
+		entry, err := service.StartTaskTimer(taskID, payload.Note)
+		if err != nil {
+			switch {
+			case errors.Is(err, service.ErrTaskNotFound):
+				respondError(w, r, http.StatusNotFound, err.Error())
+			case errors.Is(err, service.ErrTimerAlreadyRunning):
+				respondError(w, r, http.StatusConflict, err.Error())
+			default:
+				respondError(w, r, http.StatusBadRequest, err.Error())
+			}
+			return
+		}
+		respondJSON(w, http.StatusCreated, entry)
+		return
+	}
+	taskID, err := taskIDFromSuffix(r.URL.Path, "/timer/stop")
+	if err != nil {
+		respondError(w, r, http.StatusBadRequest, "task id must be a positive integer")
+		return
+	}
+	entry, err := service.StopTaskTimer(taskID)
+	if err != nil {
+		if errors.Is(err, service.ErrTaskNotFound) {
+			respondError(w, r, http.StatusNotFound, err.Error())
+		} else {
+			respondError(w, r, http.StatusConflict, err.Error())
+		}
+		return
+	}
+	respondJSON(w, http.StatusOK, entry)
+}
+
 func taskIDFromSuffix(path, suffix string) (int, error) {
 	id, err := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(path, "/tasks/"), suffix))
 	if err != nil || id < 1 {

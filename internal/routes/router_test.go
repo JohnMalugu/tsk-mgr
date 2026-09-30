@@ -38,6 +38,25 @@ func TestTimeTrackingReadRoutes(t *testing.T) {
 	}
 }
 
+func TestTaskTimerStartAndStopRoutes(t *testing.T) {
+	service.ResetTasks()
+	started := httptest.NewRecorder()
+	Router(started, httptest.NewRequest(http.MethodPost, "/tasks/1/timer/start", strings.NewReader(`{"note":"Focus"}`)))
+	if started.Code != http.StatusCreated {
+		t.Fatalf("timer start status %d: %s", started.Code, started.Body.String())
+	}
+	conflict := httptest.NewRecorder()
+	Router(conflict, httptest.NewRequest(http.MethodPost, "/tasks/2/timer/start", nil))
+	if conflict.Code != http.StatusConflict {
+		t.Fatalf("expected active timer conflict %d, got %d", http.StatusConflict, conflict.Code)
+	}
+	stopped := httptest.NewRecorder()
+	Router(stopped, httptest.NewRequest(http.MethodPost, "/tasks/1/timer/stop", nil))
+	if stopped.Code != http.StatusOK || !strings.Contains(stopped.Body.String(), `"endedAt"`) {
+		t.Fatalf("unexpected timer stop response: %d %s", stopped.Code, stopped.Body.String())
+	}
+}
+
 func TestGlobalActivityRoute(t *testing.T) {
 	service.ResetTasks()
 	service.CreateTask(model.Task{Title: "Timeline entry"})
