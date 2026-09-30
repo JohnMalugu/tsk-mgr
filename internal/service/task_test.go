@@ -56,6 +56,26 @@ func TestStartTaskTimerIsExclusive(t *testing.T) {
 	}
 }
 
+func TestStopTaskTimerPersistsElapsedTime(t *testing.T) {
+	ResetTasks()
+	if _, err := StartTaskTimer(1, "Focus"); err != nil {
+		t.Fatal(err)
+	}
+	stopped, err := StopTaskTimer(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stopped.EndedAt == nil || stopped.DurationSeconds < 0 {
+		t.Fatalf("expected completed time entry, got %#v", stopped)
+	}
+	if _, err := StopTaskTimer(1); !errors.Is(err, ErrNoActiveTimer) {
+		t.Fatalf("expected no-active-timer error, got %v", err)
+	}
+	if _, err := StopTaskTimer(999); !errors.Is(err, ErrTaskNotFound) {
+		t.Fatalf("expected missing-task error, got %v", err)
+	}
+}
+
 func TestResetTasksClearsActivityLogAndSequence(t *testing.T) {
 	ResetTasks()
 	mu.Lock()

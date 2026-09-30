@@ -161,6 +161,26 @@ func StartTaskTimer(taskID int, note string) (model.TimeEntry, error) {
 	return currentTimeEntry(entry, now), nil
 }
 
+// StopTaskTimer closes the active timer belonging to taskID.
+func StopTaskTimer(taskID int) (model.TimeEntry, error) {
+	mu.Lock()
+	defer mu.Unlock()
+	if findTaskPositionLocked(taskID) < 0 {
+		return model.TimeEntry{}, ErrTaskNotFound
+	}
+	for i := range timeEntries {
+		if timeEntries[i].TaskID != taskID || timeEntries[i].EndedAt != nil {
+			continue
+		}
+		endedAt := time.Now().UTC()
+		timeEntries[i].EndedAt = &endedAt
+		timeEntries[i].DurationSeconds = int64(endedAt.Sub(timeEntries[i].StartedAt).Seconds())
+		tasks[findTaskPositionLocked(taskID)].UpdatedAt = endedAt
+		return timeEntries[i], nil
+	}
+	return model.TimeEntry{}, ErrNoActiveTimer
+}
+
 type TaskSummary struct {
 	Total      int            `json:"total"`
 	Completed  int            `json:"completed"`
