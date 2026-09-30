@@ -205,6 +205,46 @@ func GetTaskTimeSummary(taskID int) (TaskTimeSummary, bool) {
 	return summary, true
 }
 
+// GetTimeReport aggregates tracked time over an optional task and time window.
+func GetTimeReport(taskID *int, from, to *time.Time) TimeReport {
+	mu.RLock()
+	defer mu.RUnlock()
+	now := time.Now()
+	byTask := make(map[int]int64)
+	report := TimeReport{ByTask: make([]TaskTimeTotal, 0)}
+	for _, entry := range timeEntries {
+		if taskID != nil && entry.TaskID != *taskID {
+			continue
+		}
+		start, end := entry.StartedAt, now
+		if entry.EndedAt != nil {
+			end = *entry.EndedAt
+		} else {
+			report.ActiveCount++
+		}
+		if from != nil && start.Before(*from) {
+			start = *from
+		}
+		if to != nil && end.After(*to) {
+			end = *to
+		}
+		if !end.After(start) {
+			continue
+		}
+		seconds := int64(end.Sub(start).Seconds())
+		report.TotalSeconds += seconds
+		byTask[entry.TaskID] += seconds
+		if entry.EndedAt != nil {
+			report.EntryCount++
+		}
+	}
+	for id, seconds := range byTask {
+		report.ByTask = append(report.ByTask, TaskTimeTotal{TaskID: id, TotalSeconds: seconds})
+	}
+	sort.Slice(report.ByTask, func(i, j int) bool { return report.ByTask[i].TaskID < report.ByTask[j].TaskID })
+	return report
+}
+
 // AddManualTimeEntry records a completed time interval supplied by the caller.
 func AddManualTimeEntry(taskID int, startedAt, endedAt time.Time, note string) (model.TimeEntry, error) {
 	mu.Lock()
@@ -295,6 +335,18 @@ type TaskTimeSummary struct {
 	EstimatedSeconds int64 `json:"estimatedSeconds"`
 	ActualSeconds    int64 `json:"actualSeconds"`
 	VarianceSeconds  int64 `json:"varianceSeconds"`
+}
+
+type TaskTimeTotal struct {
+	TaskID       int   `json:"taskId"`
+	TotalSeconds int64 `json:"totalSeconds"`
+}
+
+type TimeReport struct {
+	TotalSeconds int64           `json:"totalSeconds"`
+	EntryCount   int             `json:"entryCount"`
+	ActiveCount  int             `json:"activeCount"`
+	ByTask       []TaskTimeTotal `json:"byTask"`
 }
 
 type ActivityPage struct {

@@ -776,6 +776,20 @@ func TestGetTaskTimeSummaryIncludesTrackedAndRunningTime(t *testing.T) {
 	}
 }
 
+func TestGetTimeReportClipsIntervalsToWindow(t *testing.T) {
+	ResetTasks()
+	start := time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)
+	end := start.Add(time.Hour)
+	if _, err := AddManualTimeEntry(1, start, end, "Planning"); err != nil {
+		t.Fatal(err)
+	}
+	from, to := start.Add(15*time.Minute), start.Add(45*time.Minute)
+	report := GetTimeReport(nil, &from, &to)
+	if report.TotalSeconds != 1800 || report.EntryCount != 1 || len(report.ByTask) != 1 || report.ByTask[0].TaskID != 1 {
+		t.Fatalf("unexpected clipped time report: %#v", report)
+	}
+}
+
 func TestUpdateTaskRecordsRenameActivity(t *testing.T) {
 	ResetTasks()
 	original := GetTaskByID(1)
