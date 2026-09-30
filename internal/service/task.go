@@ -186,6 +186,25 @@ func StopTaskTimer(taskID int) (model.TimeEntry, error) {
 	return model.TimeEntry{}, ErrNoActiveTimer
 }
 
+// GetTaskTimeSummary compares a task's estimate with tracked actual time.
+func GetTaskTimeSummary(taskID int) (TaskTimeSummary, bool) {
+	mu.RLock()
+	defer mu.RUnlock()
+	taskPosition := findTaskPositionLocked(taskID)
+	if taskPosition < 0 {
+		return TaskTimeSummary{}, false
+	}
+	now := time.Now()
+	summary := TaskTimeSummary{TaskID: taskID, EstimatedSeconds: int64(tasks[taskPosition].EstimateMinutes) * 60}
+	for _, entry := range timeEntries {
+		if entry.TaskID == taskID {
+			summary.ActualSeconds += currentTimeEntry(entry, now).DurationSeconds
+		}
+	}
+	summary.VarianceSeconds = summary.ActualSeconds - summary.EstimatedSeconds
+	return summary, true
+}
+
 // AddManualTimeEntry records a completed time interval supplied by the caller.
 func AddManualTimeEntry(taskID int, startedAt, endedAt time.Time, note string) (model.TimeEntry, error) {
 	mu.Lock()
@@ -269,6 +288,13 @@ type ChecklistProgress struct {
 	Completed int `json:"completed"`
 	Remaining int `json:"remaining"`
 	Percent   int `json:"percent"`
+}
+
+type TaskTimeSummary struct {
+	TaskID           int   `json:"taskId"`
+	EstimatedSeconds int64 `json:"estimatedSeconds"`
+	ActualSeconds    int64 `json:"actualSeconds"`
+	VarianceSeconds  int64 `json:"varianceSeconds"`
 }
 
 type ActivityPage struct {

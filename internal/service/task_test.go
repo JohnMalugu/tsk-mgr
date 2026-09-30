@@ -755,6 +755,27 @@ func TestUpdateTaskEstimateValidatesAndRecordsChange(t *testing.T) {
 	}
 }
 
+func TestGetTaskTimeSummaryIncludesTrackedAndRunningTime(t *testing.T) {
+	ResetTasks()
+	if _, err := UpdateTaskEstimate(1, 60); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now().UTC().Add(-30 * time.Minute)
+	if _, err := AddManualTimeEntry(1, start, start.Add(15*time.Minute), "Earlier"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := StartTaskTimer(1, "Current"); err != nil {
+		t.Fatal(err)
+	}
+	summary, found := GetTaskTimeSummary(1)
+	if !found || summary.EstimatedSeconds != 3600 || summary.ActualSeconds < 900 || summary.VarianceSeconds != summary.ActualSeconds-3600 {
+		t.Fatalf("unexpected task time summary: %#v found=%v", summary, found)
+	}
+	if _, found := GetTaskTimeSummary(999); found {
+		t.Fatal("expected missing task summary to be reported")
+	}
+}
+
 func TestUpdateTaskRecordsRenameActivity(t *testing.T) {
 	ResetTasks()
 	original := GetTaskByID(1)
