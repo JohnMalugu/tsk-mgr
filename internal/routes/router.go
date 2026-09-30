@@ -32,6 +32,10 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		handler.HandleTaskTime(w, r)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/tasks/") && strings.Contains(r.URL.Path, "/time/") {
+		handler.HandleTaskTimeEntry(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/tasks/") && strings.HasSuffix(r.URL.Path, "/activity") {
 		handler.HandleTaskActivity(w, r)
 		return

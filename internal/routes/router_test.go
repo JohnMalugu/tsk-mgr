@@ -57,6 +57,25 @@ func TestTaskTimerStartAndStopRoutes(t *testing.T) {
 	}
 }
 
+func TestManualTimeEntryRouteAndDeletion(t *testing.T) {
+	service.ResetTasks()
+	body := `{"startedAt":"2026-09-30T09:00:00Z","endedAt":"2026-09-30T09:30:00Z","note":"Planning"}`
+	created := httptest.NewRecorder()
+	Router(created, httptest.NewRequest(http.MethodPost, "/tasks/1/time", strings.NewReader(body)))
+	if created.Code != http.StatusCreated {
+		t.Fatalf("manual entry create status %d: %s", created.Code, created.Body.String())
+	}
+	var entry model.TimeEntry
+	if err := json.NewDecoder(created.Body).Decode(&entry); err != nil {
+		t.Fatal(err)
+	}
+	deleted := httptest.NewRecorder()
+	Router(deleted, httptest.NewRequest(http.MethodDelete, "/tasks/1/time/"+fmt.Sprint(entry.ID), nil))
+	if deleted.Code != http.StatusNoContent {
+		t.Fatalf("expected deletion status %d, got %d", http.StatusNoContent, deleted.Code)
+	}
+}
+
 func TestGlobalActivityRoute(t *testing.T) {
 	service.ResetTasks()
 	service.CreateTask(model.Task{Title: "Timeline entry"})

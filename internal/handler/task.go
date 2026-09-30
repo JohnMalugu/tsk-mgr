@@ -586,9 +586,34 @@ func HandleActiveTimer(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleTaskTime(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", http.MethodGet)
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
 		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if r.Method == http.MethodPost {
+		var payload struct {
+			StartedAt time.Time `json:"startedAt"`
+			EndedAt   time.Time `json:"endedAt"`
+			Note      string    `json:"note"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&payload); err != nil {
+			respondError(w, r, http.StatusBadRequest, "request body must be valid JSON")
+			return
+		}
+		taskID, err := taskIDFromSuffix(r.URL.Path, "/time")
+		if err != nil {
+			respondError(w, r, http.StatusBadRequest, "task id must be a positive integer")
+			return
+		}
+		entry, err := service.AddManualTimeEntry(taskID, payload.StartedAt, payload.EndedAt, payload.Note)
+		if err != nil {
+			respondTimeEntryError(w, r, err)
+			return
+		}
+		respondJSON(w, http.StatusCreated, entry)
 		return
 	}
 	taskID, err := taskIDFromSuffix(r.URL.Path, "/time")
@@ -603,6 +628,41 @@ func HandleTaskTime(w http.ResponseWriter, r *http.Request) {
 	}
 	summary, _ := service.GetTaskTimeSummary(taskID)
 	respondJSON(w, http.StatusOK, map[string]interface{}{"entries": entries, "summary": summary})
+}
+
+func HandleTaskTimeEntry(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		w.Header().Set("Allow", http.MethodDelete)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/tasks/"), "/time/")
+	if len(parts) != 2 {
+		respondError(w, r, http.StatusBadRequest, "time-entry route is invalid")
+		return
+	}
+	taskID, taskErr := strconv.Atoi(parts[0])
+	entryID, entryErr := strconv.Atoi(parts[1])
+	if taskErr != nil || entryErr != nil || taskID < 1 || entryID < 1 {
+		respondError(w, r, http.StatusBadRequest, "task and entry ids must be positive integers")
+		return
+	}
+	if err := service.DeleteTimeEntry(taskID, entryID); err != nil {
+		respondTimeEntryError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func respondTimeEntryError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, service.ErrTaskNotFound), errors.Is(err, service.ErrTimeEntryNotFound):
+		respondError(w, r, http.StatusNotFound, err.Error())
+	case errors.Is(err, service.ErrTimeEntryOverlap), errors.Is(err, service.ErrTimerAlreadyRunning):
+		respondError(w, r, http.StatusConflict, err.Error())
+	default:
+		respondError(w, r, http.StatusBadRequest, err.Error())
+	}
 }
 
 func HandleTaskTimer(w http.ResponseWriter, r *http.Request) {
