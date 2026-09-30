@@ -24,6 +24,20 @@ func TestHealthRoute(t *testing.T) {
 	}
 }
 
+func TestTimeTrackingReadRoutes(t *testing.T) {
+	service.ResetTasks()
+	entries := httptest.NewRecorder()
+	Router(entries, httptest.NewRequest(http.MethodGet, "/tasks/1/time", nil))
+	if entries.Code != http.StatusOK || !strings.Contains(entries.Body.String(), `"entries":[]`) {
+		t.Fatalf("unexpected task time response: %d %s", entries.Code, entries.Body.String())
+	}
+	active := httptest.NewRecorder()
+	Router(active, httptest.NewRequest(http.MethodGet, "/timer", nil))
+	if active.Code != http.StatusOK || active.Body.String() != "null\n" {
+		t.Fatalf("unexpected inactive timer response: %d %s", active.Code, active.Body.String())
+	}
+}
+
 func TestGlobalActivityRoute(t *testing.T) {
 	service.ResetTasks()
 	service.CreateTask(model.Task{Title: "Timeline entry"})

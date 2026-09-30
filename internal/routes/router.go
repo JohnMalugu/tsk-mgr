@@ -20,6 +20,14 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		handler.HandleActivity(w, r)
 		return
 	}
+	if r.URL.Path == "/timer" {
+		handler.HandleActiveTimer(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/tasks/") && strings.HasSuffix(r.URL.Path, "/time") {
+		handler.HandleTaskTime(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/tasks/") && strings.HasSuffix(r.URL.Path, "/activity") {
 		handler.HandleTaskActivity(w, r)
 		return

@@ -576,6 +576,43 @@ func HandleTaskActivity(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, service.GetActivities(&taskID, action, from, to, offset, limit))
 }
 
+func HandleActiveTimer(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	respondJSON(w, http.StatusOK, service.GetActiveTimer())
+}
+
+func HandleTaskTime(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	taskID, err := taskIDFromSuffix(r.URL.Path, "/time")
+	if err != nil {
+		respondError(w, r, http.StatusBadRequest, "task id must be a positive integer")
+		return
+	}
+	entries, found := service.GetTaskTimeEntries(taskID)
+	if !found {
+		respondError(w, r, http.StatusNotFound, "task not found")
+		return
+	}
+	summary, _ := service.GetTaskTimeSummary(taskID)
+	respondJSON(w, http.StatusOK, map[string]interface{}{"entries": entries, "summary": summary})
+}
+
+func taskIDFromSuffix(path, suffix string) (int, error) {
+	id, err := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(path, "/tasks/"), suffix))
+	if err != nil || id < 1 {
+		return 0, fmt.Errorf("invalid task id")
+	}
+	return id, nil
+}
+
 func activityTimeRange(r *http.Request) (*time.Time, *time.Time, error) {
 	from, err := dateFilter(r, "from")
 	if err != nil {
