@@ -39,7 +39,7 @@ var activityActions = map[string]struct{}{
 	"dependency_added": {}, "dependency_removed": {}, "dependencies_updated": {},
 	"checklist_item_added": {}, "checklist_item_updated": {}, "checklist_item_completed": {},
 	"checklist_item_reopened": {}, "checklist_item_deleted": {}, "checklist_reordered": {}, "estimate_updated": {},
-	"timer_started": {}, "timer_stopped": {}, "time_logged": {}, "time_entry_deleted": {},
+	"timer_started": {}, "timer_stopped": {}, "time_logged": {}, "time_entry_deleted": {}, "recurrence_created": {},
 }
 
 // IsActivityAction reports whether an action is part of the activity event contract.
@@ -1214,6 +1214,23 @@ func buildNextOccurrence(source model.Task, id, checklistStartID int, dueDate, n
 	return next, checklistStartID + len(next.Checklist)
 }
 
+func spawnNextOccurrenceLocked(source model.Task) *model.Task {
+	if source.Recurrence == nil {
+		return nil
+	}
+	nextDue, err := NextRecurrenceDate(source.DueDate, source.Recurrence)
+	if err != nil || (source.Recurrence.Until != nil && nextDue.After(*source.Recurrence.Until)) {
+		return nil
+	}
+	now := time.Now()
+	next, nextChecklistItemIDValue := buildNextOccurrence(source, nextID, nextChecklistItemID, nextDue, now)
+	nextChecklistItemID = nextChecklistItemIDValue
+	nextID++
+	tasks = append(tasks, next)
+	recordActivityLocked(source.ID, "recurrence_created", "Created next occurrence "+strconv.Itoa(next.ID)+" due "+nextDue.Format(time.RFC3339))
+	return &next
+}
+
 // UpdateTask replaces an existing task and returns the updated task.
 func UpdateTask(id int, task model.Task) *model.Task {
 	updated, _ := UpdateTaskWithDependencies(id, task, task.DependsOn)
@@ -1380,6 +1397,9 @@ func SetTaskCompletionChecked(id int, completed bool) (*model.Task, error) {
 			tasks[i].UpdatedAt = time.Now()
 			if wasCompleted != completed {
 				recordCompletionActivityLocked(tasks[i])
+				if completed {
+					spawnNextOccurrenceLocked(tasks[i])
+				}
 			}
 			updated := tasks[i]
 			return &updated, nil

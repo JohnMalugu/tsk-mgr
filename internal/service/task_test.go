@@ -795,6 +795,37 @@ func TestCreateTaskStartsRecurrenceSeries(t *testing.T) {
 	}
 }
 
+func TestCompletingRecurringTaskCreatesExactlyOneNextOccurrence(t *testing.T) {
+	ResetTasks()
+	first, err := CreateTaskWithDependencies(model.Task{
+		Title: "Weekly review", DueDate: time.Date(2026, 10, 2, 9, 0, 0, 0, time.UTC),
+		Recurrence: &model.RecurrenceRule{Frequency: "weekly", Interval: 1},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetTaskCompletionChecked(first.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetTaskCompletionChecked(first.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	allTasks := GetAllTasks()
+	occurrenceCount := 0
+	var next model.Task
+	for _, task := range allTasks {
+		if task.RecurrenceSeriesID == first.ID {
+			occurrenceCount++
+			if task.RecurrenceOccurrence == 2 {
+				next = task
+			}
+		}
+	}
+	if occurrenceCount != 2 || next.RecurrenceOccurrence != 2 || !next.DueDate.Equal(first.DueDate.AddDate(0, 0, 7)) {
+		t.Fatalf("expected one next weekly occurrence, got %#v", allTasks)
+	}
+}
+
 func TestBuildNextOccurrenceResetsMutableProgress(t *testing.T) {
 	due := time.Date(2026, 10, 9, 9, 0, 0, 0, time.UTC)
 	source := model.Task{
