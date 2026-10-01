@@ -1214,6 +1214,36 @@ func buildNextOccurrence(source model.Task, id, checklistStartID int, dueDate, n
 	return next, checklistStartID + len(next.Checklist)
 }
 
+// GetTaskOccurrences returns a snapshot of all tasks in the same recurrence series.
+func GetTaskOccurrences(taskID int) ([]model.Task, error) {
+	mu.RLock()
+	defer mu.RUnlock()
+	position := findTaskPositionLocked(taskID)
+	if position < 0 {
+		return nil, ErrTaskNotFound
+	}
+	seriesID := tasks[position].RecurrenceSeriesID
+	if seriesID < 1 {
+		return nil, ErrRecurrenceNotFound
+	}
+	occurrences := make([]model.Task, 0)
+	for _, task := range tasks {
+		if task.RecurrenceSeriesID != seriesID {
+			continue
+		}
+		copy := task
+		copy.Tags = append([]string(nil), task.Tags...)
+		copy.DependsOn = append([]int(nil), task.DependsOn...)
+		copy.Checklist = append([]model.ChecklistItem(nil), task.Checklist...)
+		copy.Recurrence = cloneRecurrenceRule(task.Recurrence)
+		occurrences = append(occurrences, copy)
+	}
+	sort.Slice(occurrences, func(i, j int) bool {
+		return occurrences[i].RecurrenceOccurrence < occurrences[j].RecurrenceOccurrence
+	})
+	return occurrences, nil
+}
+
 func spawnNextOccurrenceLocked(source model.Task) *model.Task {
 	if source.Recurrence == nil {
 		return nil

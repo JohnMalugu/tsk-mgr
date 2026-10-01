@@ -857,6 +857,30 @@ func TestCompletingRecurringTaskCreatesExactlyOneNextOccurrence(t *testing.T) {
 	}
 }
 
+func TestGetTaskOccurrencesReturnsOrderedSeriesCopies(t *testing.T) {
+	ResetTasks()
+	first, err := CreateTaskWithDependencies(model.Task{
+		Title: "Daily report", DueDate: time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC),
+		Recurrence: &model.RecurrenceRule{Frequency: "daily", Interval: 1},
+		Tags:       []string{"work"},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetTaskCompletionChecked(first.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	occurrences, err := GetTaskOccurrences(first.ID + 1)
+	if err != nil || len(occurrences) != 2 || occurrences[0].RecurrenceOccurrence != 1 || occurrences[1].RecurrenceOccurrence != 2 {
+		t.Fatalf("unexpected occurrence list: %#v err=%v", occurrences, err)
+	}
+	occurrences[0].Tags[0] = "mutated"
+	stored := GetTaskByID(first.ID)
+	if stored.Tags[0] != "work" {
+		t.Fatal("occurrence query exposed mutable internal slices")
+	}
+}
+
 func TestBuildNextOccurrenceResetsMutableProgress(t *testing.T) {
 	due := time.Date(2026, 10, 9, 9, 0, 0, 0, time.UTC)
 	source := model.Task{
