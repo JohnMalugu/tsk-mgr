@@ -576,6 +576,29 @@ func HandleTaskActivity(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, service.GetActivities(&taskID, action, from, to, offset, limit))
 }
 
+func HandleTaskOccurrences(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	taskID, err := taskIDFromSuffix(r.URL.Path, "/occurrences")
+	if err != nil {
+		respondError(w, r, http.StatusBadRequest, "task id must be a positive integer")
+		return
+	}
+	occurrences, err := service.GetTaskOccurrences(taskID)
+	if err != nil {
+		if errors.Is(err, service.ErrTaskNotFound) || errors.Is(err, service.ErrRecurrenceNotFound) {
+			respondError(w, r, http.StatusNotFound, err.Error())
+		} else {
+			respondError(w, r, http.StatusInternalServerError, "could not load occurrences")
+		}
+		return
+	}
+	respondJSON(w, http.StatusOK, occurrences)
+}
+
 func HandleActiveTimer(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)

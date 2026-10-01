@@ -114,6 +114,25 @@ func TestTaskActivityRouteIncludesTaskEvents(t *testing.T) {
 	}
 }
 
+func TestTaskOccurrencesRouteReturnsSeries(t *testing.T) {
+	service.ResetTasks()
+	first, err := service.CreateTaskWithDependencies(model.Task{
+		Title: "Daily report", DueDate: time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC),
+		Recurrence: &model.RecurrenceRule{Frequency: "daily", Interval: 1},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.SetTaskCompletionChecked(first.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodGet, "/tasks/"+fmt.Sprint(first.ID)+"/occurrences", nil))
+	if recorder.Code != http.StatusOK || strings.Count(recorder.Body.String(), `"recurrenceOccurrence"`) != 2 {
+		t.Fatalf("unexpected occurrences response: %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestActivityRouteSupportsPagination(t *testing.T) {
 	service.ResetTasks()
 	service.CreateTask(model.Task{Title: "First event"})
