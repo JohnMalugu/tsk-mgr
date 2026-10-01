@@ -1244,6 +1244,25 @@ func GetTaskOccurrences(taskID int) ([]model.Task, error) {
 	return occurrences, nil
 }
 
+// GetNextOccurrenceDueDate previews the next date without creating an occurrence.
+func GetNextOccurrenceDueDate(taskID int) (time.Time, error) {
+	mu.RLock()
+	defer mu.RUnlock()
+	position := findTaskPositionLocked(taskID)
+	if position < 0 {
+		return time.Time{}, ErrTaskNotFound
+	}
+	task := tasks[position]
+	if task.Recurrence == nil {
+		return time.Time{}, ErrRecurrenceNotFound
+	}
+	nextDue, err := NextRecurrenceDate(task.DueDate, task.Recurrence)
+	if err != nil || (task.Recurrence.Until != nil && nextDue.After(*task.Recurrence.Until)) {
+		return time.Time{}, ErrRecurrenceNotFound
+	}
+	return nextDue, nil
+}
+
 func spawnNextOccurrenceLocked(source model.Task) *model.Task {
 	if source.Recurrence == nil {
 		return nil

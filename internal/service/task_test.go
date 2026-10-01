@@ -881,6 +881,28 @@ func TestGetTaskOccurrencesReturnsOrderedSeriesCopies(t *testing.T) {
 	}
 }
 
+func TestGetNextOccurrenceDueDateDoesNotMutateSeries(t *testing.T) {
+	ResetTasks()
+	until := time.Date(2026, 10, 3, 9, 0, 0, 0, time.UTC)
+	task, err := CreateTaskWithDependencies(model.Task{
+		Title: "Daily reminder", DueDate: time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC),
+		Recurrence: &model.RecurrenceRule{Frequency: "daily", Interval: 1, Until: &until},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next, err := GetNextOccurrenceDueDate(task.ID)
+	if err != nil || !next.Equal(task.DueDate.AddDate(0, 0, 1)) {
+		t.Fatalf("unexpected next due date %v err=%v", next, err)
+	}
+	if len(GetAllTasks()) != 3 {
+		t.Fatal("preview must not create an occurrence")
+	}
+	if _, err := GetNextOccurrenceDueDate(2); !errors.Is(err, ErrRecurrenceNotFound) {
+		t.Fatalf("expected non-recurring-task error, got %v", err)
+	}
+}
+
 func TestBuildNextOccurrenceResetsMutableProgress(t *testing.T) {
 	due := time.Date(2026, 10, 9, 9, 0, 0, 0, time.UTC)
 	source := model.Task{
