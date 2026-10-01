@@ -795,6 +795,24 @@ func TestCreateTaskStartsRecurrenceSeries(t *testing.T) {
 	}
 }
 
+func TestBuildNextOccurrenceResetsMutableProgress(t *testing.T) {
+	due := time.Date(2026, 10, 9, 9, 0, 0, 0, time.UTC)
+	source := model.Task{
+		ID: 12, Title: "Weekly review", DueDate: due.AddDate(0, 0, -7), Completed: true,
+		Tags: []string{"team"}, DependsOn: []int{2}, Recurrence: &model.RecurrenceRule{Frequency: "weekly", Interval: 1},
+		RecurrenceSeriesID: 12, RecurrenceOccurrence: 1,
+		Checklist: []model.ChecklistItem{{ID: 4, Text: "Prepare", Completed: true}, {ID: 5, Text: "Review", Completed: false}},
+	}
+	now := time.Date(2026, 10, 1, 8, 0, 0, 0, time.UTC)
+	next, nextChecklistID := buildNextOccurrence(source, 13, 40, due, now)
+	if next.ID != 13 || next.DueDate != due || next.Completed || next.RecurrenceOccurrence != 2 || next.RecurrenceSeriesID != 12 {
+		t.Fatalf("unexpected next occurrence metadata: %#v", next)
+	}
+	if len(next.Checklist) != 2 || next.Checklist[0].ID != 40 || next.Checklist[0].Completed || next.Checklist[1].ID != 41 || nextChecklistID != 42 {
+		t.Fatalf("unexpected cloned checklist: %#v next ID %d", next.Checklist, nextChecklistID)
+	}
+}
+
 func TestCreateTaskRecordsActivity(t *testing.T) {
 	ResetTasks()
 	created, err := CreateTaskWithDependencies(model.Task{Title: "Plan release"}, nil)

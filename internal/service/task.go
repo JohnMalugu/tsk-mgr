@@ -1187,6 +1187,33 @@ func cloneRecurrenceRule(rule *model.RecurrenceRule) *model.RecurrenceRule {
 	return &copy
 }
 
+func buildNextOccurrence(source model.Task, id, checklistStartID int, dueDate, now time.Time) (model.Task, int) {
+	occurrence := source.RecurrenceOccurrence
+	if occurrence < 1 {
+		occurrence = 1
+	}
+	seriesID := source.RecurrenceSeriesID
+	if seriesID < 1 {
+		seriesID = source.ID
+	}
+	next := source
+	next.ID = id
+	next.CreatedAt = now
+	next.UpdatedAt = now
+	next.DueDate = dueDate
+	next.Completed = false
+	next.DependsOn = append([]int(nil), source.DependsOn...)
+	next.Tags = append([]string(nil), source.Tags...)
+	next.Recurrence = cloneRecurrenceRule(source.Recurrence)
+	next.RecurrenceSeriesID = seriesID
+	next.RecurrenceOccurrence = occurrence + 1
+	next.Checklist = make([]model.ChecklistItem, len(source.Checklist))
+	for index, item := range source.Checklist {
+		next.Checklist[index] = model.ChecklistItem{ID: checklistStartID + index, Text: item.Text}
+	}
+	return next, checklistStartID + len(next.Checklist)
+}
+
 // UpdateTask replaces an existing task and returns the updated task.
 func UpdateTask(id int, task model.Task) *model.Task {
 	updated, _ := UpdateTaskWithDependencies(id, task, task.DependsOn)
