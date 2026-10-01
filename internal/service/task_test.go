@@ -780,6 +780,21 @@ func TestCreateTaskDefaultsPriority(t *testing.T) {
 	}
 }
 
+func TestCreateTaskStartsRecurrenceSeries(t *testing.T) {
+	ResetTasks()
+	task, err := CreateTaskWithDependencies(model.Task{
+		Title:      "Weekly review",
+		DueDate:    time.Date(2026, 10, 2, 9, 0, 0, 0, time.UTC),
+		Recurrence: &model.RecurrenceRule{Frequency: "weekly", Interval: 1},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task.RecurrenceSeriesID != task.ID || task.RecurrenceOccurrence != 1 {
+		t.Fatalf("expected service-owned first occurrence metadata, got %#v", task)
+	}
+}
+
 func TestCreateTaskRecordsActivity(t *testing.T) {
 	ResetTasks()
 	created, err := CreateTaskWithDependencies(model.Task{Title: "Plan release"}, nil)

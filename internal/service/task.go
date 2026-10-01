@@ -1133,6 +1133,9 @@ func CreateTask(task model.Task) model.Task {
 func CreateTaskWithDependencies(task model.Task, dependencyIDs []int) (model.Task, error) {
 	mu.Lock()
 	defer mu.Unlock()
+	if err := validateRecurrenceRule(task.Recurrence, task.DueDate); err != nil {
+		return model.Task{}, err
+	}
 
 	for _, dependencyID := range dependencyIDs {
 		if dependencyID < 1 || findTaskPositionLocked(dependencyID) < 0 {
@@ -1158,10 +1161,30 @@ func CreateTaskWithDependencies(task model.Task, dependencyIDs []int) (model.Tas
 	task.UpdatedAt = now
 	task.ID = nextID
 	task.DependsOn = append([]int(nil), dependencyIDs...)
+	task.Recurrence = cloneRecurrenceRule(task.Recurrence)
+	if task.Recurrence != nil {
+		task.RecurrenceSeriesID = task.ID
+		task.RecurrenceOccurrence = 1
+	} else {
+		task.RecurrenceSeriesID = 0
+		task.RecurrenceOccurrence = 0
+	}
 	nextID++
 	tasks = append(tasks, task)
 	recordActivityLocked(task.ID, "created", "Task created: "+task.Title)
 	return task, nil
+}
+
+func cloneRecurrenceRule(rule *model.RecurrenceRule) *model.RecurrenceRule {
+	if rule == nil {
+		return nil
+	}
+	copy := *rule
+	if rule.Until != nil {
+		until := *rule.Until
+		copy.Until = &until
+	}
+	return &copy
 }
 
 // UpdateTask replaces an existing task and returns the updated task.
