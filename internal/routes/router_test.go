@@ -149,6 +149,37 @@ func TestNextRecurrenceRoutePreviewsDate(t *testing.T) {
 	}
 }
 
+func TestRecurringTaskWorkflowThroughRouter(t *testing.T) {
+	service.ResetTasks()
+	created := httptest.NewRecorder()
+	payload := `{"title":"Daily review","dueDate":"2026-10-01T09:00:00Z","recurrence":{"frequency":"daily","interval":1}}`
+	Router(created, httptest.NewRequest(http.MethodPost, "/tasks", strings.NewReader(payload)))
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create status %d: %s", created.Code, created.Body.String())
+	}
+	var task struct {
+		ID int `json:"id"`
+	}
+	if err := json.NewDecoder(created.Body).Decode(&task); err != nil {
+		t.Fatal(err)
+	}
+	completed := httptest.NewRecorder()
+	Router(completed, httptest.NewRequest(http.MethodPatch, "/tasks/"+fmt.Sprint(task.ID)+"/complete", nil))
+	if completed.Code != http.StatusOK {
+		t.Fatalf("complete status %d: %s", completed.Code, completed.Body.String())
+	}
+	history := httptest.NewRecorder()
+	Router(history, httptest.NewRequest(http.MethodGet, "/tasks/"+fmt.Sprint(task.ID)+"/occurrences", nil))
+	if history.Code != http.StatusOK || strings.Count(history.Body.String(), `"recurrenceOccurrence"`) != 2 {
+		t.Fatalf("history response %d: %s", history.Code, history.Body.String())
+	}
+	preview := httptest.NewRecorder()
+	Router(preview, httptest.NewRequest(http.MethodGet, "/tasks/"+fmt.Sprint(task.ID)+"/recurrence/next", nil))
+	if preview.Code != http.StatusOK || !strings.Contains(preview.Body.String(), "2026-10-02T09:00:00Z") {
+		t.Fatalf("preview response %d: %s", preview.Code, preview.Body.String())
+	}
+}
+
 func TestActivityRouteSupportsPagination(t *testing.T) {
 	service.ResetTasks()
 	service.CreateTask(model.Task{Title: "First event"})
