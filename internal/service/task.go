@@ -1489,6 +1489,9 @@ func BulkSetTaskCompletionChecked(ids []int, completed bool) (BulkUpdateResult, 
 		tasks[position].UpdatedAt = time.Now()
 		if wasCompleted != completed {
 			recordCompletionActivityLocked(tasks[position])
+			if completed {
+				spawnNextOccurrenceLocked(tasks[position])
+			}
 		}
 		updated = append(updated, tasks[position])
 	}

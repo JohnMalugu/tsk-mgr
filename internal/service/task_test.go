@@ -661,6 +661,37 @@ func TestBulkCompletionAcceptsPrerequisiteInSameBatch(t *testing.T) {
 	}
 }
 
+func TestBulkCompletionCreatesNextOccurrenceAfterValidation(t *testing.T) {
+	ResetTasks()
+	recurring, err := CreateTaskWithDependencies(model.Task{
+		Title: "Monthly close", DueDate: time.Date(2026, 10, 31, 9, 0, 0, 0, time.UTC),
+		Recurrence: &model.RecurrenceRule{Frequency: "monthly", Interval: 1},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BulkSetTaskCompletionChecked([]int{recurring.ID, 999}, true); !errors.Is(err, ErrTaskNotFound) {
+		t.Fatalf("expected invalid batch rejection, got %v", err)
+	}
+	if _, err := BulkSetTaskCompletionChecked([]int{recurring.ID}, true); err != nil {
+		t.Fatal(err)
+	}
+	allTasks := GetAllTasks()
+	occurrences := 0
+	var next model.Task
+	for _, task := range allTasks {
+		if task.RecurrenceSeriesID == recurring.ID {
+			occurrences++
+			if task.RecurrenceOccurrence == 2 {
+				next = task
+			}
+		}
+	}
+	if occurrences != 2 || next.DueDate.Format("2006-01-02") != "2026-11-30" {
+		t.Fatalf("expected clamped next occurrence after successful batch, got %#v", allTasks)
+	}
+}
+
 func TestBulkCompletionRejectsBlockedBatchWithoutMutation(t *testing.T) {
 	ResetTasks()
 	if _, err := AddTaskDependency(1, 2); err != nil {
