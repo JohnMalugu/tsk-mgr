@@ -3,6 +3,7 @@ package validation
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
@@ -26,4 +27,15 @@ func TestValidateTaskRejectsNegativeEstimate(t *testing.T) {
 		}
 	}
 	t.Fatal("expected estimate validation error")
+}
+
+func TestValidateTaskRejectsInvalidRecurrence(t *testing.T) {
+	task := model.Task{Title: "Task", DueDate: time.Date(2030, 1, 2, 9, 0, 0, 0, time.UTC), Recurrence: &model.RecurrenceRule{Frequency: "yearly", Interval: 0}}
+	fields := make(map[string]bool)
+	for _, validationError := range ValidateTask(&task) {
+		fields[validationError.Field] = true
+	}
+	if !fields["recurrence.frequency"] || !fields["recurrence.interval"] {
+		t.Fatalf("expected recurrence-specific errors, got %#v", fields)
+	}
 }

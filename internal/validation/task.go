@@ -44,6 +44,18 @@ func ValidateTask(task *model.Task) []ValidationError {
 			Message: "Estimate must be non-negative",
 		})
 	}
+	if task.Recurrence != nil {
+		rule := task.Recurrence
+		if rule.Frequency != "daily" && rule.Frequency != "weekly" && rule.Frequency != "monthly" {
+			errors = append(errors, ValidationError{Field: "recurrence.frequency", Message: "Frequency must be daily, weekly, or monthly"})
+		}
+		if rule.Interval < 1 || rule.Interval > 365 {
+			errors = append(errors, ValidationError{Field: "recurrence.interval", Message: "Interval must be between 1 and 365"})
+		}
+		if rule.Until != nil && !task.DueDate.IsZero() && rule.Until.Before(task.DueDate) {
+			errors = append(errors, ValidationError{Field: "recurrence.until", Message: "Until cannot be before the first due date"})
+		}
+	}
 
 	if task.Priority != "" {
 		switch strings.ToLower(task.Priority) {
