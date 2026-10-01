@@ -692,6 +692,39 @@ func TestBulkCompletionCreatesNextOccurrenceAfterValidation(t *testing.T) {
 	}
 }
 
+func TestRecurrenceUntilIncludesFinalDueDateAndThenStops(t *testing.T) {
+	ResetTasks()
+	firstDue := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	until := firstDue.AddDate(0, 0, 2)
+	first, err := CreateTaskWithDependencies(model.Task{
+		Title: "Short series", DueDate: firstDue,
+		Recurrence: &model.RecurrenceRule{Frequency: "daily", Interval: 1, Until: &until},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetTaskCompletionChecked(first.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	second := GetTaskByID(first.ID + 1)
+	if second == nil || !second.DueDate.Equal(firstDue.AddDate(0, 0, 1)) {
+		t.Fatalf("expected second occurrence, got %#v", second)
+	}
+	if _, err := SetTaskCompletionChecked(second.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	third := GetTaskByID(second.ID + 1)
+	if third == nil || !third.DueDate.Equal(until) {
+		t.Fatalf("expected final occurrence on until date, got %#v", third)
+	}
+	if _, err := SetTaskCompletionChecked(third.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if GetTaskByID(third.ID+1) != nil {
+		t.Fatal("expected recurrence to stop after inclusive until date")
+	}
+}
+
 func TestBulkCompletionRejectsBlockedBatchWithoutMutation(t *testing.T) {
 	ResetTasks()
 	if _, err := AddTaskDependency(1, 2); err != nil {
