@@ -641,6 +641,28 @@ func TestHandleTaskByIDPatchesTask(t *testing.T) {
 	}
 }
 
+func TestPatchTaskRecurrenceAndDetach(t *testing.T) {
+	resetTaskFixture()
+	set := httptest.NewRecorder()
+	HandleTaskByID(set, httptest.NewRequest(http.MethodPatch, "/tasks/1", strings.NewReader(`{"recurrence":{"frequency":"weekly","interval":1}}`)))
+	if set.Code != http.StatusOK || !strings.Contains(set.Body.String(), `"frequency":"weekly"`) {
+		t.Fatalf("unexpected recurrence PATCH: %d %s", set.Code, set.Body.String())
+	}
+	task := service.GetTaskByID(1)
+	if task.RecurrenceSeriesID != 1 || task.RecurrenceOccurrence != 1 {
+		t.Fatalf("expected recurrence series metadata: %#v", task)
+	}
+	detach := httptest.NewRecorder()
+	HandleTaskByID(detach, httptest.NewRequest(http.MethodPatch, "/tasks/1", strings.NewReader(`{"recurrence":null}`)))
+	if detach.Code != http.StatusOK {
+		t.Fatalf("unexpected recurrence detach: %d %s", detach.Code, detach.Body.String())
+	}
+	task = service.GetTaskByID(1)
+	if task.Recurrence != nil || task.RecurrenceSeriesID != 1 {
+		t.Fatalf("expected recurrence disabled while history identity remains: %#v", task)
+	}
+}
+
 func TestHandleTaskDependenciesAddsPrerequisite(t *testing.T) {
 	resetTaskFixture()
 	body := strings.NewReader(`{"dependsOn":2}`)

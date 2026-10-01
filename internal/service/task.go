@@ -1299,6 +1299,9 @@ func UpdateTaskWithDependencies(id int, task model.Task, dependencyIDs []int) (*
 			if err := validateDependencySetLocked(id, dependencyIDs); err != nil {
 				return nil, err
 			}
+			if err := validateRecurrenceRule(task.Recurrence, task.DueDate); err != nil {
+				return nil, err
+			}
 			if task.Completed && hasIncompleteDependencyIDsLocked(dependencyIDs) {
 				return nil, ErrTaskBlocked
 			}
@@ -1306,6 +1309,7 @@ func UpdateTaskWithDependencies(id int, task model.Task, dependencyIDs []int) (*
 				return nil, ErrTaskBlocked
 			}
 			oldTitle := tasks[i].Title
+			previousSeriesID, previousOccurrence := tasks[i].RecurrenceSeriesID, tasks[i].RecurrenceOccurrence
 			task.CreatedAt = tasks[i].CreatedAt
 			task.UpdatedAt = time.Now()
 			task.Tags = normalizeTags(task.Tags)
@@ -1314,6 +1318,22 @@ func UpdateTaskWithDependencies(id int, task model.Task, dependencyIDs []int) (*
 			}
 			task.ID = id
 			task.DependsOn = append([]int(nil), dependencyIDs...)
+			task.Recurrence = cloneRecurrenceRule(task.Recurrence)
+			if task.Recurrence != nil {
+				if previousSeriesID > 0 {
+					task.RecurrenceSeriesID = previousSeriesID
+					task.RecurrenceOccurrence = previousOccurrence
+				} else {
+					task.RecurrenceSeriesID = id
+					task.RecurrenceOccurrence = 1
+				}
+			} else if previousSeriesID > 0 {
+				task.RecurrenceSeriesID = previousSeriesID
+				task.RecurrenceOccurrence = previousOccurrence
+			} else {
+				task.RecurrenceSeriesID = 0
+				task.RecurrenceOccurrence = 0
+			}
 			tasks[i] = task
 			if oldTitle != task.Title {
 				recordActivityLocked(id, "updated", "Task renamed from "+oldTitle+" to "+task.Title)
