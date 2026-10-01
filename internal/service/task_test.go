@@ -129,6 +129,39 @@ func TestConcurrentTimerStartsHaveSingleWinner(t *testing.T) {
 	}
 }
 
+func TestConcurrentCompletionGeneratesOneRecurringOccurrence(t *testing.T) {
+	ResetTasks()
+	task, err := CreateTaskWithDependencies(model.Task{
+		Title: "Recurring task", DueDate: time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC),
+		Recurrence: &model.RecurrenceRule{Frequency: "daily", Interval: 1},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const attempts = 24
+	var wait sync.WaitGroup
+	errorsFound := make(chan error, attempts)
+	for range attempts {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			_, err := SetTaskCompletionChecked(task.ID, true)
+			errorsFound <- err
+		}()
+	}
+	wait.Wait()
+	close(errorsFound)
+	for err := range errorsFound {
+		if err != nil {
+			t.Fatalf("concurrent idempotent completion failed: %v", err)
+		}
+	}
+	occurrences, err := GetTaskOccurrences(task.ID)
+	if err != nil || len(occurrences) != 2 {
+		t.Fatalf("expected exactly two series occurrences, got %#v err=%v", occurrences, err)
+	}
+}
+
 func TestStopTaskTimerPersistsElapsedTime(t *testing.T) {
 	ResetTasks()
 	if _, err := StartTaskTimer(1, "Focus"); err != nil {
