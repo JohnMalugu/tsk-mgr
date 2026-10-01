@@ -18,6 +18,26 @@ func TestDependencyErrorsAreDistinct(t *testing.T) {
 	}
 }
 
+func TestValidateRecurrenceRuleBoundsAndDates(t *testing.T) {
+	due := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	valid := &model.RecurrenceRule{Frequency: "weekly", Interval: 2}
+	if err := validateRecurrenceRule(valid, due); err != nil {
+		t.Fatalf("expected valid recurrence rule: %v", err)
+	}
+	for _, rule := range []*model.RecurrenceRule{
+		{Frequency: "yearly", Interval: 1},
+		{Frequency: "daily", Interval: 0},
+		{Frequency: "monthly", Interval: 366},
+		{Frequency: "daily", Interval: 1, Until: timePtr(due.Add(-time.Second))},
+	} {
+		if err := validateRecurrenceRule(rule, due); !errors.Is(err, ErrRecurrenceInvalid) {
+			t.Fatalf("expected invalid rule %#v, got %v", rule, err)
+		}
+	}
+}
+
+func timePtr(value time.Time) *time.Time { return &value }
+
 func TestResetTasksClearsTimeEntryState(t *testing.T) {
 	timeEntries = []model.TimeEntry{{ID: 8, TaskID: 1}}
 	nextTimeEntryID = 9

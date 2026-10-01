@@ -30,6 +30,8 @@ var (
 	ErrTimeEntryInvalid        = errors.New("time entry is invalid")
 	ErrTimeEntryOverlap        = errors.New("time entry overlaps existing tracked time")
 	ErrTaskEstimateInvalid     = errors.New("task estimate must be non-negative")
+	ErrRecurrenceInvalid       = errors.New("recurrence rule is invalid")
+	ErrRecurrenceNotFound      = errors.New("task is not recurring")
 )
 
 var activityActions = map[string]struct{}{
@@ -44,6 +46,22 @@ var activityActions = map[string]struct{}{
 func IsActivityAction(action string) bool {
 	_, ok := activityActions[action]
 	return ok
+}
+
+func validateRecurrenceRule(rule *model.RecurrenceRule, dueDate time.Time) error {
+	if rule == nil {
+		return nil
+	}
+	if rule.Frequency != "daily" && rule.Frequency != "weekly" && rule.Frequency != "monthly" {
+		return ErrRecurrenceInvalid
+	}
+	if rule.Interval < 1 || rule.Interval > 365 {
+		return ErrRecurrenceInvalid
+	}
+	if rule.Until != nil && rule.Until.Before(dueDate) {
+		return ErrRecurrenceInvalid
+	}
+	return nil
 }
 
 // In-memory storage (we'll use database later)
