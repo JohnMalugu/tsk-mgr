@@ -48,6 +48,10 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		handler.HandleTaskOccurrences(w, r)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/tasks/") && strings.HasSuffix(r.URL.Path, "/recurrence/next") {
+		handler.HandleNextRecurrence(w, r)
+		return
+	}
 
 	if r.URL.Path == "/tasks" {
 		handler.HandleTasks(w, r)

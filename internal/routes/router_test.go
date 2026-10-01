@@ -133,6 +133,22 @@ func TestTaskOccurrencesRouteReturnsSeries(t *testing.T) {
 	}
 }
 
+func TestNextRecurrenceRoutePreviewsDate(t *testing.T) {
+	service.ResetTasks()
+	task, err := service.CreateTaskWithDependencies(model.Task{
+		Title: "Weekly report", DueDate: time.Date(2026, 10, 2, 9, 0, 0, 0, time.UTC),
+		Recurrence: &model.RecurrenceRule{Frequency: "weekly", Interval: 1},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodGet, "/tasks/"+fmt.Sprint(task.ID)+"/recurrence/next", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "2026-10-09T09:00:00Z") {
+		t.Fatalf("unexpected next recurrence response: %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestActivityRouteSupportsPagination(t *testing.T) {
 	service.ResetTasks()
 	service.CreateTask(model.Task{Title: "First event"})

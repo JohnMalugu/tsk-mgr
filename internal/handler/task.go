@@ -599,6 +599,29 @@ func HandleTaskOccurrences(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, occurrences)
 }
 
+func HandleNextRecurrence(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	taskID, err := taskIDFromSuffix(r.URL.Path, "/recurrence/next")
+	if err != nil {
+		respondError(w, r, http.StatusBadRequest, "task id must be a positive integer")
+		return
+	}
+	dueDate, err := service.GetNextOccurrenceDueDate(taskID)
+	if err != nil {
+		if errors.Is(err, service.ErrTaskNotFound) || errors.Is(err, service.ErrRecurrenceNotFound) {
+			respondError(w, r, http.StatusNotFound, err.Error())
+		} else {
+			respondError(w, r, http.StatusInternalServerError, "could not preview recurrence")
+		}
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]time.Time{"nextDueDate": dueDate})
+}
+
 func HandleActiveTimer(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
