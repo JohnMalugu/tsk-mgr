@@ -745,6 +745,26 @@ func TestGeneratedOccurrenceIsRecordedInActivity(t *testing.T) {
 	}
 }
 
+func TestBlockedRecurringTaskDoesNotSpawnOccurrence(t *testing.T) {
+	ResetTasks()
+	first, err := CreateTaskWithDependencies(model.Task{
+		Title: "Recurring close", DueDate: time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC),
+		Recurrence: &model.RecurrenceRule{Frequency: "weekly", Interval: 1},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddTaskDependency(first.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetTaskCompletionChecked(first.ID, true); !errors.Is(err, ErrTaskBlocked) {
+		t.Fatalf("expected blocked completion, got %v", err)
+	}
+	if GetTaskByID(first.ID+1) != nil {
+		t.Fatal("blocked completion must not spawn a recurrence")
+	}
+}
+
 func TestBulkCompletionRejectsBlockedBatchWithoutMutation(t *testing.T) {
 	ResetTasks()
 	if _, err := AddTaskDependency(1, 2); err != nil {
