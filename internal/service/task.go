@@ -404,7 +404,7 @@ type ActivityPage struct {
 
 // GetAllTasks returns the first page of all tasks.
 func GetAllTasks() []model.Task {
-	return GetTasks(nil, nil, "", nil, nil, nil, nil, 0, 20, "id", false)
+	return GetTasks(nil, nil, nil, "", nil, nil, nil, nil, 0, 20, "id", false)
 }
 
 // GetActivities returns a filtered page ordered from newest to oldest.
@@ -495,7 +495,7 @@ func GetTaskSummary() TaskSummary {
 }
 
 // GetTasks returns a page of tasks matching the optional filters.
-func GetTasks(completed, overdue *bool, search string, priority *string, tag *string, dueAfter, dueBefore *time.Time, offset, limit int, sortBy string, descending bool) []model.Task {
+func GetTasks(completed, overdue, recurring *bool, search string, priority *string, tag *string, dueAfter, dueBefore *time.Time, offset, limit int, sortBy string, descending bool) []model.Task {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -507,6 +507,9 @@ func GetTasks(completed, overdue *bool, search string, priority *string, tag *st
 		}
 		isOverdue := !task.Completed && task.DueDate.Before(time.Now())
 		if overdue != nil && isOverdue != *overdue {
+			continue
+		}
+		if recurring != nil && (task.Recurrence != nil) != *recurring {
 			continue
 		}
 		if priority != nil && strings.ToLower(task.Priority) != strings.ToLower(*priority) {

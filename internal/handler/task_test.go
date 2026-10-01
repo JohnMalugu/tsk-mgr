@@ -56,6 +56,27 @@ func TestHandleTasksFiltersByCompletion(t *testing.T) {
 	}
 }
 
+func TestHandleTasksFiltersByRecurringState(t *testing.T) {
+	resetTaskFixture()
+	body := `{"title":"Weekly review","dueDate":"2030-01-02T09:00:00Z","recurrence":{"frequency":"weekly","interval":1}}`
+	created := httptest.NewRecorder()
+	HandleTasks(created, httptest.NewRequest(http.MethodPost, "/tasks", strings.NewReader(body)))
+	if created.Code != http.StatusCreated {
+		t.Fatalf("expected recurring task creation status %d, got %d", http.StatusCreated, created.Code)
+	}
+	for _, query := range []struct {
+		url  string
+		want string
+		miss string
+	}{{"/tasks?recurring=true", "Weekly review", "Buy groceries"}, {"/tasks?recurring=false", "Buy groceries", "Weekly review"}} {
+		recorder := httptest.NewRecorder()
+		HandleTasks(recorder, httptest.NewRequest(http.MethodGet, query.url, nil))
+		if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), query.want) || strings.Contains(recorder.Body.String(), query.miss) {
+			t.Fatalf("unexpected recurring filter response for %s: %d %s", query.url, recorder.Code, recorder.Body.String())
+		}
+	}
+}
+
 func TestHandleTasksFiltersOverdue(t *testing.T) {
 	resetTaskFixture()
 	request := httptest.NewRequest(http.MethodGet, "/tasks?overdue=true", nil)
