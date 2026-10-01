@@ -2,6 +2,8 @@ package service
 
 import (
 	"errors"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -722,6 +724,24 @@ func TestRecurrenceUntilIncludesFinalDueDateAndThenStops(t *testing.T) {
 	}
 	if GetTaskByID(third.ID+1) != nil {
 		t.Fatal("expected recurrence to stop after inclusive until date")
+	}
+}
+
+func TestGeneratedOccurrenceIsRecordedInActivity(t *testing.T) {
+	ResetTasks()
+	first, err := CreateTaskWithDependencies(model.Task{
+		Title: "Daily cleanup", DueDate: time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC),
+		Recurrence: &model.RecurrenceRule{Frequency: "daily", Interval: 1},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetTaskCompletionChecked(first.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	page := GetActivities(ptrInt(first.ID), "recurrence_created", nil, nil, 0, 10)
+	if page.Total != 1 || !strings.Contains(page.Activities[0].Summary, strconv.Itoa(first.ID+1)) {
+		t.Fatalf("expected recurrence creation activity, got %#v", page)
 	}
 }
 
