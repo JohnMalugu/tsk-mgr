@@ -64,6 +64,31 @@ func validateRecurrenceRule(rule *model.RecurrenceRule, dueDate time.Time) error
 	return nil
 }
 
+// NextRecurrenceDate calculates the next calendar occurrence for a validated rule.
+func NextRecurrenceDate(dueDate time.Time, rule *model.RecurrenceRule) (time.Time, error) {
+	if err := validateRecurrenceRule(rule, dueDate); err != nil || rule == nil {
+		return time.Time{}, ErrRecurrenceInvalid
+	}
+	switch rule.Frequency {
+	case "daily":
+		return dueDate.AddDate(0, 0, rule.Interval), nil
+	case "weekly":
+		return dueDate.AddDate(0, 0, 7*rule.Interval), nil
+	case "monthly":
+		totalMonths := dueDate.Year()*12 + int(dueDate.Month()) - 1 + rule.Interval
+		year := totalMonths / 12
+		month := time.Month(totalMonths%12 + 1)
+		lastDay := time.Date(year, month+1, 0, 0, 0, 0, 0, dueDate.Location()).Day()
+		day := dueDate.Day()
+		if day > lastDay {
+			day = lastDay
+		}
+		return time.Date(year, month, day, dueDate.Hour(), dueDate.Minute(), dueDate.Second(), dueDate.Nanosecond(), dueDate.Location()), nil
+	default:
+		return time.Time{}, ErrRecurrenceInvalid
+	}
+}
+
 // In-memory storage (we'll use database later)
 var tasks []model.Task
 var activities []model.Activity

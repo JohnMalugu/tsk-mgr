@@ -36,6 +36,27 @@ func TestValidateRecurrenceRuleBoundsAndDates(t *testing.T) {
 	}
 }
 
+func TestNextRecurrenceDateCalendarBoundaries(t *testing.T) {
+	monthly := &model.RecurrenceRule{Frequency: "monthly", Interval: 1}
+	jan31 := time.Date(2027, time.January, 31, 9, 15, 0, 0, time.UTC)
+	if got, _ := NextRecurrenceDate(jan31, monthly); got.Format(time.RFC3339) != "2027-02-28T09:15:00Z" {
+		t.Fatalf("expected month-end clamp, got %v", got)
+	}
+	leapJan31 := time.Date(2028, time.January, 31, 9, 15, 0, 0, time.UTC)
+	if got, _ := NextRecurrenceDate(leapJan31, monthly); got.Format(time.RFC3339) != "2028-02-29T09:15:00Z" {
+		t.Fatalf("expected leap-year month-end clamp, got %v", got)
+	}
+	location, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Fatal(err)
+	}
+	daily := &model.RecurrenceRule{Frequency: "daily", Interval: 1}
+	springDay := time.Date(2026, time.March, 7, 9, 0, 0, 0, location)
+	if got, _ := NextRecurrenceDate(springDay, daily); got.Hour() != 9 || got.Day() != 8 || got.Location() != location {
+		t.Fatalf("expected local wall time preserved over DST, got %v", got)
+	}
+}
+
 func timePtr(value time.Time) *time.Time { return &value }
 
 func TestResetTasksClearsTimeEntryState(t *testing.T) {
