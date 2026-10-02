@@ -73,6 +73,16 @@ func TestBulkDueDateRoute(t *testing.T) {
 	}
 }
 
+func TestBulkTagsRoute(t *testing.T) {
+	service.ResetTasks()
+	payload := `{"ids":[1,2],"tags":[" work ","WORK","personal"]}`
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodPost, "/tasks/bulk/tags", strings.NewReader(payload)))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"updated":2`) || strings.Count(recorder.Body.String(), `"work"`) != 2 {
+		t.Fatalf("unexpected bulk tags response: %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestManualTimeEntryRouteAndDeletion(t *testing.T) {
 	service.ResetTasks()
 	body := `{"startedAt":"2026-09-30T09:00:00Z","endedAt":"2026-09-30T09:30:00Z","note":"Planning"}`
