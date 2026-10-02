@@ -44,6 +44,10 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		handler.HandleTaskActivity(w, r)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/tasks/") && strings.HasSuffix(r.URL.Path, "/comments") {
+		handler.HandleTaskComments(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/tasks/") && strings.HasSuffix(r.URL.Path, "/occurrences") {
 		handler.HandleTaskOccurrences(w, r)
 		return

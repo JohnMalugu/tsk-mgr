@@ -607,6 +607,51 @@ func HandleTaskActivity(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, service.GetActivities(&taskID, action, from, to, offset, limit))
 }
 
+func HandleTaskComments(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	taskID, err := taskIDFromSuffix(r.URL.Path, "/comments")
+	if err != nil {
+		respondError(w, r, http.StatusBadRequest, "task id must be a positive integer")
+		return
+	}
+	if r.Method == http.MethodPost {
+		var payload struct {
+			Body string `json:"body"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&payload); err != nil {
+			respondError(w, r, http.StatusBadRequest, "request body must be valid JSON")
+			return
+		}
+		if err := decoder.Decode(&struct{}{}); err != io.EOF {
+			respondError(w, r, http.StatusBadRequest, "request body must contain a single JSON value")
+			return
+		}
+		comment, err := service.AddTaskComment(taskID, payload.Body)
+		if err != nil {
+			if errors.Is(err, service.ErrTaskNotFound) {
+				respondError(w, r, http.StatusNotFound, err.Error())
+			} else {
+				respondError(w, r, http.StatusBadRequest, err.Error())
+			}
+			return
+		}
+		respondJSON(w, http.StatusCreated, comment)
+		return
+	}
+	comments, found := service.GetTaskComments(taskID)
+	if !found {
+		respondError(w, r, http.StatusNotFound, "task not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, comments)
+}
+
 func HandleTaskOccurrences(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
@@ -1055,7 +1100,7 @@ func patchTask(w http.ResponseWriter, r *http.Request, id int) {
 		Description     *string         `json:"description"`
 		DueDate         *time.Time      `json:"dueDate"`
 		Completed       *bool           `json:"completed"`
-		Status           *string         `json:"status"`
+		Status          *string         `json:"status"`
 		Priority        *string         `json:"priority"`
 		Tags            *[]string       `json:"tags"`
 		DependsOn       *[]int          `json:"dependsOn"`

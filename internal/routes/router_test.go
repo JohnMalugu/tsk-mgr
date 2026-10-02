@@ -153,6 +153,25 @@ func TestTaskActivityRouteIncludesTaskEvents(t *testing.T) {
 	}
 }
 
+func TestTaskCommentsRouteLifecycle(t *testing.T) {
+	service.ResetTasks()
+	created := httptest.NewRecorder()
+	Router(created, httptest.NewRequest(http.MethodPost, "/tasks/1/comments", strings.NewReader(`{"body":"  Keep the scope focused  "}`)))
+	if created.Code != http.StatusCreated || !strings.Contains(created.Body.String(), `"body":"Keep the scope focused"`) {
+		t.Fatalf("unexpected comment creation response: %d %s", created.Code, created.Body.String())
+	}
+	listed := httptest.NewRecorder()
+	Router(listed, httptest.NewRequest(http.MethodGet, "/tasks/1/comments", nil))
+	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), "Keep the scope focused") {
+		t.Fatalf("unexpected comments list response: %d %s", listed.Code, listed.Body.String())
+	}
+	invalid := httptest.NewRecorder()
+	Router(invalid, httptest.NewRequest(http.MethodPost, "/tasks/1/comments", strings.NewReader(`{"body":" "}`)))
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("expected empty comment rejection, got %d", invalid.Code)
+	}
+}
+
 func TestTaskOccurrencesRouteReturnsSeries(t *testing.T) {
 	service.ResetTasks()
 	first, err := service.CreateTaskWithDependencies(model.Task{
