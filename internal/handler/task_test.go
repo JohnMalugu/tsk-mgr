@@ -168,6 +168,18 @@ func TestHandleTasksSearchesDescriptions(t *testing.T) {
 	}
 }
 
+func TestHandleTasksSearchesChecklistItems(t *testing.T) {
+	resetTaskFixture()
+	if _, err := service.AddChecklistItem(1, "Prepare launch checklist"); err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	HandleTasks(recorder, httptest.NewRequest(http.MethodGet, "/tasks?q=launch", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "Buy groceries") || strings.Contains(recorder.Body.String(), "Learn Go") {
+		t.Fatalf("expected checklist search to return parent task, got %d %q", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestHandleTasksFiltersByDueDateRange(t *testing.T) {
 	resetTaskFixture()
 	for _, payload := range []string{

@@ -529,6 +529,14 @@ func GetTasks(completed, overdue, recurring *bool, search string, priority *stri
 			matchesSearch = strings.Contains(strings.ToLower(task.Description), search)
 		}
 		if search != "" && !matchesSearch {
+			for _, item := range task.Checklist {
+				if strings.Contains(strings.ToLower(item.Text), search) {
+					matchesSearch = true
+					break
+				}
+			}
+		}
+		if search != "" && !matchesSearch {
 			for _, tag := range task.Tags {
 				if strings.Contains(strings.ToLower(tag), search) {
 					matchesSearch = true
