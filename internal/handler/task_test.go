@@ -153,6 +153,21 @@ func TestHandleTasksSearchesTags(t *testing.T) {
 	}
 }
 
+func TestHandleTasksSearchesDescriptions(t *testing.T) {
+	resetTaskFixture()
+	created := httptest.NewRecorder()
+	HandleTasks(created, httptest.NewRequest(http.MethodPost, "/tasks", strings.NewReader(`{"title":"Design review","description":"Review service architecture","dueDate":"2030-01-01T00:00:00Z"}`)))
+	if created.Code != http.StatusCreated {
+		t.Fatalf("expected task creation, got %d %q", created.Code, created.Body.String())
+	}
+	request := httptest.NewRequest(http.MethodGet, "/tasks?q=architecture", nil)
+	recorder := httptest.NewRecorder()
+	HandleTasks(recorder, request)
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "Design review") || strings.Contains(recorder.Body.String(), "Buy groceries") {
+		t.Fatalf("expected description search match, got %d %q", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestHandleTasksFiltersByDueDateRange(t *testing.T) {
 	resetTaskFixture()
 	for _, payload := range []string{
