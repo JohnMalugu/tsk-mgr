@@ -58,6 +58,21 @@ func TestTaskTimerStartAndStopRoutes(t *testing.T) {
 	}
 }
 
+func TestBulkDueDateRoute(t *testing.T) {
+	service.ResetTasks()
+	payload := `{"ids":[1,2],"dueDate":"2030-01-15T09:00:00Z"}`
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodPost, "/tasks/bulk/due-date", strings.NewReader(payload)))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"updated":2`) {
+		t.Fatalf("unexpected bulk due-date response: %d %s", recorder.Code, recorder.Body.String())
+	}
+	invalid := httptest.NewRecorder()
+	Router(invalid, httptest.NewRequest(http.MethodPost, "/tasks/bulk/due-date", strings.NewReader(`{"ids":[1],"dueDate":""}`)))
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("expected missing date to be rejected, got %d", invalid.Code)
+	}
+}
+
 func TestManualTimeEntryRouteAndDeletion(t *testing.T) {
 	service.ResetTasks()
 	body := `{"startedAt":"2026-09-30T09:00:00Z","endedAt":"2026-09-30T09:30:00Z","note":"Planning"}`

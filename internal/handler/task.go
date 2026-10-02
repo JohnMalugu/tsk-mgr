@@ -953,6 +953,40 @@ func HandleBulkPriority(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, result)
 }
 
+func HandleBulkDueDate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var payload struct {
+		IDs     []int     `json:"ids"`
+		DueDate time.Time `json:"dueDate"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&payload); err != nil {
+		respondError(w, r, http.StatusBadRequest, "request body must be valid JSON")
+		return
+	}
+	if len(payload.IDs) == 0 || payload.DueDate.IsZero() {
+		respondError(w, r, http.StatusBadRequest, "ids and dueDate are required")
+		return
+	}
+	for _, id := range payload.IDs {
+		if id < 1 {
+			respondError(w, r, http.StatusBadRequest, "task ids must be positive integers")
+			return
+		}
+	}
+	result, ok := service.BulkSetTaskDueDate(payload.IDs, payload.DueDate)
+	if !ok {
+		respondError(w, r, http.StatusNotFound, "one or more tasks not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, result)
+}
+
 func updateTask(w http.ResponseWriter, r *http.Request, id int) {
 	task, ok := decodeTask(w, r)
 	if !ok {

@@ -50,6 +50,7 @@ func main() {
 	fmt.Printf("   POST   http://localhost:8080/tasks/bulk/complete\n")
 	fmt.Printf("   POST   http://localhost:8080/tasks/bulk/delete\n")
 	fmt.Printf("   POST   http://localhost:8080/tasks/bulk/priority\n")
+	fmt.Printf("   POST   http://localhost:8080/tasks/bulk/due-date\n")
 	fmt.Printf("   POST   http://localhost:8080/tasks\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/{id}\n")
 	fmt.Printf("   PUT    http://localhost:8080/tasks/{id}\n")

@@ -99,6 +99,10 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		handler.HandleBulkPriority(w, r)
 		return
 	}
+	if r.URL.Path == "/tasks/bulk/due-date" {
+		handler.HandleBulkDueDate(w, r)
+		return
+	}
 
 	if strings.HasSuffix(r.URL.Path, "/complete") && strings.HasPrefix(r.URL.Path, "/tasks/") {
 		handler.HandleTaskComplete(w, r)
