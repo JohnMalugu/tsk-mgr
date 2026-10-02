@@ -536,7 +536,7 @@ func GetTasks(completed, overdue, recurring *bool, search string, priority *stri
 		if search != "" && !matchesSearch {
 			continue
 		}
-		result = append(result, task)
+		result = append(result, cloneTask(task))
 	}
 	sort.SliceStable(result, func(i, j int) bool {
 		comparison := 0
@@ -604,6 +604,21 @@ func GetTasks(completed, overdue, recurring *bool, search string, priority *stri
 	return result[offset:end]
 }
 
+func cloneTask(task model.Task) model.Task {
+	task.Tags = append([]string(nil), task.Tags...)
+	task.DependsOn = append([]int(nil), task.DependsOn...)
+	task.Checklist = append([]model.ChecklistItem(nil), task.Checklist...)
+	if task.Recurrence != nil {
+		recurrence := *task.Recurrence
+		if recurrence.Until != nil {
+			until := *recurrence.Until
+			recurrence.Until = &until
+		}
+		task.Recurrence = &recurrence
+	}
+	return task
+}
+
 // GetTaskByID returns a task by ID
 func GetTaskByID(id int) *model.Task {
 	mu.RLock()
@@ -611,7 +626,7 @@ func GetTaskByID(id int) *model.Task {
 
 	for i, task := range tasks {
 		if task.ID == id {
-			result := tasks[i]
+			result := cloneTask(tasks[i])
 			return &result
 		}
 	}

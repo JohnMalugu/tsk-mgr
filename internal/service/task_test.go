@@ -310,20 +310,42 @@ func TestChecklistErrorsAreDistinct(t *testing.T) {
 }
 
 func TestGetTaskByIDReturnsCopy(t *testing.T) {
-	task := GetTaskByID(1)
+	ResetTasks()
+	until := time.Now().Add(72 * time.Hour)
+	created := CreateTask(model.Task{
+		Title: "copy test", DueDate: time.Now().Add(48 * time.Hour),
+		Tags: []string{"original"}, DependsOn: []int{1},
+		Checklist: []model.ChecklistItem{{ID: 7, Text: "original"}},
+		Recurrence: &model.RecurrenceRule{Frequency: "daily", Interval: 1, Until: &until},
+	})
+	task := GetTaskByID(created.ID)
 	if task == nil {
-		t.Fatal("expected seeded task")
+		t.Fatal("expected created task")
 	}
 
-	originalTitle := task.Title
 	task.Title = "locally changed"
+	task.Tags[0] = "changed"
+	task.DependsOn[0] = 99
+	task.Checklist[0].Text = "changed"
+	task.Recurrence.Frequency = "weekly"
+	task.Recurrence.Until = nil
 
-	storedTask := GetTaskByID(1)
+	storedTask := GetTaskByID(created.ID)
 	if storedTask == nil {
-		t.Fatal("expected seeded task")
+		t.Fatal("expected stored task")
 	}
-	if storedTask.Title != originalTitle {
-		t.Fatalf("expected stored task title %q, got %q", originalTitle, storedTask.Title)
+	if storedTask.Title != "copy test" || storedTask.Tags[0] != "original" || storedTask.DependsOn[0] != 1 || storedTask.Checklist[0].Text != "original" || storedTask.Recurrence.Frequency != "daily" || storedTask.Recurrence.Until == nil {
+		t.Fatalf("lookup result mutated stored task: %#v", storedTask)
+	}
+	listed := GetAllTasks()
+	for i := range listed {
+		if listed[i].ID == created.ID {
+			listed[i].Tags[0] = "list mutation"
+		}
+	}
+	storedTask = GetTaskByID(created.ID)
+	if storedTask.Tags[0] != "original" {
+		t.Fatalf("list result mutated stored task tags: %#v", storedTask.Tags)
 	}
 }
 
