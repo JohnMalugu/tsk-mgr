@@ -351,12 +351,15 @@ func DeleteTimeEntry(taskID, entryID int) error {
 }
 
 type TaskSummary struct {
-	Total      int            `json:"total"`
-	Completed  int            `json:"completed"`
-	Pending    int            `json:"pending"`
-	Overdue    int            `json:"overdue"`
-	Blocked    int            `json:"blocked"`
-	ByPriority map[string]int `json:"byPriority"`
+	Total              int            `json:"total"`
+	Completed          int            `json:"completed"`
+	Pending            int            `json:"pending"`
+	Overdue            int            `json:"overdue"`
+	DueSoon            int            `json:"dueSoon"`
+	Blocked            int            `json:"blocked"`
+	EstimatedMinutes   int            `json:"estimatedMinutes"`
+	TrackedSeconds     int64          `json:"trackedSeconds"`
+	ByPriority         map[string]int `json:"byPriority"`
 }
 
 type BulkUpdateResult struct {
@@ -473,8 +476,10 @@ func GetTaskSummary() TaskSummary {
 	mu.RLock()
 	defer mu.RUnlock()
 
+	now := time.Now()
 	summary := TaskSummary{Total: len(tasks), ByPriority: map[string]int{"low": 0, "medium": 0, "high": 0}}
 	for _, task := range tasks {
+		summary.EstimatedMinutes += task.EstimateMinutes
 		if hasIncompletePrerequisiteLocked(task) {
 			summary.Blocked++
 		}
@@ -487,9 +492,14 @@ func GetTaskSummary() TaskSummary {
 			continue
 		}
 		summary.Pending++
-		if task.DueDate.Before(time.Now()) {
+		if task.DueDate.Before(now) {
 			summary.Overdue++
+		} else if task.DueDate.Before(now.Add(7 * 24 * time.Hour)) {
+			summary.DueSoon++
 		}
+	}
+	for _, entry := range timeEntries {
+		summary.TrackedSeconds += currentTimeEntry(entry, now).DurationSeconds
 	}
 	return summary
 }

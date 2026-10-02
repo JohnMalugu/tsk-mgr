@@ -20,6 +20,24 @@ func TestDependencyErrorsAreDistinct(t *testing.T) {
 	}
 }
 
+func TestTaskSummaryIncludesWorkloadAndDueSoonMetrics(t *testing.T) {
+	ResetTasks()
+	if _, err := UpdateTaskEstimate(1, 30); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpdateTaskEstimate(2, 45); err != nil {
+		t.Fatal(err)
+	}
+	startedAt := time.Now().Add(-30 * time.Minute)
+	if _, err := AddManualTimeEntry(1, startedAt, startedAt.Add(15*time.Minute), "Focused work"); err != nil {
+		t.Fatal(err)
+	}
+	summary := GetTaskSummary()
+	if summary.EstimatedMinutes != 75 || summary.TrackedSeconds != 900 || summary.DueSoon != 1 {
+		t.Fatalf("unexpected workload summary: %#v", summary)
+	}
+}
+
 func TestValidateRecurrenceRuleBoundsAndDates(t *testing.T) {
 	due := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	valid := &model.RecurrenceRule{Frequency: "weekly", Interval: 2}
