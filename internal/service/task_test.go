@@ -1089,6 +1089,26 @@ func TestBulkSetTaskPriorityIsAtomic(t *testing.T) {
 	}
 }
 
+func TestBulkSetTaskDueDateIsAtomic(t *testing.T) {
+	ResetTasks()
+	dueDate := time.Date(2030, 1, 15, 9, 0, 0, 0, time.UTC)
+	if _, ok := BulkSetTaskDueDate([]int{1, 999}, dueDate); ok {
+		t.Fatal("expected update to reject a missing task")
+	}
+	if task := GetTaskByID(1); task == nil || task.DueDate.Equal(dueDate) {
+		t.Fatal("rejected update must not partially change due dates")
+	}
+	result, ok := BulkSetTaskDueDate([]int{1, 2, 1}, dueDate)
+	if !ok || result.Updated != 2 {
+		t.Fatalf("expected two unique tasks updated, got %#v, ok=%v", result, ok)
+	}
+	for _, task := range result.Tasks {
+		if !task.DueDate.Equal(dueDate) {
+			t.Fatalf("expected due date %v, got %v", dueDate, task.DueDate)
+		}
+	}
+}
+
 func TestUpdateTaskPreservesCreatedAt(t *testing.T) {
 	ResetTasks()
 	original := GetTaskByID(1)
