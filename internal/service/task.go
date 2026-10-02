@@ -1718,3 +1718,32 @@ func BulkSetTaskDueDate(ids []int, dueDate time.Time) (BulkUpdateResult, bool) {
 	}
 	return BulkUpdateResult{Tasks: updated, Updated: len(updated)}, true
 }
+
+// BulkSetTaskTags replaces tags only when every requested task exists.
+func BulkSetTaskTags(ids []int, tags []string) (BulkUpdateResult, bool) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	positions := make([]int, 0, len(ids))
+	seen := make(map[int]struct{}, len(ids))
+	for _, id := range ids {
+		if _, duplicate := seen[id]; duplicate {
+			continue
+		}
+		seen[id] = struct{}{}
+		position := findTaskPositionLocked(id)
+		if position < 0 {
+			return BulkUpdateResult{}, false
+		}
+		positions = append(positions, position)
+	}
+
+	normalizedTags := normalizeTags(tags)
+	updated := make([]model.Task, 0, len(positions))
+	for _, position := range positions {
+		tasks[position].Tags = append([]string(nil), normalizedTags...)
+		tasks[position].UpdatedAt = time.Now()
+		updated = append(updated, cloneTask(tasks[position]))
+	}
+	return BulkUpdateResult{Tasks: updated, Updated: len(updated)}, true
+}

@@ -1109,6 +1109,25 @@ func TestBulkSetTaskDueDateIsAtomic(t *testing.T) {
 	}
 }
 
+func TestBulkSetTaskTagsIsAtomicAndNormalizes(t *testing.T) {
+	ResetTasks()
+	if _, ok := BulkSetTaskTags([]int{1, 999}, []string{" work ", "WORK"}); ok {
+		t.Fatal("expected update to reject a missing task")
+	}
+	if task := GetTaskByID(1); task == nil || task.Tags[0] != "home" {
+		t.Fatal("rejected update must not change tags")
+	}
+	result, ok := BulkSetTaskTags([]int{1, 2}, []string{" work ", "WORK", "personal"})
+	if !ok || result.Updated != 2 {
+		t.Fatalf("expected two tasks updated, got %#v, ok=%v", result, ok)
+	}
+	for _, task := range result.Tasks {
+		if len(task.Tags) != 2 || task.Tags[0] != "work" || task.Tags[1] != "personal" {
+			t.Fatalf("unexpected normalized tags: %#v", task.Tags)
+		}
+	}
+}
+
 func TestUpdateTaskPreservesCreatedAt(t *testing.T) {
 	ResetTasks()
 	original := GetTaskByID(1)
