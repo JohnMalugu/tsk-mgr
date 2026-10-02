@@ -243,6 +243,27 @@ func TestHandleTasksSortsByDueDateAscending(t *testing.T) {
 	}
 }
 
+func TestHandleTasksSortsByEstimateAscending(t *testing.T) {
+	resetTaskFixture()
+	if _, err := service.UpdateTaskEstimate(1, 60); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.UpdateTaskEstimate(2, 15); err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	HandleTasks(recorder, httptest.NewRequest(http.MethodGet, "/tasks?sort=estimateMinutes", nil))
+	var tasks []struct {
+		ID int `json:"id"`
+	}
+	if recorder.Code != http.StatusOK || json.NewDecoder(recorder.Body).Decode(&tasks) != nil {
+		t.Fatalf("unexpected estimate sort response: %d", recorder.Code)
+	}
+	if len(tasks) != 2 || tasks[0].ID != 2 {
+		t.Fatalf("expected lowest estimate first, got %#v", tasks)
+	}
+}
+
 func TestHandleTasksRejectsInvalidSort(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks?sort=unknown", nil)
 	recorder := httptest.NewRecorder()

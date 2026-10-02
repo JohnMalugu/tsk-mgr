@@ -351,15 +351,15 @@ func DeleteTimeEntry(taskID, entryID int) error {
 }
 
 type TaskSummary struct {
-	Total              int            `json:"total"`
-	Completed          int            `json:"completed"`
-	Pending            int            `json:"pending"`
-	Overdue            int            `json:"overdue"`
-	DueSoon            int            `json:"dueSoon"`
-	Blocked            int            `json:"blocked"`
-	EstimatedMinutes   int            `json:"estimatedMinutes"`
-	TrackedSeconds     int64          `json:"trackedSeconds"`
-	ByPriority         map[string]int `json:"byPriority"`
+	Total            int            `json:"total"`
+	Completed        int            `json:"completed"`
+	Pending          int            `json:"pending"`
+	Overdue          int            `json:"overdue"`
+	DueSoon          int            `json:"dueSoon"`
+	Blocked          int            `json:"blocked"`
+	EstimatedMinutes int            `json:"estimatedMinutes"`
+	TrackedSeconds   int64          `json:"trackedSeconds"`
+	ByPriority       map[string]int `json:"byPriority"`
 }
 
 type BulkUpdateResult struct {
@@ -579,6 +579,12 @@ func GetTasks(completed, overdue, recurring *bool, search string, priority *stri
 			if result[i].DueDate.Before(result[j].DueDate) {
 				comparison = -1
 			} else if result[i].DueDate.After(result[j].DueDate) {
+				comparison = 1
+			}
+		case "estimateMinutes":
+			if result[i].EstimateMinutes < result[j].EstimateMinutes {
+				comparison = -1
+			} else if result[i].EstimateMinutes > result[j].EstimateMinutes {
 				comparison = 1
 			}
 		case "priority":
