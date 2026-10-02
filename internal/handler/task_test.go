@@ -282,6 +282,39 @@ func TestHandleTasksSortsByLastUpdated(t *testing.T) {
 	}
 }
 
+func TestHandleTasksSortsByStatus(t *testing.T) {
+	resetTaskFixture()
+	if _, err := service.SetTaskCompletionChecked(1, true); err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	HandleTasks(recorder, httptest.NewRequest(http.MethodGet, "/tasks?sort=status", nil))
+	var tasks []struct {
+		ID     int    `json:"id"`
+		Status string `json:"status"`
+	}
+	if recorder.Code != http.StatusOK || json.NewDecoder(recorder.Body).Decode(&tasks) != nil {
+		t.Fatalf("unexpected status sort response: %d", recorder.Code)
+	}
+	if len(tasks) != 2 || tasks[0].Status != "completed" {
+		t.Fatalf("expected status ordering, got %#v", tasks)
+	}
+}
+
+func TestPatchTaskUpdatesStatusAndRejectsConflicts(t *testing.T) {
+	resetTaskFixture()
+	updated := httptest.NewRecorder()
+	HandleTaskByID(updated, httptest.NewRequest(http.MethodPatch, "/tasks/1", strings.NewReader(`{"status":"in_progress"}`)))
+	if updated.Code != http.StatusOK || !strings.Contains(updated.Body.String(), `"status":"in_progress"`) {
+		t.Fatalf("unexpected status patch response: %d %s", updated.Code, updated.Body.String())
+	}
+	conflict := httptest.NewRecorder()
+	HandleTaskByID(conflict, httptest.NewRequest(http.MethodPatch, "/tasks/1", strings.NewReader(`{"status":"completed","completed":false}`)))
+	if conflict.Code != http.StatusBadRequest {
+		t.Fatalf("expected conflicting status patch rejection, got %d", conflict.Code)
+	}
+}
+
 func TestHandleTasksRejectsInvalidSort(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks?sort=unknown", nil)
 	recorder := httptest.NewRecorder()

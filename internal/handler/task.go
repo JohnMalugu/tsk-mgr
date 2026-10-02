@@ -116,8 +116,8 @@ func sorting(r *http.Request) (string, bool, error) {
 	if sortBy == "" {
 		sortBy = "id"
 	}
-	if sortBy != "id" && sortBy != "title" && sortBy != "dueDate" && sortBy != "priority" && sortBy != "completed" && sortBy != "estimateMinutes" && sortBy != "updatedAt" {
-		return "", false, fmt.Errorf("sort must be id, title, dueDate, priority, completed, estimateMinutes, or updatedAt")
+	if sortBy != "id" && sortBy != "title" && sortBy != "dueDate" && sortBy != "priority" && sortBy != "completed" && sortBy != "estimateMinutes" && sortBy != "updatedAt" && sortBy != "status" {
+		return "", false, fmt.Errorf("sort must be id, title, dueDate, priority, completed, estimateMinutes, updatedAt, or status")
 	}
 
 	order := r.URL.Query().Get("order")
@@ -1055,6 +1055,7 @@ func patchTask(w http.ResponseWriter, r *http.Request, id int) {
 		Description     *string         `json:"description"`
 		DueDate         *time.Time      `json:"dueDate"`
 		Completed       *bool           `json:"completed"`
+		Status           *string         `json:"status"`
 		Priority        *string         `json:"priority"`
 		Tags            *[]string       `json:"tags"`
 		DependsOn       *[]int          `json:"dependsOn"`
@@ -1071,7 +1072,7 @@ func patchTask(w http.ResponseWriter, r *http.Request, id int) {
 		respondError(w, r, http.StatusBadRequest, "request body must contain a single JSON value")
 		return
 	}
-	if patch.Title == nil && patch.Description == nil && patch.DueDate == nil && patch.Completed == nil && patch.Priority == nil && patch.Tags == nil && patch.DependsOn == nil && patch.EstimateMinutes == nil && len(patch.Recurrence) == 0 {
+	if patch.Title == nil && patch.Description == nil && patch.DueDate == nil && patch.Completed == nil && patch.Status == nil && patch.Priority == nil && patch.Tags == nil && patch.DependsOn == nil && patch.EstimateMinutes == nil && len(patch.Recurrence) == 0 {
 		respondError(w, r, http.StatusBadRequest, "at least one task field must be provided")
 		return
 	}
@@ -1089,7 +1090,15 @@ func patchTask(w http.ResponseWriter, r *http.Request, id int) {
 	if patch.DueDate != nil {
 		task.DueDate = *patch.DueDate
 	}
-	if patch.Completed != nil {
+	if patch.Status != nil {
+		statusCompleted := *patch.Status == model.TaskStatusCompleted
+		if patch.Completed != nil && *patch.Completed != statusCompleted {
+			respondError(w, r, http.StatusBadRequest, "status and completed must describe the same state")
+			return
+		}
+		task.Status = *patch.Status
+		task.Completed = statusCompleted
+	} else if patch.Completed != nil {
 		task.Completed = *patch.Completed
 	}
 	if patch.Priority != nil {
