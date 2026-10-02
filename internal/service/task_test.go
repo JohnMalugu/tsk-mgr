@@ -1186,6 +1186,31 @@ func TestUpdateTaskPreservesCreatedAt(t *testing.T) {
 	}
 }
 
+func TestUpdateTaskCompletionRecordsLifecycleAndRecurrence(t *testing.T) {
+	ResetTasks()
+	dueDate := time.Date(2030, 1, 1, 9, 0, 0, 0, time.UTC)
+	task, err := CreateTaskWithDependencies(model.Task{
+		Title: "Daily review", DueDate: dueDate,
+		Recurrence: &model.RecurrenceRule{Frequency: "daily", Interval: 1},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task.Completed = true
+	updated, err := UpdateTaskWithDependencies(task.ID, task, task.DependsOn)
+	if err != nil || updated == nil || !updated.Completed {
+		t.Fatalf("expected task completion update, task=%#v err=%v", updated, err)
+	}
+	occurrences, err := GetTaskOccurrences(task.ID)
+	if err != nil || len(occurrences) != 2 || !occurrences[1].DueDate.Equal(dueDate.AddDate(0, 0, 1)) {
+		t.Fatalf("expected next recurrence, got %#v err=%v", occurrences, err)
+	}
+	events := GetActivities(&task.ID, "completed", nil, nil, 0, 20)
+	if events.Total != 1 {
+		t.Fatalf("expected one completion event, got %#v", events)
+	}
+}
+
 func TestUpdateTaskEstimateValidatesAndRecordsChange(t *testing.T) {
 	ResetTasks()
 	updated, err := UpdateTaskEstimate(1, 45)

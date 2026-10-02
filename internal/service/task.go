@@ -1377,6 +1377,7 @@ func UpdateTaskWithDependencies(id int, task model.Task, dependencyIDs []int) (*
 				return nil, ErrTaskBlocked
 			}
 			oldTitle := tasks[i].Title
+			wasCompleted := tasks[i].Completed
 			previousSeriesID, previousOccurrence := tasks[i].RecurrenceSeriesID, tasks[i].RecurrenceOccurrence
 			task.CreatedAt = tasks[i].CreatedAt
 			task.UpdatedAt = time.Now()
@@ -1403,6 +1404,12 @@ func UpdateTaskWithDependencies(id int, task model.Task, dependencyIDs []int) (*
 				task.RecurrenceOccurrence = 0
 			}
 			tasks[i] = task
+			if wasCompleted != task.Completed {
+				recordCompletionActivityLocked(tasks[i])
+				if task.Completed {
+					spawnNextOccurrenceLocked(tasks[i])
+				}
+			}
 			if oldTitle != task.Title {
 				recordActivityLocked(id, "updated", "Task renamed from "+oldTitle+" to "+task.Title)
 			} else {
