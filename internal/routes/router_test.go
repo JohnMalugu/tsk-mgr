@@ -73,6 +73,20 @@ func TestBulkDueDateRoute(t *testing.T) {
 	}
 }
 
+func TestUpcomingTasksRouteValidatesWindow(t *testing.T) {
+	service.ResetTasks()
+	valid := httptest.NewRecorder()
+	Router(valid, httptest.NewRequest(http.MethodGet, "/tasks/upcoming?days=7", nil))
+	if valid.Code != http.StatusOK {
+		t.Fatalf("expected upcoming task response, got %d %s", valid.Code, valid.Body.String())
+	}
+	invalid := httptest.NewRecorder()
+	Router(invalid, httptest.NewRequest(http.MethodGet, "/tasks/upcoming?days=0", nil))
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid window rejection, got %d", invalid.Code)
+	}
+}
+
 func TestBulkTagsRoute(t *testing.T) {
 	service.ResetTasks()
 	payload := `{"ids":[1,2],"tags":[" work ","WORK","personal"]}`

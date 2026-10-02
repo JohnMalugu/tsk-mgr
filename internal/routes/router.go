@@ -66,6 +66,10 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		handler.HandleReadyTasks(w, r)
 		return
 	}
+	if r.URL.Path == "/tasks/upcoming" {
+		handler.HandleUpcomingTasks(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/tasks/") && strings.HasSuffix(r.URL.Path, "/checklist/order") {
 		handler.HandleChecklistOrder(w, r)
 		return

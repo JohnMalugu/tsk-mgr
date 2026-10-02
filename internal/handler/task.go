@@ -305,6 +305,20 @@ func HandleReadyTasks(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, service.GetReadyTasks())
 }
 
+func HandleUpcomingTasks(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	days, err := queryInt(r, "days", 7)
+	if err != nil || days < 1 || days > 365 {
+		respondError(w, r, http.StatusBadRequest, "days must be between 1 and 365")
+		return
+	}
+	respondJSON(w, http.StatusOK, service.GetUpcomingTasks(time.Now(), days))
+}
+
 func HandleTaskDependencies(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
