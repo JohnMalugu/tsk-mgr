@@ -1449,6 +1449,13 @@ func DeleteTask(id int) bool {
 		if tasks[i].ID == id {
 			recordActivityLocked(id, "deleted", "Task deleted: "+tasks[i].Title)
 			tasks = append(tasks[:i], tasks[i+1:]...)
+			remainingEntries := timeEntries[:0]
+			for _, entry := range timeEntries {
+				if entry.TaskID != id {
+					remainingEntries = append(remainingEntries, entry)
+				}
+			}
+			timeEntries = remainingEntries
 			return true
 		}
 	}

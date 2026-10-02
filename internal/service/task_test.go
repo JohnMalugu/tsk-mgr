@@ -315,7 +315,7 @@ func TestGetTaskByIDReturnsCopy(t *testing.T) {
 	created := CreateTask(model.Task{
 		Title: "copy test", DueDate: time.Now().Add(48 * time.Hour),
 		Tags: []string{"original"}, DependsOn: []int{1},
-		Checklist: []model.ChecklistItem{{ID: 7, Text: "original"}},
+		Checklist:  []model.ChecklistItem{{ID: 7, Text: "original"}},
 		Recurrence: &model.RecurrenceRule{Frequency: "daily", Interval: 1, Until: &until},
 	})
 	task := GetTaskByID(created.ID)
@@ -669,6 +669,20 @@ func TestDeleteTaskRecordsActivityBeforeRemoval(t *testing.T) {
 	events := GetActivityLog()
 	if len(events) != 1 || events[0].TaskID != 1 || events[0].Action != "deleted" || events[0].Summary != "Task deleted: Buy groceries" {
 		t.Fatalf("unexpected deletion activity: %#v", events)
+	}
+}
+
+func TestDeleteTaskRemovesTimeFromReports(t *testing.T) {
+	ResetTasks()
+	startedAt := time.Now().Add(-2 * time.Hour)
+	if _, err := AddManualTimeEntry(1, startedAt, startedAt.Add(time.Hour), "Completed work"); err != nil {
+		t.Fatal(err)
+	}
+	if !DeleteTask(1) {
+		t.Fatal("expected task deletion")
+	}
+	if report := GetTimeReport(nil, nil, nil); report.TotalSeconds != 0 || report.EntryCount != 0 || len(report.ByTask) != 0 {
+		t.Fatalf("deleted task time remained in report: %#v", report)
 	}
 }
 
