@@ -587,6 +587,12 @@ func GetTasks(completed, overdue, recurring *bool, search string, priority *stri
 			} else if result[i].EstimateMinutes > result[j].EstimateMinutes {
 				comparison = 1
 			}
+		case "updatedAt":
+			if result[i].UpdatedAt.Before(result[j].UpdatedAt) {
+				comparison = -1
+			} else if result[i].UpdatedAt.After(result[j].UpdatedAt) {
+				comparison = 1
+			}
 		case "priority":
 			priorityRank := func(priority string) int {
 				switch strings.ToLower(priority) {

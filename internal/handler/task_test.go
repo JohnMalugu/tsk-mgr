@@ -264,6 +264,24 @@ func TestHandleTasksSortsByEstimateAscending(t *testing.T) {
 	}
 }
 
+func TestHandleTasksSortsByLastUpdated(t *testing.T) {
+	resetTaskFixture()
+	if _, err := service.UpdateTaskEstimate(1, 20); err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	HandleTasks(recorder, httptest.NewRequest(http.MethodGet, "/tasks?sort=updatedAt&order=desc", nil))
+	var tasks []struct {
+		ID int `json:"id"`
+	}
+	if recorder.Code != http.StatusOK || json.NewDecoder(recorder.Body).Decode(&tasks) != nil {
+		t.Fatalf("unexpected last-updated sort response: %d", recorder.Code)
+	}
+	if len(tasks) != 2 || tasks[0].ID != 1 {
+		t.Fatalf("expected most recently updated task first, got %#v", tasks)
+	}
+}
+
 func TestHandleTasksRejectsInvalidSort(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks?sort=unknown", nil)
 	recorder := httptest.NewRecorder()
