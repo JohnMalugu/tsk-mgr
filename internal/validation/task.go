@@ -17,6 +17,9 @@ type ValidationError struct {
 // ValidateTask validates a task
 func ValidateTask(task *model.Task) []ValidationError {
 	var errors []ValidationError
+	if task.Status != "" && task.Status != model.TaskStatusTodo && task.Status != model.TaskStatusInProgress && task.Status != model.TaskStatusCompleted && task.Status != model.TaskStatusCanceled {
+		errors = append(errors, ValidationError{Field: "status", Message: "Status must be todo, in_progress, completed, or canceled"})
+	}
 
 	// Validate title
 	if strings.TrimSpace(task.Title) == "" {

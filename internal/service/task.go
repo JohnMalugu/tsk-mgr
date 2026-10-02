@@ -112,8 +112,8 @@ func ResetTasks() {
 
 	now := time.Now()
 	tasks = []model.Task{
-		{ID: 1, Title: "Buy groceries", CreatedAt: now, UpdatedAt: now, DueDate: now.AddDate(0, 0, -1), Completed: false, Priority: "medium", Tags: []string{"home", "errands"}},
-		{ID: 2, Title: "Learn Go", CreatedAt: now, UpdatedAt: now, DueDate: now.AddDate(0, 0, 3), Completed: false, Priority: "low", Tags: []string{"study"}},
+		{ID: 1, Title: "Buy groceries", CreatedAt: now, UpdatedAt: now, DueDate: now.AddDate(0, 0, -1), Completed: false, Status: model.TaskStatusTodo, Priority: "medium", Tags: []string{"home", "errands"}},
+		{ID: 2, Title: "Learn Go", CreatedAt: now, UpdatedAt: now, DueDate: now.AddDate(0, 0, 3), Completed: false, Status: model.TaskStatusTodo, Priority: "low", Tags: []string{"study"}},
 	}
 	nextID = 3
 	nextChecklistItemID = 1
@@ -469,6 +469,17 @@ func normalizeTags(tags []string) []string {
 		result = append(result, tag)
 	}
 	return result
+}
+
+func normalizeTaskStatus(task *model.Task) {
+	if task.Completed {
+		task.Status = model.TaskStatusCompleted
+		return
+	}
+	if task.Status == model.TaskStatusInProgress || task.Status == model.TaskStatusCanceled {
+		return
+	}
+	task.Status = model.TaskStatusTodo
 }
 
 // GetTaskSummary returns aggregate task counts.
@@ -1225,6 +1236,7 @@ func CreateTaskWithDependencies(task model.Task, dependencyIDs []int) (model.Tas
 	}
 	now := time.Now()
 	task.Tags = normalizeTags(task.Tags)
+	normalizeTaskStatus(&task)
 	if task.Priority == "" {
 		task.Priority = "medium"
 	}
@@ -1382,6 +1394,7 @@ func UpdateTaskWithDependencies(id int, task model.Task, dependencyIDs []int) (*
 			task.CreatedAt = tasks[i].CreatedAt
 			task.UpdatedAt = time.Now()
 			task.Tags = normalizeTags(task.Tags)
+			normalizeTaskStatus(&task)
 			if task.Priority == "" {
 				task.Priority = "medium"
 			}
@@ -1548,6 +1561,11 @@ func SetTaskCompletionChecked(id int, completed bool) (*model.Task, error) {
 			}
 			wasCompleted := tasks[i].Completed
 			tasks[i].Completed = completed
+			if completed {
+				tasks[i].Status = model.TaskStatusCompleted
+			} else if tasks[i].Status == model.TaskStatusCompleted {
+				tasks[i].Status = model.TaskStatusTodo
+			}
 			tasks[i].UpdatedAt = time.Now()
 			if wasCompleted != completed {
 				recordCompletionActivityLocked(tasks[i])
@@ -1640,6 +1658,11 @@ func BulkSetTaskCompletionChecked(ids []int, completed bool) (BulkUpdateResult, 
 	for _, position := range positions {
 		wasCompleted := tasks[position].Completed
 		tasks[position].Completed = completed
+		if completed {
+			tasks[position].Status = model.TaskStatusCompleted
+		} else if tasks[position].Status == model.TaskStatusCompleted {
+			tasks[position].Status = model.TaskStatusTodo
+		}
 		tasks[position].UpdatedAt = time.Now()
 		if wasCompleted != completed {
 			recordCompletionActivityLocked(tasks[position])

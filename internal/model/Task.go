@@ -2,6 +2,13 @@ package model
 
 import "time"
 
+const (
+	TaskStatusTodo       = "todo"
+	TaskStatusInProgress = "in_progress"
+	TaskStatusCompleted  = "completed"
+	TaskStatusCanceled   = "canceled"
+)
+
 type ChecklistItem struct {
 	ID        int    `json:"id"`
 	Text      string `json:"text"`
@@ -23,6 +30,7 @@ type Task struct {
 	DueDate              time.Time       `json:"dueDate"`
 	EstimateMinutes      int             `json:"estimateMinutes,omitempty"`
 	Completed            bool            `json:"completed"`
+	Status               string          `json:"status"`
 	Priority             string          `json:"priority"`
 	Tags                 []string        `json:"tags"`
 	DependsOn            []int           `json:"dependsOn"`

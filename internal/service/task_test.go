@@ -38,6 +38,22 @@ func TestTaskSummaryIncludesWorkloadAndDueSoonMetrics(t *testing.T) {
 	}
 }
 
+func TestTaskStatusStaysCompatibleWithCompletion(t *testing.T) {
+	ResetTasks()
+	task, err := CreateTaskWithDependencies(model.Task{Title: "Status task", Status: model.TaskStatusInProgress}, nil)
+	if err != nil || task.Status != model.TaskStatusInProgress || task.Completed {
+		t.Fatalf("unexpected new task status: %#v err=%v", task, err)
+	}
+	completed, err := SetTaskCompletionChecked(task.ID, true)
+	if err != nil || completed.Status != model.TaskStatusCompleted || !completed.Completed {
+		t.Fatalf("unexpected completed task state: %#v err=%v", completed, err)
+	}
+	reopened, err := SetTaskCompletionChecked(task.ID, false)
+	if err != nil || reopened.Status != model.TaskStatusTodo || reopened.Completed {
+		t.Fatalf("unexpected reopened task state: %#v err=%v", reopened, err)
+	}
+}
+
 func TestValidateRecurrenceRuleBoundsAndDates(t *testing.T) {
 	due := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	valid := &model.RecurrenceRule{Frequency: "weekly", Interval: 2}
