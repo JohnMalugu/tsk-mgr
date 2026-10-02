@@ -910,6 +910,28 @@ func TestGetTasksReturnsEmptyPageBeyondResults(t *testing.T) {
 	}
 }
 
+func TestGetUpcomingTasksFiltersAndSorts(t *testing.T) {
+	ResetTasks()
+	now := time.Date(2030, 1, 1, 12, 0, 0, 0, time.UTC)
+	first, err := CreateTaskWithDependencies(model.Task{Title: "Soonest", DueDate: now.Add(24 * time.Hour)}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := CreateTaskWithDependencies(model.Task{Title: "Later", DueDate: now.Add(48 * time.Hour)}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	completed, err := CreateTaskWithDependencies(model.Task{Title: "Done", DueDate: now.Add(12 * time.Hour)}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	SetTaskCompletion(completed.ID, true)
+	result := GetUpcomingTasks(now, 3)
+	if len(result) != 2 || result[0].ID != first.ID || result[1].ID != second.ID {
+		t.Fatalf("unexpected upcoming tasks: %#v", result)
+	}
+}
+
 func TestBulkSetTaskCompletionUpdatesAllTasks(t *testing.T) {
 	ResetTasks()
 

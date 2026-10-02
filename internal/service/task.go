@@ -984,7 +984,6 @@ func IsTaskBlocked(id int) (bool, bool) {
 func GetReadyTasks() []model.Task {
 	mu.RLock()
 	defer mu.RUnlock()
-
 	ready := make([]model.Task, 0)
 	for _, task := range tasks {
 		if task.Completed || hasIncompletePrerequisiteLocked(task) {
@@ -998,6 +997,27 @@ func GetReadyTasks() []model.Task {
 		return ready[i].ID < ready[j].ID
 	})
 	return ready
+}
+
+// GetUpcomingTasks returns incomplete tasks due within the requested number of days.
+func GetUpcomingTasks(now time.Time, days int) []model.Task {
+	mu.RLock()
+	defer mu.RUnlock()
+	deadline := now.AddDate(0, 0, days)
+	upcoming := make([]model.Task, 0)
+	for _, task := range tasks {
+		if task.Completed || task.DueDate.Before(now) || task.DueDate.After(deadline) {
+			continue
+		}
+		upcoming = append(upcoming, cloneTask(task))
+	}
+	sort.Slice(upcoming, func(i, j int) bool {
+		if upcoming[i].DueDate.Equal(upcoming[j].DueDate) {
+			return upcoming[i].ID < upcoming[j].ID
+		}
+		return upcoming[i].DueDate.Before(upcoming[j].DueDate)
+	})
+	return upcoming
 }
 
 // AddTaskDependency makes dependencyID a prerequisite of taskID.
