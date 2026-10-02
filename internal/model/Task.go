@@ -15,6 +15,13 @@ type ChecklistItem struct {
 	Completed bool   `json:"completed"`
 }
 
+type TaskComment struct {
+	ID        int       `json:"id"`
+	TaskID    int       `json:"taskId"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 type RecurrenceRule struct {
 	Frequency string     `json:"frequency"`
 	Interval  int        `json:"interval"`

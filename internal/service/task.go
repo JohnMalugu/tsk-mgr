@@ -32,6 +32,8 @@ var (
 	ErrTaskEstimateInvalid     = errors.New("task estimate must be non-negative")
 	ErrRecurrenceInvalid       = errors.New("recurrence rule is invalid")
 	ErrRecurrenceNotFound      = errors.New("task is not recurring")
+	ErrCommentInvalid          = errors.New("comment must contain 1 to 5000 characters")
+	ErrCommentLimitReached     = errors.New("task comment limit reached")
 )
 
 var activityActions = map[string]struct{}{
@@ -39,7 +41,7 @@ var activityActions = map[string]struct{}{
 	"dependency_added": {}, "dependency_removed": {}, "dependencies_updated": {},
 	"checklist_item_added": {}, "checklist_item_updated": {}, "checklist_item_completed": {},
 	"checklist_item_reopened": {}, "checklist_item_deleted": {}, "checklist_reordered": {}, "estimate_updated": {},
-	"timer_started": {}, "timer_stopped": {}, "time_logged": {}, "time_entry_deleted": {}, "recurrence_created": {},
+	"timer_started": {}, "timer_stopped": {}, "time_logged": {}, "time_entry_deleted": {}, "recurrence_created": {}, "comment_added": {},
 }
 
 // IsActivityAction reports whether an action is part of the activity event contract.
@@ -93,10 +95,12 @@ func NextRecurrenceDate(dueDate time.Time, rule *model.RecurrenceRule) (time.Tim
 var tasks []model.Task
 var activities []model.Activity
 var timeEntries []model.TimeEntry
+var taskComments []model.TaskComment
 var nextID int = 1
 var nextChecklistItemID int = 1
 var nextActivityID int = 1
 var nextTimeEntryID int = 1
+var nextTaskCommentID int = 1
 var mu sync.RWMutex
 
 const maxActivityEvents = 10000
@@ -121,6 +125,53 @@ func ResetTasks() {
 	nextActivityID = 1
 	timeEntries = nil
 	nextTimeEntryID = 1
+	taskComments = nil
+	nextTaskCommentID = 1
+}
+
+// AddTaskComment stores a bounded comment and records it in the task activity stream.
+func AddTaskComment(taskID int, body string) (model.TaskComment, error) {
+	mu.Lock()
+	defer mu.Unlock()
+	body = strings.TrimSpace(body)
+	if count := utf8.RuneCountInString(body); count == 0 || count > 5000 {
+		return model.TaskComment{}, ErrCommentInvalid
+	}
+	position := findTaskPositionLocked(taskID)
+	if position < 0 {
+		return model.TaskComment{}, ErrTaskNotFound
+	}
+	count := 0
+	for _, comment := range taskComments {
+		if comment.TaskID == taskID {
+			count++
+		}
+	}
+	if count >= 1000 {
+		return model.TaskComment{}, ErrCommentLimitReached
+	}
+	comment := model.TaskComment{ID: nextTaskCommentID, TaskID: taskID, Body: body, CreatedAt: time.Now().UTC()}
+	nextTaskCommentID++
+	taskComments = append(taskComments, comment)
+	tasks[position].UpdatedAt = comment.CreatedAt
+	recordActivityLocked(taskID, "comment_added", "Comment added to task: "+tasks[position].Title)
+	return comment, nil
+}
+
+// GetTaskComments returns a task's comments in chronological order.
+func GetTaskComments(taskID int) ([]model.TaskComment, bool) {
+	mu.RLock()
+	defer mu.RUnlock()
+	if findTaskPositionLocked(taskID) < 0 {
+		return nil, false
+	}
+	comments := make([]model.TaskComment, 0)
+	for _, comment := range taskComments {
+		if comment.TaskID == taskID {
+			comments = append(comments, comment)
+		}
+	}
+	return comments, true
 }
 
 func recordActivityLocked(taskID int, action, summary string) {

@@ -54,6 +54,31 @@ func TestTaskStatusStaysCompatibleWithCompletion(t *testing.T) {
 	}
 }
 
+func TestTaskCommentsValidateAndRecordChronologically(t *testing.T) {
+	ResetTasks()
+	if _, err := AddTaskComment(1, "   "); !errors.Is(err, ErrCommentInvalid) {
+		t.Fatalf("expected empty comment rejection, got %v", err)
+	}
+	first, err := AddTaskComment(1, "  First note  ")
+	if err != nil || first.Body != "First note" {
+		t.Fatalf("unexpected first comment: %#v err=%v", first, err)
+	}
+	second, err := AddTaskComment(1, "Second note")
+	if err != nil || second.ID <= first.ID {
+		t.Fatalf("unexpected second comment: %#v err=%v", second, err)
+	}
+	comments, found := GetTaskComments(1)
+	if !found || len(comments) != 2 || comments[0].ID != first.ID || comments[1].ID != second.ID {
+		t.Fatalf("unexpected task comments: %#v found=%v", comments, found)
+	}
+	if !IsActivityAction("comment_added") {
+		t.Fatal("comment activity must be a supported filter action")
+	}
+	if _, found := GetTaskComments(999); found {
+		t.Fatal("expected missing task to be reported")
+	}
+}
+
 func TestValidateRecurrenceRuleBoundsAndDates(t *testing.T) {
 	due := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	valid := &model.RecurrenceRule{Frequency: "weekly", Interval: 2}
