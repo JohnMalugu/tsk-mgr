@@ -24,6 +24,7 @@ func main() {
 	fmt.Printf("📚 Endpoints:\n")
 	fmt.Printf("   GET    http://localhost:8080/health\n")
 	fmt.Printf("   GET    http://localhost:8080/activity?offset=0&limit=20&action={action}&from={timestamp}&to={timestamp}\n")
+	fmt.Printf("   GET    http://localhost:8080/tags?offset=0&limit=20\n")
 	fmt.Printf("   GET    http://localhost:8080/timer\n")
 	fmt.Printf("   GET    http://localhost:8080/time/report?taskId={id}&from={timestamp}&to={timestamp}\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks\n")

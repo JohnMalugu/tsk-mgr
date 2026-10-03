@@ -20,6 +20,10 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		handler.HandleActivity(w, r)
 		return
 	}
+	if r.URL.Path == "/tags" {
+		handler.HandleTags(w, r)
+		return
+	}
 	if r.URL.Path == "/timer" {
 		handler.HandleActiveTimer(w, r)
 		return

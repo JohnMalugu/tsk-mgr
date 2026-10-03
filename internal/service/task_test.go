@@ -56,11 +56,11 @@ func TestGetTagSummaryCountsTasksAndSortsDeterministically(t *testing.T) {
 	ResetTasks()
 	CreateTask(model.Task{Title: "Tagged one", Tags: []string{"home", "work"}})
 	CreateTask(model.Task{Title: "Tagged two", Tags: []string{"work"}})
-	summary := GetTagSummary()
-	if len(summary) != 4 || summary[0].Tag != "home" || summary[0].TaskCount != 2 || summary[1].Tag != "work" || summary[1].TaskCount != 2 {
+	summary := GetTagSummary(0, 20)
+	if len(summary.Tags) != 4 || summary.Tags[0].Tag != "home" || summary.Tags[0].TaskCount != 2 || summary.Tags[1].Tag != "work" || summary.Tags[1].TaskCount != 2 {
 		t.Fatalf("unexpected tag usage summary: %#v", summary)
 	}
-	if summary[2].Tag != "errands" || summary[3].Tag != "study" {
+	if summary.Tags[2].Tag != "errands" || summary.Tags[3].Tag != "study" {
 		t.Fatalf("expected stable alphabetical order for ties, got %#v", summary)
 	}
 }

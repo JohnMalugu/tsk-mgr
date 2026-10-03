@@ -170,6 +170,15 @@ func TestGlobalActivityRoute(t *testing.T) {
 	}
 }
 
+func TestTagSummaryRouteSupportsPagination(t *testing.T) {
+	service.ResetTasks()
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodGet, "/tags?offset=0&limit=1", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"total":3`) || !strings.Contains(recorder.Body.String(), `"limit":1`) {
+		t.Fatalf("unexpected tag summary response: %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestTaskActivityRouteIncludesTaskEvents(t *testing.T) {
 	service.ResetTasks()
 	created := service.CreateTask(model.Task{Title: "Timeline entry"})

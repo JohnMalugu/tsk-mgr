@@ -477,6 +477,13 @@ type TagSummary struct {
 	TaskCount int    `json:"taskCount"`
 }
 
+type TagSummaryPage struct {
+	Tags   []TagSummary `json:"tags"`
+	Total  int          `json:"total"`
+	Offset int          `json:"offset"`
+	Limit  int          `json:"limit"`
+}
+
 type BulkUpdateResult struct {
 	Tasks   []model.Task `json:"tasks"`
 	Updated int          `json:"updated"`
@@ -643,7 +650,7 @@ func GetTaskSummary() TaskSummary {
 }
 
 // GetTagSummary returns normalized tag usage ordered by frequency, then tag name.
-func GetTagSummary() []TagSummary {
+func GetTagSummary(offset, limit int) TagSummaryPage {
 	mu.RLock()
 	defer mu.RUnlock()
 	counts := make(map[string]int)
@@ -662,7 +669,17 @@ func GetTagSummary() []TagSummary {
 		}
 		return result[i].TaskCount > result[j].TaskCount
 	})
-	return result
+	total := len(result)
+	if offset >= total {
+		result = []TagSummary{}
+	} else {
+		end := offset + limit
+		if end > total {
+			end = total
+		}
+		result = result[offset:end]
+	}
+	return TagSummaryPage{Tags: result, Total: total, Offset: offset, Limit: limit}
 }
 
 // GetTasks returns a page of tasks matching the optional filters.

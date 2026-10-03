@@ -340,6 +340,20 @@ func HandleTaskSummary(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, service.GetTaskSummary())
 }
 
+func HandleTags(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	offset, limit, err := pagination(r)
+	if err != nil {
+		respondError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, service.GetTagSummary(offset, limit))
+}
+
 func HandleReadyTasks(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
