@@ -1035,6 +1035,23 @@ func TestGetUpcomingTasksFiltersAndSorts(t *testing.T) {
 	}
 }
 
+func TestGetBlockedTasksReturnsIncompleteDependents(t *testing.T) {
+	ResetTasks()
+	if _, err := AddTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	blocked := GetBlockedTasks()
+	if len(blocked) != 1 || blocked[0].ID != 1 || blocked[0].Completed {
+		t.Fatalf("unexpected blocked task list: %#v", blocked)
+	}
+	if _, err := SetTaskCompletionChecked(2, true); err != nil {
+		t.Fatal(err)
+	}
+	if blocked := GetBlockedTasks(); len(blocked) != 0 {
+		t.Fatalf("expected no blocked tasks after prerequisite completion, got %#v", blocked)
+	}
+}
+
 func TestBulkSetTaskCompletionUpdatesAllTasks(t *testing.T) {
 	ResetTasks()
 

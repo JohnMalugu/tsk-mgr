@@ -1146,6 +1146,26 @@ func GetReadyTasks() []model.Task {
 	return ready
 }
 
+// GetBlockedTasks returns incomplete tasks with at least one unfinished prerequisite.
+func GetBlockedTasks() []model.Task {
+	mu.RLock()
+	defer mu.RUnlock()
+	blocked := make([]model.Task, 0)
+	for _, task := range tasks {
+		if task.Completed || !hasIncompletePrerequisiteLocked(task) {
+			continue
+		}
+		blocked = append(blocked, cloneTask(task))
+	}
+	sort.Slice(blocked, func(i, j int) bool {
+		if blocked[i].DueDate.Equal(blocked[j].DueDate) {
+			return blocked[i].ID < blocked[j].ID
+		}
+		return blocked[i].DueDate.Before(blocked[j].DueDate)
+	})
+	return blocked
+}
+
 // GetUpcomingTasks returns incomplete tasks due within the requested number of days.
 func GetUpcomingTasks(now time.Time, days int) []model.Task {
 	mu.RLock()
