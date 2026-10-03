@@ -472,6 +472,11 @@ type TaskSummary struct {
 	ByStatus         map[string]int `json:"byStatus"`
 }
 
+type TagSummary struct {
+	Tag       string `json:"tag"`
+	TaskCount int    `json:"taskCount"`
+}
+
 type BulkUpdateResult struct {
 	Tasks   []model.Task `json:"tasks"`
 	Updated int          `json:"updated"`
@@ -635,6 +640,29 @@ func GetTaskSummary() TaskSummary {
 		summary.TrackedSeconds += currentTimeEntry(entry, now).DurationSeconds
 	}
 	return summary
+}
+
+// GetTagSummary returns normalized tag usage ordered by frequency, then tag name.
+func GetTagSummary() []TagSummary {
+	mu.RLock()
+	defer mu.RUnlock()
+	counts := make(map[string]int)
+	for _, task := range tasks {
+		for _, tag := range normalizeTags(task.Tags) {
+			counts[tag]++
+		}
+	}
+	result := make([]TagSummary, 0, len(counts))
+	for tag, count := range counts {
+		result = append(result, TagSummary{Tag: tag, TaskCount: count})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].TaskCount == result[j].TaskCount {
+			return strings.ToLower(result[i].Tag) < strings.ToLower(result[j].Tag)
+		}
+		return result[i].TaskCount > result[j].TaskCount
+	})
+	return result
 }
 
 // GetTasks returns a page of tasks matching the optional filters.

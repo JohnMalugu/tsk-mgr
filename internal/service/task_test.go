@@ -52,6 +52,19 @@ func TestTaskSummaryCountsStatuses(t *testing.T) {
 	}
 }
 
+func TestGetTagSummaryCountsTasksAndSortsDeterministically(t *testing.T) {
+	ResetTasks()
+	CreateTask(model.Task{Title: "Tagged one", Tags: []string{"home", "work"}})
+	CreateTask(model.Task{Title: "Tagged two", Tags: []string{"work"}})
+	summary := GetTagSummary()
+	if len(summary) != 4 || summary[0].Tag != "home" || summary[0].TaskCount != 2 || summary[1].Tag != "work" || summary[1].TaskCount != 2 {
+		t.Fatalf("unexpected tag usage summary: %#v", summary)
+	}
+	if summary[2].Tag != "errands" || summary[3].Tag != "study" {
+		t.Fatalf("expected stable alphabetical order for ties, got %#v", summary)
+	}
+}
+
 func TestTaskStatusStaysCompatibleWithCompletion(t *testing.T) {
 	ResetTasks()
 	task, err := CreateTaskWithDependencies(model.Task{Title: "Status task", Status: model.TaskStatusInProgress}, nil)
