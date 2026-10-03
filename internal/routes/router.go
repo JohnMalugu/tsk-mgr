@@ -74,6 +74,10 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		handler.HandleReadyTasks(w, r)
 		return
 	}
+	if r.URL.Path == "/tasks/blocked" {
+		handler.HandleBlockedTasks(w, r)
+		return
+	}
 	if r.URL.Path == "/tasks/upcoming" {
 		handler.HandleUpcomingTasks(w, r)
 		return

@@ -87,6 +87,18 @@ func TestUpcomingTasksRouteValidatesWindow(t *testing.T) {
 	}
 }
 
+func TestBlockedTasksRouteReflectsDependencies(t *testing.T) {
+	service.ResetTasks()
+	if _, err := service.AddTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodGet, "/tasks/blocked", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"id":1`) || strings.Contains(recorder.Body.String(), `"id":2`) {
+		t.Fatalf("unexpected blocked tasks response: %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestBulkTagsRoute(t *testing.T) {
 	service.ResetTasks()
 	payload := `{"ids":[1,2],"tags":[" work ","WORK","personal"]}`
