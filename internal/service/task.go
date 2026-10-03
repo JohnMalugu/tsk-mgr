@@ -34,6 +34,7 @@ var (
 	ErrRecurrenceNotFound      = errors.New("task is not recurring")
 	ErrCommentInvalid          = errors.New("comment must contain 1 to 5000 characters")
 	ErrCommentLimitReached     = errors.New("task comment limit reached")
+	ErrCommentNotFound         = errors.New("comment not found")
 	ErrTaskStatusInvalid       = errors.New("task status is invalid")
 )
 
@@ -42,7 +43,7 @@ var activityActions = map[string]struct{}{
 	"dependency_added": {}, "dependency_removed": {}, "dependencies_updated": {},
 	"checklist_item_added": {}, "checklist_item_updated": {}, "checklist_item_completed": {},
 	"checklist_item_reopened": {}, "checklist_item_deleted": {}, "checklist_reordered": {}, "estimate_updated": {},
-	"timer_started": {}, "timer_stopped": {}, "time_logged": {}, "time_entry_deleted": {}, "recurrence_created": {}, "comment_added": {},
+	"timer_started": {}, "timer_stopped": {}, "time_logged": {}, "time_entry_deleted": {}, "recurrence_created": {}, "comment_added": {}, "comment_deleted": {},
 }
 
 // IsActivityAction reports whether an action is part of the activity event contract.
@@ -183,6 +184,26 @@ func GetTaskComments(taskID, offset, limit int) (CommentPage, bool) {
 		comments = comments[offset:end]
 	}
 	return CommentPage{Comments: comments, Total: total, Offset: offset, Limit: limit}, true
+}
+
+// DeleteTaskComment removes a comment while retaining an activity event.
+func DeleteTaskComment(taskID, commentID int) error {
+	mu.Lock()
+	defer mu.Unlock()
+	taskPosition := findTaskPositionLocked(taskID)
+	if taskPosition < 0 {
+		return ErrTaskNotFound
+	}
+	for index, comment := range taskComments {
+		if comment.TaskID != taskID || comment.ID != commentID {
+			continue
+		}
+		taskComments = append(taskComments[:index], taskComments[index+1:]...)
+		tasks[taskPosition].UpdatedAt = time.Now().UTC()
+		recordActivityLocked(taskID, "comment_deleted", "Comment deleted from task: "+tasks[taskPosition].Title)
+		return nil
+	}
+	return ErrCommentNotFound
 }
 
 func recordActivityLocked(taskID int, action, summary string) {

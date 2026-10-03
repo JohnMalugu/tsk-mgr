@@ -83,6 +83,31 @@ func TestTaskCommentsValidateAndRecordChronologically(t *testing.T) {
 	}
 }
 
+func TestDeleteTaskCommentRecordsActivity(t *testing.T) {
+	ResetTasks()
+	comment, err := AddTaskComment(1, "Remove this note")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteTaskComment(1, comment.ID); err != nil {
+		t.Fatal(err)
+	}
+	page, found := GetTaskComments(1, 0, 20)
+	if !found || page.Total != 0 {
+		t.Fatalf("expected deleted comment to be absent: %#v", page)
+	}
+	events := GetActivities(nil, "comment_deleted", nil, nil, 0, 20)
+	if events.Total != 1 || events.Activities[0].TaskID != 1 {
+		t.Fatalf("expected deletion audit event, got %#v", events)
+	}
+	if err := DeleteTaskComment(1, comment.ID); !errors.Is(err, ErrCommentNotFound) {
+		t.Fatalf("expected missing-comment error, got %v", err)
+	}
+	if err := DeleteTaskComment(999, comment.ID); !errors.Is(err, ErrTaskNotFound) {
+		t.Fatalf("expected missing-task error, got %v", err)
+	}
+}
+
 func TestValidateRecurrenceRuleBoundsAndDates(t *testing.T) {
 	due := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	valid := &model.RecurrenceRule{Frequency: "weekly", Interval: 2}
