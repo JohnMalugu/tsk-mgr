@@ -702,8 +702,8 @@ func HandleTaskComments(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleTaskCommentItem(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		w.Header().Set("Allow", http.MethodDelete)
+	if r.Method != http.MethodPatch && r.Method != http.MethodDelete {
+		w.Header().Set("Allow", http.MethodPatch+", "+http.MethodDelete)
 		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
@@ -716,6 +716,32 @@ func HandleTaskCommentItem(w http.ResponseWriter, r *http.Request) {
 	commentID, commentErr := strconv.Atoi(parts[1])
 	if taskErr != nil || commentErr != nil || taskID < 1 || commentID < 1 {
 		respondError(w, r, http.StatusBadRequest, "task and comment ids must be positive integers")
+		return
+	}
+	if r.Method == http.MethodPatch {
+		var payload struct {
+			Body string `json:"body"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&payload); err != nil {
+			respondError(w, r, http.StatusBadRequest, "request body must be valid JSON")
+			return
+		}
+		if err := decoder.Decode(&struct{}{}); err != io.EOF {
+			respondError(w, r, http.StatusBadRequest, "request body must contain a single JSON value")
+			return
+		}
+		comment, err := service.UpdateTaskComment(taskID, commentID, payload.Body)
+		if err != nil {
+			if errors.Is(err, service.ErrTaskNotFound) || errors.Is(err, service.ErrCommentNotFound) {
+				respondError(w, r, http.StatusNotFound, err.Error())
+			} else {
+				respondError(w, r, http.StatusBadRequest, err.Error())
+			}
+			return
+		}
+		respondJSON(w, http.StatusOK, comment)
 		return
 	}
 	if err := service.DeleteTaskComment(taskID, commentID); err != nil {

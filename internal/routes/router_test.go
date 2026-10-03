@@ -180,6 +180,11 @@ func TestTaskCommentsRouteLifecycle(t *testing.T) {
 	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), `"total":1`) || !strings.Contains(listed.Body.String(), "Keep the scope focused") {
 		t.Fatalf("unexpected comments list response: %d %s", listed.Code, listed.Body.String())
 	}
+	updated := httptest.NewRecorder()
+	Router(updated, httptest.NewRequest(http.MethodPatch, "/tasks/1/comments/1", strings.NewReader(`{"body":"Revised scope"}`)))
+	if updated.Code != http.StatusOK || !strings.Contains(updated.Body.String(), "Revised scope") {
+		t.Fatalf("unexpected comment update response: %d %s", updated.Code, updated.Body.String())
+	}
 	invalid := httptest.NewRecorder()
 	Router(invalid, httptest.NewRequest(http.MethodPost, "/tasks/1/comments", strings.NewReader(`{"body":" "}`)))
 	if invalid.Code != http.StatusBadRequest {

@@ -44,6 +44,7 @@ func main() {
 	fmt.Printf("   GET    http://localhost:8080/tasks/{id}/comments\n")
 	fmt.Printf("   POST   http://localhost:8080/tasks/{id}/comments\n")
 	fmt.Printf("   DELETE http://localhost:8080/tasks/{id}/comments/{commentId}\n")
+	fmt.Printf("   PATCH  http://localhost:8080/tasks/{id}/comments/{commentId}\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/{id}/time\n")
 	fmt.Printf("   POST   http://localhost:8080/tasks/{id}/time\n")
 	fmt.Printf("   POST   http://localhost:8080/tasks/{id}/timer/start\n")
