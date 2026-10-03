@@ -34,6 +34,7 @@ var (
 	ErrRecurrenceNotFound      = errors.New("task is not recurring")
 	ErrCommentInvalid          = errors.New("comment must contain 1 to 5000 characters")
 	ErrCommentLimitReached     = errors.New("task comment limit reached")
+	ErrTaskStatusInvalid       = errors.New("task status is invalid")
 )
 
 var activityActions = map[string]struct{}{
@@ -1737,6 +1738,66 @@ func BulkSetTaskCompletionChecked(ids []int, completed bool) (BulkUpdateResult, 
 			}
 		}
 		updated = append(updated, tasks[position])
+	}
+	return BulkUpdateResult{Tasks: updated, Updated: len(updated)}, nil
+}
+
+// BulkSetTaskStatusChecked applies one status atomically while preserving dependency rules.
+func BulkSetTaskStatusChecked(ids []int, status string) (BulkUpdateResult, error) {
+	if status != model.TaskStatusTodo && status != model.TaskStatusInProgress && status != model.TaskStatusCompleted && status != model.TaskStatusCanceled {
+		return BulkUpdateResult{}, ErrTaskStatusInvalid
+	}
+	completed := status == model.TaskStatusCompleted
+	mu.Lock()
+	defer mu.Unlock()
+	positions := make([]int, 0, len(ids))
+	selected := make(map[int]struct{}, len(ids))
+	for _, id := range ids {
+		if _, duplicate := selected[id]; duplicate {
+			continue
+		}
+		position := findTaskPositionLocked(id)
+		if position < 0 {
+			return BulkUpdateResult{}, ErrTaskNotFound
+		}
+		selected[id] = struct{}{}
+		positions = append(positions, position)
+	}
+	if completed {
+		for _, position := range positions {
+			for _, dependencyID := range tasks[position].DependsOn {
+				if _, included := selected[dependencyID]; included {
+					continue
+				}
+				dependencyPosition := findTaskPositionLocked(dependencyID)
+				if dependencyPosition >= 0 && !tasks[dependencyPosition].Completed {
+					return BulkUpdateResult{}, ErrTaskBlocked
+				}
+			}
+		}
+	} else {
+		for _, position := range positions {
+			if hasCompletedDependentLocked(tasks[position].ID, selected) {
+				return BulkUpdateResult{}, ErrTaskBlocked
+			}
+		}
+	}
+	updated := make([]model.Task, 0, len(positions))
+	for _, position := range positions {
+		previousStatus := tasks[position].Status
+		wasCompleted := tasks[position].Completed
+		tasks[position].Status = status
+		tasks[position].Completed = completed
+		tasks[position].UpdatedAt = time.Now()
+		if wasCompleted != completed {
+			recordCompletionActivityLocked(tasks[position])
+			if completed {
+				spawnNextOccurrenceLocked(tasks[position])
+			}
+		} else if previousStatus != status {
+			recordActivityLocked(tasks[position].ID, "updated", "Task status changed to "+status)
+		}
+		updated = append(updated, cloneTask(tasks[position]))
 	}
 	return BulkUpdateResult{Tasks: updated, Updated: len(updated)}, nil
 }

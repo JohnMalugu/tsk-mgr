@@ -1001,6 +1001,26 @@ func TestBulkSetTaskCompletionDoesNotPartiallyUpdate(t *testing.T) {
 	}
 }
 
+func TestBulkSetTaskStatusIsAtomicAndDependencyAware(t *testing.T) {
+	ResetTasks()
+	if _, err := AddTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BulkSetTaskStatusChecked([]int{1}, model.TaskStatusCompleted); !errors.Is(err, ErrTaskBlocked) {
+		t.Fatalf("expected blocked status update, got %v", err)
+	}
+	if task := GetTaskByID(1); task == nil || task.Status != model.TaskStatusTodo {
+		t.Fatalf("blocked bulk update mutated task: %#v", task)
+	}
+	result, err := BulkSetTaskStatusChecked([]int{1, 2}, model.TaskStatusInProgress)
+	if err != nil || result.Updated != 2 || result.Tasks[0].Status != model.TaskStatusInProgress {
+		t.Fatalf("unexpected bulk status result: %#v err=%v", result, err)
+	}
+	if _, err := BulkSetTaskStatusChecked([]int{1}, "blocked"); !errors.Is(err, ErrTaskStatusInvalid) {
+		t.Fatalf("expected invalid status error, got %v", err)
+	}
+}
+
 func TestBulkDeleteTasksIsAtomic(t *testing.T) {
 	ResetTasks()
 	if _, ok := BulkDeleteTasks([]int{1, 999}); ok {
