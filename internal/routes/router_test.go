@@ -124,6 +124,20 @@ func TestBulkStatusRoute(t *testing.T) {
 	}
 }
 
+func TestBulkEstimateRoute(t *testing.T) {
+	service.ResetTasks()
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodPost, "/tasks/bulk/estimate", strings.NewReader(`{"ids":[1,2],"estimateMinutes":25}`)))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"updated":2`) {
+		t.Fatalf("unexpected bulk estimate response: %d %s", recorder.Code, recorder.Body.String())
+	}
+	invalid := httptest.NewRecorder()
+	Router(invalid, httptest.NewRequest(http.MethodPost, "/tasks/bulk/estimate", strings.NewReader(`{"ids":[1],"estimateMinutes":-1}`)))
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("expected negative estimate rejection, got %d", invalid.Code)
+	}
+}
+
 func TestManualTimeEntryRouteAndDeletion(t *testing.T) {
 	service.ResetTasks()
 	body := `{"startedAt":"2026-09-30T09:00:00Z","endedAt":"2026-09-30T09:30:00Z","note":"Planning"}`

@@ -131,6 +131,10 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		handler.HandleBulkStatus(w, r)
 		return
 	}
+	if r.URL.Path == "/tasks/bulk/estimate" {
+		handler.HandleBulkEstimate(w, r)
+		return
+	}
 
 	if strings.HasSuffix(r.URL.Path, "/complete") && strings.HasPrefix(r.URL.Path, "/tasks/") {
 		handler.HandleTaskComplete(w, r)
