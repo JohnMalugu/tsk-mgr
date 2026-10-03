@@ -334,6 +334,26 @@ func TestHandleTasksFiltersByStatus(t *testing.T) {
 	}
 }
 
+func TestHandleTasksFiltersByEstimateRange(t *testing.T) {
+	resetTaskFixture()
+	if _, err := service.UpdateTaskEstimate(1, 20); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.UpdateTaskEstimate(2, 90); err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	HandleTasks(recorder, httptest.NewRequest(http.MethodGet, "/tasks?minEstimate=10&maxEstimate=30", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"id":1`) || strings.Contains(recorder.Body.String(), `"id":2`) {
+		t.Fatalf("unexpected estimate range response: %d %s", recorder.Code, recorder.Body.String())
+	}
+	invalid := httptest.NewRecorder()
+	HandleTasks(invalid, httptest.NewRequest(http.MethodGet, "/tasks?minEstimate=30&maxEstimate=10", nil))
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("expected reversed estimate range rejection, got %d", invalid.Code)
+	}
+}
+
 func TestHandleTasksRejectsInvalidSort(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks?sort=unknown", nil)
 	recorder := httptest.NewRecorder()

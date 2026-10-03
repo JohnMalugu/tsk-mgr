@@ -65,6 +65,20 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, http.StatusBadRequest, "dueAfter must not be later than dueBefore")
 			return
 		}
+		minEstimate, err := optionalNonNegativeInt(r, "minEstimate")
+		if err != nil {
+			respondError(w, r, http.StatusBadRequest, "minEstimate must be a non-negative integer")
+			return
+		}
+		maxEstimate, err := optionalNonNegativeInt(r, "maxEstimate")
+		if err != nil {
+			respondError(w, r, http.StatusBadRequest, "maxEstimate must be a non-negative integer")
+			return
+		}
+		if minEstimate != nil && maxEstimate != nil && *minEstimate > *maxEstimate {
+			respondError(w, r, http.StatusBadRequest, "minEstimate must not exceed maxEstimate")
+			return
+		}
 		offset, limit, err := pagination(r)
 		if err != nil {
 			respondError(w, r, http.StatusBadRequest, err.Error())
@@ -75,13 +89,25 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, http.StatusBadRequest, err.Error())
 			return
 		}
-		respondJSON(w, http.StatusOK, service.GetTasks(completed, overdue, recurring, status, r.URL.Query().Get("q"), priority, tag, dueAfter, dueBefore, offset, limit, sortBy, descending))
+		respondJSON(w, http.StatusOK, service.GetTasks(completed, overdue, recurring, status, r.URL.Query().Get("q"), priority, tag, dueAfter, dueBefore, minEstimate, maxEstimate, offset, limit, sortBy, descending))
 	case http.MethodPost:
 		createTask(w, r)
 	default:
 		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
 		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
 	}
+}
+
+func optionalNonNegativeInt(r *http.Request, name string) (*int, error) {
+	value := r.URL.Query().Get(name)
+	if value == "" {
+		return nil, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 0 {
+		return nil, fmt.Errorf("invalid non-negative integer")
+	}
+	return &parsed, nil
 }
 
 func dateFilter(r *http.Request, name string) (*time.Time, error) {

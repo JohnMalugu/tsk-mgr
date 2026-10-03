@@ -458,7 +458,7 @@ type ActivityPage struct {
 
 // GetAllTasks returns the first page of all tasks.
 func GetAllTasks() []model.Task {
-	return GetTasks(nil, nil, nil, nil, "", nil, nil, nil, nil, 0, 20, "id", false)
+	return GetTasks(nil, nil, nil, nil, "", nil, nil, nil, nil, nil, nil, 0, 20, "id", false)
 }
 
 // GetActivities returns a filtered page ordered from newest to oldest.
@@ -567,7 +567,7 @@ func GetTaskSummary() TaskSummary {
 }
 
 // GetTasks returns a page of tasks matching the optional filters.
-func GetTasks(completed, overdue, recurring *bool, status *string, search string, priority *string, tag *string, dueAfter, dueBefore *time.Time, offset, limit int, sortBy string, descending bool) []model.Task {
+func GetTasks(completed, overdue, recurring *bool, status *string, search string, priority *string, tag *string, dueAfter, dueBefore *time.Time, minEstimate, maxEstimate *int, offset, limit int, sortBy string, descending bool) []model.Task {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -597,6 +597,12 @@ func GetTasks(completed, overdue, recurring *bool, status *string, search string
 			continue
 		}
 		if dueBefore != nil && task.DueDate.After(*dueBefore) {
+			continue
+		}
+		if minEstimate != nil && task.EstimateMinutes < *minEstimate {
+			continue
+		}
+		if maxEstimate != nil && task.EstimateMinutes > *maxEstimate {
 			continue
 		}
 		matchesSearch := strings.Contains(strings.ToLower(task.Title), search)

@@ -942,7 +942,7 @@ func TestGetReadyTasksExcludesBlockedAndCompletedTasks(t *testing.T) {
 }
 
 func TestGetTasksReturnsEmptyPageBeyondResults(t *testing.T) {
-	page := GetTasks(nil, nil, nil, nil, "", nil, nil, nil, nil, 100, 20, "id", false)
+	page := GetTasks(nil, nil, nil, nil, "", nil, nil, nil, nil, nil, nil, 100, 20, "id", false)
 	if page == nil {
 		t.Fatal("expected an empty slice, got nil")
 	}
