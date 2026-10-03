@@ -185,6 +185,16 @@ func TestTaskCommentsRouteLifecycle(t *testing.T) {
 	if invalid.Code != http.StatusBadRequest {
 		t.Fatalf("expected empty comment rejection, got %d", invalid.Code)
 	}
+	deleted := httptest.NewRecorder()
+	Router(deleted, httptest.NewRequest(http.MethodDelete, "/tasks/1/comments/1", nil))
+	if deleted.Code != http.StatusNoContent {
+		t.Fatalf("expected comment deletion, got %d %s", deleted.Code, deleted.Body.String())
+	}
+	missing := httptest.NewRecorder()
+	Router(missing, httptest.NewRequest(http.MethodDelete, "/tasks/1/comments/999", nil))
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("expected missing comment status, got %d", missing.Code)
+	}
 }
 
 func TestTaskOccurrencesRouteReturnsSeries(t *testing.T) {

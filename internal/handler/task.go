@@ -701,6 +701,30 @@ func HandleTaskComments(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, comments)
 }
 
+func HandleTaskCommentItem(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		w.Header().Set("Allow", http.MethodDelete)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/tasks/"), "/comments/")
+	if len(parts) != 2 {
+		respondError(w, r, http.StatusBadRequest, "comment route is invalid")
+		return
+	}
+	taskID, taskErr := strconv.Atoi(parts[0])
+	commentID, commentErr := strconv.Atoi(parts[1])
+	if taskErr != nil || commentErr != nil || taskID < 1 || commentID < 1 {
+		respondError(w, r, http.StatusBadRequest, "task and comment ids must be positive integers")
+		return
+	}
+	if err := service.DeleteTaskComment(taskID, commentID); err != nil {
+		respondError(w, r, http.StatusNotFound, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func HandleTaskOccurrences(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
