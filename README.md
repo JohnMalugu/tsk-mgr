@@ -34,12 +34,13 @@ Other task workflows include:
 
 - `PATCH /tasks/{id}` to update fields, including `status`.
 - `PATCH /tasks/{id}/complete` to complete or reopen a task.
-- `GET /tasks/ready` and `GET /tasks/upcoming?days=7` for actionable queue views.
+- `GET /tasks/ready`, `/tasks/blocked`, and `/tasks/upcoming?days=7` for actionable queue views.
 - `GET /tasks/summary` for status counts, priority distribution, upcoming work, estimates, and tracked time.
-- `GET|POST /tasks/{id}/comments` for task discussion.
+- `GET /tags` for a paginated usage-ranked tag catalog.
+- `GET|POST /tasks/{id}/comments` and `PATCH|DELETE /tasks/{id}/comments/{commentId}` for task discussion.
 - `GET|POST /tasks/{id}/checklist`, plus checklist item completion and ordering routes.
-- Dependency, recurrence, activity, and timer routes under `/tasks/{id}`.
-- `POST /tasks/bulk/complete`, `/tasks/bulk/delete`, `/tasks/bulk/priority`, `/tasks/bulk/due-date`, and `/tasks/bulk/tags` for batch workflows.
+- Dependency, recurrence preview/skip, activity, and timer routes under `/tasks/{id}`.
+- `POST /tasks/bulk/complete`, `/tasks/bulk/delete`, `/tasks/bulk/priority`, `/tasks/bulk/due-date`, `/tasks/bulk/tags`, `/tasks/bulk/status`, and `/tasks/bulk/estimate` for batch workflows.
 
 Task creation, update, and comment requests reject unknown fields and enforce request-size limits. List pagination is bounded to 100 records per request.
 

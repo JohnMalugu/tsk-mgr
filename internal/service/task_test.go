@@ -808,6 +808,9 @@ func TestDeleteTaskRecordsActivityBeforeRemoval(t *testing.T) {
 
 func TestDeleteTaskRemovesTimeFromReports(t *testing.T) {
 	ResetTasks()
+	if _, err := AddTaskComment(1, "Remove with task"); err != nil {
+		t.Fatal(err)
+	}
 	startedAt := time.Now().Add(-2 * time.Hour)
 	if _, err := AddManualTimeEntry(1, startedAt, startedAt.Add(time.Hour), "Completed work"); err != nil {
 		t.Fatal(err)
@@ -817,6 +820,9 @@ func TestDeleteTaskRemovesTimeFromReports(t *testing.T) {
 	}
 	if report := GetTimeReport(nil, nil, nil); report.TotalSeconds != 0 || report.EntryCount != 0 || len(report.ByTask) != 0 {
 		t.Fatalf("deleted task time remained in report: %#v", report)
+	}
+	if _, found := GetTaskComments(1, 0, 20); found {
+		t.Fatal("expected comments to be removed with deleted task")
 	}
 }
 

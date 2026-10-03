@@ -1753,6 +1753,13 @@ func DeleteTask(id int) bool {
 				}
 			}
 			timeEntries = remainingEntries
+			remainingComments := taskComments[:0]
+			for _, comment := range taskComments {
+				if comment.TaskID != id {
+					remainingComments = append(remainingComments, comment)
+				}
+			}
+			taskComments = remainingComments
 			return true
 		}
 	}
