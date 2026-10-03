@@ -1341,6 +1341,23 @@ func TestBulkSetTaskTagsIsAtomicAndNormalizes(t *testing.T) {
 	}
 }
 
+func TestBulkSetTaskEstimateIsAtomic(t *testing.T) {
+	ResetTasks()
+	if _, err := BulkSetTaskEstimate([]int{1, 999}, 45); !errors.Is(err, ErrTaskNotFound) {
+		t.Fatalf("expected missing-task error, got %v", err)
+	}
+	if task := GetTaskByID(1); task == nil || task.EstimateMinutes != 0 {
+		t.Fatalf("rejected batch changed estimate: %#v", task)
+	}
+	result, err := BulkSetTaskEstimate([]int{1, 2, 1}, 45)
+	if err != nil || result.Updated != 2 || result.Tasks[0].EstimateMinutes != 45 {
+		t.Fatalf("unexpected bulk estimate result: %#v err=%v", result, err)
+	}
+	if _, err := BulkSetTaskEstimate([]int{1}, -1); !errors.Is(err, ErrTaskEstimateInvalid) {
+		t.Fatalf("expected negative estimate rejection, got %v", err)
+	}
+}
+
 func TestUpdateTaskPreservesCreatedAt(t *testing.T) {
 	ResetTasks()
 	original := GetTaskByID(1)

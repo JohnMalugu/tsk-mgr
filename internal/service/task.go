@@ -2094,3 +2094,36 @@ func BulkSetTaskTags(ids []int, tags []string) (BulkUpdateResult, bool) {
 	}
 	return BulkUpdateResult{Tasks: updated, Updated: len(updated)}, true
 }
+
+// BulkSetTaskEstimate updates estimates only when every requested task exists.
+func BulkSetTaskEstimate(ids []int, estimateMinutes int) (BulkUpdateResult, error) {
+	if estimateMinutes < 0 {
+		return BulkUpdateResult{}, ErrTaskEstimateInvalid
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	positions := make([]int, 0, len(ids))
+	seen := make(map[int]struct{}, len(ids))
+	for _, id := range ids {
+		if _, duplicate := seen[id]; duplicate {
+			continue
+		}
+		seen[id] = struct{}{}
+		position := findTaskPositionLocked(id)
+		if position < 0 {
+			return BulkUpdateResult{}, ErrTaskNotFound
+		}
+		positions = append(positions, position)
+	}
+	updated := make([]model.Task, 0, len(positions))
+	for _, position := range positions {
+		previous := tasks[position].EstimateMinutes
+		if previous != estimateMinutes {
+			tasks[position].EstimateMinutes = estimateMinutes
+			tasks[position].UpdatedAt = time.Now()
+			recordActivityLocked(tasks[position].ID, "estimate_updated", "Updated estimate from "+strconv.Itoa(previous)+" to "+strconv.Itoa(estimateMinutes)+" minutes")
+		}
+		updated = append(updated, cloneTask(tasks[position]))
+	}
+	return BulkUpdateResult{Tasks: updated, Updated: len(updated)}, nil
+}
