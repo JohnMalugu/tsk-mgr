@@ -662,6 +662,11 @@ func HandleTaskComments(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, http.StatusBadRequest, "task id must be a positive integer")
 		return
 	}
+	offset, limit, err := pagination(r)
+	if err != nil {
+		respondError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
 	if r.Method == http.MethodPost {
 		var payload struct {
 			Body string `json:"body"`
@@ -688,7 +693,7 @@ func HandleTaskComments(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusCreated, comment)
 		return
 	}
-	comments, found := service.GetTaskComments(taskID)
+	comments, found := service.GetTaskComments(taskID, offset, limit)
 	if !found {
 		respondError(w, r, http.StatusNotFound, "task not found")
 		return

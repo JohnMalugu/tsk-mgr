@@ -67,14 +67,18 @@ func TestTaskCommentsValidateAndRecordChronologically(t *testing.T) {
 	if err != nil || second.ID <= first.ID {
 		t.Fatalf("unexpected second comment: %#v err=%v", second, err)
 	}
-	comments, found := GetTaskComments(1)
-	if !found || len(comments) != 2 || comments[0].ID != first.ID || comments[1].ID != second.ID {
+	comments, found := GetTaskComments(1, 0, 20)
+	if !found || comments.Total != 2 || len(comments.Comments) != 2 || comments.Comments[0].ID != first.ID || comments.Comments[1].ID != second.ID {
 		t.Fatalf("unexpected task comments: %#v found=%v", comments, found)
+	}
+	page, found := GetTaskComments(1, 1, 1)
+	if !found || page.Total != 2 || len(page.Comments) != 1 || page.Comments[0].ID != second.ID {
+		t.Fatalf("unexpected paginated comments: %#v found=%v", page, found)
 	}
 	if !IsActivityAction("comment_added") {
 		t.Fatal("comment activity must be a supported filter action")
 	}
-	if _, found := GetTaskComments(999); found {
+	if _, found := GetTaskComments(999, 0, 20); found {
 		t.Fatal("expected missing task to be reported")
 	}
 }
@@ -1053,7 +1057,7 @@ func TestBulkDeleteTasksRemovesRelatedTimeAndComments(t *testing.T) {
 	if report := GetTimeReport(nil, nil, nil); report.TotalSeconds != 0 || report.EntryCount != 0 {
 		t.Fatalf("bulk-deleted task time remained in report: %#v", report)
 	}
-	if _, found := GetTaskComments(1); found {
+	if _, found := GetTaskComments(1, 0, 20); found {
 		t.Fatal("expected comments to be removed with their task")
 	}
 }

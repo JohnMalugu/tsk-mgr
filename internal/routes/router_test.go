@@ -176,8 +176,8 @@ func TestTaskCommentsRouteLifecycle(t *testing.T) {
 		t.Fatalf("unexpected comment creation response: %d %s", created.Code, created.Body.String())
 	}
 	listed := httptest.NewRecorder()
-	Router(listed, httptest.NewRequest(http.MethodGet, "/tasks/1/comments", nil))
-	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), "Keep the scope focused") {
+	Router(listed, httptest.NewRequest(http.MethodGet, "/tasks/1/comments?offset=0&limit=1", nil))
+	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), `"total":1`) || !strings.Contains(listed.Body.String(), "Keep the scope focused") {
 		t.Fatalf("unexpected comments list response: %d %s", listed.Code, listed.Body.String())
 	}
 	invalid := httptest.NewRecorder()

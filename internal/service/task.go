@@ -160,11 +160,11 @@ func AddTaskComment(taskID int, body string) (model.TaskComment, error) {
 }
 
 // GetTaskComments returns a task's comments in chronological order.
-func GetTaskComments(taskID int) ([]model.TaskComment, bool) {
+func GetTaskComments(taskID, offset, limit int) (CommentPage, bool) {
 	mu.RLock()
 	defer mu.RUnlock()
 	if findTaskPositionLocked(taskID) < 0 {
-		return nil, false
+		return CommentPage{}, false
 	}
 	comments := make([]model.TaskComment, 0)
 	for _, comment := range taskComments {
@@ -172,7 +172,17 @@ func GetTaskComments(taskID int) ([]model.TaskComment, bool) {
 			comments = append(comments, comment)
 		}
 	}
-	return comments, true
+	total := len(comments)
+	if offset >= total {
+		comments = []model.TaskComment{}
+	} else {
+		end := offset + limit
+		if end > total {
+			end = total
+		}
+		comments = comments[offset:end]
+	}
+	return CommentPage{Comments: comments, Total: total, Offset: offset, Limit: limit}, true
 }
 
 func recordActivityLocked(taskID int, action, summary string) {
@@ -455,6 +465,13 @@ type ActivityPage struct {
 	Total      int              `json:"total"`
 	Offset     int              `json:"offset"`
 	Limit      int              `json:"limit"`
+}
+
+type CommentPage struct {
+	Comments []model.TaskComment `json:"comments"`
+	Total    int                 `json:"total"`
+	Offset   int                 `json:"offset"`
+	Limit    int                 `json:"limit"`
 }
 
 // GetAllTasks returns the first page of all tasks.
@@ -767,7 +784,6 @@ func UpdateTaskEstimate(taskID, estimateMinutes int) (*model.Task, error) {
 	return nil, ErrTaskNotFound
 }
 
-// GetTaskChecklist returns a copy of a task's checklist.
 func GetTaskChecklist(taskID int) ([]model.ChecklistItem, bool) {
 	mu.RLock()
 	defer mu.RUnlock()
