@@ -20,6 +20,7 @@ type TaskComment struct {
 	TaskID    int       `json:"taskId"`
 	Body      string    `json:"body"`
 	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type RecurrenceRule struct {

@@ -43,7 +43,7 @@ var activityActions = map[string]struct{}{
 	"dependency_added": {}, "dependency_removed": {}, "dependencies_updated": {},
 	"checklist_item_added": {}, "checklist_item_updated": {}, "checklist_item_completed": {},
 	"checklist_item_reopened": {}, "checklist_item_deleted": {}, "checklist_reordered": {}, "estimate_updated": {},
-	"timer_started": {}, "timer_stopped": {}, "time_logged": {}, "time_entry_deleted": {}, "recurrence_created": {}, "comment_added": {}, "comment_deleted": {},
+	"timer_started": {}, "timer_stopped": {}, "time_logged": {}, "time_entry_deleted": {}, "recurrence_created": {}, "comment_added": {}, "comment_updated": {}, "comment_deleted": {},
 }
 
 // IsActivityAction reports whether an action is part of the activity event contract.
@@ -152,12 +152,38 @@ func AddTaskComment(taskID int, body string) (model.TaskComment, error) {
 	if count >= 1000 {
 		return model.TaskComment{}, ErrCommentLimitReached
 	}
-	comment := model.TaskComment{ID: nextTaskCommentID, TaskID: taskID, Body: body, CreatedAt: time.Now().UTC()}
+	now := time.Now().UTC()
+	comment := model.TaskComment{ID: nextTaskCommentID, TaskID: taskID, Body: body, CreatedAt: now, UpdatedAt: now}
 	nextTaskCommentID++
 	taskComments = append(taskComments, comment)
 	tasks[position].UpdatedAt = comment.CreatedAt
 	recordActivityLocked(taskID, "comment_added", "Comment added to task: "+tasks[position].Title)
 	return comment, nil
+}
+
+// UpdateTaskComment edits a comment and records the change in task activity.
+func UpdateTaskComment(taskID, commentID int, body string) (model.TaskComment, error) {
+	mu.Lock()
+	defer mu.Unlock()
+	body = strings.TrimSpace(body)
+	if count := utf8.RuneCountInString(body); count == 0 || count > 5000 {
+		return model.TaskComment{}, ErrCommentInvalid
+	}
+	taskPosition := findTaskPositionLocked(taskID)
+	if taskPosition < 0 {
+		return model.TaskComment{}, ErrTaskNotFound
+	}
+	for index := range taskComments {
+		if taskComments[index].TaskID != taskID || taskComments[index].ID != commentID {
+			continue
+		}
+		taskComments[index].Body = body
+		taskComments[index].UpdatedAt = time.Now().UTC()
+		tasks[taskPosition].UpdatedAt = taskComments[index].UpdatedAt
+		recordActivityLocked(taskID, "comment_updated", "Comment updated on task: "+tasks[taskPosition].Title)
+		return taskComments[index], nil
+	}
+	return model.TaskComment{}, ErrCommentNotFound
 }
 
 // GetTaskComments returns a task's comments in chronological order.

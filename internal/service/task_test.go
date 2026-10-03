@@ -108,6 +108,25 @@ func TestDeleteTaskCommentRecordsActivity(t *testing.T) {
 	}
 }
 
+func TestUpdateTaskCommentChangesBodyAndRecordsActivity(t *testing.T) {
+	ResetTasks()
+	comment, err := AddTaskComment(1, "Initial note")
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := UpdateTaskComment(1, comment.ID, "  Revised note  ")
+	if err != nil || updated.Body != "Revised note" || !updated.UpdatedAt.After(comment.CreatedAt) {
+		t.Fatalf("unexpected updated comment: %#v err=%v", updated, err)
+	}
+	page, found := GetTaskComments(1, 0, 20)
+	if !found || page.Total != 1 || page.Comments[0].Body != "Revised note" {
+		t.Fatalf("unexpected persisted comment: %#v", page)
+	}
+	if events := GetActivities(nil, "comment_updated", nil, nil, 0, 20); events.Total != 1 {
+		t.Fatalf("expected one comment update event, got %#v", events)
+	}
+}
+
 func TestValidateRecurrenceRuleBoundsAndDates(t *testing.T) {
 	due := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	valid := &model.RecurrenceRule{Frequency: "weekly", Interval: 2}
