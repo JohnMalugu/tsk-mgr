@@ -38,6 +38,20 @@ func TestTaskSummaryIncludesWorkloadAndDueSoonMetrics(t *testing.T) {
 	}
 }
 
+func TestTaskSummaryCountsStatuses(t *testing.T) {
+	ResetTasks()
+	if _, err := UpdateTaskWithDependencies(1, model.Task{Title: "Running", DueDate: time.Now().Add(time.Hour), Status: model.TaskStatusInProgress}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetTaskCompletionChecked(2, true); err != nil {
+		t.Fatal(err)
+	}
+	summary := GetTaskSummary()
+	if summary.ByStatus[model.TaskStatusTodo] != 0 || summary.ByStatus[model.TaskStatusInProgress] != 1 || summary.ByStatus[model.TaskStatusCompleted] != 1 || summary.ByStatus[model.TaskStatusCanceled] != 0 {
+		t.Fatalf("unexpected status counts: %#v", summary.ByStatus)
+	}
+}
+
 func TestTaskStatusStaysCompatibleWithCompletion(t *testing.T) {
 	ResetTasks()
 	task, err := CreateTaskWithDependencies(model.Task{Title: "Status task", Status: model.TaskStatusInProgress}, nil)

@@ -469,6 +469,7 @@ type TaskSummary struct {
 	EstimatedMinutes int            `json:"estimatedMinutes"`
 	TrackedSeconds   int64          `json:"trackedSeconds"`
 	ByPriority       map[string]int `json:"byPriority"`
+	ByStatus         map[string]int `json:"byStatus"`
 }
 
 type BulkUpdateResult struct {
@@ -604,9 +605,14 @@ func GetTaskSummary() TaskSummary {
 	defer mu.RUnlock()
 
 	now := time.Now()
-	summary := TaskSummary{Total: len(tasks), ByPriority: map[string]int{"low": 0, "medium": 0, "high": 0}}
+	summary := TaskSummary{
+		Total:      len(tasks),
+		ByPriority: map[string]int{"low": 0, "medium": 0, "high": 0},
+		ByStatus:   map[string]int{model.TaskStatusTodo: 0, model.TaskStatusInProgress: 0, model.TaskStatusCompleted: 0, model.TaskStatusCanceled: 0},
+	}
 	for _, task := range tasks {
 		summary.EstimatedMinutes += task.EstimateMinutes
+		summary.ByStatus[task.Status]++
 		if hasIncompletePrerequisiteLocked(task) {
 			summary.Blocked++
 		}
