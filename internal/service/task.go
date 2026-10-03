@@ -36,10 +36,11 @@ var (
 	ErrCommentLimitReached     = errors.New("task comment limit reached")
 	ErrCommentNotFound         = errors.New("comment not found")
 	ErrTaskStatusInvalid       = errors.New("task status is invalid")
+	ErrTaskAlreadyClosed       = errors.New("task occurrence is already closed")
 )
 
 var activityActions = map[string]struct{}{
-	"created": {}, "updated": {}, "completed": {}, "reopened": {}, "deleted": {},
+	"created": {}, "updated": {}, "completed": {}, "reopened": {}, "deleted": {}, "recurrence_skipped": {},
 	"dependency_added": {}, "dependency_removed": {}, "dependencies_updated": {},
 	"checklist_item_added": {}, "checklist_item_updated": {}, "checklist_item_completed": {},
 	"checklist_item_reopened": {}, "checklist_item_deleted": {}, "checklist_reordered": {}, "estimate_updated": {},
@@ -1545,6 +1546,28 @@ func GetNextOccurrenceDueDate(taskID int) (time.Time, error) {
 		return time.Time{}, ErrRecurrenceNotFound
 	}
 	return nextDue, nil
+}
+
+// SkipTaskOccurrence cancels one recurring instance and advances its series.
+func SkipTaskOccurrence(taskID int) (*model.Task, error) {
+	mu.Lock()
+	defer mu.Unlock()
+	position := findTaskPositionLocked(taskID)
+	if position < 0 {
+		return nil, ErrTaskNotFound
+	}
+	if tasks[position].Recurrence == nil {
+		return nil, ErrRecurrenceNotFound
+	}
+	if tasks[position].Completed || tasks[position].Status == model.TaskStatusCanceled {
+		return nil, ErrTaskAlreadyClosed
+	}
+	tasks[position].Status = model.TaskStatusCanceled
+	tasks[position].UpdatedAt = time.Now().UTC()
+	recordActivityLocked(taskID, "recurrence_skipped", "Skipped recurring task occurrence: "+tasks[position].Title)
+	spawnNextOccurrenceLocked(tasks[position])
+	updated := cloneTask(tasks[position])
+	return &updated, nil
 }
 
 func spawnNextOccurrenceLocked(source model.Task) *model.Task {

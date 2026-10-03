@@ -1401,6 +1401,29 @@ func TestUpdateTaskCompletionRecordsLifecycleAndRecurrence(t *testing.T) {
 	}
 }
 
+func TestSkipTaskOccurrenceCancelsAndAdvancesSeries(t *testing.T) {
+	ResetTasks()
+	dueDate := time.Date(2030, 1, 1, 9, 0, 0, 0, time.UTC)
+	task, err := CreateTaskWithDependencies(model.Task{Title: "Weekly review", DueDate: dueDate, Recurrence: &model.RecurrenceRule{Frequency: "weekly", Interval: 1}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	skipped, err := SkipTaskOccurrence(task.ID)
+	if err != nil || skipped.Status != model.TaskStatusCanceled || skipped.Completed {
+		t.Fatalf("unexpected skipped occurrence: %#v err=%v", skipped, err)
+	}
+	occurrences, err := GetTaskOccurrences(task.ID)
+	if err != nil || len(occurrences) != 2 || occurrences[1].DueDate != dueDate.AddDate(0, 0, 7) {
+		t.Fatalf("expected next weekly occurrence, got %#v err=%v", occurrences, err)
+	}
+	if events := GetActivities(&task.ID, "recurrence_skipped", nil, nil, 0, 20); events.Total != 1 {
+		t.Fatalf("expected skip activity, got %#v", events)
+	}
+	if _, err := SkipTaskOccurrence(task.ID); !errors.Is(err, ErrTaskAlreadyClosed) {
+		t.Fatalf("expected repeated skip to fail, got %v", err)
+	}
+}
+
 func TestUpdateTaskEstimateValidatesAndRecordsChange(t *testing.T) {
 	ResetTasks()
 	updated, err := UpdateTaskEstimate(1, 45)
