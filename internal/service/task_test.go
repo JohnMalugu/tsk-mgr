@@ -1018,6 +1018,26 @@ func TestBulkDeleteTasksIsAtomic(t *testing.T) {
 	}
 }
 
+func TestBulkDeleteTasksRemovesRelatedTimeAndComments(t *testing.T) {
+	ResetTasks()
+	start := time.Now().Add(-2 * time.Hour)
+	if _, err := AddManualTimeEntry(1, start, start.Add(time.Hour), "Tracked"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddTaskComment(1, "Note"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := BulkDeleteTasks([]int{1}); !ok {
+		t.Fatal("expected task deletion")
+	}
+	if report := GetTimeReport(nil, nil, nil); report.TotalSeconds != 0 || report.EntryCount != 0 {
+		t.Fatalf("bulk-deleted task time remained in report: %#v", report)
+	}
+	if _, found := GetTaskComments(1); found {
+		t.Fatal("expected comments to be removed with their task")
+	}
+}
+
 func TestCreateTaskNormalizesTags(t *testing.T) {
 	ResetTasks()
 	created := CreateTask(model.Task{Title: "Tagged", Tags: []string{" home ", "Home", "work"}})

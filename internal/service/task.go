@@ -1783,6 +1783,20 @@ func BulkDeleteTasks(ids []int) (BulkDeleteResult, bool) {
 		remaining = append(remaining, task)
 	}
 	tasks = remaining
+	remainingEntries := timeEntries[:0]
+	for _, entry := range timeEntries {
+		if _, deleting := requested[entry.TaskID]; !deleting {
+			remainingEntries = append(remainingEntries, entry)
+		}
+	}
+	timeEntries = remainingEntries
+	remainingComments := taskComments[:0]
+	for _, comment := range taskComments {
+		if _, deleting := requested[comment.TaskID]; !deleting {
+			remainingComments = append(remainingComments, comment)
+		}
+	}
+	taskComments = remainingComments
 	return BulkDeleteResult{Deleted: deleted, Count: len(deleted)}, true
 }
 
