@@ -41,6 +41,11 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, http.StatusBadRequest, "priority must be low, medium, or high")
 			return
 		}
+		status, err := statusFilter(r)
+		if err != nil {
+			respondError(w, r, http.StatusBadRequest, "status filter is invalid")
+			return
+		}
 		tag, err := tagFilter(r)
 		if err != nil {
 			respondError(w, r, http.StatusBadRequest, "tag filter is invalid")
@@ -70,7 +75,7 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, http.StatusBadRequest, err.Error())
 			return
 		}
-		respondJSON(w, http.StatusOK, service.GetTasks(completed, overdue, recurring, r.URL.Query().Get("q"), priority, tag, dueAfter, dueBefore, offset, limit, sortBy, descending))
+		respondJSON(w, http.StatusOK, service.GetTasks(completed, overdue, recurring, status, r.URL.Query().Get("q"), priority, tag, dueAfter, dueBefore, offset, limit, sortBy, descending))
 	case http.MethodPost:
 		createTask(w, r)
 	default:
@@ -178,6 +183,19 @@ func priorityFilter(r *http.Request) (*string, error) {
 		return &value, nil
 	default:
 		return nil, fmt.Errorf("invalid priority")
+	}
+}
+
+func statusFilter(r *http.Request) (*string, error) {
+	value := r.URL.Query().Get("status")
+	if value == "" {
+		return nil, nil
+	}
+	switch value {
+	case model.TaskStatusTodo, model.TaskStatusInProgress, model.TaskStatusCompleted, model.TaskStatusCanceled:
+		return &value, nil
+	default:
+		return nil, fmt.Errorf("invalid status")
 	}
 }
 

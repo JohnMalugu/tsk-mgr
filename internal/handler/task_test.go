@@ -8,7 +8,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
 )
 
@@ -312,6 +314,23 @@ func TestPatchTaskUpdatesStatusAndRejectsConflicts(t *testing.T) {
 	HandleTaskByID(conflict, httptest.NewRequest(http.MethodPatch, "/tasks/1", strings.NewReader(`{"status":"completed","completed":false}`)))
 	if conflict.Code != http.StatusBadRequest {
 		t.Fatalf("expected conflicting status patch rejection, got %d", conflict.Code)
+	}
+}
+
+func TestHandleTasksFiltersByStatus(t *testing.T) {
+	resetTaskFixture()
+	if _, err := service.UpdateTaskWithDependencies(1, model.Task{Title: "Running", DueDate: time.Now().Add(time.Hour), Status: model.TaskStatusInProgress}, nil); err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	HandleTasks(recorder, httptest.NewRequest(http.MethodGet, "/tasks?status=in_progress", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"title":"Running"`) || strings.Contains(recorder.Body.String(), `"title":"Learn Go"`) {
+		t.Fatalf("unexpected status filter response: %d %s", recorder.Code, recorder.Body.String())
+	}
+	invalid := httptest.NewRecorder()
+	HandleTasks(invalid, httptest.NewRequest(http.MethodGet, "/tasks?status=blocked", nil))
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("expected unsupported status filter rejection, got %d", invalid.Code)
 	}
 }
 
