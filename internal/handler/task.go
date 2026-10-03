@@ -820,6 +820,32 @@ func HandleNextRecurrence(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]time.Time{"nextDueDate": dueDate})
 }
 
+func HandleSkipRecurrence(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	taskID, err := taskIDFromSuffix(r.URL.Path, "/recurrence/skip")
+	if err != nil {
+		respondError(w, r, http.StatusBadRequest, "task id must be a positive integer")
+		return
+	}
+	task, err := service.SkipTaskOccurrence(taskID)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrTaskNotFound), errors.Is(err, service.ErrRecurrenceNotFound):
+			respondError(w, r, http.StatusNotFound, err.Error())
+		case errors.Is(err, service.ErrTaskAlreadyClosed):
+			respondError(w, r, http.StatusConflict, err.Error())
+		default:
+			respondError(w, r, http.StatusInternalServerError, "could not skip occurrence")
+		}
+		return
+	}
+	respondJSON(w, http.StatusOK, task)
+}
+
 func HandleActiveTimer(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)

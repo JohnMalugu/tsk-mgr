@@ -34,6 +34,7 @@ func main() {
 	fmt.Printf("   GET    http://localhost:8080/tasks/upcoming?days=7\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/{id}/occurrences\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/{id}/recurrence/next\n")
+	fmt.Printf("   POST   http://localhost:8080/tasks/{id}/recurrence/skip\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks?recurring=true|false\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/{id}/checklist\n")
 	fmt.Printf("   POST   http://localhost:8080/tasks/{id}/checklist\n")

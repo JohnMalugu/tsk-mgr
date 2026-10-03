@@ -272,6 +272,25 @@ func TestNextRecurrenceRoutePreviewsDate(t *testing.T) {
 	}
 }
 
+func TestSkipRecurrenceRouteAdvancesSeries(t *testing.T) {
+	service.ResetTasks()
+	task, err := service.CreateTaskWithDependencies(model.Task{Title: "Weekly review", DueDate: time.Date(2030, 1, 1, 9, 0, 0, 0, time.UTC), Recurrence: &model.RecurrenceRule{Frequency: "weekly", Interval: 1}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "/tasks/" + fmt.Sprint(task.ID) + "/recurrence/skip"
+	skipped := httptest.NewRecorder()
+	Router(skipped, httptest.NewRequest(http.MethodPost, path, nil))
+	if skipped.Code != http.StatusOK || !strings.Contains(skipped.Body.String(), `"status":"canceled"`) {
+		t.Fatalf("unexpected skip response: %d %s", skipped.Code, skipped.Body.String())
+	}
+	repeated := httptest.NewRecorder()
+	Router(repeated, httptest.NewRequest(http.MethodPost, path, nil))
+	if repeated.Code != http.StatusConflict {
+		t.Fatalf("expected repeated skip conflict, got %d", repeated.Code)
+	}
+}
+
 func TestRecurringTaskWorkflowThroughRouter(t *testing.T) {
 	service.ResetTasks()
 	created := httptest.NewRecorder()
