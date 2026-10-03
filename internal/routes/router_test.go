@@ -97,6 +97,21 @@ func TestBulkTagsRoute(t *testing.T) {
 	}
 }
 
+func TestBulkStatusRoute(t *testing.T) {
+	service.ResetTasks()
+	payload := `{"ids":[1,2],"status":"in_progress"}`
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodPost, "/tasks/bulk/status", strings.NewReader(payload)))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"updated":2`) {
+		t.Fatalf("unexpected bulk status response: %d %s", recorder.Code, recorder.Body.String())
+	}
+	invalid := httptest.NewRecorder()
+	Router(invalid, httptest.NewRequest(http.MethodPost, "/tasks/bulk/status", strings.NewReader(`{"ids":[1],"status":"blocked"}`)))
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid status rejection, got %d", invalid.Code)
+	}
+}
+
 func TestManualTimeEntryRouteAndDeletion(t *testing.T) {
 	service.ResetTasks()
 	body := `{"startedAt":"2026-09-30T09:00:00Z","endedAt":"2026-09-30T09:30:00Z","note":"Planning"}`
