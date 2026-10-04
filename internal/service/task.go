@@ -786,9 +786,24 @@ func GetTasks(completed, overdue, recurring *bool, status *string, search string
 				comparison = 1
 			}
 		case "status":
-			if result[i].Status < result[j].Status {
+			statusRank := func(status string) int {
+				switch status {
+				case model.TaskStatusTodo:
+					return 0
+				case model.TaskStatusInProgress:
+					return 1
+				case model.TaskStatusCompleted:
+					return 2
+				case model.TaskStatusCanceled:
+					return 3
+				default:
+					return 4
+				}
+			}
+			left, right := statusRank(result[i].Status), statusRank(result[j].Status)
+			if left < right {
 				comparison = -1
-			} else if result[i].Status > result[j].Status {
+			} else if left > right {
 				comparison = 1
 			}
 		case "priority":

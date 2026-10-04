@@ -298,7 +298,7 @@ func TestHandleTasksSortsByLastUpdated(t *testing.T) {
 
 func TestHandleTasksSortsByStatus(t *testing.T) {
 	resetTaskFixture()
-	if _, err := service.SetTaskCompletionChecked(1, true); err != nil {
+	if _, err := service.UpdateTaskWithDependencies(1, model.Task{Title: "Running", DueDate: time.Now().Add(time.Hour), Status: model.TaskStatusInProgress}, nil); err != nil {
 		t.Fatal(err)
 	}
 	recorder := httptest.NewRecorder()
@@ -310,7 +310,7 @@ func TestHandleTasksSortsByStatus(t *testing.T) {
 	if recorder.Code != http.StatusOK || json.NewDecoder(recorder.Body).Decode(&tasks) != nil {
 		t.Fatalf("unexpected status sort response: %d", recorder.Code)
 	}
-	if len(tasks) != 2 || tasks[0].Status != "completed" {
+	if len(tasks) != 2 || tasks[0].Status != model.TaskStatusTodo || tasks[1].Status != model.TaskStatusInProgress {
 		t.Fatalf("expected status ordering, got %#v", tasks)
 	}
 }
