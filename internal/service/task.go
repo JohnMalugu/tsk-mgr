@@ -2129,11 +2129,26 @@ func BulkSetTaskTags(ids []int, tags []string) (BulkUpdateResult, bool) {
 	normalizedTags := normalizeTags(tags)
 	updated := make([]model.Task, 0, len(positions))
 	for _, position := range positions {
-		tasks[position].Tags = append([]string(nil), normalizedTags...)
-		tasks[position].UpdatedAt = time.Now()
+		if !equalStringSlices(tasks[position].Tags, normalizedTags) {
+			tasks[position].Tags = append([]string(nil), normalizedTags...)
+			tasks[position].UpdatedAt = time.Now()
+			recordActivityLocked(tasks[position].ID, "updated", "Task tags updated")
+		}
 		updated = append(updated, cloneTask(tasks[position]))
 	}
 	return BulkUpdateResult{Tasks: updated, Updated: len(updated)}, true
+}
+
+func equalStringSlices(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if !strings.EqualFold(left[index], right[index]) {
+			return false
+		}
+	}
+	return true
 }
 
 // BulkSetTaskEstimate updates estimates only when every requested task exists.

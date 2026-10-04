@@ -1427,6 +1427,22 @@ func TestBulkSetTaskTagsIsAtomicAndNormalizes(t *testing.T) {
 	}
 }
 
+func TestBulkSetTaskTagsRecordsOnlyChangedSets(t *testing.T) {
+	ResetTasks()
+	if _, ok := BulkSetTaskTags([]int{1}, []string{"HOME", "errands"}); !ok {
+		t.Fatal("expected tag update")
+	}
+	if events := GetActivities(nil, "updated", nil, nil, 0, 20); events.Total != 0 {
+		t.Fatalf("case/order-equivalent tags should not add activity: %#v", events)
+	}
+	if _, ok := BulkSetTaskTags([]int{1}, []string{"work"}); !ok {
+		t.Fatal("expected tag replacement")
+	}
+	if events := GetActivities(nil, "updated", nil, nil, 0, 20); events.Total != 1 {
+		t.Fatalf("expected one tag-change event, got %#v", events)
+	}
+}
+
 func TestBulkSetTaskEstimateIsAtomic(t *testing.T) {
 	ResetTasks()
 	if _, err := BulkSetTaskEstimate([]int{1, 999}, 45); !errors.Is(err, ErrTaskNotFound) {
