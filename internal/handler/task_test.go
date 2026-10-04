@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -387,6 +388,30 @@ func TestHandleTasksFiltersByChecklistCompletion(t *testing.T) {
 	HandleTasks(invalid, httptest.NewRequest(http.MethodGet, "/tasks?checklistComplete=maybe", nil))
 	if invalid.Code != http.StatusBadRequest {
 		t.Fatalf("expected invalid checklist filter rejection, got %d", invalid.Code)
+	}
+}
+
+func TestHandleTasksFiltersByLastUpdatedRange(t *testing.T) {
+	resetTaskFixture()
+	if _, err := service.UpdateTaskEstimate(1, 25); err != nil {
+		t.Fatal(err)
+	}
+	updated := service.GetTaskByID(1)
+	if updated == nil {
+		t.Fatal("expected updated task")
+	}
+	windowStart := updated.UpdatedAt.Truncate(time.Second).Format(time.RFC3339)
+	windowEnd := updated.UpdatedAt.Truncate(time.Second).Add(time.Second).Format(time.RFC3339)
+	url := "/tasks?updatedAfter=" + url.QueryEscape(windowStart) + "&updatedBefore=" + url.QueryEscape(windowEnd)
+	recorder := httptest.NewRecorder()
+	HandleTasks(recorder, httptest.NewRequest(http.MethodGet, url, nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected updated range response: %d %s", recorder.Code, recorder.Body.String())
+	}
+	invalid := httptest.NewRecorder()
+	HandleTasks(invalid, httptest.NewRequest(http.MethodGet, "/tasks?updatedAfter=2030-02-01T00:00:00Z&updatedBefore=2030-01-01T00:00:00Z", nil))
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("expected reversed update window rejection, got %d", invalid.Code)
 	}
 }
 

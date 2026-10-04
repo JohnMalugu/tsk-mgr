@@ -1099,7 +1099,7 @@ func TestGetReadyTasksExcludesBlockedAndCompletedTasks(t *testing.T) {
 }
 
 func TestGetTasksReturnsEmptyPageBeyondResults(t *testing.T) {
-	page := GetTasks(nil, nil, nil, nil, nil, "", nil, nil, nil, nil, nil, nil, 100, 20, "id", false)
+	page := GetTasks(nil, nil, nil, nil, nil, "", nil, nil, nil, nil, nil, nil, nil, nil, 100, 20, "id", false)
 	if page == nil {
 		t.Fatal("expected an empty slice, got nil")
 	}
@@ -1111,7 +1111,7 @@ func TestGetTasksReturnsEmptyPageBeyondResults(t *testing.T) {
 func TestPaginatedQueriesHandleMaximumOffset(t *testing.T) {
 	ResetTasks()
 	maxInt := int(^uint(0) >> 1)
-	if page := GetTasks(nil, nil, nil, nil, nil, "", nil, nil, nil, nil, nil, nil, maxInt, 20, "id", false); len(page) != 0 {
+	if page := GetTasks(nil, nil, nil, nil, nil, "", nil, nil, nil, nil, nil, nil, nil, nil, maxInt, 20, "id", false); len(page) != 0 {
 		t.Fatalf("expected empty task page for huge offset, got %#v", page)
 	}
 	if page, found := GetTaskComments(1, maxInt, 20); !found || len(page.Comments) != 0 {
@@ -1122,6 +1122,22 @@ func TestPaginatedQueriesHandleMaximumOffset(t *testing.T) {
 	}
 	if page := GetActivities(nil, "", nil, nil, maxInt, 20); len(page.Activities) != 0 {
 		t.Fatalf("expected empty activity page for huge offset, got %#v", page)
+	}
+}
+
+func TestGetTasksFiltersByUpdatedAtBounds(t *testing.T) {
+	ResetTasks()
+	mu.Lock()
+	firstUpdate := time.Date(2030, 1, 2, 9, 0, 0, 0, time.UTC)
+	secondUpdate := firstUpdate.Add(24 * time.Hour)
+	tasks[0].UpdatedAt = firstUpdate
+	tasks[1].UpdatedAt = secondUpdate
+	mu.Unlock()
+	after := firstUpdate.Add(time.Hour)
+	before := secondUpdate.Add(time.Hour)
+	result := GetTasks(nil, nil, nil, nil, nil, "", nil, nil, nil, nil, &after, &before, nil, nil, 0, 20, "id", false)
+	if len(result) != 1 || result[0].ID != 2 {
+		t.Fatalf("expected only task updated in range, got %#v", result)
 	}
 }
 

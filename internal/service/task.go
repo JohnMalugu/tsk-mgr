@@ -541,7 +541,7 @@ type CommentPage struct {
 
 // GetAllTasks returns the first page of all tasks.
 func GetAllTasks() []model.Task {
-	return GetTasks(nil, nil, nil, nil, nil, "", nil, nil, nil, nil, nil, nil, 0, 20, "id", false)
+	return GetTasks(nil, nil, nil, nil, nil, "", nil, nil, nil, nil, nil, nil, nil, nil, 0, 20, "id", false)
 }
 
 // GetActivities returns a filtered page ordered from newest to oldest.
@@ -680,7 +680,7 @@ func GetTagSummary(offset, limit int) TagSummaryPage {
 }
 
 // GetTasks returns a page of tasks matching the optional filters.
-func GetTasks(completed, overdue, recurring *bool, status *string, checklistComplete *bool, search string, priority *string, tag *string, dueAfter, dueBefore *time.Time, minEstimate, maxEstimate *int, offset, limit int, sortBy string, descending bool) []model.Task {
+func GetTasks(completed, overdue, recurring *bool, status *string, checklistComplete *bool, search string, priority *string, tag *string, dueAfter, dueBefore, updatedAfter, updatedBefore *time.Time, minEstimate, maxEstimate *int, offset, limit int, sortBy string, descending bool) []model.Task {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -725,6 +725,12 @@ func GetTasks(completed, overdue, recurring *bool, status *string, checklistComp
 			continue
 		}
 		if dueBefore != nil && task.DueDate.After(*dueBefore) {
+			continue
+		}
+		if updatedAfter != nil && task.UpdatedAt.Before(*updatedAfter) {
+			continue
+		}
+		if updatedBefore != nil && task.UpdatedAt.After(*updatedBefore) {
 			continue
 		}
 		if minEstimate != nil && task.EstimateMinutes < *minEstimate {

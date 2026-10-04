@@ -25,7 +25,7 @@ Task status values are `todo`, `in_progress`, `completed`, and `canceled`. The `
 List tasks with optional filters and sorting:
 
 ```text
-GET /tasks?q=release&completed=false&overdue=false&priority=high&tag=release&dueAfter=2030-01-01T00:00:00Z&dueBefore=2030-01-31T23:59:59Z&offset=0&limit=20&sort=dueDate&order=asc
+GET /tasks?q=release&status=in_progress&completed=false&overdue=false&priority=high&tag=release&dueAfter=2030-01-01T00:00:00Z&dueBefore=2030-01-31T23:59:59Z&updatedAfter=2030-01-01T00:00:00Z&updatedBefore=2030-01-31T23:59:59Z&minEstimate=30&maxEstimate=120&checklistComplete=false&offset=0&limit=20&sort=dueDate&order=asc
 ```
 
 Search matches title, description, tags, and checklist text. Sort fields include `id`, `title`, `dueDate`, `priority`, `completed`, `estimateMinutes`, `updatedAt`, and `status`.

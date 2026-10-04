@@ -70,6 +70,20 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, http.StatusBadRequest, "dueAfter must not be later than dueBefore")
 			return
 		}
+		updatedAfter, err := dateFilter(r, "updatedAfter")
+		if err != nil {
+			respondError(w, r, http.StatusBadRequest, "updatedAfter must be an RFC3339 timestamp")
+			return
+		}
+		updatedBefore, err := dateFilter(r, "updatedBefore")
+		if err != nil {
+			respondError(w, r, http.StatusBadRequest, "updatedBefore must be an RFC3339 timestamp")
+			return
+		}
+		if updatedAfter != nil && updatedBefore != nil && updatedAfter.After(*updatedBefore) {
+			respondError(w, r, http.StatusBadRequest, "updatedAfter must not be later than updatedBefore")
+			return
+		}
 		minEstimate, err := optionalNonNegativeInt(r, "minEstimate")
 		if err != nil {
 			respondError(w, r, http.StatusBadRequest, "minEstimate must be a non-negative integer")
@@ -94,7 +108,7 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, http.StatusBadRequest, err.Error())
 			return
 		}
-		respondJSON(w, http.StatusOK, service.GetTasks(completed, overdue, recurring, status, checklistComplete, r.URL.Query().Get("q"), priority, tag, dueAfter, dueBefore, minEstimate, maxEstimate, offset, limit, sortBy, descending))
+		respondJSON(w, http.StatusOK, service.GetTasks(completed, overdue, recurring, status, checklistComplete, r.URL.Query().Get("q"), priority, tag, dueAfter, dueBefore, updatedAfter, updatedBefore, minEstimate, maxEstimate, offset, limit, sortBy, descending))
 	case http.MethodPost:
 		createTask(w, r)
 	default:
