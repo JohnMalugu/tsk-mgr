@@ -2096,8 +2096,12 @@ func BulkSetTaskDueDate(ids []int, dueDate time.Time) (BulkUpdateResult, bool) {
 
 	updated := make([]model.Task, 0, len(positions))
 	for _, position := range positions {
-		tasks[position].DueDate = dueDate
-		tasks[position].UpdatedAt = time.Now()
+		if !tasks[position].DueDate.Equal(dueDate) {
+			previous := tasks[position].DueDate
+			tasks[position].DueDate = dueDate
+			tasks[position].UpdatedAt = time.Now()
+			recordActivityLocked(tasks[position].ID, "updated", "Due date changed from "+previous.Format(time.RFC3339)+" to "+dueDate.Format(time.RFC3339))
+		}
 		updated = append(updated, cloneTask(tasks[position]))
 	}
 	return BulkUpdateResult{Tasks: updated, Updated: len(updated)}, true
