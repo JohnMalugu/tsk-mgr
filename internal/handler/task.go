@@ -558,6 +558,53 @@ func HandleChecklistOrder(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, items)
 }
 
+func HandleBulkChecklistCompletion(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	taskID, err := taskIDFromSuffix(r.URL.Path, "/checklist/complete")
+	if err != nil {
+		respondError(w, r, http.StatusBadRequest, "task id must be a positive integer")
+		return
+	}
+	var payload struct {
+		ItemIDs   []int `json:"itemIds"`
+		Completed *bool `json:"completed"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&payload); err != nil {
+		respondError(w, r, http.StatusBadRequest, "request body must be valid JSON")
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		respondError(w, r, http.StatusBadRequest, "request body must contain a single JSON value")
+		return
+	}
+	if len(payload.ItemIDs) == 0 || payload.Completed == nil {
+		respondError(w, r, http.StatusBadRequest, "itemIds and completed are required")
+		return
+	}
+	for _, itemID := range payload.ItemIDs {
+		if itemID < 1 {
+			respondError(w, r, http.StatusBadRequest, "checklist item ids must be positive integers")
+			return
+		}
+	}
+	items, err := service.BulkSetChecklistCompletion(taskID, payload.ItemIDs, *payload.Completed)
+	if err != nil {
+		if errors.Is(err, service.ErrTaskNotFound) || errors.Is(err, service.ErrChecklistItemNotFound) {
+			respondError(w, r, http.StatusNotFound, err.Error())
+		} else {
+			respondError(w, r, http.StatusBadRequest, err.Error())
+		}
+		return
+	}
+	respondJSON(w, http.StatusOK, items)
+}
+
 func HandleChecklistProgress(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)

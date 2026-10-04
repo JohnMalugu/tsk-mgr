@@ -39,6 +39,7 @@ func main() {
 	fmt.Printf("   GET    http://localhost:8080/tasks/{id}/checklist\n")
 	fmt.Printf("   POST   http://localhost:8080/tasks/{id}/checklist\n")
 	fmt.Printf("   PUT    http://localhost:8080/tasks/{id}/checklist/order\n")
+	fmt.Printf("   POST   http://localhost:8080/tasks/{id}/checklist/complete\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/{id}/checklist/progress\n")
 	fmt.Printf("   PATCH  http://localhost:8080/tasks/{id}/checklist/{itemId}\n")
 	fmt.Printf("   DELETE http://localhost:8080/tasks/{id}/checklist/{itemId}\n")

@@ -94,6 +94,10 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		handler.HandleChecklistOrder(w, r)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/tasks/") && strings.HasSuffix(r.URL.Path, "/checklist/complete") {
+		handler.HandleBulkChecklistCompletion(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/tasks/") && strings.HasSuffix(r.URL.Path, "/checklist/progress") {
 		handler.HandleChecklistProgress(w, r)
 		return

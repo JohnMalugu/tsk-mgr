@@ -237,6 +237,24 @@ func TestTaskCommentsRouteLifecycle(t *testing.T) {
 	}
 }
 
+func TestBulkChecklistCompletionRoute(t *testing.T) {
+	service.ResetTasks()
+	first, err := service.AddChecklistItem(1, "First")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := service.AddChecklistItem(1, "Second")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := fmt.Sprintf(`{"itemIds":[%d,%d],"completed":true}`, first.ID, second.ID)
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodPost, "/tasks/1/checklist/complete", strings.NewReader(payload)))
+	if recorder.Code != http.StatusOK || strings.Count(recorder.Body.String(), `"completed":true`) != 2 {
+		t.Fatalf("unexpected bulk checklist completion response: %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestTaskOccurrencesRouteReturnsSeries(t *testing.T) {
 	service.ResetTasks()
 	first, err := service.CreateTaskWithDependencies(model.Task{
