@@ -482,6 +482,20 @@ func TestTaskDependentsRoute(t *testing.T) {
 	}
 }
 
+func TestDuplicateTaskRoute(t *testing.T) {
+	service.ResetTasks()
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodPost, "/tasks/1/duplicate", nil))
+	if recorder.Code != http.StatusCreated || !strings.Contains(recorder.Body.String(), "Buy groceries (copy)") || !strings.Contains(recorder.Body.String(), `"status":"todo"`) {
+		t.Fatalf("unexpected duplicate response: %d %s", recorder.Code, recorder.Body.String())
+	}
+	missing := httptest.NewRecorder()
+	Router(missing, httptest.NewRequest(http.MethodPost, "/tasks/999/duplicate", nil))
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("expected missing source response, got %d", missing.Code)
+	}
+}
+
 func TestDependenciesRouteIsDispatched(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks/1/dependencies", nil)
 	recorder := httptest.NewRecorder()

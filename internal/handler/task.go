@@ -269,6 +269,25 @@ func HandleTaskByID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func HandleDuplicateTask(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	taskID, err := taskIDFromSuffix(r.URL.Path, "/duplicate")
+	if err != nil {
+		respondError(w, r, http.StatusBadRequest, "task id must be a positive integer")
+		return
+	}
+	duplicate, err := service.DuplicateTask(taskID)
+	if err != nil {
+		respondError(w, r, http.StatusNotFound, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusCreated, duplicate)
+}
+
 func createTask(w http.ResponseWriter, r *http.Request) {
 	task, ok := decodeTask(w, r)
 	if !ok {
