@@ -1053,6 +1053,23 @@ func TestGetTasksReturnsEmptyPageBeyondResults(t *testing.T) {
 	}
 }
 
+func TestPaginatedQueriesHandleMaximumOffset(t *testing.T) {
+	ResetTasks()
+	maxInt := int(^uint(0) >> 1)
+	if page := GetTasks(nil, nil, nil, nil, "", nil, nil, nil, nil, nil, nil, maxInt, 20, "id", false); len(page) != 0 {
+		t.Fatalf("expected empty task page for huge offset, got %#v", page)
+	}
+	if page, found := GetTaskComments(1, maxInt, 20); !found || len(page.Comments) != 0 {
+		t.Fatalf("expected empty comment page for huge offset, page=%#v found=%v", page, found)
+	}
+	if page := GetTagSummary(maxInt, 20); len(page.Tags) != 0 {
+		t.Fatalf("expected empty tag page for huge offset, got %#v", page)
+	}
+	if page := GetActivities(nil, "", nil, nil, maxInt, 20); len(page.Activities) != 0 {
+		t.Fatalf("expected empty activity page for huge offset, got %#v", page)
+	}
+}
+
 func TestGetUpcomingTasksFiltersAndSorts(t *testing.T) {
 	ResetTasks()
 	now := time.Date(2030, 1, 1, 12, 0, 0, 0, time.UTC)

@@ -201,15 +201,8 @@ func GetTaskComments(taskID, offset, limit int) (CommentPage, bool) {
 		}
 	}
 	total := len(comments)
-	if offset >= total {
-		comments = []model.TaskComment{}
-	} else {
-		end := offset + limit
-		if end > total {
-			end = total
-		}
-		comments = comments[offset:end]
-	}
+	start, end := pageBounds(offset, limit, total)
+	comments = comments[start:end]
 	return CommentPage{Comments: comments, Total: total, Offset: offset, Limit: limit}, true
 }
 
@@ -231,6 +224,16 @@ func DeleteTaskComment(taskID, commentID int) error {
 		return nil
 	}
 	return ErrCommentNotFound
+}
+
+func pageBounds(offset, limit, total int) (int, int) {
+	if offset >= total {
+		return total, total
+	}
+	if limit > total-offset {
+		return offset, total
+	}
+	return offset, offset + limit
 }
 
 func recordActivityLocked(taskID int, action, summary string) {
@@ -568,14 +571,8 @@ func GetActivities(taskID *int, action string, from, to *time.Time, offset, limi
 		return filtered[i].OccurredAt.After(filtered[j].OccurredAt)
 	})
 	total := len(filtered)
-	if offset >= total {
-		return ActivityPage{Activities: []model.Activity{}, Total: total, Offset: offset, Limit: limit}
-	}
-	end := offset + limit
-	if end < offset || end > total {
-		end = total
-	}
-	return ActivityPage{Activities: filtered[offset:end], Total: total, Offset: offset, Limit: limit}
+	start, end := pageBounds(offset, limit, total)
+	return ActivityPage{Activities: filtered[start:end], Total: total, Offset: offset, Limit: limit}
 }
 func contains(items []string, target string) bool {
 	for _, item := range items {
@@ -673,15 +670,8 @@ func GetTagSummary(offset, limit int) TagSummaryPage {
 		return result[i].TaskCount > result[j].TaskCount
 	})
 	total := len(result)
-	if offset >= total {
-		result = []TagSummary{}
-	} else {
-		end := offset + limit
-		if end > total {
-			end = total
-		}
-		result = result[offset:end]
-	}
+	start, end := pageBounds(offset, limit, total)
+	result = result[start:end]
 	return TagSummaryPage{Tags: result, Total: total, Offset: offset, Limit: limit}
 }
 
@@ -823,14 +813,8 @@ func GetTasks(completed, overdue, recurring *bool, status *string, search string
 		}
 		return comparison < 0
 	})
-	if offset >= len(result) {
-		return []model.Task{}
-	}
-	end := offset + limit
-	if end > len(result) {
-		end = len(result)
-	}
-	return result[offset:end]
+	start, end := pageBounds(offset, limit, len(result))
+	return result[start:end]
 }
 
 func cloneTask(task model.Task) model.Task {
