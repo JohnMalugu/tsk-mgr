@@ -335,7 +335,7 @@ func TestHandleTasksFiltersByStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	recorder := httptest.NewRecorder()
-	HandleTasks(recorder, httptest.NewRequest(http.MethodGet, "/tasks?status=in_progress", nil))
+	HandleTasks(recorder, httptest.NewRequest(http.MethodGet, "/tasks?status=%20IN_PROGRESS%20", nil))
 	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"title":"Running"`) || strings.Contains(recorder.Body.String(), `"title":"Learn Go"`) {
 		t.Fatalf("unexpected status filter response: %d %s", recorder.Code, recorder.Body.String())
 	}

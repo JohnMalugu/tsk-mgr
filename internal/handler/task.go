@@ -213,7 +213,7 @@ func priorityFilter(r *http.Request) (*string, error) {
 }
 
 func statusFilter(r *http.Request) (*string, error) {
-	value := r.URL.Query().Get("status")
+	value := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("status")))
 	if value == "" {
 		return nil, nil
 	}
