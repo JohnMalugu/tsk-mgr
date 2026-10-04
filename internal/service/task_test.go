@@ -154,6 +154,24 @@ func TestUpdateTaskCommentChangesBodyAndRecordsActivity(t *testing.T) {
 	}
 }
 
+func TestCompletedStatusSetsLegacyCompletionOnCreateAndUpdate(t *testing.T) {
+	ResetTasks()
+	created := CreateTask(model.Task{Title: "Completed via status", Status: model.TaskStatusCompleted})
+	if !created.Completed || created.Status != model.TaskStatusCompleted {
+		t.Fatalf("status not reflected in legacy completion field: %#v", created)
+	}
+	existing := GetTaskByID(2)
+	if existing == nil {
+		t.Fatal("expected seeded task")
+	}
+	existing.Status = model.TaskStatusCompleted
+	existing.Completed = false
+	updated := UpdateTask(existing.ID, *existing)
+	if updated == nil || !updated.Completed || updated.Status != model.TaskStatusCompleted {
+		t.Fatalf("updated status not reflected in completion field: %#v", updated)
+	}
+}
+
 func TestValidateRecurrenceRuleBoundsAndDates(t *testing.T) {
 	due := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	valid := &model.RecurrenceRule{Frequency: "weekly", Interval: 2}

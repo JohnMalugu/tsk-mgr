@@ -599,6 +599,9 @@ func normalizeTags(tags []string) []string {
 }
 
 func normalizeTaskStatus(task *model.Task) {
+	if task.Status == model.TaskStatusCompleted {
+		task.Completed = true
+	}
 	if task.Completed {
 		task.Status = model.TaskStatusCompleted
 		return
