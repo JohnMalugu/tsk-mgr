@@ -36,6 +36,11 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, http.StatusBadRequest, "recurring must be true or false")
 			return
 		}
+		checklistComplete, err := completionQueryFilter(r, "checklistComplete")
+		if err != nil {
+			respondError(w, r, http.StatusBadRequest, "checklistComplete must be true or false")
+			return
+		}
 		priority, err := priorityFilter(r)
 		if err != nil {
 			respondError(w, r, http.StatusBadRequest, "priority must be low, medium, or high")
@@ -89,7 +94,7 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, http.StatusBadRequest, err.Error())
 			return
 		}
-		respondJSON(w, http.StatusOK, service.GetTasks(completed, overdue, recurring, status, r.URL.Query().Get("q"), priority, tag, dueAfter, dueBefore, minEstimate, maxEstimate, offset, limit, sortBy, descending))
+		respondJSON(w, http.StatusOK, service.GetTasks(completed, overdue, recurring, status, checklistComplete, r.URL.Query().Get("q"), priority, tag, dueAfter, dueBefore, minEstimate, maxEstimate, offset, limit, sortBy, descending))
 	case http.MethodPost:
 		createTask(w, r)
 	default:
@@ -162,7 +167,11 @@ func sorting(r *http.Request) (string, bool, error) {
 }
 
 func completionFilter(r *http.Request) (*bool, error) {
-	value := r.URL.Query().Get("completed")
+	return completionQueryFilter(r, "completed")
+}
+
+func completionQueryFilter(r *http.Request, name string) (*bool, error) {
+	value := r.URL.Query().Get(name)
 	if value == "" {
 		return nil, nil
 	}

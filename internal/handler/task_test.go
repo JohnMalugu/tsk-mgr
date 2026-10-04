@@ -366,6 +366,30 @@ func TestHandleTasksFiltersByEstimateRange(t *testing.T) {
 	}
 }
 
+func TestHandleTasksFiltersByChecklistCompletion(t *testing.T) {
+	resetTaskFixture()
+	first, err := service.AddChecklistItem(1, "First")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.SetChecklistItemCompletion(1, first.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.AddChecklistItem(2, "Second"); err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	HandleTasks(recorder, httptest.NewRequest(http.MethodGet, "/tasks?checklistComplete=true", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"id":1`) || strings.Contains(recorder.Body.String(), `"id":2`) {
+		t.Fatalf("unexpected completed checklist filter response: %d %s", recorder.Code, recorder.Body.String())
+	}
+	invalid := httptest.NewRecorder()
+	HandleTasks(invalid, httptest.NewRequest(http.MethodGet, "/tasks?checklistComplete=maybe", nil))
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid checklist filter rejection, got %d", invalid.Code)
+	}
+}
+
 func TestHandleTasksRejectsInvalidSort(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks?sort=unknown", nil)
 	recorder := httptest.NewRecorder()

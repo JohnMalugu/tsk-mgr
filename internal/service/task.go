@@ -541,7 +541,7 @@ type CommentPage struct {
 
 // GetAllTasks returns the first page of all tasks.
 func GetAllTasks() []model.Task {
-	return GetTasks(nil, nil, nil, nil, "", nil, nil, nil, nil, nil, nil, 0, 20, "id", false)
+	return GetTasks(nil, nil, nil, nil, nil, "", nil, nil, nil, nil, nil, nil, 0, 20, "id", false)
 }
 
 // GetActivities returns a filtered page ordered from newest to oldest.
@@ -680,7 +680,7 @@ func GetTagSummary(offset, limit int) TagSummaryPage {
 }
 
 // GetTasks returns a page of tasks matching the optional filters.
-func GetTasks(completed, overdue, recurring *bool, status *string, search string, priority *string, tag *string, dueAfter, dueBefore *time.Time, minEstimate, maxEstimate *int, offset, limit int, sortBy string, descending bool) []model.Task {
+func GetTasks(completed, overdue, recurring *bool, status *string, checklistComplete *bool, search string, priority *string, tag *string, dueAfter, dueBefore *time.Time, minEstimate, maxEstimate *int, offset, limit int, sortBy string, descending bool) []model.Task {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -699,6 +699,21 @@ func GetTasks(completed, overdue, recurring *bool, status *string, search string
 		}
 		if status != nil && task.Status != *status {
 			continue
+		}
+		if checklistComplete != nil {
+			if len(task.Checklist) == 0 {
+				continue
+			}
+			allComplete := true
+			for _, item := range task.Checklist {
+				if !item.Completed {
+					allComplete = false
+					break
+				}
+			}
+			if allComplete != *checklistComplete {
+				continue
+			}
 		}
 		if priority != nil && strings.ToLower(task.Priority) != strings.ToLower(*priority) {
 			continue
