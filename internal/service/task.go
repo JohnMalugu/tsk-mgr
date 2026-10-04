@@ -633,8 +633,10 @@ func GetTaskSummary() TaskSummary {
 		if _, ok := summary.ByPriority[priority]; ok {
 			summary.ByPriority[priority]++
 		}
-		if task.Completed {
-			summary.Completed++
+		if task.Completed || task.Status == model.TaskStatusCanceled {
+			if task.Completed {
+				summary.Completed++
+			}
 			continue
 		}
 		summary.Pending++
@@ -694,7 +696,7 @@ func GetTasks(completed, overdue, recurring *bool, status *string, search string
 		if completed != nil && task.Completed != *completed {
 			continue
 		}
-		isOverdue := !task.Completed && task.DueDate.Before(time.Now())
+		isOverdue := !task.Completed && task.Status != model.TaskStatusCanceled && task.DueDate.Before(time.Now())
 		if overdue != nil && isOverdue != *overdue {
 			continue
 		}
@@ -1179,7 +1181,7 @@ func GetReadyTasks() []model.Task {
 	defer mu.RUnlock()
 	ready := make([]model.Task, 0)
 	for _, task := range tasks {
-		if task.Completed || hasIncompletePrerequisiteLocked(task) {
+		if task.Completed || task.Status == model.TaskStatusCanceled || hasIncompletePrerequisiteLocked(task) {
 			continue
 		}
 		copy := task
@@ -1219,7 +1221,7 @@ func GetUpcomingTasks(now time.Time, days int) []model.Task {
 	deadline := now.AddDate(0, 0, days)
 	upcoming := make([]model.Task, 0)
 	for _, task := range tasks {
-		if task.Completed || task.DueDate.Before(now) || task.DueDate.After(deadline) {
+		if task.Completed || task.Status == model.TaskStatusCanceled || task.DueDate.Before(now) || task.DueDate.After(deadline) {
 			continue
 		}
 		upcoming = append(upcoming, cloneTask(task))

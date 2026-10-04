@@ -1092,6 +1092,32 @@ func TestGetBlockedTasksReturnsIncompleteDependents(t *testing.T) {
 	}
 }
 
+func TestCanceledTasksStayOutOfActiveQueuesAndPendingCounts(t *testing.T) {
+	ResetTasks()
+	dueDate := time.Date(2030, 1, 1, 9, 0, 0, 0, time.UTC)
+	canceled, err := CreateTaskWithDependencies(model.Task{Title: "Canceled", DueDate: dueDate, Status: model.TaskStatusCanceled}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CreateTaskWithDependencies(model.Task{Title: "Active", DueDate: dueDate.Add(time.Hour)}, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, task := range GetReadyTasks() {
+		if task.ID == canceled.ID {
+			t.Fatal("canceled task appeared in ready queue")
+		}
+	}
+	for _, task := range GetUpcomingTasks(time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC), 1) {
+		if task.ID == canceled.ID {
+			t.Fatal("canceled task appeared in upcoming queue")
+		}
+	}
+	summary := GetTaskSummary()
+	if summary.Pending != 3 || summary.ByStatus[model.TaskStatusCanceled] != 1 {
+		t.Fatalf("canceled task counted as pending: %#v", summary)
+	}
+}
+
 func TestBulkSetTaskCompletionUpdatesAllTasks(t *testing.T) {
 	ResetTasks()
 
