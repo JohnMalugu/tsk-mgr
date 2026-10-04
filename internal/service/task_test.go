@@ -1135,6 +1135,23 @@ func TestCanceledTasksStayOutOfActiveQueuesAndPendingCounts(t *testing.T) {
 	}
 }
 
+func TestCanceledTasksAreNotReportedAsBlocked(t *testing.T) {
+	ResetTasks()
+	if _, err := AddTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := UpdateTaskWithDependencies(1, model.Task{Title: "Canceled dependent", DueDate: time.Now(), Status: model.TaskStatusCanceled, DependsOn: []int{2}}, []int{2})
+	if err != nil || updated == nil {
+		t.Fatalf("expected cancellation update, task=%#v err=%v", updated, err)
+	}
+	if blocked := GetBlockedTasks(); len(blocked) != 0 {
+		t.Fatalf("canceled task appeared in blocked queue: %#v", blocked)
+	}
+	if summary := GetTaskSummary(); summary.Blocked != 0 {
+		t.Fatalf("canceled task counted as blocked: %#v", summary)
+	}
+}
+
 func TestBulkSetTaskCompletionUpdatesAllTasks(t *testing.T) {
 	ResetTasks()
 

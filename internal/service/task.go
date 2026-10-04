@@ -623,7 +623,7 @@ func GetTaskSummary() TaskSummary {
 	for _, task := range tasks {
 		summary.EstimatedMinutes += task.EstimateMinutes
 		summary.ByStatus[task.Status]++
-		if hasIncompletePrerequisiteLocked(task) {
+		if !task.Completed && task.Status != model.TaskStatusCanceled && hasIncompletePrerequisiteLocked(task) {
 			summary.Blocked++
 		}
 		priority := strings.ToLower(task.Priority)
@@ -1184,7 +1184,7 @@ func GetBlockedTasks() []model.Task {
 	defer mu.RUnlock()
 	blocked := make([]model.Task, 0)
 	for _, task := range tasks {
-		if task.Completed || !hasIncompletePrerequisiteLocked(task) {
+		if task.Completed || task.Status == model.TaskStatusCanceled || !hasIncompletePrerequisiteLocked(task) {
 			continue
 		}
 		blocked = append(blocked, cloneTask(task))
