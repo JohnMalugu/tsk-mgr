@@ -1440,7 +1440,7 @@ func TestSkipTaskOccurrenceCancelsAndAdvancesSeries(t *testing.T) {
 		t.Fatalf("unexpected skipped occurrence: %#v err=%v", skipped, err)
 	}
 	occurrences, err := GetTaskOccurrences(task.ID)
-	if err != nil || len(occurrences) != 2 || occurrences[1].DueDate != dueDate.AddDate(0, 0, 7) {
+	if err != nil || len(occurrences) != 2 || occurrences[1].DueDate != dueDate.AddDate(0, 0, 7) || occurrences[1].Status != model.TaskStatusTodo {
 		t.Fatalf("expected next weekly occurrence, got %#v err=%v", occurrences, err)
 	}
 	if events := GetActivities(&task.ID, "recurrence_skipped", nil, nil, 0, 20); events.Total != 1 {

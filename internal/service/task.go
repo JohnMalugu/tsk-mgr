@@ -1487,6 +1487,7 @@ func buildNextOccurrence(source model.Task, id, checklistStartID int, dueDate, n
 	next.UpdatedAt = now
 	next.DueDate = dueDate
 	next.Completed = false
+	next.Status = model.TaskStatusTodo
 	next.DependsOn = append([]int(nil), source.DependsOn...)
 	next.Tags = append([]string(nil), source.Tags...)
 	next.Recurrence = cloneRecurrenceRule(source.Recurrence)
@@ -1652,7 +1653,7 @@ func UpdateTaskWithDependencies(id int, task model.Task, dependencyIDs []int) (*
 			} else {
 				recordActivityLocked(id, "updated", "Task updated: "+task.Title)
 			}
-				updated := cloneTask(tasks[i])
+			updated := cloneTask(tasks[i])
 			return &updated, nil
 		}
 	}
