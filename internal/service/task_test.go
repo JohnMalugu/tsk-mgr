@@ -574,6 +574,29 @@ func TestSetChecklistItemCompletion(t *testing.T) {
 	}
 }
 
+func TestBulkSetChecklistCompletionIsAtomic(t *testing.T) {
+	ResetTasks()
+	first, err := AddChecklistItem(1, "First")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := AddChecklistItem(1, "Second")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BulkSetChecklistCompletion(1, []int{first.ID, 999}, true); !errors.Is(err, ErrChecklistItemNotFound) {
+		t.Fatalf("expected missing item error, got %v", err)
+	}
+	items, _ := GetTaskChecklist(1)
+	if items[0].Completed || items[1].Completed {
+		t.Fatalf("rejected batch partially changed checklist: %#v", items)
+	}
+	updated, err := BulkSetChecklistCompletion(1, []int{first.ID, second.ID, first.ID}, true)
+	if err != nil || len(updated) != 2 || !updated[0].Completed || !updated[1].Completed {
+		t.Fatalf("unexpected bulk checklist result: %#v err=%v", updated, err)
+	}
+}
+
 func TestUpdateChecklistItemTextPreservesState(t *testing.T) {
 	ResetTasks()
 	item, err := AddChecklistItem(1, "draft")

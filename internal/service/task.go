@@ -960,6 +960,46 @@ func SetChecklistItemCompletion(taskID, itemID int, completed bool) (model.Check
 	return model.ChecklistItem{}, ErrTaskNotFound
 }
 
+// BulkSetChecklistCompletion updates selected checklist items atomically.
+func BulkSetChecklistCompletion(taskID int, itemIDs []int, completed bool) ([]model.ChecklistItem, error) {
+	mu.Lock()
+	defer mu.Unlock()
+	taskPosition := findTaskPositionLocked(taskID)
+	if taskPosition < 0 {
+		return nil, ErrTaskNotFound
+	}
+	positions := make([]int, 0, len(itemIDs))
+	seen := make(map[int]struct{}, len(itemIDs))
+	for _, itemID := range itemIDs {
+		if _, duplicate := seen[itemID]; duplicate {
+			continue
+		}
+		seen[itemID] = struct{}{}
+		itemPosition := -1
+		for index := range tasks[taskPosition].Checklist {
+			if tasks[taskPosition].Checklist[index].ID == itemID {
+				itemPosition = index
+				break
+			}
+		}
+		if itemPosition < 0 {
+			return nil, ErrChecklistItemNotFound
+		}
+		positions = append(positions, itemPosition)
+	}
+	updated := make([]model.ChecklistItem, 0, len(positions))
+	for _, position := range positions {
+		item := &tasks[taskPosition].Checklist[position]
+		if item.Completed != completed {
+			item.Completed = completed
+			tasks[taskPosition].UpdatedAt = time.Now()
+			recordChecklistCompletionActivityLocked(taskID, *item)
+		}
+		updated = append(updated, *item)
+	}
+	return updated, nil
+}
+
 // UpdateChecklistItemText changes an item's text without changing its identity or completion state.
 func UpdateChecklistItemText(taskID, itemID int, text string) (model.ChecklistItem, error) {
 	mu.Lock()
