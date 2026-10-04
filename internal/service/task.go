@@ -731,6 +731,14 @@ func GetTasks(completed, overdue, recurring *bool, status *string, search string
 			}
 		}
 		if search != "" && !matchesSearch {
+			for _, comment := range taskComments {
+				if comment.TaskID == task.ID && strings.Contains(strings.ToLower(comment.Body), search) {
+					matchesSearch = true
+					break
+				}
+			}
+		}
+		if search != "" && !matchesSearch {
 			for _, tag := range task.Tags {
 				if strings.Contains(strings.ToLower(tag), search) {
 					matchesSearch = true

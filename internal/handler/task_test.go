@@ -182,6 +182,18 @@ func TestHandleTasksSearchesChecklistItems(t *testing.T) {
 	}
 }
 
+func TestHandleTasksSearchesComments(t *testing.T) {
+	resetTaskFixture()
+	if _, err := service.AddTaskComment(1, "Coordinate the migration window"); err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	HandleTasks(recorder, httptest.NewRequest(http.MethodGet, "/tasks?q=migration", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"id":1`) || strings.Contains(recorder.Body.String(), `"id":2`) {
+		t.Fatalf("unexpected comment search response: %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestHandleTasksFiltersByDueDateRange(t *testing.T) {
 	resetTaskFixture()
 	for _, payload := range []string{
