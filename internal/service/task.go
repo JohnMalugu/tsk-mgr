@@ -41,6 +41,7 @@ var (
 
 var activityActions = map[string]struct{}{
 	"created": {}, "updated": {}, "completed": {}, "reopened": {}, "deleted": {}, "recurrence_skipped": {},
+	"duplicated":       {},
 	"dependency_added": {}, "dependency_removed": {}, "dependencies_updated": {},
 	"checklist_item_added": {}, "checklist_item_updated": {}, "checklist_item_completed": {},
 	"checklist_item_reopened": {}, "checklist_item_deleted": {}, "checklist_reordered": {}, "estimate_updated": {},
@@ -1512,6 +1513,43 @@ func CreateTaskWithDependencies(task model.Task, dependencyIDs []int) (model.Tas
 	tasks = append(tasks, task)
 	recordActivityLocked(task.ID, "created", "Task created: "+task.Title)
 	return cloneTask(task), nil
+}
+
+// DuplicateTask creates a new task from an existing task without copying recurrence history.
+func DuplicateTask(taskID int) (model.Task, error) {
+	mu.Lock()
+	defer mu.Unlock()
+	position := findTaskPositionLocked(taskID)
+	if position < 0 {
+		return model.Task{}, ErrTaskNotFound
+	}
+	source := tasks[position]
+	for _, dependencyID := range source.DependsOn {
+		if findTaskPositionLocked(dependencyID) < 0 {
+			return model.Task{}, ErrTaskNotFound
+		}
+	}
+	now := time.Now()
+	copy := cloneTask(source)
+	copy.ID = nextID
+	copy.Title = source.Title + " (copy)"
+	copy.CreatedAt = now
+	copy.UpdatedAt = now
+	copy.Completed = false
+	copy.Status = model.TaskStatusTodo
+	copy.Recurrence = nil
+	copy.RecurrenceSeriesID = 0
+	copy.RecurrenceOccurrence = 0
+	copy.Checklist = make([]model.ChecklistItem, len(source.Checklist))
+	for index, item := range source.Checklist {
+		copy.Checklist[index] = model.ChecklistItem{ID: nextChecklistItemID, Text: item.Text}
+		nextChecklistItemID++
+	}
+	nextID++
+	tasks = append(tasks, copy)
+	recordActivityLocked(copy.ID, "created", "Task created: "+copy.Title)
+	recordActivityLocked(copy.ID, "duplicated", "Duplicated from task "+strconv.Itoa(taskID))
+	return cloneTask(copy), nil
 }
 
 func cloneRecurrenceRule(rule *model.RecurrenceRule) *model.RecurrenceRule {

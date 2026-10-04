@@ -1300,6 +1300,31 @@ func TestCreateTaskNormalizesTags(t *testing.T) {
 	}
 }
 
+func TestDuplicateTaskResetsProgressAndDetachesRecurrence(t *testing.T) {
+	ResetTasks()
+	source, err := CreateTaskWithDependencies(model.Task{
+		Title: "Weekly report", DueDate: time.Now().Add(24 * time.Hour), Completed: true,
+		Recurrence: &model.RecurrenceRule{Frequency: "weekly", Interval: 1},
+		Checklist:  []model.ChecklistItem{{ID: 90, Text: "Draft", Completed: true}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	duplicate, err := DuplicateTask(source.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate.ID == source.ID || duplicate.Title != "Weekly report (copy)" || duplicate.Completed || duplicate.Status != model.TaskStatusTodo || duplicate.Recurrence != nil {
+		t.Fatalf("unexpected duplicate task state: %#v", duplicate)
+	}
+	if len(duplicate.Checklist) != 1 || duplicate.Checklist[0].ID == source.Checklist[0].ID || duplicate.Checklist[0].Completed {
+		t.Fatalf("duplicate checklist progress/identity was not reset: %#v", duplicate.Checklist)
+	}
+	if !IsActivityAction("duplicated") {
+		t.Fatal("duplicate activity must be supported")
+	}
+}
+
 func TestCreateTaskDefaultsPriority(t *testing.T) {
 	ResetTasks()
 	created := CreateTask(model.Task{Title: "No priority"})
