@@ -483,6 +483,27 @@ func TestGetTaskByIDReturnsCopy(t *testing.T) {
 	}
 }
 
+func TestCreateAndUpdateTaskReturnIndependentChecklistSnapshots(t *testing.T) {
+	ResetTasks()
+	created := CreateTask(model.Task{Title: "Snapshot", Checklist: []model.ChecklistItem{{Text: "Original"}}})
+	created.Checklist[0].Text = "Mutated create result"
+	stored := GetTaskByID(created.ID)
+	if stored == nil || stored.Checklist[0].Text != "Original" {
+		t.Fatalf("create result mutated stored checklist: %#v", stored)
+	}
+	update := *stored
+	update.Checklist[0].Text = "Updated"
+	updated := UpdateTask(created.ID, update)
+	if updated == nil {
+		t.Fatal("expected task update")
+	}
+	updated.Checklist[0].Text = "Mutated update result"
+	stored = GetTaskByID(created.ID)
+	if stored == nil || stored.Checklist[0].Text != "Updated" {
+		t.Fatalf("update result mutated stored checklist: %#v", stored)
+	}
+}
+
 func TestGetTaskChecklistReturnsCopyAndDistinguishesMissing(t *testing.T) {
 	ResetTasks()
 	items, found := GetTaskChecklist(1)

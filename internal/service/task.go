@@ -1457,7 +1457,7 @@ func CreateTaskWithDependencies(task model.Task, dependencyIDs []int) (model.Tas
 	nextID++
 	tasks = append(tasks, task)
 	recordActivityLocked(task.ID, "created", "Task created: "+task.Title)
-	return task, nil
+	return cloneTask(task), nil
 }
 
 func cloneRecurrenceRule(rule *model.RecurrenceRule) *model.RecurrenceRule {
@@ -1652,7 +1652,7 @@ func UpdateTaskWithDependencies(id int, task model.Task, dependencyIDs []int) (*
 			} else {
 				recordActivityLocked(id, "updated", "Task updated: "+task.Title)
 			}
-			updated := tasks[i]
+				updated := cloneTask(tasks[i])
 			return &updated, nil
 		}
 	}
