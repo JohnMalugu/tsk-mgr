@@ -452,6 +452,18 @@ func TestTaskDependencyWorkflowThroughRouter(t *testing.T) {
 	}
 }
 
+func TestTaskDependentsRoute(t *testing.T) {
+	service.ResetTasks()
+	if _, err := service.AddTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodGet, "/tasks/2/dependents", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"id":1`) {
+		t.Fatalf("unexpected dependents response: %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestDependenciesRouteIsDispatched(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/tasks/1/dependencies", nil)
 	recorder := httptest.NewRecorder()

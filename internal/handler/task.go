@@ -431,6 +431,25 @@ func HandleTaskDependencies(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, dependencies)
 }
 
+func HandleTaskDependents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		respondError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	taskID, err := taskIDFromSuffix(r.URL.Path, "/dependents")
+	if err != nil {
+		respondError(w, r, http.StatusBadRequest, "task id must be a positive integer")
+		return
+	}
+	dependents, found := service.GetTaskDependents(taskID)
+	if !found {
+		respondError(w, r, http.StatusNotFound, "task not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, dependents)
+}
+
 func HandleTaskDependency(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		w.Header().Set("Allow", http.MethodDelete)
