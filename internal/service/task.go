@@ -2064,8 +2064,12 @@ func BulkSetTaskPriority(ids []int, priority string) (BulkUpdateResult, bool) {
 
 	updated := make([]model.Task, 0, len(positions))
 	for _, position := range positions {
-		tasks[position].Priority = priority
-		tasks[position].UpdatedAt = time.Now()
+		if tasks[position].Priority != priority {
+			previous := tasks[position].Priority
+			tasks[position].Priority = priority
+			tasks[position].UpdatedAt = time.Now()
+			recordActivityLocked(tasks[position].ID, "updated", "Priority changed from "+previous+" to "+priority)
+		}
 		updated = append(updated, tasks[position])
 	}
 	return BulkUpdateResult{Tasks: updated, Updated: len(updated)}, true

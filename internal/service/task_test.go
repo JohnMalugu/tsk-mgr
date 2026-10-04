@@ -1355,6 +1355,22 @@ func TestBulkSetTaskPriorityIsAtomic(t *testing.T) {
 	}
 }
 
+func TestBulkSetTaskPriorityRecordsOnlyChanges(t *testing.T) {
+	ResetTasks()
+	if _, ok := BulkSetTaskPriority([]int{1, 2}, "high"); !ok {
+		t.Fatal("expected priority update")
+	}
+	if events := GetActivities(nil, "updated", nil, nil, 0, 20); events.Total != 2 {
+		t.Fatalf("expected one activity per changed task, got %#v", events)
+	}
+	if _, ok := BulkSetTaskPriority([]int{1, 2}, "high"); !ok {
+		t.Fatal("expected repeated priority update")
+	}
+	if events := GetActivities(nil, "updated", nil, nil, 0, 20); events.Total != 2 {
+		t.Fatalf("no-op update should not add activity, got %#v", events)
+	}
+}
+
 func TestBulkSetTaskDueDateIsAtomic(t *testing.T) {
 	ResetTasks()
 	dueDate := time.Date(2030, 1, 15, 9, 0, 0, 0, time.UTC)
