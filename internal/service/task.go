@@ -1117,7 +1117,6 @@ func ReorderChecklist(taskID int, orderedIDs []int) ([]model.ChecklistItem, erro
 func GetTaskDependencies(id int) ([]model.Task, bool) {
 	mu.RLock()
 	defer mu.RUnlock()
-
 	var task *model.Task
 	for i := range tasks {
 		if tasks[i].ID == id {
@@ -1139,6 +1138,32 @@ func GetTaskDependencies(id int) ([]model.Task, bool) {
 		}
 	}
 	return dependencies, true
+}
+
+// GetTaskDependents returns tasks that list id as a prerequisite.
+func GetTaskDependents(id int) ([]model.Task, bool) {
+	mu.RLock()
+	defer mu.RUnlock()
+	if findTaskPositionLocked(id) < 0 {
+		return nil, false
+	}
+	dependents := make([]model.Task, 0)
+	for _, task := range tasks {
+		if containsInt(task.DependsOn, id) {
+			dependents = append(dependents, cloneTask(task))
+		}
+	}
+	sort.Slice(dependents, func(i, j int) bool { return dependents[i].ID < dependents[j].ID })
+	return dependents, true
+}
+
+func containsInt(items []int, target int) bool {
+	for _, item := range items {
+		if item == target {
+			return true
+		}
+	}
+	return false
 }
 
 // IsTaskBlocked reports whether a task has any incomplete prerequisite.

@@ -704,6 +704,20 @@ func TestGetTaskDependenciesDistinguishesEmptyFromMissing(t *testing.T) {
 	}
 }
 
+func TestGetTaskDependentsReturnsReverseEdges(t *testing.T) {
+	ResetTasks()
+	if _, err := AddTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	dependents, found := GetTaskDependents(2)
+	if !found || len(dependents) != 1 || dependents[0].ID != 1 {
+		t.Fatalf("unexpected dependents: %#v found=%v", dependents, found)
+	}
+	if _, found := GetTaskDependents(999); found {
+		t.Fatal("expected missing prerequisite to be reported")
+	}
+}
+
 func TestAddTaskDependencyRejectsInvalidGraphEdges(t *testing.T) {
 	ResetTasks()
 	if _, err := AddTaskDependency(1, 1); !errors.Is(err, ErrDependencySelfReference) {
