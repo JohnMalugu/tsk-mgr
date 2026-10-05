@@ -179,6 +179,9 @@ func UpdateTaskComment(taskID, commentID int, body string) (model.TaskComment, e
 		if taskComments[index].TaskID != taskID || taskComments[index].ID != commentID {
 			continue
 		}
+		if taskComments[index].Body == body {
+			return taskComments[index], nil
+		}
 		taskComments[index].Body = body
 		taskComments[index].UpdatedAt = time.Now().UTC()
 		tasks[taskPosition].UpdatedAt = taskComments[index].UpdatedAt

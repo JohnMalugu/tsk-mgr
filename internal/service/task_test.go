@@ -154,6 +154,21 @@ func TestUpdateTaskCommentChangesBodyAndRecordsActivity(t *testing.T) {
 	}
 }
 
+func TestUpdateTaskCommentDoesNotAuditNoOp(t *testing.T) {
+	ResetTasks()
+	comment, err := AddTaskComment(1, "Same note")
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := UpdateTaskComment(1, comment.ID, "  Same note  ")
+	if err != nil || !updated.UpdatedAt.Equal(comment.UpdatedAt) {
+		t.Fatalf("no-op comment update changed timestamp: %#v err=%v", updated, err)
+	}
+	if events := GetActivities(nil, "comment_updated", nil, nil, 0, 20); events.Total != 0 {
+		t.Fatalf("no-op comment update created activity: %#v", events)
+	}
+}
+
 func TestCompletedStatusSetsLegacyCompletionOnCreateAndUpdate(t *testing.T) {
 	ResetTasks()
 	created := CreateTask(model.Task{Title: "Completed via status", Status: model.TaskStatusCompleted})
