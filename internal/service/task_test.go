@@ -1581,6 +1581,23 @@ func TestBulkSetTaskPriorityIsAtomic(t *testing.T) {
 	}
 }
 
+func TestBulkSetTaskPriorityReturnsDeepCopies(t *testing.T) {
+	ResetTasks()
+	if _, err := UpdateTaskWithDependencies(1, model.Task{Title: "Tagged", DueDate: time.Now(), Tags: []string{"original"}, Checklist: []model.ChecklistItem{{ID: 1, Text: "Original"}}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	result, ok := BulkSetTaskPriority([]int{1}, "high")
+	if !ok || len(result.Tasks) != 1 {
+		t.Fatalf("unexpected bulk priority result: %#v", result)
+	}
+	result.Tasks[0].Tags[0] = "changed"
+	result.Tasks[0].Checklist[0].Text = "changed"
+	stored := GetTaskByID(1)
+	if stored == nil || stored.Tags[0] != "original" || stored.Checklist[0].Text != "Original" {
+		t.Fatalf("bulk priority response mutated task storage: %#v", stored)
+	}
+}
+
 func TestBulkSetTaskPriorityRecordsOnlyChanges(t *testing.T) {
 	ResetTasks()
 	if _, ok := BulkSetTaskPriority([]int{1, 2}, "high"); !ok {

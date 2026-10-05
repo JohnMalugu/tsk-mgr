@@ -2061,7 +2061,7 @@ func BulkSetTaskCompletionChecked(ids []int, completed bool) (BulkUpdateResult, 
 				spawnNextOccurrenceLocked(tasks[position])
 			}
 		}
-		updated = append(updated, tasks[position])
+		updated = append(updated, cloneTask(tasks[position]))
 	}
 	return BulkUpdateResult{Tasks: updated, Updated: len(updated)}, nil
 }
@@ -2227,7 +2227,7 @@ func BulkSetTaskPriority(ids []int, priority string) (BulkUpdateResult, bool) {
 			tasks[position].UpdatedAt = time.Now()
 			recordActivityLocked(tasks[position].ID, "updated", "Priority changed from "+previous+" to "+priority)
 		}
-		updated = append(updated, tasks[position])
+		updated = append(updated, cloneTask(tasks[position]))
 	}
 	return BulkUpdateResult{Tasks: updated, Updated: len(updated)}, true
 }
