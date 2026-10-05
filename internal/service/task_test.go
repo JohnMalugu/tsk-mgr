@@ -823,6 +823,23 @@ func TestGetTaskDependenciesReturnsDeepCopies(t *testing.T) {
 	}
 }
 
+func TestAddTaskDependencyReturnsDeepCopy(t *testing.T) {
+	ResetTasks()
+	if _, err := UpdateTaskWithDependencies(1, model.Task{Title: "Tagged", DueDate: time.Now(), Tags: []string{"original"}, Checklist: []model.ChecklistItem{{ID: 1, Text: "Original"}}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := AddTaskDependency(1, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated.Tags[0] = "changed"
+	updated.Checklist[0].Text = "changed"
+	stored := GetTaskByID(1)
+	if stored == nil || stored.Tags[0] != "original" || stored.Checklist[0].Text != "Original" {
+		t.Fatalf("dependency result mutated stored task: %#v", stored)
+	}
+}
+
 func TestAddTaskDependencyRejectsInvalidGraphEdges(t *testing.T) {
 	ResetTasks()
 	if _, err := AddTaskDependency(1, 1); !errors.Is(err, ErrDependencySelfReference) {

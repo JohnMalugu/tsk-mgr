@@ -1401,8 +1401,7 @@ func AddTaskDependency(taskID, dependencyID int) (*model.Task, error) {
 	tasks[taskPosition].DependsOn = append(tasks[taskPosition].DependsOn, dependencyID)
 	tasks[taskPosition].UpdatedAt = time.Now()
 	recordActivityLocked(taskID, "dependency_added", "Added prerequisite task "+strconv.Itoa(dependencyID))
-	updated := tasks[taskPosition]
-	updated.DependsOn = append([]int(nil), updated.DependsOn...)
+	updated := cloneTask(tasks[taskPosition])
 	return &updated, nil
 }
 
