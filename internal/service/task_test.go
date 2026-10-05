@@ -96,6 +96,23 @@ func TestTaskStatusStaysCompatibleWithCompletion(t *testing.T) {
 	}
 }
 
+func TestReopenCanceledTaskRestoresTodoState(t *testing.T) {
+	ResetTasks()
+	if _, err := UpdateTaskWithDependencies(1, model.Task{Title: "Canceled", DueDate: time.Now(), Status: model.TaskStatusCanceled}, nil); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := ReopenCanceledTask(1)
+	if err != nil || reopened.Status != model.TaskStatusTodo || reopened.Completed {
+		t.Fatalf("unexpected reopened task: %#v err=%v", reopened, err)
+	}
+	if events := GetActivities(ptrInt(1), "reopened", nil, nil, 0, 20); events.Total != 1 {
+		t.Fatalf("expected one reopen event, got %#v", events)
+	}
+	if _, err := ReopenCanceledTask(1); !errors.Is(err, ErrTaskAlreadyClosed) {
+		t.Fatalf("expected non-canceled task rejection, got %v", err)
+	}
+}
+
 func TestTaskCommentsValidateAndRecordChronologically(t *testing.T) {
 	ResetTasks()
 	if _, err := AddTaskComment(1, "   "); !errors.Is(err, ErrCommentInvalid) {

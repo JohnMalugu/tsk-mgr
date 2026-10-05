@@ -1969,6 +1969,25 @@ func SetTaskCompletionChecked(id int, completed bool) (*model.Task, error) {
 	return nil, ErrTaskNotFound
 }
 
+// ReopenCanceledTask returns a canceled task to the todo state.
+func ReopenCanceledTask(id int) (*model.Task, error) {
+	mu.Lock()
+	defer mu.Unlock()
+	position := findTaskPositionLocked(id)
+	if position < 0 {
+		return nil, ErrTaskNotFound
+	}
+	if tasks[position].Status != model.TaskStatusCanceled {
+		return nil, ErrTaskAlreadyClosed
+	}
+	tasks[position].Status = model.TaskStatusTodo
+	tasks[position].Completed = false
+	tasks[position].UpdatedAt = time.Now()
+	recordActivityLocked(id, "reopened", "Canceled task reopened: "+tasks[position].Title)
+	updated := cloneTask(tasks[position])
+	return &updated, nil
+}
+
 func hasIncompletePrerequisiteLocked(task model.Task) bool {
 	return hasIncompleteDependencyIDsLocked(task.DependsOn)
 }
