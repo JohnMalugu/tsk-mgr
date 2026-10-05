@@ -1421,8 +1421,7 @@ func RemoveTaskDependency(taskID, dependencyID int) (*model.Task, error) {
 			tasks[i].DependsOn = append(tasks[i].DependsOn[:dependencyIndex], tasks[i].DependsOn[dependencyIndex+1:]...)
 			tasks[i].UpdatedAt = time.Now()
 			recordActivityLocked(taskID, "dependency_removed", "Removed prerequisite task "+strconv.Itoa(dependencyID))
-			updated := tasks[i]
-			updated.DependsOn = append([]int(nil), updated.DependsOn...)
+			updated := cloneTask(tasks[i])
 			return &updated, nil
 		}
 		return nil, ErrDependencyNotFound
@@ -1499,8 +1498,7 @@ func ReplaceTaskDependencies(taskID int, dependencyIDs []int) (*model.Task, erro
 	if changed {
 		recordActivityLocked(taskID, "dependencies_updated", "Updated task prerequisites")
 	}
-	updated := tasks[taskPosition]
-	updated.DependsOn = append([]int(nil), updated.DependsOn...)
+	updated := cloneTask(tasks[taskPosition])
 	return &updated, nil
 }
 

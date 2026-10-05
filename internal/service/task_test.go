@@ -935,6 +935,31 @@ func TestPrerequisiteCannotBeUncompletedWhileDependentIsComplete(t *testing.T) {
 		t.Fatalf("expected dependent and prerequisite to reset together, got %v", err)
 	}
 }
+func TestDependencyRemovalAndReplacementReturnDeepCopies(t *testing.T) {
+	for _, operation := range []func() (*model.Task, error){
+		func() (*model.Task, error) { return RemoveTaskDependency(1, 2) },
+		func() (*model.Task, error) { return ReplaceTaskDependencies(1, []int{2}) },
+	} {
+		ResetTasks()
+		if _, err := UpdateTaskWithDependencies(1, model.Task{Title: "Tagged", DueDate: time.Now(), Tags: []string{"original"}, Checklist: []model.ChecklistItem{{ID: 1, Text: "Original"}}}, nil); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := AddTaskDependency(1, 2); err != nil {
+			t.Fatal(err)
+		}
+		updated, err := operation()
+		if err != nil {
+			t.Fatal(err)
+		}
+		updated.Tags[0] = "changed"
+		updated.Checklist[0].Text = "changed"
+		stored := GetTaskByID(1)
+		if stored == nil || stored.Tags[0] != "original" || stored.Checklist[0].Text != "Original" {
+			t.Fatalf("dependency mutation response changed storage: %#v", stored)
+		}
+	}
+}
+
 func TestRemoveTaskDependencyUpdatesGraph(t *testing.T) {
 	ResetTasks()
 	if _, err := AddTaskDependency(1, 2); err != nil {
