@@ -1565,6 +1565,12 @@ func TestBulkSetTaskTagsRecordsOnlyChangedSets(t *testing.T) {
 	if events := GetActivities(nil, "updated", nil, nil, 0, 20); events.Total != 0 {
 		t.Fatalf("case/order-equivalent tags should not add activity: %#v", events)
 	}
+	if _, ok := BulkSetTaskTags([]int{1}, []string{"errands", "home"}); !ok {
+		t.Fatal("expected reordered tags update")
+	}
+	if events := GetActivities(nil, "updated", nil, nil, 0, 20); events.Total != 0 {
+		t.Fatalf("reordered tag set should not add activity: %#v", events)
+	}
 	if _, ok := BulkSetTaskTags([]int{1}, []string{"work"}); !ok {
 		t.Fatal("expected tag replacement")
 	}

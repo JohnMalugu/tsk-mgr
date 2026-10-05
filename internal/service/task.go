@@ -2277,8 +2277,12 @@ func equalStringSlices(left, right []string) bool {
 	if len(left) != len(right) {
 		return false
 	}
-	for index := range left {
-		if !strings.EqualFold(left[index], right[index]) {
+	values := make(map[string]struct{}, len(left))
+	for _, value := range left {
+		values[strings.ToLower(value)] = struct{}{}
+	}
+	for _, value := range right {
+		if _, found := values[strings.ToLower(value)]; !found {
 			return false
 		}
 	}
