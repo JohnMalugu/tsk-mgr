@@ -1230,7 +1230,7 @@ func GetTaskDependencies(id int) ([]model.Task, bool) {
 	for _, dependencyID := range task.DependsOn {
 		for _, candidate := range tasks {
 			if candidate.ID == dependencyID {
-				dependencies = append(dependencies, candidate)
+				dependencies = append(dependencies, cloneTask(candidate))
 				break
 			}
 		}

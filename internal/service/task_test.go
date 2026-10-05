@@ -780,6 +780,26 @@ func TestGetTaskDependentsReturnsReverseEdges(t *testing.T) {
 	}
 }
 
+func TestGetTaskDependenciesReturnsDeepCopies(t *testing.T) {
+	ResetTasks()
+	if _, err := UpdateTaskWithDependencies(2, model.Task{Title: "Prerequisite", DueDate: time.Now(), Tags: []string{"original"}, Checklist: []model.ChecklistItem{{ID: 1, Text: "Original"}}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddTaskDependency(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	dependencies, found := GetTaskDependencies(1)
+	if !found || len(dependencies) != 1 {
+		t.Fatalf("unexpected prerequisites: %#v found=%v", dependencies, found)
+	}
+	dependencies[0].Tags[0] = "changed"
+	dependencies[0].Checklist[0].Text = "changed"
+	stored := GetTaskByID(2)
+	if stored == nil || stored.Tags[0] != "original" || stored.Checklist[0].Text != "Original" {
+		t.Fatalf("prerequisite response mutated stored task: %#v", stored)
+	}
+}
+
 func TestAddTaskDependencyRejectsInvalidGraphEdges(t *testing.T) {
 	ResetTasks()
 	if _, err := AddTaskDependency(1, 1); !errors.Is(err, ErrDependencySelfReference) {
