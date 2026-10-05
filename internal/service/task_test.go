@@ -52,6 +52,21 @@ func TestTaskSummaryCountsStatuses(t *testing.T) {
 	}
 }
 
+func TestTaskSummaryExcludesCanceledEstimates(t *testing.T) {
+	ResetTasks()
+	created, err := CreateTaskWithDependencies(model.Task{Title: "Canceled work", DueDate: time.Now(), Status: model.TaskStatusCanceled, EstimateMinutes: 120}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Status != model.TaskStatusCanceled {
+		t.Fatalf("expected canceled task, got %#v", created)
+	}
+	summary := GetTaskSummary()
+	if summary.EstimatedMinutes != 0 || summary.ByStatus[model.TaskStatusCanceled] != 1 {
+		t.Fatalf("canceled effort should not count as active estimate: %#v", summary)
+	}
+}
+
 func TestGetTagSummaryCountsTasksAndSortsDeterministically(t *testing.T) {
 	ResetTasks()
 	CreateTask(model.Task{Title: "Tagged one", Tags: []string{"home", "work"}})
@@ -402,7 +417,6 @@ func TestAddManualTimeEntryValidatesIntervalsAndOverlaps(t *testing.T) {
 		t.Fatalf("expected invalid interval error, got %v", err)
 	}
 }
-
 
 func TestAddManualTimeEntryRejectsClosedTasks(t *testing.T) {
 	ResetTasks()

@@ -641,7 +641,6 @@ func GetTaskSummary() TaskSummary {
 		ByStatus:   map[string]int{model.TaskStatusTodo: 0, model.TaskStatusInProgress: 0, model.TaskStatusCompleted: 0, model.TaskStatusCanceled: 0},
 	}
 	for _, task := range tasks {
-		summary.EstimatedMinutes += task.EstimateMinutes
 		summary.ByStatus[task.Status]++
 		if !task.Completed && task.Status != model.TaskStatusCanceled && hasIncompletePrerequisiteLocked(task) {
 			summary.Blocked++
@@ -656,6 +655,7 @@ func GetTaskSummary() TaskSummary {
 			}
 			continue
 		}
+		summary.EstimatedMinutes += task.EstimateMinutes
 		summary.Pending++
 		if task.DueDate.Before(now) {
 			summary.Overdue++
