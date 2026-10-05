@@ -540,6 +540,29 @@ func TestGetTaskByIDReturnsCopy(t *testing.T) {
 	}
 }
 
+func TestCompletionAndEstimateResultsAreDeepCopies(t *testing.T) {
+	ResetTasks()
+	if _, err := UpdateTaskWithDependencies(1, model.Task{Title: "Nested", DueDate: time.Now(), Tags: []string{"original"}, Checklist: []model.ChecklistItem{{ID: 1, Text: "Original"}}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	completed, err := SetTaskCompletionChecked(1, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	completed.Tags[0] = "completion mutation"
+	completed.Checklist[0].Text = "completion mutation"
+	updated, err := UpdateTaskEstimate(1, 90)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated.Tags[0] = "estimate mutation"
+	updated.Checklist[0].Text = "estimate mutation"
+	stored := GetTaskByID(1)
+	if stored == nil || stored.Tags[0] != "original" || stored.Checklist[0].Text != "Original" {
+		t.Fatalf("mutation result changed stored task: %#v", stored)
+	}
+}
+
 func TestCreateAndUpdateTaskReturnIndependentChecklistSnapshots(t *testing.T) {
 	ResetTasks()
 	created := CreateTask(model.Task{Title: "Snapshot", Checklist: []model.ChecklistItem{{Text: "Original"}}})

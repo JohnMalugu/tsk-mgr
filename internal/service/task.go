@@ -924,7 +924,7 @@ func UpdateTaskEstimate(taskID, estimateMinutes int) (*model.Task, error) {
 			tasks[i].UpdatedAt = time.Now()
 			recordActivityLocked(taskID, "estimate_updated", "Updated estimate from "+strconv.Itoa(previous)+" to "+strconv.Itoa(estimateMinutes)+" minutes")
 		}
-		updated := tasks[i]
+		updated := cloneTask(tasks[i])
 		return &updated, nil
 	}
 	return nil, ErrTaskNotFound
@@ -1962,7 +1962,7 @@ func SetTaskCompletionChecked(id int, completed bool) (*model.Task, error) {
 					spawnNextOccurrenceLocked(tasks[i])
 				}
 			}
-			updated := tasks[i]
+			updated := cloneTask(tasks[i])
 			return &updated, nil
 		}
 	}
