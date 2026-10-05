@@ -1059,7 +1059,7 @@ func respondTimeEntryError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, service.ErrTaskNotFound), errors.Is(err, service.ErrTimeEntryNotFound):
 		respondError(w, r, http.StatusNotFound, err.Error())
-	case errors.Is(err, service.ErrTimeEntryOverlap), errors.Is(err, service.ErrTimerAlreadyRunning):
+	case errors.Is(err, service.ErrTimeEntryOverlap), errors.Is(err, service.ErrTimerAlreadyRunning), errors.Is(err, service.ErrTaskNotActive):
 		respondError(w, r, http.StatusConflict, err.Error())
 	default:
 		respondError(w, r, http.StatusBadRequest, err.Error())

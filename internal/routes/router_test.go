@@ -169,6 +169,19 @@ func TestManualTimeEntryRouteAndDeletion(t *testing.T) {
 	}
 }
 
+func TestManualTimeEntryRejectsCompletedTask(t *testing.T) {
+	service.ResetTasks()
+	if _, err := service.SetTaskCompletionChecked(1, true); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"startedAt":"2030-01-01T09:00:00Z","endedAt":"2030-01-01T09:30:00Z","note":"Work"}`
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodPost, "/tasks/1/time", strings.NewReader(body)))
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("expected closed-task time conflict, got %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestTimeReportRouteFiltersByTaskAndTime(t *testing.T) {
 	service.ResetTasks()
 	start := time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)
