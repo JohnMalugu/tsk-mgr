@@ -65,6 +65,9 @@ func validateRecurrenceRule(rule *model.RecurrenceRule, dueDate time.Time) error
 	if rule.Interval < 1 || rule.Interval > 365 {
 		return ErrRecurrenceInvalid
 	}
+	if rule.DayOfMonth < 0 || rule.DayOfMonth > 31 || (rule.Frequency != "monthly" && rule.DayOfMonth != 0) {
+		return ErrRecurrenceInvalid
+	}
 	if rule.Until != nil && rule.Until.Before(dueDate) {
 		return ErrRecurrenceInvalid
 	}
@@ -86,7 +89,10 @@ func NextRecurrenceDate(dueDate time.Time, rule *model.RecurrenceRule) (time.Tim
 		year := totalMonths / 12
 		month := time.Month(totalMonths%12 + 1)
 		lastDay := time.Date(year, month+1, 0, 0, 0, 0, 0, dueDate.Location()).Day()
-		day := dueDate.Day()
+		day := rule.DayOfMonth
+		if day == 0 {
+			day = dueDate.Day()
+		}
 		if day > lastDay {
 			day = lastDay
 		}
@@ -1545,6 +1551,11 @@ func CreateTaskWithDependencies(task model.Task, dependencyIDs []int) (model.Tas
 	now := time.Now()
 	task.Tags = normalizeTags(task.Tags)
 	normalizeTaskStatus(&task)
+	if task.Recurrence != nil && task.Recurrence.Frequency == "monthly" && task.Recurrence.DayOfMonth == 0 {
+		rule := *task.Recurrence
+		rule.DayOfMonth = task.DueDate.Day()
+		task.Recurrence = &rule
+	}
 	if task.Priority == "" {
 		task.Priority = "medium"
 	}
@@ -1763,6 +1774,11 @@ func UpdateTaskWithDependencies(id int, task model.Task, dependencyIDs []int) (*
 			task.UpdatedAt = time.Now()
 			task.Tags = normalizeTags(task.Tags)
 			normalizeTaskStatus(&task)
+			if task.Recurrence != nil && task.Recurrence.Frequency == "monthly" && task.Recurrence.DayOfMonth == 0 {
+				rule := *task.Recurrence
+				rule.DayOfMonth = task.DueDate.Day()
+				task.Recurrence = &rule
+			}
 			if task.Priority == "" {
 				task.Priority = "medium"
 			}

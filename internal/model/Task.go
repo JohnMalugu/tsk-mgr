@@ -26,6 +26,7 @@ type TaskComment struct {
 type RecurrenceRule struct {
 	Frequency string     `json:"frequency"`
 	Interval  int        `json:"interval"`
+	DayOfMonth int       `json:"dayOfMonth,omitempty"`
 	Until     *time.Time `json:"until,omitempty"`
 }
 

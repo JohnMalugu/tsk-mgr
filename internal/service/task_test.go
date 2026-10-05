@@ -215,6 +215,11 @@ func TestNextRecurrenceDateCalendarBoundaries(t *testing.T) {
 	if got, _ := NextRecurrenceDate(leapJan31, monthly); got.Format(time.RFC3339) != "2028-02-29T09:15:00Z" {
 		t.Fatalf("expected leap-year month-end clamp, got %v", got)
 	}
+	anchoredFebruary := time.Date(2027, time.February, 28, 9, 15, 0, 0, time.UTC)
+	anchored := &model.RecurrenceRule{Frequency: "monthly", Interval: 1, DayOfMonth: 31}
+	if got, _ := NextRecurrenceDate(anchoredFebruary, anchored); got.Format(time.RFC3339) != "2027-03-31T09:15:00Z" {
+		t.Fatalf("expected anchored recurrence to recover day 31, got %v", got)
+	}
 	location, err := time.LoadLocation("America/Los_Angeles")
 	if err != nil {
 		t.Fatal(err)
