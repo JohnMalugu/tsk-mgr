@@ -902,6 +902,27 @@ func TestDeleteTaskRemovesTimeFromReports(t *testing.T) {
 	}
 }
 
+func TestDeletingTaskClearsItsActiveTimer(t *testing.T) {
+	for _, deleteTask := range []func() bool{
+		func() bool { return DeleteTask(1) },
+		func() bool { _, ok := BulkDeleteTasks([]int{1}); return ok },
+	} {
+		ResetTasks()
+		if _, err := StartTaskTimer(1, "Working"); err != nil {
+			t.Fatal(err)
+		}
+		if !deleteTask() {
+			t.Fatal("expected task deletion")
+		}
+		if timer := GetActiveTimer(); timer != nil {
+			t.Fatalf("deleted task left an active timer: %#v", timer)
+		}
+		if _, err := StartTaskTimer(2, "Continue"); err != nil {
+			t.Fatalf("deleted timer blocked a new timer: %v", err)
+		}
+	}
+}
+
 func TestIsTaskBlockedFollowsPrerequisiteCompletion(t *testing.T) {
 	ResetTasks()
 	if _, err := AddTaskDependency(1, 2); err != nil {
