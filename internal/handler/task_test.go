@@ -297,6 +297,26 @@ func TestHandleTasksSortsByLastUpdated(t *testing.T) {
 	}
 }
 
+func TestHandleTasksSortsTiesInRequestedDirection(t *testing.T) {
+	resetTaskFixture()
+	for _, query := range []struct {
+		order string
+		first int
+	}{{"asc", 1}, {"desc", 2}} {
+		recorder := httptest.NewRecorder()
+		HandleTasks(recorder, httptest.NewRequest(http.MethodGet, "/tasks?sort=status&order="+query.order, nil))
+		var tasks []struct {
+			ID int `json:"id"`
+		}
+		if recorder.Code != http.StatusOK || json.NewDecoder(recorder.Body).Decode(&tasks) != nil {
+			t.Fatalf("unexpected %s sort response: %d", query.order, recorder.Code)
+		}
+		if len(tasks) != 2 || tasks[0].ID != query.first {
+			t.Fatalf("expected task %d first for %s ties, got %#v", query.first, query.order, tasks)
+		}
+	}
+}
+
 func TestHandleTasksSortsByStatus(t *testing.T) {
 	resetTaskFixture()
 	if _, err := service.UpdateTaskWithDependencies(1, model.Task{Title: "Running", DueDate: time.Now().Add(time.Hour), Status: model.TaskStatusInProgress}, nil); err != nil {
