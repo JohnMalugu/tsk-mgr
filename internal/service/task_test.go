@@ -329,6 +329,25 @@ func TestConcurrentCompletionGeneratesOneRecurringOccurrence(t *testing.T) {
 	}
 }
 
+func TestStartTaskTimerRejectsClosedTasks(t *testing.T) {
+	ResetTasks()
+	if _, err := SetTaskCompletionChecked(1, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := StartTaskTimer(1, "Finished work"); !errors.Is(err, ErrTaskNotActive) {
+		t.Fatalf("expected completed task timer rejection, got %v", err)
+	}
+	if _, err := UpdateTaskWithDependencies(2, model.Task{Title: "Canceled", DueDate: time.Now(), Status: model.TaskStatusCanceled}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := StartTaskTimer(2, "Canceled work"); !errors.Is(err, ErrTaskNotActive) {
+		t.Fatalf("expected canceled task timer rejection, got %v", err)
+	}
+	if _, err := StartTaskTimer(1, "Completed task timer slot"); !errors.Is(err, ErrTaskNotActive) {
+		t.Fatalf("expected no timer to start, got %v", err)
+	}
+}
+
 func TestStopTaskTimerPersistsElapsedTime(t *testing.T) {
 	ResetTasks()
 	if _, err := StartTaskTimer(1, "Focus"); err != nil {

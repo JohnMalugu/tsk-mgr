@@ -37,6 +37,7 @@ var (
 	ErrCommentNotFound         = errors.New("comment not found")
 	ErrTaskStatusInvalid       = errors.New("task status is invalid")
 	ErrTaskAlreadyClosed       = errors.New("task occurrence is already closed")
+	ErrTaskNotActive           = errors.New("cannot start a timer for a completed or canceled task")
 )
 
 var activityActions = map[string]struct{}{
@@ -310,6 +311,9 @@ func StartTaskTimer(taskID int, note string) (model.TimeEntry, error) {
 	taskPosition := findTaskPositionLocked(taskID)
 	if taskPosition < 0 {
 		return model.TimeEntry{}, ErrTaskNotFound
+	}
+	if tasks[taskPosition].Completed || tasks[taskPosition].Status == model.TaskStatusCanceled {
+		return model.TimeEntry{}, ErrTaskNotActive
 	}
 	for _, entry := range timeEntries {
 		if entry.EndedAt == nil {
