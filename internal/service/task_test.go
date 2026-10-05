@@ -403,6 +403,24 @@ func TestAddManualTimeEntryValidatesIntervalsAndOverlaps(t *testing.T) {
 	}
 }
 
+
+func TestAddManualTimeEntryRejectsClosedTasks(t *testing.T) {
+	ResetTasks()
+	if _, err := SetTaskCompletionChecked(1, true); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now().Add(-time.Hour)
+	if _, err := AddManualTimeEntry(1, start, start.Add(30*time.Minute), "Completed work"); !errors.Is(err, ErrTaskNotActive) {
+		t.Fatalf("expected completed task rejection, got %v", err)
+	}
+	if _, err := UpdateTaskWithDependencies(2, model.Task{Title: "Canceled", DueDate: time.Now(), Status: model.TaskStatusCanceled}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddManualTimeEntry(2, start, start.Add(30*time.Minute), "Canceled work"); !errors.Is(err, ErrTaskNotActive) {
+		t.Fatalf("expected canceled task rejection, got %v", err)
+	}
+}
+
 func TestManualTimeEntryRecordsActivity(t *testing.T) {
 	ResetTasks()
 	start := time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)

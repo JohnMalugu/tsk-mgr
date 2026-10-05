@@ -420,8 +420,12 @@ func GetTimeReport(taskID *int, from, to *time.Time) TimeReport {
 func AddManualTimeEntry(taskID int, startedAt, endedAt time.Time, note string) (model.TimeEntry, error) {
 	mu.Lock()
 	defer mu.Unlock()
-	if findTaskPositionLocked(taskID) < 0 {
+	taskPosition := findTaskPositionLocked(taskID)
+	if taskPosition < 0 {
 		return model.TimeEntry{}, ErrTaskNotFound
+	}
+	if tasks[taskPosition].Completed || tasks[taskPosition].Status == model.TaskStatusCanceled {
+		return model.TimeEntry{}, ErrTaskNotActive
 	}
 	note = strings.TrimSpace(note)
 	if !endedAt.After(startedAt) || len([]rune(note)) > 250 {
@@ -449,7 +453,6 @@ func AddManualTimeEntry(taskID int, startedAt, endedAt time.Time, note string) (
 	}
 	nextTimeEntryID++
 	timeEntries = append(timeEntries, entry)
-	taskPosition := findTaskPositionLocked(taskID)
 	tasks[taskPosition].UpdatedAt = now.UTC()
 	recordActivityLocked(taskID, "time_logged", "Logged "+strconv.FormatInt(entry.DurationSeconds, 10)+" seconds")
 	return entry, nil
