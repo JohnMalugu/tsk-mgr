@@ -58,6 +58,18 @@ func TestTaskTimerStartAndStopRoutes(t *testing.T) {
 	}
 }
 
+func TestTaskTimerRejectsCompletedTask(t *testing.T) {
+	service.ResetTasks()
+	if _, err := service.SetTaskCompletionChecked(1, true); err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	Router(recorder, httptest.NewRequest(http.MethodPost, "/tasks/1/timer/start", strings.NewReader(`{"note":"Work"}`)))
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("expected completed-task timer conflict, got %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestBulkDueDateRoute(t *testing.T) {
 	service.ResetTasks()
 	payload := `{"ids":[1,2],"dueDate":"2030-01-15T09:00:00Z"}`

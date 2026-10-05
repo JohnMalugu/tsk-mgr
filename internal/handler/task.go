@@ -1094,7 +1094,7 @@ func HandleTaskTimer(w http.ResponseWriter, r *http.Request) {
 			switch {
 			case errors.Is(err, service.ErrTaskNotFound):
 				respondError(w, r, http.StatusNotFound, err.Error())
-			case errors.Is(err, service.ErrTimerAlreadyRunning):
+			case errors.Is(err, service.ErrTimerAlreadyRunning), errors.Is(err, service.ErrTaskNotActive):
 				respondError(w, r, http.StatusConflict, err.Error())
 			default:
 				respondError(w, r, http.StatusBadRequest, err.Error())
