@@ -1294,9 +1294,7 @@ func GetReadyTasks() []model.Task {
 		if task.Completed || task.Status == model.TaskStatusCanceled || hasIncompletePrerequisiteLocked(task) {
 			continue
 		}
-		copy := task
-		copy.DependsOn = append([]int(nil), task.DependsOn...)
-		ready = append(ready, copy)
+		ready = append(ready, cloneTask(task))
 	}
 	sort.Slice(ready, func(i, j int) bool {
 		return ready[i].ID < ready[j].ID

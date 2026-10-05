@@ -1259,6 +1259,23 @@ func TestGetUpcomingTasksFiltersAndSorts(t *testing.T) {
 	}
 }
 
+func TestGetReadyTasksReturnsDeepCopies(t *testing.T) {
+	ResetTasks()
+	if _, err := UpdateTaskWithDependencies(1, model.Task{Title: "Ready", DueDate: time.Now(), Tags: []string{"original"}, Checklist: []model.ChecklistItem{{ID: 1, Text: "Original"}}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	ready := GetReadyTasks()
+	if len(ready) != 2 {
+		t.Fatalf("expected both seeded tasks to be ready, got %#v", ready)
+	}
+	ready[0].Tags[0] = "changed"
+	ready[0].Checklist[0].Text = "changed"
+	stored := GetTaskByID(1)
+	if stored == nil || stored.Tags[0] != "original" || stored.Checklist[0].Text != "Original" {
+		t.Fatalf("ready task snapshot mutated storage: %#v", stored)
+	}
+}
+
 func TestGetBlockedTasksReturnsIncompleteDependents(t *testing.T) {
 	ResetTasks()
 	if _, err := AddTaskDependency(1, 2); err != nil {
