@@ -156,6 +156,10 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		handler.HandleTaskComplete(w, r)
 		return
 	}
+	if strings.HasSuffix(r.URL.Path, "/reopen") && strings.HasPrefix(r.URL.Path, "/tasks/") {
+		handler.HandleReopenCanceledTask(w, r)
+		return
+	}
 
 	if strings.HasPrefix(r.URL.Path, "/tasks/") {
 		handler.HandleTaskByID(w, r)

@@ -70,6 +70,23 @@ func TestTaskTimerRejectsCompletedTask(t *testing.T) {
 	}
 }
 
+func TestReopenCanceledTaskRoute(t *testing.T) {
+	service.ResetTasks()
+	if _, err := service.UpdateTaskWithDependencies(1, model.Task{Title: "Canceled", DueDate: time.Now(), Status: model.TaskStatusCanceled}, nil); err != nil {
+		t.Fatal(err)
+	}
+	reopened := httptest.NewRecorder()
+	Router(reopened, httptest.NewRequest(http.MethodPost, "/tasks/1/reopen", nil))
+	if reopened.Code != http.StatusOK || !strings.Contains(reopened.Body.String(), `"status":"todo"`) {
+		t.Fatalf("unexpected reopen response: %d %s", reopened.Code, reopened.Body.String())
+	}
+	conflict := httptest.NewRecorder()
+	Router(conflict, httptest.NewRequest(http.MethodPost, "/tasks/1/reopen", nil))
+	if conflict.Code != http.StatusConflict {
+		t.Fatalf("expected reopen conflict for active task, got %d", conflict.Code)
+	}
+}
+
 func TestBulkDueDateRoute(t *testing.T) {
 	service.ResetTasks()
 	payload := `{"ids":[1,2],"dueDate":"2030-01-15T09:00:00Z"}`

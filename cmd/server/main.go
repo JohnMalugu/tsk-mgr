@@ -71,6 +71,7 @@ func main() {
 	fmt.Printf("   PATCH  http://localhost:8080/tasks/{id}\n")
 	fmt.Printf("   DELETE http://localhost:8080/tasks/{id}\n")
 	fmt.Printf("   PATCH  http://localhost:8080/tasks/{id}/complete\n")
+	fmt.Printf("   POST   http://localhost:8080/tasks/{id}/reopen\n")
 	fmt.Printf("\n")
 
 	server := &http.Server{
