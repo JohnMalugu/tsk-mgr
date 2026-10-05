@@ -34,6 +34,7 @@ Other task workflows include:
 
 - `PATCH /tasks/{id}` to update fields, including `status`.
 - `PATCH /tasks/{id}/complete` to complete or reopen a task.
+- `POST /tasks/{id}/reopen` to return a canceled task to the todo queue.
 - `GET /tasks/ready`, `/tasks/blocked`, and `/tasks/upcoming?days=7` for actionable queue views.
 - `GET /tasks/summary` for status counts, priority distribution, upcoming work, estimates, and tracked time.
 - `GET /tags` for a paginated usage-ranked tag catalog.
@@ -43,6 +44,7 @@ Other task workflows include:
 - `POST /tasks/bulk/complete`, `/tasks/bulk/delete`, `/tasks/bulk/priority`, `/tasks/bulk/due-date`, `/tasks/bulk/tags`, `/tasks/bulk/status`, and `/tasks/bulk/estimate` for batch workflows.
 
 Task creation, update, and comment requests reject unknown fields and enforce request-size limits. List pagination is bounded to 100 records per request.
+Live timers and manual time entries are accepted only for tasks that are not completed or canceled.
 
 ## Current limitations
 
