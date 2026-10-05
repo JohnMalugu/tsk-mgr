@@ -231,7 +231,7 @@ func DeleteTaskComment(taskID, commentID int) error {
 }
 
 func pageBounds(offset, limit, total int) (int, int) {
-	if offset >= total {
+	if offset < 0 || limit <= 0 || offset >= total {
 		return total, total
 	}
 	if limit > total-offset {

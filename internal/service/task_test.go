@@ -1161,6 +1161,22 @@ func TestPaginatedQueriesHandleMaximumOffset(t *testing.T) {
 	}
 }
 
+func TestPaginatedQueriesHandleInvalidBounds(t *testing.T) {
+	ResetTasks()
+	if page := GetTasks(nil, nil, nil, nil, nil, "", nil, nil, nil, nil, nil, nil, nil, nil, -1, 20, "id", false); len(page) != 0 {
+		t.Fatalf("expected empty task page for negative offset, got %#v", page)
+	}
+	if page, found := GetTaskComments(1, -1, 20); !found || len(page.Comments) != 0 {
+		t.Fatalf("expected empty comment page for negative offset, page=%#v found=%v", page, found)
+	}
+	if page := GetTagSummary(0, 0); len(page.Tags) != 0 {
+		t.Fatalf("expected empty tag page for zero limit, got %#v", page)
+	}
+	if page := GetActivities(nil, "", nil, nil, 0, -5); len(page.Activities) != 0 {
+		t.Fatalf("expected empty activity page for negative limit, got %#v", page)
+	}
+}
+
 func TestGetTasksFiltersByUpdatedAtBounds(t *testing.T) {
 	ResetTasks()
 	mu.Lock()
