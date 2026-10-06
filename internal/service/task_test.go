@@ -67,6 +67,19 @@ func TestTaskSummaryExcludesCanceledEstimates(t *testing.T) {
 	}
 }
 
+func TestTaskSummaryExcludesCompletedTasksFromDueSoon(t *testing.T) {
+	ResetTasks()
+	if _, err := UpdateTaskWithDependencies(1, model.Task{Title: "Due soon", DueDate: time.Now().Add(time.Hour)}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetTaskCompletionChecked(1, true); err != nil {
+		t.Fatal(err)
+	}
+	if summary := GetTaskSummary(); summary.DueSoon != 1 || summary.Completed != 1 {
+		t.Fatalf("completed task affected active due-soon count: %#v", summary)
+	}
+}
+
 func TestTaskSummaryTrackedSecondsExcludesClosedTasks(t *testing.T) {
 	ResetTasks()
 	start := time.Now().Add(-2 * time.Hour)
