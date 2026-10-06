@@ -1971,6 +1971,10 @@ func SetTaskCompletionChecked(id int, completed bool) (*model.Task, error) {
 				return nil, ErrTaskBlocked
 			}
 			wasCompleted := tasks[i].Completed
+			if wasCompleted == completed {
+				updated := cloneTask(tasks[i])
+				return &updated, nil
+			}
 			tasks[i].Completed = completed
 			if completed {
 				tasks[i].Status = model.TaskStatusCompleted

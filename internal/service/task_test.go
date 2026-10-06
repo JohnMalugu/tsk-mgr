@@ -1112,6 +1112,25 @@ func TestIsTaskBlockedFollowsPrerequisiteCompletion(t *testing.T) {
 	}
 }
 
+func TestSetTaskCompletionNoOpPreservesTimestampAndActivity(t *testing.T) {
+	ResetTasks()
+	completed, err := SetTaskCompletionChecked(1, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	initialUpdatedAt := completed.UpdatedAt
+	if _, err := SetTaskCompletionChecked(1, true); err != nil {
+		t.Fatal(err)
+	}
+	stored := GetTaskByID(1)
+	if stored == nil || !stored.UpdatedAt.Equal(initialUpdatedAt) {
+		t.Fatalf("no-op completion changed UpdatedAt: %#v", stored)
+	}
+	if events := GetActivities(ptrInt(1), "completed", nil, nil, 0, 20); events.Total != 1 {
+		t.Fatalf("no-op completion added another event: %#v", events)
+	}
+}
+
 func TestSetTaskCompletionRejectsBlockedTask(t *testing.T) {
 	ResetTasks()
 	if _, err := AddTaskDependency(1, 2); err != nil {
