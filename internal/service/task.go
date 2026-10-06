@@ -664,6 +664,10 @@ func GetTaskSummary() TaskSummary {
 		}
 	}
 	for _, entry := range timeEntries {
+		position := findTaskPositionLocked(entry.TaskID)
+		if position < 0 || tasks[position].Completed || tasks[position].Status == model.TaskStatusCanceled {
+			continue
+		}
 		summary.TrackedSeconds += currentTimeEntry(entry, now).DurationSeconds
 	}
 	return summary

@@ -67,6 +67,23 @@ func TestTaskSummaryExcludesCanceledEstimates(t *testing.T) {
 	}
 }
 
+func TestTaskSummaryTrackedSecondsExcludesClosedTasks(t *testing.T) {
+	ResetTasks()
+	start := time.Now().Add(-2 * time.Hour)
+	if _, err := AddManualTimeEntry(1, start, start.Add(time.Hour), "Work"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetTaskCompletionChecked(1, true); err != nil {
+		t.Fatal(err)
+	}
+	if summary := GetTaskSummary(); summary.TrackedSeconds != 0 {
+		t.Fatalf("closed task time counted as active tracked workload: %#v", summary)
+	}
+	if report := GetTimeReport(nil, nil, nil); report.TotalSeconds != 3600 {
+		t.Fatalf("historical report should retain completed time: %#v", report)
+	}
+}
+
 func TestGetTagSummaryCountsTasksAndSortsDeterministically(t *testing.T) {
 	ResetTasks()
 	CreateTask(model.Task{Title: "Tagged one", Tags: []string{"home", "work"}})
