@@ -1583,12 +1583,34 @@ func DuplicateTask(taskID int) (model.Task, error) {
 	if position < 0 {
 		return model.Task{}, ErrTaskNotFound
 	}
-	source := tasks[position]
-	for _, dependencyID := range source.DependsOn {
-		if findTaskPositionLocked(dependencyID) < 0 {
-			return model.Task{}, ErrTaskNotFound
+	return duplicateTaskLocked(tasks[position]), nil
+}
+
+// BulkDuplicateTasks duplicates every selected task or leaves storage unchanged.
+func BulkDuplicateTasks(taskIDs []int) ([]model.Task, error) {
+	mu.Lock()
+	defer mu.Unlock()
+	positions := make([]int, 0, len(taskIDs))
+	seen := make(map[int]struct{}, len(taskIDs))
+	for _, taskID := range taskIDs {
+		if _, duplicate := seen[taskID]; duplicate {
+			continue
 		}
+		seen[taskID] = struct{}{}
+		position := findTaskPositionLocked(taskID)
+		if position < 0 {
+			return nil, ErrTaskNotFound
+		}
+		positions = append(positions, position)
 	}
+	duplicates := make([]model.Task, 0, len(positions))
+	for _, position := range positions {
+		duplicates = append(duplicates, duplicateTaskLocked(tasks[position]))
+	}
+	return duplicates, nil
+}
+
+func duplicateTaskLocked(source model.Task) model.Task {
 	now := time.Now()
 	copy := cloneTask(source)
 	copy.ID = nextID
@@ -1608,8 +1630,8 @@ func DuplicateTask(taskID int) (model.Task, error) {
 	nextID++
 	tasks = append(tasks, copy)
 	recordActivityLocked(copy.ID, "created", "Task created: "+copy.Title)
-	recordActivityLocked(copy.ID, "duplicated", "Duplicated from task "+strconv.Itoa(taskID))
-	return cloneTask(copy), nil
+	recordActivityLocked(copy.ID, "duplicated", "Duplicated from task "+strconv.Itoa(source.ID))
+	return cloneTask(copy)
 }
 
 func cloneRecurrenceRule(rule *model.RecurrenceRule) *model.RecurrenceRule {

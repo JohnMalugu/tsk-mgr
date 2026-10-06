@@ -1568,6 +1568,26 @@ func TestDuplicateTaskResetsProgressAndDetachesRecurrence(t *testing.T) {
 	}
 }
 
+func TestBulkDuplicateTasksIsAtomicAndDeduplicates(t *testing.T) {
+	ResetTasks()
+	if _, err := BulkDuplicateTasks([]int{1, 999}); !errors.Is(err, ErrTaskNotFound) {
+		t.Fatalf("expected missing source error, got %v", err)
+	}
+	if len(GetAllTasks()) != 2 {
+		t.Fatal("rejected bulk duplication partially created tasks")
+	}
+	duplicates, err := BulkDuplicateTasks([]int{1, 2, 1})
+	if err != nil || len(duplicates) != 2 {
+		t.Fatalf("expected two unique copies, got %#v err=%v", duplicates, err)
+	}
+	if duplicates[0].Title != "Buy groceries (copy)" || duplicates[1].Title != "Learn Go (copy)" {
+		t.Fatalf("unexpected duplicated tasks: %#v", duplicates)
+	}
+	if len(GetAllTasks()) != 4 {
+		t.Fatal("expected both copies to be stored")
+	}
+}
+
 func TestCreateTaskDefaultsPriority(t *testing.T) {
 	ResetTasks()
 	created := CreateTask(model.Task{Title: "No priority"})
