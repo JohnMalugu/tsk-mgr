@@ -1469,6 +1469,29 @@ func TestCanceledTasksAreNotReportedAsBlocked(t *testing.T) {
 	}
 }
 
+func TestBulkSetTaskCompletionNoOpPreservesTimestamps(t *testing.T) {
+	ResetTasks()
+	result, err := BulkSetTaskCompletionChecked([]int{1, 2}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updatedAt := map[int]time.Time{}
+	for _, task := range result.Tasks {
+		updatedAt[task.ID] = task.UpdatedAt
+	}
+	if _, err := BulkSetTaskCompletionChecked([]int{1, 2}, true); err != nil {
+		t.Fatal(err)
+	}
+	for id, expected := range updatedAt {
+		if task := GetTaskByID(id); task == nil || !task.UpdatedAt.Equal(expected) {
+			t.Fatalf("no-op bulk completion changed task %d timestamp: %#v", id, task)
+		}
+	}
+	if events := GetActivities(nil, "completed", nil, nil, 0, 20); events.Total != 2 {
+		t.Fatalf("no-op batch created completion events: %#v", events)
+	}
+}
+
 func TestBulkSetTaskCompletionUpdatesAllTasks(t *testing.T) {
 	ResetTasks()
 

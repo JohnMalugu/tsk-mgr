@@ -2091,14 +2091,14 @@ func BulkSetTaskCompletionChecked(ids []int, completed bool) (BulkUpdateResult, 
 	updated := make([]model.Task, 0, len(positions))
 	for _, position := range positions {
 		wasCompleted := tasks[position].Completed
-		tasks[position].Completed = completed
-		if completed {
-			tasks[position].Status = model.TaskStatusCompleted
-		} else if tasks[position].Status == model.TaskStatusCompleted {
-			tasks[position].Status = model.TaskStatusTodo
-		}
-		tasks[position].UpdatedAt = time.Now()
 		if wasCompleted != completed {
+			tasks[position].Completed = completed
+			if completed {
+				tasks[position].Status = model.TaskStatusCompleted
+			} else if tasks[position].Status == model.TaskStatusCompleted {
+				tasks[position].Status = model.TaskStatusTodo
+			}
+			tasks[position].UpdatedAt = time.Now()
 			recordCompletionActivityLocked(tasks[position])
 			if completed {
 				spawnNextOccurrenceLocked(tasks[position])
