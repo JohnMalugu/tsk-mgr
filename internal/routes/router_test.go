@@ -153,6 +153,20 @@ func TestBulkStatusRoute(t *testing.T) {
 	}
 }
 
+func TestBulkDuplicateRoute(t *testing.T) {
+	service.ResetTasks()
+	created := httptest.NewRecorder()
+	Router(created, httptest.NewRequest(http.MethodPost, "/tasks/bulk/duplicate", strings.NewReader(`{"ids":[1,2,1]}`)))
+	if created.Code != http.StatusCreated || strings.Count(created.Body.String(), " (copy)") != 2 {
+		t.Fatalf("unexpected bulk duplicate response: %d %s", created.Code, created.Body.String())
+	}
+	missing := httptest.NewRecorder()
+	Router(missing, httptest.NewRequest(http.MethodPost, "/tasks/bulk/duplicate", strings.NewReader(`{"ids":[1,999]}`)))
+	if missing.Code != http.StatusNotFound || len(service.GetAllTasks()) != 4 {
+		t.Fatalf("expected atomic missing-source rejection, status=%d tasks=%d", missing.Code, len(service.GetAllTasks()))
+	}
+}
+
 func TestBulkEstimateRoute(t *testing.T) {
 	service.ResetTasks()
 	recorder := httptest.NewRecorder()
