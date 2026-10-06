@@ -55,6 +55,9 @@ func ValidateTask(task *model.Task) []ValidationError {
 		if rule.Interval < 1 || rule.Interval > 365 {
 			errors = append(errors, ValidationError{Field: "recurrence.interval", Message: "Interval must be between 1 and 365"})
 		}
+		if rule.DayOfMonth < 0 || rule.DayOfMonth > 31 || (rule.Frequency != "monthly" && rule.DayOfMonth != 0) {
+			errors = append(errors, ValidationError{Field: "recurrence.dayOfMonth", Message: "Day of month must be between 1 and 31 and is only valid for monthly recurrence"})
+		}
 		if rule.Until != nil && !task.DueDate.IsZero() && rule.Until.Before(task.DueDate) {
 			errors = append(errors, ValidationError{Field: "recurrence.until", Message: "Until cannot be before the first due date"})
 		}

@@ -49,3 +49,23 @@ func TestValidateTaskRejectsInvalidRecurrence(t *testing.T) {
 		t.Fatalf("expected recurrence-specific errors, got %#v", fields)
 	}
 }
+
+func TestValidateTaskRejectsInvalidRecurrenceDayOfMonth(t *testing.T) {
+	dueDate := time.Date(2030, 1, 31, 9, 0, 0, 0, time.UTC)
+	for _, rule := range []*model.RecurrenceRule{
+		{Frequency: "monthly", Interval: 1, DayOfMonth: 32},
+		{Frequency: "weekly", Interval: 1, DayOfMonth: 15},
+	} {
+		task := model.Task{Title: "Task", DueDate: dueDate, Recurrence: rule}
+		found := false
+		for _, validationError := range ValidateTask(&task) {
+			if validationError.Field == "recurrence.dayOfMonth" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected recurrence day-of-month validation for %#v", rule)
+		}
+	}
+}
