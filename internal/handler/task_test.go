@@ -350,6 +350,18 @@ func TestPatchTaskUpdatesStatusAndRejectsConflicts(t *testing.T) {
 	}
 }
 
+func TestPatchTaskStatusOverridesLegacyCompletionWhenExplicit(t *testing.T) {
+	resetTaskFixture()
+	if _, err := service.SetTaskCompletionChecked(1, true); err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	HandleTaskByID(recorder, httptest.NewRequest(http.MethodPatch, "/tasks/1", strings.NewReader(`{"status":"in_progress"}`)))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"status":"in_progress"`) || !strings.Contains(recorder.Body.String(), `"completed":false`) {
+		t.Fatalf("explicit status did not synchronize legacy completion: %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestHandleTasksFiltersByStatus(t *testing.T) {
 	resetTaskFixture()
 	if _, err := service.UpdateTaskWithDependencies(1, model.Task{Title: "Running", DueDate: time.Now().Add(time.Hour), Status: model.TaskStatusInProgress}, nil); err != nil {
