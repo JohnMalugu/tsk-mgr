@@ -382,6 +382,20 @@ func TestRecurringTaskWorkflowThroughRouter(t *testing.T) {
 	}
 }
 
+func TestCreateTaskValidatesRecurrenceDayOfMonth(t *testing.T) {
+	service.ResetTasks()
+	invalid := httptest.NewRecorder()
+	Router(invalid, httptest.NewRequest(http.MethodPost, "/tasks", strings.NewReader(`{"title":"Monthly task","dueDate":"2030-01-31T09:00:00Z","recurrence":{"frequency":"monthly","interval":1,"dayOfMonth":32}}`)))
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid recurrence day rejection, got %d %s", invalid.Code, invalid.Body.String())
+	}
+	valid := httptest.NewRecorder()
+	Router(valid, httptest.NewRequest(http.MethodPost, "/tasks", strings.NewReader(`{"title":"Monthly task","dueDate":"2030-01-31T09:00:00Z","recurrence":{"frequency":"monthly","interval":1,"dayOfMonth":31}}`)))
+	if valid.Code != http.StatusCreated {
+		t.Fatalf("expected valid monthly recurrence creation, got %d %s", valid.Code, valid.Body.String())
+	}
+}
+
 func TestActivityRouteSupportsPagination(t *testing.T) {
 	service.ResetTasks()
 	service.CreateTask(model.Task{Title: "First event"})
