@@ -59,7 +59,7 @@ func main() {
 	fmt.Printf("   DELETE http://localhost:8080/tasks/{id}/dependencies/{dependencyId}\n")
 	fmt.Printf("   POST   http://localhost:8080/tasks/bulk/complete\n")
 	fmt.Printf("   POST   http://localhost:8080/tasks/bulk/delete\n")
-		fmt.Printf("   POST   http://localhost:8080/tasks/bulk/duplicate\n")
+	fmt.Printf("   POST   http://localhost:8080/tasks/bulk/duplicate\n")
 	fmt.Printf("   POST   http://localhost:8080/tasks/bulk/priority\n")
 	fmt.Printf("   POST   http://localhost:8080/tasks/bulk/due-date\n")
 	fmt.Printf("   POST   http://localhost:8080/tasks/bulk/tags\n")
