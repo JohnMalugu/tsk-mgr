@@ -1,4 +1,7 @@
 package service
 
+import "github.com/JohnMalugu/tsk-mgr-api/internal/model"
+
 type WorkspaceService interface {
+	Create(w *model.Workspace) error
 }
