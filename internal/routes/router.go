@@ -16,6 +16,14 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		handler.HandleHealth(w, r)
 		return
 	}
+	if r.URL.Path == "/auth/register" && r.Method == http.MethodPost {
+		handler.HandleRegister(w, r)
+		return
+	}
+	if r.URL.Path == "/auth/login" && r.Method == http.MethodPost {
+		handler.HandleLogin(w, r)
+		return
+	}
 	if r.URL.Path == "/activity" {
 		handler.HandleActivity(w, r)
 		return
