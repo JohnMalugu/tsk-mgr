@@ -12,9 +12,15 @@ import (
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/routes"
+	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
+	"github.com/JohnMalugu/tsk-mgr-api/internal/handler"
 )
 
 func main() {
+	// Initialize services
+	authSvc := service.NewAuthService()
+	handler.InitAuthHandler(authSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
