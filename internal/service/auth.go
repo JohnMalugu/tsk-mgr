@@ -55,3 +55,21 @@ func (s *authServiceImpl) Register(username, email, password string) (*model.Use
 	s.users[username] = user
 	return user, nil
 }
+
+func (s *authServiceImpl) Login(username, password string) (string, error) {
+	s.mu.RLock()
+	user, exists := s.users[username]
+	s.mu.RUnlock()
+	
+	if !exists {
+		return "", ErrInvalidCreds
+	}
+	
+	err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
+	if err != nil {
+		return "", ErrInvalidCreds
+	}
+	
+	// TODO: Return actual JWT instead of simple token
+	return "token-" + user.ID, nil
+}
