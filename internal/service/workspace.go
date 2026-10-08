@@ -16,3 +16,4 @@ func NewWorkspaceService() WorkspaceService {
 
 func (s *workspaceServiceImpl) Create(w *model.Workspace) error { return nil }
 func (s *workspaceServiceImpl) Get(id string) (*model.Workspace, error) { return nil, nil }
+func (s *workspaceServiceImpl) List() ([]*model.Workspace, error) { return nil, nil }
