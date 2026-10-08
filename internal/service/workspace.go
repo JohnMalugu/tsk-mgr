@@ -7,3 +7,5 @@ type WorkspaceService interface {
 	Get(id string) (*model.Workspace, error)
 	List() ([]*model.Workspace, error)
 }
+
+type workspaceServiceImpl struct {}
