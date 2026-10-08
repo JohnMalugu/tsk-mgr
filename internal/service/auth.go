@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/JohnMalugu/tsk-mgr-api/internal/auth"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -70,6 +71,5 @@ func (s *authServiceImpl) Login(username, password string) (string, error) {
 		return "", ErrInvalidCreds
 	}
 	
-	// TODO: Return actual JWT instead of simple token
-	return "token-" + user.ID, nil
+	return auth.GenerateToken(user.ID, user.Username)
 }
