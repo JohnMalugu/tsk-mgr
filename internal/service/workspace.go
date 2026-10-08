@@ -13,3 +13,5 @@ type workspaceServiceImpl struct {}
 func NewWorkspaceService() WorkspaceService {
 	return &workspaceServiceImpl{}
 }
+
+func (s *workspaceServiceImpl) Create(w *model.Workspace) error { return nil }
