@@ -15,6 +15,24 @@ func NewAuthHandler(s service.AuthService) *AuthHandler {
 	return &AuthHandler{authService: s}
 }
 
+var globalAuthHandler *AuthHandler
+
+func InitAuthHandler(s service.AuthService) {
+	globalAuthHandler = NewAuthHandler(s)
+}
+
+func HandleRegister(w http.ResponseWriter, r *http.Request) {
+	if globalAuthHandler != nil {
+		globalAuthHandler.HandleRegister(w, r)
+	}
+}
+
+func HandleLogin(w http.ResponseWriter, r *http.Request) {
+	if globalAuthHandler != nil {
+		globalAuthHandler.HandleLogin(w, r)
+	}
+}
+
 type authRequest struct {
 	Username string `json:"username"`
 	Email    string `json:"email,omitempty"`
