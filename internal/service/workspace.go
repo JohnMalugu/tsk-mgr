@@ -9,3 +9,7 @@ type WorkspaceService interface {
 }
 
 type workspaceServiceImpl struct {}
+
+func NewWorkspaceService() WorkspaceService {
+	return &workspaceServiceImpl{}
+}
