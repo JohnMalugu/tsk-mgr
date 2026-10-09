@@ -54,6 +54,9 @@ func (s *authServiceImpl) Register(username, email, password string) (*model.Use
 	}
 	
 	if err := s.repo.Create(user); err != nil {
+		if err == repository.ErrDuplicateUser {
+			return nil, ErrUserExists
+		}
 		return nil, err
 	}
 	
