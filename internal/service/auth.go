@@ -29,10 +29,11 @@ func NewAuthService(repo repository.UserRepository) AuthService {
 }
 
 func (s *authServiceImpl) Register(username, email, password string) (*model.User, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	
-	if _, exists := s.users[username]; exists {
+	existingUser, err := s.repo.GetByUsername(username)
+	if err != nil {
+		return nil, err
+	}
+	if existingUser != nil {
 		return nil, ErrUserExists
 	}
 	
@@ -42,7 +43,7 @@ func (s *authServiceImpl) Register(username, email, password string) (*model.Use
 	}
 	
 	user := &model.User{
-		ID:           "u-" + username, // Simple ID for now
+		ID:           "u-" + username, // Replace with UUID later
 		Username:     username,
 		Email:        email,
 		PasswordHash: string(hashed),
@@ -50,7 +51,10 @@ func (s *authServiceImpl) Register(username, email, password string) (*model.Use
 		UpdatedAt:    time.Now().UTC(),
 	}
 	
-	s.users[username] = user
+	if err := s.repo.Create(user); err != nil {
+		return nil, err
+	}
+	
 	return user, nil
 }
 
