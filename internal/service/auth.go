@@ -2,6 +2,8 @@ package service
 
 import (
 	"errors"
+	"time"
+
 	"github.com/JohnMalugu/tsk-mgr-api/internal/auth"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -59,15 +61,15 @@ func (s *authServiceImpl) Register(username, email, password string) (*model.Use
 }
 
 func (s *authServiceImpl) Login(username, password string) (string, error) {
-	s.mu.RLock()
-	user, exists := s.users[username]
-	s.mu.RUnlock()
-	
-	if !exists {
+	user, err := s.repo.GetByUsername(username)
+	if err != nil {
+		return "", err
+	}
+	if user == nil {
 		return "", ErrInvalidCreds
 	}
 	
-	err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
+	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
 	if err != nil {
 		return "", ErrInvalidCreds
 	}
