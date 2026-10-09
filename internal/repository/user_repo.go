@@ -17,3 +17,12 @@ type userRepositoryImpl struct {
 func NewUserRepository(db *sql.DB) UserRepository {
 	return &userRepositoryImpl{db: db}
 }
+
+func (r *userRepositoryImpl) Create(user *model.User) error {
+	query := `
+	INSERT INTO users (id, username, email, password_hash, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?)`
+	
+	_, err := r.db.Exec(query, user.ID, user.Username, user.Email, user.PasswordHash, user.CreatedAt, user.UpdatedAt)
+	return err
+}
