@@ -13,6 +13,7 @@ var ErrDuplicateUser = errors.New("duplicate user")
 type UserRepository interface {
 	Create(user *model.User) error
 	GetByUsername(username string) (*model.User, error)
+	GetByID(id string) (*model.User, error)
 }
 
 type userRepositoryImpl struct {
