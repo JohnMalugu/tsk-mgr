@@ -2,11 +2,13 @@ package repository
 
 import (
 	"database/sql"
+	"errors"
 	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
-	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
 )
+
+var ErrDuplicateUser = errors.New("duplicate user")
 
 type UserRepository interface {
 	Create(user *model.User) error
@@ -31,7 +33,7 @@ func (r *userRepositoryImpl) Create(user *model.User) error {
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed: users.username") ||
 			strings.Contains(err.Error(), "UNIQUE constraint failed: users.email") {
-			return service.ErrUserExists
+			return ErrDuplicateUser
 		}
 	}
 	
