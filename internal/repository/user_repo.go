@@ -2,7 +2,10 @@ package repository
 
 import (
 	"database/sql"
+	"strings"
+
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
+	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
 )
 
 type UserRepository interface {
@@ -24,6 +27,14 @@ func (r *userRepositoryImpl) Create(user *model.User) error {
 	VALUES (?, ?, ?, ?, ?, ?)`
 	
 	_, err := r.db.Exec(query, user.ID, user.Username, user.Email, user.PasswordHash, user.CreatedAt, user.UpdatedAt)
+	
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed: users.username") ||
+			strings.Contains(err.Error(), "UNIQUE constraint failed: users.email") {
+			return service.ErrUserExists
+		}
+	}
+	
 	return err
 }
 
