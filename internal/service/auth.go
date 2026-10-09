@@ -2,11 +2,9 @@ package service
 
 import (
 	"errors"
-	"sync"
-	"time"
-
 	"github.com/JohnMalugu/tsk-mgr-api/internal/auth"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
+	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -21,13 +19,12 @@ type AuthService interface {
 }
 
 type authServiceImpl struct {
-	mu    sync.RWMutex
-	users map[string]*model.User
+	repo repository.UserRepository
 }
 
-func NewAuthService() AuthService {
+func NewAuthService(repo repository.UserRepository) AuthService {
 	return &authServiceImpl{
-		users: make(map[string]*model.User),
+		repo: repo,
 	}
 }
 
