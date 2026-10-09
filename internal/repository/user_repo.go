@@ -79,3 +79,21 @@ func (r *userRepositoryImpl) GetByID(id string) (*model.User, error) {
 	
 	return &user, nil
 }
+
+func (r *userRepositoryImpl) Update(user *model.User) error {
+	query := `
+	UPDATE users 
+	SET username = ?, email = ?, password_hash = ?, updated_at = ?
+	WHERE id = ?`
+	
+	_, err := r.db.Exec(query, user.Username, user.Email, user.PasswordHash, user.UpdatedAt, user.ID)
+	
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed: users.username") ||
+			strings.Contains(err.Error(), "UNIQUE constraint failed: users.email") {
+			return ErrDuplicateUser
+		}
+	}
+	
+	return err
+}
