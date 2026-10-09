@@ -12,15 +12,15 @@ func InitDB(filepath string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if err = db.Ping(); err != nil {
 		return nil, err
 	}
-	
+
 	if err := createSchema(db); err != nil {
 		return nil, err
 	}
-	
+
 	log.Println("Database connection established and schema initialized")
 	return db, nil
 }
@@ -35,7 +35,7 @@ func createSchema(db *sql.DB) error {
 		created_at DATETIME NOT NULL,
 		updated_at DATETIME NOT NULL
 	);`
-	
+
 	_, err := db.Exec(query)
 	return err
 }

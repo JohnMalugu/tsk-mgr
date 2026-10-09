@@ -9,6 +9,7 @@ import (
 )
 
 type contextKey string
+
 const UserIDKey contextKey = "userID"
 
 func RequireAuth(next http.HandlerFunc) http.HandlerFunc {

@@ -38,12 +38,12 @@ func (s *authServiceImpl) Register(username, email, password string) (*model.Use
 	if existingUser != nil {
 		return nil, ErrUserExists
 	}
-	
+
 	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	user := &model.User{
 		ID:           "u-" + username, // Replace with UUID later
 		Username:     username,
@@ -52,14 +52,14 @@ func (s *authServiceImpl) Register(username, email, password string) (*model.Use
 		CreatedAt:    time.Now().UTC(),
 		UpdatedAt:    time.Now().UTC(),
 	}
-	
+
 	if err := s.repo.Create(user); err != nil {
 		if err == repository.ErrDuplicateUser {
 			return nil, ErrUserExists
 		}
 		return nil, err
 	}
-	
+
 	return user, nil
 }
 
@@ -71,11 +71,11 @@ func (s *authServiceImpl) Login(username, password string) (string, error) {
 	if user == nil {
 		return "", ErrInvalidCreds
 	}
-	
+
 	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
 	if err != nil {
 		return "", ErrInvalidCreds
 	}
-	
+
 	return auth.GenerateToken(user.ID, user.Username)
 }

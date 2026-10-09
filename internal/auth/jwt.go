@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	secretKey = []byte("my-secret-key-for-auth") // In production, load from env
+	secretKey       = []byte("my-secret-key-for-auth") // In production, load from env
 	ErrInvalidToken = errors.New("invalid token")
 )
 

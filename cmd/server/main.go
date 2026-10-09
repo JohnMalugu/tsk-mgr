@@ -11,11 +11,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/JohnMalugu/tsk-mgr-api/internal/db"
+	"github.com/JohnMalugu/tsk-mgr-api/internal/handler"
+	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/routes"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
-	"github.com/JohnMalugu/tsk-mgr-api/internal/handler"
-	"github.com/JohnMalugu/tsk-mgr-api/internal/db"
-	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
 )
 
 func main() {

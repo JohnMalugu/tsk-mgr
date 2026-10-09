@@ -8,12 +8,12 @@ type WorkspaceService interface {
 	List() ([]*model.Workspace, error)
 }
 
-type workspaceServiceImpl struct {}
+type workspaceServiceImpl struct{}
 
 func NewWorkspaceService() WorkspaceService {
 	return &workspaceServiceImpl{}
 }
 
-func (s *workspaceServiceImpl) Create(w *model.Workspace) error { return nil }
+func (s *workspaceServiceImpl) Create(w *model.Workspace) error         { return nil }
 func (s *workspaceServiceImpl) Get(id string) (*model.Workspace, error) { return nil, nil }
-func (s *workspaceServiceImpl) List() ([]*model.Workspace, error) { return nil, nil }
+func (s *workspaceServiceImpl) List() ([]*model.Workspace, error)       { return nil, nil }

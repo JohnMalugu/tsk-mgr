@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"net/http"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
+	"net/http"
 )
 
 type WorkspaceHandler struct {

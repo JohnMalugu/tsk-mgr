@@ -29,16 +29,16 @@ func (r *userRepositoryImpl) Create(user *model.User) error {
 	query := `
 	INSERT INTO users (id, username, email, password_hash, created_at, updated_at)
 	VALUES (?, ?, ?, ?, ?, ?)`
-	
+
 	_, err := r.db.Exec(query, user.ID, user.Username, user.Email, user.PasswordHash, user.CreatedAt, user.UpdatedAt)
-	
+
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed: users.username") ||
 			strings.Contains(err.Error(), "UNIQUE constraint failed: users.email") {
 			return ErrDuplicateUser
 		}
 	}
-	
+
 	return err
 }
 
@@ -46,9 +46,9 @@ func (r *userRepositoryImpl) GetByUsername(username string) (*model.User, error)
 	query := `
 	SELECT id, username, email, password_hash, created_at, updated_at
 	FROM users WHERE username = ?`
-	
+
 	row := r.db.QueryRow(query, username)
-	
+
 	var user model.User
 	err := row.Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.CreatedAt, &user.UpdatedAt)
 	if err == sql.ErrNoRows {
@@ -57,7 +57,7 @@ func (r *userRepositoryImpl) GetByUsername(username string) (*model.User, error)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &user, nil
 }
 
@@ -65,9 +65,9 @@ func (r *userRepositoryImpl) GetByID(id string) (*model.User, error) {
 	query := `
 	SELECT id, username, email, password_hash, created_at, updated_at
 	FROM users WHERE id = ?`
-	
+
 	row := r.db.QueryRow(query, id)
-	
+
 	var user model.User
 	err := row.Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.CreatedAt, &user.UpdatedAt)
 	if err == sql.ErrNoRows {
@@ -76,7 +76,7 @@ func (r *userRepositoryImpl) GetByID(id string) (*model.User, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &user, nil
 }
 
@@ -85,15 +85,15 @@ func (r *userRepositoryImpl) Update(user *model.User) error {
 	UPDATE users 
 	SET username = ?, email = ?, password_hash = ?, updated_at = ?
 	WHERE id = ?`
-	
+
 	_, err := r.db.Exec(query, user.Username, user.Email, user.PasswordHash, user.UpdatedAt, user.ID)
-	
+
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed: users.username") ||
 			strings.Contains(err.Error(), "UNIQUE constraint failed: users.email") {
 			return ErrDuplicateUser
 		}
 	}
-	
+
 	return err
 }
