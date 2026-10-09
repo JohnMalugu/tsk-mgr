@@ -2,10 +2,14 @@ package service
 
 import (
 	"testing"
+	"github.com/JohnMalugu/tsk-mgr-api/internal/db"
+	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
 )
 
 func TestAuthService_Register(t *testing.T) {
-	svc := NewAuthService()
+	sqliteDB, _ := db.InitDB(":memory:")
+	repo := repository.NewUserRepository(sqliteDB)
+	svc := NewAuthService(repo)
 	
 	// Test basic registration
 	user, err := svc.Register("testuser", "test@example.com", "password123")
@@ -25,7 +29,10 @@ func TestAuthService_Register(t *testing.T) {
 }
 
 func TestAuthService_Login(t *testing.T) {
-	svc := NewAuthService()
+	sqliteDB, _ := db.InitDB(":memory:")
+	repo := repository.NewUserRepository(sqliteDB)
+	svc := NewAuthService(repo)
+	
 	svc.Register("loginuser", "login@example.com", "mypassword")
 	
 	// Test successful login
