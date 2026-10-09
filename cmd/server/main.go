@@ -14,11 +14,20 @@ import (
 	"github.com/JohnMalugu/tsk-mgr-api/internal/routes"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/handler"
+	"github.com/JohnMalugu/tsk-mgr-api/internal/db"
+	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
 )
 
 func main() {
+	// Initialize database
+	sqliteDB, err := db.InitDB("tasks.db")
+	if err != nil {
+		log.Fatalf("failed to initialize database: %v", err)
+	}
+
 	// Initialize services
-	authSvc := service.NewAuthService()
+	userRepo := repository.NewUserRepository(sqliteDB)
+	authSvc := service.NewAuthService(userRepo)
 	handler.InitAuthHandler(authSvc)
 
 	// Register the router for all requests
