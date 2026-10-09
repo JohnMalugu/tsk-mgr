@@ -17,6 +17,25 @@ func InitDB(filepath string) (*sql.DB, error) {
 		return nil, err
 	}
 	
-	log.Println("Database connection established")
+	if err := createSchema(db); err != nil {
+		return nil, err
+	}
+	
+	log.Println("Database connection established and schema initialized")
 	return db, nil
+}
+
+func createSchema(db *sql.DB) error {
+	query := `
+	CREATE TABLE IF NOT EXISTS users (
+		id TEXT PRIMARY KEY,
+		username TEXT UNIQUE NOT NULL,
+		email TEXT UNIQUE NOT NULL,
+		password_hash TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);`
+	
+	_, err := db.Exec(query)
+	return err
 }
