@@ -59,3 +59,22 @@ func (r *userRepositoryImpl) GetByUsername(username string) (*model.User, error)
 	
 	return &user, nil
 }
+
+func (r *userRepositoryImpl) GetByID(id string) (*model.User, error) {
+	query := `
+	SELECT id, username, email, password_hash, created_at, updated_at
+	FROM users WHERE id = ?`
+	
+	row := r.db.QueryRow(query, id)
+	
+	var user model.User
+	err := row.Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.CreatedAt, &user.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	
+	return &user, nil
+}
