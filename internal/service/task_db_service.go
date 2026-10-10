@@ -92,3 +92,12 @@ func (s *taskDBServiceImpl) UpdateTask(id int, userID, title, description string
 	
 	return task, nil
 }
+
+func (s *taskDBServiceImpl) DeleteTask(id int, userID string) error {
+	_, err := s.GetTask(id, userID)
+	if err != nil {
+		return err
+	}
+	
+	return s.repo.Delete(id)
+}
