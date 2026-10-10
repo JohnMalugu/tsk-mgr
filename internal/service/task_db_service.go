@@ -70,3 +70,25 @@ func (s *taskDBServiceImpl) GetTask(id int, userID string) (*model.Task, error) 
 func (s *taskDBServiceImpl) GetUserTasks(userID string) ([]*model.Task, error) {
 	return s.repo.GetByUserID(userID)
 }
+
+func (s *taskDBServiceImpl) UpdateTask(id int, userID, title, description string, dueDate time.Time, estimateMinutes int, completed bool, status, priority string) (*model.Task, error) {
+	task, err := s.GetTask(id, userID)
+	if err != nil {
+		return nil, err
+	}
+	
+	task.Title = title
+	task.Description = description
+	task.DueDate = dueDate
+	task.EstimateMinutes = estimateMinutes
+	task.Completed = completed
+	task.Status = status
+	task.Priority = priority
+	task.UpdatedAt = time.Now().UTC()
+	
+	if err := s.repo.Update(task); err != nil {
+		return nil, err
+	}
+	
+	return task, nil
+}
