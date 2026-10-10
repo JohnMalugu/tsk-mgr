@@ -64,3 +64,29 @@ func (r *taskRepositoryImpl) GetByID(id int) (*model.Task, error) {
 	
 	return &task, nil
 }
+
+func (r *taskRepositoryImpl) GetByUserID(userID string) ([]*model.Task, error) {
+	query := `
+	SELECT id, user_id, title, description, created_at, updated_at, due_date, estimate_minutes, completed, status, priority
+	FROM tasks WHERE user_id = ? ORDER BY created_at DESC`
+	
+	rows, err := r.db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var tasks []*model.Task
+	for rows.Next() {
+		var task model.Task
+		err := rows.Scan(&task.ID, &task.UserID, &task.Title, &task.Description, 
+			&task.CreatedAt, &task.UpdatedAt, &task.DueDate, 
+			&task.EstimateMinutes, &task.Completed, &task.Status, &task.Priority)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, &task)
+	}
+	
+	return tasks, rows.Err()
+}
