@@ -42,3 +42,25 @@ func (r *taskRepositoryImpl) Create(task *model.Task) error {
 	
 	return err
 }
+
+func (r *taskRepositoryImpl) GetByID(id int) (*model.Task, error) {
+	query := `
+	SELECT id, user_id, title, description, created_at, updated_at, due_date, estimate_minutes, completed, status, priority
+	FROM tasks WHERE id = ?`
+	
+	row := r.db.QueryRow(query, id)
+	var task model.Task
+	
+	err := row.Scan(&task.ID, &task.UserID, &task.Title, &task.Description, 
+		&task.CreatedAt, &task.UpdatedAt, &task.DueDate, 
+		&task.EstimateMinutes, &task.Completed, &task.Status, &task.Priority)
+		
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	
+	return &task, nil
+}
