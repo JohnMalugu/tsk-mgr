@@ -66,3 +66,7 @@ func (s *taskDBServiceImpl) GetTask(id int, userID string) (*model.Task, error) 
 	
 	return task, nil
 }
+
+func (s *taskDBServiceImpl) GetUserTasks(userID string) ([]*model.Task, error) {
+	return s.repo.GetByUserID(userID)
+}
