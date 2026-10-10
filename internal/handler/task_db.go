@@ -13,6 +13,12 @@ type TaskDBHandler struct {
 	svc service.TaskDBService
 }
 
+var GlobalTaskDBHandler *TaskDBHandler
+
+func InitTaskDBHandler(svc service.TaskDBService) {
+	GlobalTaskDBHandler = &TaskDBHandler{svc: svc}
+}
+
 func NewTaskDBHandler(svc service.TaskDBService) *TaskDBHandler {
 	return &TaskDBHandler{svc: svc}
 }

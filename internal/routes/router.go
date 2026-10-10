@@ -89,6 +89,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		handler.HandleTasks(w, r)
 		return
 	}
+	
+	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
+		handler.GlobalTaskDBHandler.HandleCreate(w, r)
+		return
+	}
+	
+	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodGet {
+		handler.GlobalTaskDBHandler.HandleList(w, r)
+		return
+	}
 
 	if r.URL.Path == "/tasks/summary" {
 		handler.HandleTaskSummary(w, r)
