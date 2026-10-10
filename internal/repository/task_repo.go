@@ -105,3 +105,9 @@ func (r *taskRepositoryImpl) Update(task *model.Task) error {
 		
 	return err
 }
+
+func (r *taskRepositoryImpl) Delete(id int) error {
+	query := `DELETE FROM tasks WHERE id = ?`
+	_, err := r.db.Exec(query, id)
+	return err
+}
