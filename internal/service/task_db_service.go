@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
+	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
 )
 
 var (
@@ -18,4 +19,12 @@ type TaskDBService interface {
 	GetUserTasks(userID string) ([]*model.Task, error)
 	UpdateTask(id int, userID, title, description string, dueDate time.Time, estimateMinutes int, completed bool, status, priority string) (*model.Task, error)
 	DeleteTask(id int, userID string) error
+}
+
+type taskDBServiceImpl struct {
+	repo repository.TaskRepository
+}
+
+func NewTaskDBService(repo repository.TaskRepository) TaskDBService {
+	return &taskDBServiceImpl{repo: repo}
 }
