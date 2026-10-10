@@ -28,3 +28,25 @@ type taskDBServiceImpl struct {
 func NewTaskDBService(repo repository.TaskRepository) TaskDBService {
 	return &taskDBServiceImpl{repo: repo}
 }
+
+func (s *taskDBServiceImpl) CreateTask(userID, title, description string, dueDate time.Time, estimateMinutes int, priority string) (*model.Task, error) {
+	now := time.Now().UTC()
+	task := &model.Task{
+		UserID:          userID,
+		Title:           title,
+		Description:     description,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+		DueDate:         dueDate,
+		EstimateMinutes: estimateMinutes,
+		Completed:       false,
+		Status:          model.TaskStatusTodo,
+		Priority:        priority,
+	}
+	
+	if err := s.repo.Create(task); err != nil {
+		return nil, err
+	}
+	
+	return task, nil
+}
