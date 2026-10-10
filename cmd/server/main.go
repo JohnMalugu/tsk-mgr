@@ -29,6 +29,10 @@ func main() {
 	userRepo := repository.NewUserRepository(sqliteDB)
 	authSvc := service.NewAuthService(userRepo)
 	handler.InitAuthHandler(authSvc)
+	
+	taskRepo := repository.NewTaskRepository(sqliteDB)
+	taskDBSvc := service.NewTaskDBService(taskRepo)
+	handler.InitTaskDBHandler(taskDBSvc)
 
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
