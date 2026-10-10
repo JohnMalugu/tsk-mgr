@@ -37,5 +37,26 @@ func createSchema(db *sql.DB) error {
 	);`
 
 	_, err := db.Exec(query)
+	if err != nil {
+		return err
+	}
+	
+	taskQuery := `
+	CREATE TABLE IF NOT EXISTS tasks (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id TEXT NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		due_date DATETIME NOT NULL,
+		estimate_minutes INTEGER,
+		completed BOOLEAN NOT NULL DEFAULT 0,
+		status TEXT NOT NULL,
+		priority TEXT NOT NULL,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+	
+	_, err = db.Exec(taskQuery)
 	return err
 }
