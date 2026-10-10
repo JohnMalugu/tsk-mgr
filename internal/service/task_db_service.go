@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	ErrTaskNotFoundDB = errors.New("task not found in database")
+	ErrTaskNotFoundDB   = errors.New("task not found in database")
 	ErrUnauthorizedTask = errors.New("unauthorized to access this task")
 )
 
@@ -43,11 +43,11 @@ func (s *taskDBServiceImpl) CreateTask(userID, title, description string, dueDat
 		Status:          model.TaskStatusTodo,
 		Priority:        priority,
 	}
-	
+
 	if err := s.repo.Create(task); err != nil {
 		return nil, err
 	}
-	
+
 	return task, nil
 }
 
@@ -59,11 +59,11 @@ func (s *taskDBServiceImpl) GetTask(id int, userID string) (*model.Task, error) 
 	if task == nil {
 		return nil, ErrTaskNotFoundDB
 	}
-	
+
 	if task.UserID != userID {
 		return nil, ErrUnauthorizedTask
 	}
-	
+
 	return task, nil
 }
 
@@ -76,7 +76,7 @@ func (s *taskDBServiceImpl) UpdateTask(id int, userID, title, description string
 	if err != nil {
 		return nil, err
 	}
-	
+
 	task.Title = title
 	task.Description = description
 	task.DueDate = dueDate
@@ -85,11 +85,11 @@ func (s *taskDBServiceImpl) UpdateTask(id int, userID, title, description string
 	task.Status = status
 	task.Priority = priority
 	task.UpdatedAt = time.Now().UTC()
-	
+
 	if err := s.repo.Update(task); err != nil {
 		return nil, err
 	}
-	
+
 	return task, nil
 }
 
@@ -98,6 +98,6 @@ func (s *taskDBServiceImpl) DeleteTask(id int, userID string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	return s.repo.Delete(id)
 }

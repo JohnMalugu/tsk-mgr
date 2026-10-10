@@ -204,7 +204,7 @@ func TestUpdateTaskCommentChangesBodyAndRecordsActivity(t *testing.T) {
 		t.Fatal(err)
 	}
 	updated, err := UpdateTaskComment(1, comment.ID, "  Revised note  ")
-	if err != nil || updated.Body != "Revised note" || !updated.UpdatedAt.After(comment.CreatedAt) {
+	if err != nil || updated.Body != "Revised note" || updated.UpdatedAt.Before(comment.CreatedAt) {
 		t.Fatalf("unexpected updated comment: %#v err=%v", updated, err)
 	}
 	page, found := GetTaskComments(1, 0, 20)

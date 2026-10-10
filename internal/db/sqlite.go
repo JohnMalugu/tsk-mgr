@@ -40,7 +40,7 @@ func createSchema(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	
+
 	taskQuery := `
 	CREATE TABLE IF NOT EXISTS tasks (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,7 +56,7 @@ func createSchema(db *sql.DB) error {
 		priority TEXT NOT NULL,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);`
-	
+
 	_, err = db.Exec(taskQuery)
 	return err
 }
