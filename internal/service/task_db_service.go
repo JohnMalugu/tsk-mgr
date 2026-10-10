@@ -50,3 +50,19 @@ func (s *taskDBServiceImpl) CreateTask(userID, title, description string, dueDat
 	
 	return task, nil
 }
+
+func (s *taskDBServiceImpl) GetTask(id int, userID string) (*model.Task, error) {
+	task, err := s.repo.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if task == nil {
+		return nil, ErrTaskNotFoundDB
+	}
+	
+	if task.UserID != userID {
+		return nil, ErrUnauthorizedTask
+	}
+	
+	return task, nil
+}
