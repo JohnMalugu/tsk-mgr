@@ -90,3 +90,18 @@ func (r *taskRepositoryImpl) GetByUserID(userID string) ([]*model.Task, error) {
 	
 	return tasks, rows.Err()
 }
+
+func (r *taskRepositoryImpl) Update(task *model.Task) error {
+	query := `
+	UPDATE tasks 
+	SET title = ?, description = ?, updated_at = ?, due_date = ?, 
+		estimate_minutes = ?, completed = ?, status = ?, priority = ?
+	WHERE id = ? AND user_id = ?`
+	
+	_, err := r.db.Exec(query, 
+		task.Title, task.Description, task.UpdatedAt, task.DueDate, 
+		task.EstimateMinutes, task.Completed, task.Status, task.Priority,
+		task.ID, task.UserID)
+		
+	return err
+}
