@@ -75,3 +75,37 @@ func (s *projectServiceImpl) GetProject(id int, userID string) (*model.Project, 
 func (s *projectServiceImpl) GetUserProjects(userID string) ([]*model.Project, error) {
 	return s.repo.GetByUserID(userID)
 }
+
+func (s *projectServiceImpl) UpdateProject(id int, userID, name, description, color string) (*model.Project, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, ErrProjectNameRequired
+	}
+
+	project, err := s.GetProject(id, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	project.Name = name
+	project.Description = strings.TrimSpace(description)
+	if color != "" {
+		project.Color = color
+	}
+	project.UpdatedAt = time.Now().UTC()
+
+	if err := s.repo.Update(project); err != nil {
+		return nil, err
+	}
+
+	return project, nil
+}
+
+func (s *projectServiceImpl) DeleteProject(id int, userID string) error {
+	_, err := s.GetProject(id, userID)
+	if err != nil {
+		return err
+	}
+
+	return s.repo.Delete(id)
+}
