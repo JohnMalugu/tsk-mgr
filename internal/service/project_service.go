@@ -2,6 +2,8 @@ package service
 
 import (
 	"errors"
+	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -27,4 +29,31 @@ type projectServiceImpl struct {
 
 func NewProjectService(repo repository.ProjectRepository) ProjectService {
 	return &projectServiceImpl{repo: repo}
+}
+
+func (s *projectServiceImpl) CreateProject(userID, name, description, color string) (*model.Project, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, ErrProjectNameRequired
+	}
+
+	if color == "" {
+		color = "#6366f1"
+	}
+
+	now := time.Now().UTC()
+	project := &model.Project{
+		UserID:      userID,
+		Name:        name,
+		Description: strings.TrimSpace(description),
+		Color:       color,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+
+	if err := s.repo.Create(project); err != nil {
+		return nil, err
+	}
+
+	return project, nil
 }
