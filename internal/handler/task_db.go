@@ -158,3 +158,28 @@ func (h *TaskDBHandler) HandleDelete(w http.ResponseWriter, r *http.Request, tas
 
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (h *TaskDBHandler) HandleComplete(w http.ResponseWriter, r *http.Request, taskID int) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	task, err := h.svc.CompleteTask(taskID, userID, true)
+	if err != nil {
+		if err == service.ErrTaskNotFoundDB {
+			http.Error(w, "Task not found", http.StatusNotFound)
+			return
+		}
+		if err == service.ErrUnauthorizedTask {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(task)
+}

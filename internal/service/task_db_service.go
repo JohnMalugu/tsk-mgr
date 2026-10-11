@@ -19,6 +19,7 @@ type TaskDBService interface {
 	GetUserTasks(userID string) ([]*model.Task, error)
 	UpdateTask(id int, userID, title, description string, dueDate time.Time, estimateMinutes int, completed bool, status, priority string) (*model.Task, error)
 	DeleteTask(id int, userID string) error
+	CompleteTask(id int, userID string, completed bool) (*model.Task, error)
 }
 
 type taskDBServiceImpl struct {
@@ -100,4 +101,25 @@ func (s *taskDBServiceImpl) DeleteTask(id int, userID string) error {
 	}
 
 	return s.repo.Delete(id)
+}
+
+func (s *taskDBServiceImpl) CompleteTask(id int, userID string, completed bool) (*model.Task, error) {
+	task, err := s.GetTask(id, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	task.Completed = completed
+	if completed {
+		task.Status = model.TaskStatusCompleted
+	} else {
+		task.Status = model.TaskStatusTodo
+	}
+	task.UpdatedAt = time.Now().UTC()
+
+	if err := s.repo.Update(task); err != nil {
+		return nil, err
+	}
+
+	return task, nil
 }
