@@ -41,3 +41,24 @@ func (r *projectRepositoryImpl) Create(project *model.Project) error {
 
 	return err
 }
+
+func (r *projectRepositoryImpl) GetByID(id int) (*model.Project, error) {
+	query := `
+	SELECT id, user_id, name, description, color, created_at, updated_at
+	FROM projects WHERE id = ?`
+
+	row := r.db.QueryRow(query, id)
+	var project model.Project
+
+	err := row.Scan(&project.ID, &project.UserID, &project.Name, &project.Description,
+		&project.Color, &project.CreatedAt, &project.UpdatedAt)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &project, nil
+}
