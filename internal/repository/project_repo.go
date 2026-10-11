@@ -87,3 +87,16 @@ func (r *projectRepositoryImpl) GetByUserID(userID string) ([]*model.Project, er
 
 	return projects, rows.Err()
 }
+
+func (r *projectRepositoryImpl) Update(project *model.Project) error {
+	query := `
+	UPDATE projects
+	SET name = ?, description = ?, color = ?, updated_at = ?
+	WHERE id = ? AND user_id = ?`
+
+	_, err := r.db.Exec(query,
+		project.Name, project.Description, project.Color, project.UpdatedAt,
+		project.ID, project.UserID)
+
+	return err
+}
