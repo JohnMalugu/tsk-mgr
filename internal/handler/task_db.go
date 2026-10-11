@@ -68,3 +68,28 @@ func (h *TaskDBHandler) HandleList(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(tasks)
 }
+
+func (h *TaskDBHandler) HandleGetByID(w http.ResponseWriter, r *http.Request, taskID int) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	task, err := h.svc.GetTask(taskID, userID)
+	if err != nil {
+		if err == service.ErrTaskNotFoundDB {
+			http.Error(w, "Task not found", http.StatusNotFound)
+			return
+		}
+		if err == service.ErrUnauthorizedTask {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(task)
+}
