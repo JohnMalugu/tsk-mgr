@@ -62,3 +62,28 @@ func (r *projectRepositoryImpl) GetByID(id int) (*model.Project, error) {
 
 	return &project, nil
 }
+
+func (r *projectRepositoryImpl) GetByUserID(userID string) ([]*model.Project, error) {
+	query := `
+	SELECT id, user_id, name, description, color, created_at, updated_at
+	FROM projects WHERE user_id = ? ORDER BY created_at DESC`
+
+	rows, err := r.db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var projects []*model.Project
+	for rows.Next() {
+		var p model.Project
+		err := rows.Scan(&p.ID, &p.UserID, &p.Name, &p.Description,
+			&p.Color, &p.CreatedAt, &p.UpdatedAt)
+		if err != nil {
+			return nil, err
+		}
+		projects = append(projects, &p)
+	}
+
+	return projects, rows.Err()
+}
