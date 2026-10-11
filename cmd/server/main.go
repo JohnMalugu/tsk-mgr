@@ -34,6 +34,10 @@ func main() {
 	taskDBSvc := service.NewTaskDBService(taskRepo)
 	handler.InitTaskDBHandler(taskDBSvc)
 
+	projectRepo := repository.NewProjectRepository(sqliteDB)
+	projectSvc := service.NewProjectService(projectRepo)
+	handler.InitProjectHandler(projectSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
