@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/handler"
@@ -98,6 +99,30 @@ func Router(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodGet {
 		handler.GlobalTaskDBHandler.HandleList(w, r)
 		return
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/v2/tasks/") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/tasks/")
+		if strings.HasSuffix(trimmed, "/complete") && r.Method == http.MethodPatch {
+			idStr := strings.TrimSuffix(trimmed, "/complete")
+			if id, err := strconv.Atoi(idStr); err == nil {
+				handler.GlobalTaskDBHandler.HandleComplete(w, r, id)
+				return
+			}
+		}
+		if id, err := strconv.Atoi(trimmed); err == nil {
+			switch r.Method {
+			case http.MethodGet:
+				handler.GlobalTaskDBHandler.HandleGetByID(w, r, id)
+				return
+			case http.MethodPut:
+				handler.GlobalTaskDBHandler.HandleUpdate(w, r, id)
+				return
+			case http.MethodDelete:
+				handler.GlobalTaskDBHandler.HandleDelete(w, r, id)
+				return
+			}
+		}
 	}
 
 	if r.URL.Path == "/tasks/summary" {
