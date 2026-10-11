@@ -58,5 +58,22 @@ func createSchema(db *sql.DB) error {
 	);`
 
 	_, err = db.Exec(taskQuery)
+	if err != nil {
+		return err
+	}
+
+	projectQuery := `
+	CREATE TABLE IF NOT EXISTS projects (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		description TEXT,
+		color TEXT NOT NULL DEFAULT '#6366f1',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(projectQuery)
 	return err
 }
