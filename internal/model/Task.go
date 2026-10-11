@@ -33,6 +33,7 @@ type RecurrenceRule struct {
 type Task struct {
 	ID                   int             `json:"id"`
 	UserID               string          `json:"userId"`
+	ProjectID            *int            `json:"projectId,omitempty"`
 	Title                string          `json:"title"`
 	Description          string          `json:"description,omitempty"`
 	CreatedAt            time.Time       `json:"createdAt"`
