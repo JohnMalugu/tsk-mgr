@@ -41,27 +41,6 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
-	taskQuery := `
-	CREATE TABLE IF NOT EXISTS tasks (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		user_id TEXT NOT NULL,
-		title TEXT NOT NULL,
-		description TEXT,
-		created_at DATETIME NOT NULL,
-		updated_at DATETIME NOT NULL,
-		due_date DATETIME NOT NULL,
-		estimate_minutes INTEGER,
-		completed BOOLEAN NOT NULL DEFAULT 0,
-		status TEXT NOT NULL,
-		priority TEXT NOT NULL,
-		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-	);`
-
-	_, err = db.Exec(taskQuery)
-	if err != nil {
-		return err
-	}
-
 	projectQuery := `
 	CREATE TABLE IF NOT EXISTS projects (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,5 +54,35 @@ func createSchema(db *sql.DB) error {
 	);`
 
 	_, err = db.Exec(projectQuery)
-	return err
+	if err != nil {
+		return err
+	}
+
+	taskQuery := `
+	CREATE TABLE IF NOT EXISTS tasks (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id TEXT NOT NULL,
+		project_id INTEGER,
+		title TEXT NOT NULL,
+		description TEXT,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		due_date DATETIME NOT NULL,
+		estimate_minutes INTEGER,
+		completed BOOLEAN NOT NULL DEFAULT 0,
+		status TEXT NOT NULL,
+		priority TEXT NOT NULL,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
+	);`
+
+	_, err = db.Exec(taskQuery)
+	if err != nil {
+		return err
+	}
+
+	// Safely attempt migration for existing databases
+	_, _ = db.Exec(`ALTER TABLE tasks ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL;`)
+
+	return nil
 }

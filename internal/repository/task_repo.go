@@ -23,11 +23,11 @@ func NewTaskRepository(db *sql.DB) TaskRepository {
 
 func (r *taskRepositoryImpl) Create(task *model.Task) error {
 	query := `
-	INSERT INTO tasks (user_id, title, description, created_at, updated_at, due_date, estimate_minutes, completed, status, priority)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	INSERT INTO tasks (user_id, project_id, title, description, created_at, updated_at, due_date, estimate_minutes, completed, status, priority)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	result, err := r.db.Exec(query,
-		task.UserID, task.Title, task.Description,
+		task.UserID, task.ProjectID, task.Title, task.Description,
 		task.CreatedAt, task.UpdatedAt, task.DueDate,
 		task.EstimateMinutes, task.Completed, task.Status, task.Priority)
 
@@ -45,13 +45,13 @@ func (r *taskRepositoryImpl) Create(task *model.Task) error {
 
 func (r *taskRepositoryImpl) GetByID(id int) (*model.Task, error) {
 	query := `
-	SELECT id, user_id, title, description, created_at, updated_at, due_date, estimate_minutes, completed, status, priority
+	SELECT id, user_id, project_id, title, description, created_at, updated_at, due_date, estimate_minutes, completed, status, priority
 	FROM tasks WHERE id = ?`
 
 	row := r.db.QueryRow(query, id)
 	var task model.Task
 
-	err := row.Scan(&task.ID, &task.UserID, &task.Title, &task.Description,
+	err := row.Scan(&task.ID, &task.UserID, &task.ProjectID, &task.Title, &task.Description,
 		&task.CreatedAt, &task.UpdatedAt, &task.DueDate,
 		&task.EstimateMinutes, &task.Completed, &task.Status, &task.Priority)
 
@@ -67,7 +67,7 @@ func (r *taskRepositoryImpl) GetByID(id int) (*model.Task, error) {
 
 func (r *taskRepositoryImpl) GetByUserID(userID string) ([]*model.Task, error) {
 	query := `
-	SELECT id, user_id, title, description, created_at, updated_at, due_date, estimate_minutes, completed, status, priority
+	SELECT id, user_id, project_id, title, description, created_at, updated_at, due_date, estimate_minutes, completed, status, priority
 	FROM tasks WHERE user_id = ? ORDER BY created_at DESC`
 
 	rows, err := r.db.Query(query, userID)
@@ -79,7 +79,7 @@ func (r *taskRepositoryImpl) GetByUserID(userID string) ([]*model.Task, error) {
 	var tasks []*model.Task
 	for rows.Next() {
 		var task model.Task
-		err := rows.Scan(&task.ID, &task.UserID, &task.Title, &task.Description,
+		err := rows.Scan(&task.ID, &task.UserID, &task.ProjectID, &task.Title, &task.Description,
 			&task.CreatedAt, &task.UpdatedAt, &task.DueDate,
 			&task.EstimateMinutes, &task.Completed, &task.Status, &task.Priority)
 		if err != nil {
@@ -94,12 +94,12 @@ func (r *taskRepositoryImpl) GetByUserID(userID string) ([]*model.Task, error) {
 func (r *taskRepositoryImpl) Update(task *model.Task) error {
 	query := `
 	UPDATE tasks 
-	SET title = ?, description = ?, updated_at = ?, due_date = ?, 
+	SET project_id = ?, title = ?, description = ?, updated_at = ?, due_date = ?, 
 		estimate_minutes = ?, completed = ?, status = ?, priority = ?
 	WHERE id = ? AND user_id = ?`
 
 	_, err := r.db.Exec(query,
-		task.Title, task.Description, task.UpdatedAt, task.DueDate,
+		task.ProjectID, task.Title, task.Description, task.UpdatedAt, task.DueDate,
 		task.EstimateMinutes, task.Completed, task.Status, task.Priority,
 		task.ID, task.UserID)
 
