@@ -125,6 +125,33 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if r.URL.Path == "/projects" && r.Method == http.MethodPost {
+		handler.GlobalProjectHandler.HandleCreate(w, r)
+		return
+	}
+
+	if r.URL.Path == "/projects" && r.Method == http.MethodGet {
+		handler.GlobalProjectHandler.HandleList(w, r)
+		return
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/projects/") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/projects/")
+		if id, err := strconv.Atoi(trimmed); err == nil {
+			switch r.Method {
+			case http.MethodGet:
+				handler.GlobalProjectHandler.HandleGetByID(w, r, id)
+				return
+			case http.MethodPut:
+				handler.GlobalProjectHandler.HandleUpdate(w, r, id)
+				return
+			case http.MethodDelete:
+				handler.GlobalProjectHandler.HandleDelete(w, r, id)
+				return
+			}
+		}
+	}
+
 	if r.URL.Path == "/tasks/summary" {
 		handler.HandleTaskSummary(w, r)
 		return
