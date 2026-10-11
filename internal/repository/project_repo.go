@@ -100,3 +100,9 @@ func (r *projectRepositoryImpl) Update(project *model.Project) error {
 
 	return err
 }
+
+func (r *projectRepositoryImpl) Delete(id int) error {
+	query := `DELETE FROM projects WHERE id = ?`
+	_, err := r.db.Exec(query, id)
+	return err
+}
