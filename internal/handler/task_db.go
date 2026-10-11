@@ -93,3 +93,44 @@ func (h *TaskDBHandler) HandleGetByID(w http.ResponseWriter, r *http.Request, ta
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(task)
 }
+
+type UpdateTaskRequest struct {
+	Title           string    `json:"title"`
+	Description     string    `json:"description"`
+	DueDate         time.Time `json:"due_date"`
+	EstimateMinutes int       `json:"estimate_minutes"`
+	Completed       bool      `json:"completed"`
+	Status          string    `json:"status"`
+	Priority        string    `json:"priority"`
+}
+
+func (h *TaskDBHandler) HandleUpdate(w http.ResponseWriter, r *http.Request, taskID int) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req UpdateTaskRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
+		return
+	}
+
+	task, err := h.svc.UpdateTask(taskID, userID, req.Title, req.Description, req.DueDate, req.EstimateMinutes, req.Completed, req.Status, req.Priority)
+	if err != nil {
+		if err == service.ErrTaskNotFoundDB {
+			http.Error(w, "Task not found", http.StatusNotFound)
+			return
+		}
+		if err == service.ErrUnauthorizedTask {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(task)
+}
