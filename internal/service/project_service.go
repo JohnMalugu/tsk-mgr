@@ -57,3 +57,21 @@ func (s *projectServiceImpl) CreateProject(userID, name, description, color stri
 
 	return project, nil
 }
+
+func (s *projectServiceImpl) GetProject(id int, userID string) (*model.Project, error) {
+	project, err := s.repo.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if project == nil {
+		return nil, ErrProjectNotFound
+	}
+	if project.UserID != userID {
+		return nil, ErrUnauthorizedProject
+	}
+	return project, nil
+}
+
+func (s *projectServiceImpl) GetUserProjects(userID string) ([]*model.Project, error) {
+	return s.repo.GetByUserID(userID)
+}
