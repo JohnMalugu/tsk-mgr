@@ -38,6 +38,10 @@ func main() {
 	projectSvc := service.NewProjectService(projectRepo)
 	handler.InitProjectHandler(projectSvc)
 
+	tagRepo := repository.NewTagRepository(sqliteDB)
+	tagSvc := service.NewTagService(tagRepo, taskRepo)
+	handler.InitTagHandler(tagSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
