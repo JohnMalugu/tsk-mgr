@@ -62,3 +62,22 @@ func (s *tagServiceImpl) CreateTag(userID, name, color string) (*model.Tag, erro
 	return tag, nil
 }
 
+func (s *tagServiceImpl) GetTag(id int, userID string) (*model.Tag, error) {
+	tag, err := s.tagRepo.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if tag == nil {
+		return nil, ErrTagNotFound
+	}
+	if tag.UserID != userID {
+		return nil, ErrUnauthorizedTag
+	}
+	return tag, nil
+}
+
+func (s *tagServiceImpl) GetUserTags(userID string) ([]*model.Tag, error) {
+	return s.tagRepo.GetByUserID(userID)
+}
+
+
