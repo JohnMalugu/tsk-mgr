@@ -70,3 +70,93 @@ func (h *TagHandler) HandleList(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(tags)
 }
+
+func (h *TagHandler) HandleGetByID(w http.ResponseWriter, r *http.Request, tagID int) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	tag, err := h.svc.GetTag(tagID, userID)
+	if err != nil {
+		if err == service.ErrTagNotFound {
+			http.Error(w, "Tag not found", http.StatusNotFound)
+			return
+		}
+		if err == service.ErrUnauthorizedTag {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tag)
+}
+
+type UpdateTagRequest struct {
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
+func (h *TagHandler) HandleUpdate(w http.ResponseWriter, r *http.Request, tagID int) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req UpdateTagRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
+		return
+	}
+
+	tag, err := h.svc.UpdateTag(tagID, userID, req.Name, req.Color)
+	if err != nil {
+		if err == service.ErrTagNameRequired {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err == service.ErrTagNotFound {
+			http.Error(w, "Tag not found", http.StatusNotFound)
+			return
+		}
+		if err == service.ErrUnauthorizedTag {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tag)
+}
+
+func (h *TagHandler) HandleDelete(w http.ResponseWriter, r *http.Request, tagID int) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	err := h.svc.DeleteTag(tagID, userID)
+	if err != nil {
+		if err == service.ErrTagNotFound {
+			http.Error(w, "Tag not found", http.StatusNotFound)
+			return
+		}
+		if err == service.ErrUnauthorizedTag {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
