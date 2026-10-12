@@ -84,5 +84,32 @@ func createSchema(db *sql.DB) error {
 	// Safely attempt migration for existing databases
 	_, _ = db.Exec(`ALTER TABLE tasks ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL;`)
 
-	return nil
+	tagQuery := `
+	CREATE TABLE IF NOT EXISTS tags (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		color TEXT NOT NULL DEFAULT '#10b981',
+		created_at DATETIME NOT NULL,
+		UNIQUE(user_id, name),
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(tagQuery)
+	if err != nil {
+		return err
+	}
+
+	taskTagQuery := `
+	CREATE TABLE IF NOT EXISTS task_tags (
+		task_id INTEGER NOT NULL,
+		tag_id INTEGER NOT NULL,
+		created_at DATETIME NOT NULL,
+		PRIMARY KEY (task_id, tag_id),
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+		FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(taskTagQuery)
+	return err
 }
