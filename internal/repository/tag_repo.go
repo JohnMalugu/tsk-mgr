@@ -59,3 +59,24 @@ func (r *tagRepositoryImpl) GetByID(id int) (*model.Tag, error) {
 
 	return &tag, nil
 }
+
+func (r *tagRepositoryImpl) GetByUserID(userID string) ([]*model.Tag, error) {
+	query := `SELECT id, user_id, name, color, created_at FROM tags WHERE user_id = ? ORDER BY name ASC`
+	rows, err := r.db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tags []*model.Tag
+	for rows.Next() {
+		var tag model.Tag
+		err := rows.Scan(&tag.ID, &tag.UserID, &tag.Name, &tag.Color, &tag.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		tags = append(tags, &tag)
+	}
+
+	return tags, rows.Err()
+}
