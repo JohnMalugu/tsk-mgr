@@ -108,4 +108,32 @@ func (r *tagRepositoryImpl) DetachTagFromTask(taskID, tagID int) error {
 	return err
 }
 
+func (r *tagRepositoryImpl) GetTagsForTask(taskID int) ([]*model.Tag, error) {
+	query := `
+	SELECT t.id, t.user_id, t.name, t.color, t.created_at
+	FROM tags t
+	INNER JOIN task_tags tt ON t.id = tt.tag_id
+	WHERE tt.task_id = ?
+	ORDER BY t.name ASC`
+
+	rows, err := r.db.Query(query, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tags []*model.Tag
+	for rows.Next() {
+		var tag model.Tag
+		err := rows.Scan(&tag.ID, &tag.UserID, &tag.Name, &tag.Color, &tag.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		tags = append(tags, &tag)
+	}
+
+	return tags, rows.Err()
+}
+
+
 
