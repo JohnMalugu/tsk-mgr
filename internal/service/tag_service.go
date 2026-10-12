@@ -80,4 +80,37 @@ func (s *tagServiceImpl) GetUserTags(userID string) ([]*model.Tag, error) {
 	return s.tagRepo.GetByUserID(userID)
 }
 
+func (s *tagServiceImpl) UpdateTag(id int, userID, name, color string) (*model.Tag, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, ErrTagNameRequired
+	}
+
+	tag, err := s.GetTag(id, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	tag.Name = name
+	if color != "" {
+		tag.Color = color
+	}
+
+	if err := s.tagRepo.Update(tag); err != nil {
+		return nil, err
+	}
+
+	return tag, nil
+}
+
+func (s *tagServiceImpl) DeleteTag(id int, userID string) error {
+	_, err := s.GetTag(id, userID)
+	if err != nil {
+		return err
+	}
+
+	return s.tagRepo.Delete(id)
+}
+
+
 
