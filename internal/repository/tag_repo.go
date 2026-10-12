@@ -25,3 +25,21 @@ type tagRepositoryImpl struct {
 func NewTagRepository(db *sql.DB) TagRepository {
 	return &tagRepositoryImpl{db: db}
 }
+
+func (r *tagRepositoryImpl) Create(tag *model.Tag) error {
+	query := `
+	INSERT INTO tags (user_id, name, color, created_at)
+	VALUES (?, ?, ?, ?)`
+
+	result, err := r.db.Exec(query, tag.UserID, tag.Name, tag.Color, tag.CreatedAt)
+	if err != nil {
+		return err
+	}
+
+	id, err := result.LastInsertId()
+	if err == nil {
+		tag.ID = int(id)
+	}
+
+	return err
+}
