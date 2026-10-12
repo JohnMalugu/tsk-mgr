@@ -161,8 +161,3 @@ func (s *tagServiceImpl) GetTaskTags(taskID int, userID string) ([]*model.Tag, e
 
 	return s.tagRepo.GetTagsForTask(taskID)
 }
-
-
-
-
-

@@ -203,7 +203,6 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-
 	if r.URL.Path == "/tasks/summary" {
 		handler.HandleTaskSummary(w, r)
 		return

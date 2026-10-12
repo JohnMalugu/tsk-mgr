@@ -242,5 +242,3 @@ func (h *TagHandler) HandleGetTaskTags(w http.ResponseWriter, r *http.Request, t
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(tags)
 }
-
-

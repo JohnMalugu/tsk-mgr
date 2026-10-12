@@ -163,7 +163,3 @@ func (r *tagRepositoryImpl) GetTasksForTag(tagID int) ([]*model.Task, error) {
 
 	return tasks, rows.Err()
 }
-
-
-
-
