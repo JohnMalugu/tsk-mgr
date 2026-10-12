@@ -132,6 +132,37 @@ func (s *tagServiceImpl) AddTagToTask(taskID, tagID int, userID string) error {
 	return s.tagRepo.AttachTagToTask(taskID, tagID)
 }
 
+func (s *tagServiceImpl) RemoveTagFromTask(taskID, tagID int, userID string) error {
+	task, err := s.taskRepo.GetByID(taskID)
+	if err != nil {
+		return err
+	}
+	if task == nil {
+		return ErrTaskNotFoundDB
+	}
+	if task.UserID != userID {
+		return ErrUnauthorizedTask
+	}
+
+	return s.tagRepo.DetachTagFromTask(taskID, tagID)
+}
+
+func (s *tagServiceImpl) GetTaskTags(taskID int, userID string) ([]*model.Tag, error) {
+	task, err := s.taskRepo.GetByID(taskID)
+	if err != nil {
+		return nil, err
+	}
+	if task == nil {
+		return nil, ErrTaskNotFoundDB
+	}
+	if task.UserID != userID {
+		return nil, ErrUnauthorizedTask
+	}
+
+	return s.tagRepo.GetTagsForTask(taskID)
+}
+
+
 
 
 
