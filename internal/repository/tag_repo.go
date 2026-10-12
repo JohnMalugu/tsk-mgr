@@ -80,3 +80,9 @@ func (r *tagRepositoryImpl) GetByUserID(userID string) ([]*model.Tag, error) {
 
 	return tags, rows.Err()
 }
+
+func (r *tagRepositoryImpl) Update(tag *model.Tag) error {
+	query := `UPDATE tags SET name = ?, color = ? WHERE id = ? AND user_id = ?`
+	_, err := r.db.Exec(query, tag.Name, tag.Color, tag.ID, tag.UserID)
+	return err
+}
