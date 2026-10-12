@@ -43,3 +43,19 @@ func (r *tagRepositoryImpl) Create(tag *model.Tag) error {
 
 	return err
 }
+
+func (r *tagRepositoryImpl) GetByID(id int) (*model.Tag, error) {
+	query := `SELECT id, user_id, name, color, created_at FROM tags WHERE id = ?`
+	row := r.db.QueryRow(query, id)
+
+	var tag model.Tag
+	err := row.Scan(&tag.ID, &tag.UserID, &tag.Name, &tag.Color, &tag.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &tag, nil
+}
