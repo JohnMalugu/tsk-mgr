@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
@@ -92,3 +93,12 @@ func (r *tagRepositoryImpl) Delete(id int) error {
 	_, err := r.db.Exec(query, id)
 	return err
 }
+
+func (r *tagRepositoryImpl) AttachTagToTask(taskID, tagID int) error {
+	query := `
+	INSERT OR IGNORE INTO task_tags (task_id, tag_id, created_at)
+	VALUES (?, ?, ?)`
+	_, err := r.db.Exec(query, taskID, tagID, time.Now().UTC())
+	return err
+}
+
