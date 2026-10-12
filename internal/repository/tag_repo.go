@@ -86,3 +86,9 @@ func (r *tagRepositoryImpl) Update(tag *model.Tag) error {
 	_, err := r.db.Exec(query, tag.Name, tag.Color, tag.ID, tag.UserID)
 	return err
 }
+
+func (r *tagRepositoryImpl) Delete(id int) error {
+	query := `DELETE FROM tags WHERE id = ?`
+	_, err := r.db.Exec(query, id)
+	return err
+}
