@@ -152,6 +152,58 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if r.URL.Path == "/v2/tags" && r.Method == http.MethodPost {
+		handler.GlobalTagHandler.HandleCreate(w, r)
+		return
+	}
+
+	if r.URL.Path == "/v2/tags" && r.Method == http.MethodGet {
+		handler.GlobalTagHandler.HandleList(w, r)
+		return
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/v2/tags/") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/tags/")
+		if id, err := strconv.Atoi(trimmed); err == nil {
+			switch r.Method {
+			case http.MethodGet:
+				handler.GlobalTagHandler.HandleGetByID(w, r, id)
+				return
+			case http.MethodPut:
+				handler.GlobalTagHandler.HandleUpdate(w, r, id)
+				return
+			case http.MethodDelete:
+				handler.GlobalTagHandler.HandleDelete(w, r, id)
+				return
+			}
+		}
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/v2/tasks/") && strings.Contains(r.URL.Path, "/tags") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/tasks/")
+		parts := strings.Split(trimmed, "/")
+		if len(parts) >= 2 && parts[1] == "tags" {
+			if taskID, err := strconv.Atoi(parts[0]); err == nil {
+				if len(parts) == 2 {
+					if r.Method == http.MethodGet {
+						handler.GlobalTagHandler.HandleGetTaskTags(w, r, taskID)
+						return
+					}
+					if r.Method == http.MethodPost {
+						handler.GlobalTagHandler.HandleAttachTag(w, r, taskID)
+						return
+					}
+				} else if len(parts) == 3 && r.Method == http.MethodDelete {
+					if tagID, err := strconv.Atoi(parts[2]); err == nil {
+						handler.GlobalTagHandler.HandleDetachTag(w, r, taskID, tagID)
+						return
+					}
+				}
+			}
+		}
+	}
+
+
 	if r.URL.Path == "/tasks/summary" {
 		handler.HandleTaskSummary(w, r)
 		return
