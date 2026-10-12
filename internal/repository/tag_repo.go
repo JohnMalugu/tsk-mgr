@@ -135,5 +135,35 @@ func (r *tagRepositoryImpl) GetTagsForTask(taskID int) ([]*model.Tag, error) {
 	return tags, rows.Err()
 }
 
+func (r *tagRepositoryImpl) GetTasksForTag(tagID int) ([]*model.Task, error) {
+	query := `
+	SELECT t.id, t.user_id, t.project_id, t.title, t.description, t.created_at, t.updated_at, t.due_date, t.estimate_minutes, t.completed, t.status, t.priority
+	FROM tasks t
+	INNER JOIN task_tags tt ON t.id = tt.task_id
+	WHERE tt.tag_id = ?
+	ORDER BY t.created_at DESC`
+
+	rows, err := r.db.Query(query, tagID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []*model.Task
+	for rows.Next() {
+		var task model.Task
+		err := rows.Scan(&task.ID, &task.UserID, &task.ProjectID, &task.Title, &task.Description,
+			&task.CreatedAt, &task.UpdatedAt, &task.DueDate,
+			&task.EstimateMinutes, &task.Completed, &task.Status, &task.Priority)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, &task)
+	}
+
+	return tasks, rows.Err()
+}
+
+
 
 
