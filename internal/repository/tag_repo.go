@@ -102,3 +102,10 @@ func (r *tagRepositoryImpl) AttachTagToTask(taskID, tagID int) error {
 	return err
 }
 
+func (r *tagRepositoryImpl) DetachTagFromTask(taskID, tagID int) error {
+	query := `DELETE FROM task_tags WHERE task_id = ? AND tag_id = ?`
+	_, err := r.db.Exec(query, taskID, tagID)
+	return err
+}
+
+
