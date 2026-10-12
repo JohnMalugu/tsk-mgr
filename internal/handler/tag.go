@@ -160,3 +160,87 @@ func (h *TagHandler) HandleDelete(w http.ResponseWriter, r *http.Request, tagID 
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type AttachTagRequest struct {
+	TagID int `json:"tag_id"`
+}
+
+func (h *TagHandler) HandleAttachTag(w http.ResponseWriter, r *http.Request, taskID int) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req AttachTagRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
+		return
+	}
+
+	err := h.svc.AddTagToTask(taskID, req.TagID, userID)
+	if err != nil {
+		if err == service.ErrTagNotFound || err == service.ErrTaskNotFoundDB {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err == service.ErrUnauthorizedTag || err == service.ErrUnauthorizedTask {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+}
+
+func (h *TagHandler) HandleDetachTag(w http.ResponseWriter, r *http.Request, taskID, tagID int) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	err := h.svc.RemoveTagFromTask(taskID, tagID, userID)
+	if err != nil {
+		if err == service.ErrTaskNotFoundDB {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err == service.ErrUnauthorizedTask {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *TagHandler) HandleGetTaskTags(w http.ResponseWriter, r *http.Request, taskID int) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	tags, err := h.svc.GetTaskTags(taskID, userID)
+	if err != nil {
+		if err == service.ErrTaskNotFoundDB {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err == service.ErrUnauthorizedTask {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tags)
+}
+
+
