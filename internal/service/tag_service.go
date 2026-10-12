@@ -2,6 +2,8 @@ package service
 
 import (
 	"errors"
+	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -35,3 +37,28 @@ func NewTagService(tagRepo repository.TagRepository, taskRepo repository.TaskRep
 		taskRepo: taskRepo,
 	}
 }
+
+func (s *tagServiceImpl) CreateTag(userID, name, color string) (*model.Tag, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, ErrTagNameRequired
+	}
+
+	if color == "" {
+		color = "#10b981"
+	}
+
+	tag := &model.Tag{
+		UserID:    userID,
+		Name:      name,
+		Color:     color,
+		CreatedAt: time.Now().UTC(),
+	}
+
+	if err := s.tagRepo.Create(tag); err != nil {
+		return nil, err
+	}
+
+	return tag, nil
+}
+
