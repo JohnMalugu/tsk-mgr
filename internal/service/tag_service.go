@@ -112,5 +112,26 @@ func (s *tagServiceImpl) DeleteTag(id int, userID string) error {
 	return s.tagRepo.Delete(id)
 }
 
+func (s *tagServiceImpl) AddTagToTask(taskID, tagID int, userID string) error {
+	_, err := s.GetTag(tagID, userID)
+	if err != nil {
+		return err
+	}
+
+	task, err := s.taskRepo.GetByID(taskID)
+	if err != nil {
+		return err
+	}
+	if task == nil {
+		return ErrTaskNotFoundDB
+	}
+	if task.UserID != userID {
+		return ErrUnauthorizedTask
+	}
+
+	return s.tagRepo.AttachTagToTask(taskID, tagID)
+}
+
+
 
 
