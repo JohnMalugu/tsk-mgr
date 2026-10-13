@@ -125,6 +125,50 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if strings.HasPrefix(r.URL.Path, "/v2/tasks/") && strings.Contains(r.URL.Path, "/subtasks") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/tasks/")
+		parts := strings.Split(trimmed, "/")
+		if len(parts) >= 2 && parts[1] == "subtasks" {
+			if taskID, err := strconv.Atoi(parts[0]); err == nil {
+				if len(parts) == 2 {
+					if r.Method == http.MethodGet {
+						handler.GlobalSubtaskHandler.HandleList(w, r, taskID)
+						return
+					}
+					if r.Method == http.MethodPost {
+						handler.GlobalSubtaskHandler.HandleCreate(w, r, taskID)
+						return
+					}
+				} else if len(parts) == 3 && parts[2] == "reorder" && r.Method == http.MethodPut {
+					handler.GlobalSubtaskHandler.HandleReorder(w, r, taskID)
+					return
+				}
+			}
+		}
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/v2/subtasks/") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/subtasks/")
+		if strings.HasSuffix(trimmed, "/toggle") && r.Method == http.MethodPatch {
+			idStr := strings.TrimSuffix(trimmed, "/toggle")
+			if id, err := strconv.Atoi(idStr); err == nil {
+				handler.GlobalSubtaskHandler.HandleToggle(w, r, id)
+				return
+			}
+		}
+		if id, err := strconv.Atoi(trimmed); err == nil {
+			switch r.Method {
+			case http.MethodPut:
+				handler.GlobalSubtaskHandler.HandleUpdate(w, r, id)
+				return
+			case http.MethodDelete:
+				handler.GlobalSubtaskHandler.HandleDelete(w, r, id)
+				return
+			}
+		}
+	}
+
+
 	if r.URL.Path == "/projects" && r.Method == http.MethodPost {
 		handler.GlobalProjectHandler.HandleCreate(w, r)
 		return
