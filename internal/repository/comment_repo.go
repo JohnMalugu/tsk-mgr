@@ -60,3 +60,28 @@ func (r *commentRepositoryImpl) GetByID(id int) (*model.Comment, error) {
 	return &c, nil
 }
 
+func (r *commentRepositoryImpl) GetByTaskID(taskID int) ([]*model.Comment, error) {
+	query := `
+	SELECT id, task_id, user_id, content, created_at, updated_at
+	FROM task_comments WHERE task_id = ? ORDER BY created_at ASC`
+
+	rows, err := r.db.Query(query, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var comments []*model.Comment
+	for rows.Next() {
+		var c model.Comment
+		err := rows.Scan(&c.ID, &c.TaskID, &c.UserID, &c.Content, &c.CreatedAt, &c.UpdatedAt)
+		if err != nil {
+			return nil, err
+		}
+		comments = append(comments, &c)
+	}
+
+	return comments, rows.Err()
+}
+
+
