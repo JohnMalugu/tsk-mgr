@@ -74,3 +74,49 @@ func (s *subtaskServiceImpl) CreateSubtask(taskID int, userID, title string) (*m
 	return subtask, nil
 }
 
+func (s *subtaskServiceImpl) GetSubtasks(taskID int, userID string) ([]*model.Subtask, error) {
+	task, err := s.taskRepo.GetByID(taskID)
+	if err != nil {
+		return nil, err
+	}
+	if task == nil {
+		return nil, ErrTaskNotFoundDB
+	}
+	if task.UserID != userID {
+		return nil, ErrUnauthorizedTask
+	}
+
+	return s.subtaskRepo.GetByTaskID(taskID)
+}
+
+func (s *subtaskServiceImpl) ToggleSubtask(subtaskID int, userID string, completed bool) (*model.Subtask, error) {
+	subtask, err := s.subtaskRepo.GetByID(subtaskID)
+	if err != nil {
+		return nil, err
+	}
+	if subtask == nil {
+		return nil, ErrSubtaskNotFound
+	}
+
+	task, err := s.taskRepo.GetByID(subtask.TaskID)
+	if err != nil {
+		return nil, err
+	}
+	if task == nil {
+		return nil, ErrTaskNotFoundDB
+	}
+	if task.UserID != userID {
+		return nil, ErrUnauthorizedTask
+	}
+
+	subtask.Completed = completed
+	subtask.UpdatedAt = time.Now().UTC()
+
+	if err := s.subtaskRepo.Update(subtask); err != nil {
+		return nil, err
+	}
+
+	return subtask, nil
+}
+
+
