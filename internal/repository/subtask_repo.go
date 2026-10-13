@@ -22,3 +22,24 @@ type subtaskRepositoryImpl struct {
 func NewSubtaskRepository(db *sql.DB) SubtaskRepository {
 	return &subtaskRepositoryImpl{db: db}
 }
+
+func (r *subtaskRepositoryImpl) Create(subtask *model.Subtask) error {
+	query := `
+	INSERT INTO subtasks (task_id, title, completed, position, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?)`
+
+	result, err := r.db.Exec(query,
+		subtask.TaskID, subtask.Title, subtask.Completed,
+		subtask.Position, subtask.CreatedAt, subtask.UpdatedAt)
+	if err != nil {
+		return err
+	}
+
+	id, err := result.LastInsertId()
+	if err == nil {
+		subtask.ID = int(id)
+	}
+
+	return err
+}
+
