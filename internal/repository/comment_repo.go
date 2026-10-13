@@ -84,4 +84,21 @@ func (r *commentRepositoryImpl) GetByTaskID(taskID int) ([]*model.Comment, error
 	return comments, rows.Err()
 }
 
+func (r *commentRepositoryImpl) Update(comment *model.Comment) error {
+	query := `
+	UPDATE task_comments
+	SET content = ?, updated_at = ?
+	WHERE id = ?`
+
+	_, err := r.db.Exec(query, comment.Content, comment.UpdatedAt, comment.ID)
+	return err
+}
+
+func (r *commentRepositoryImpl) Delete(id int) error {
+	query := `DELETE FROM task_comments WHERE id = ?`
+	_, err := r.db.Exec(query, id)
+	return err
+}
+
+
 
