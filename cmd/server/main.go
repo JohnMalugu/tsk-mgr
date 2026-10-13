@@ -42,6 +42,14 @@ func main() {
 	tagSvc := service.NewTagService(tagRepo, taskRepo)
 	handler.InitTagHandler(tagSvc)
 
+	subtaskRepo := repository.NewSubtaskRepository(sqliteDB)
+	subtaskSvc := service.NewSubtaskService(subtaskRepo, taskRepo)
+	handler.InitSubtaskHandler(subtaskSvc)
+
+	commentRepo := repository.NewCommentRepository(sqliteDB)
+	commentSvc := service.NewCommentService(commentRepo, taskRepo)
+	handler.InitCommentHandler(commentSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
