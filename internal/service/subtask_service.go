@@ -119,4 +119,63 @@ func (s *subtaskServiceImpl) ToggleSubtask(subtaskID int, userID string, complet
 	return subtask, nil
 }
 
+func (s *subtaskServiceImpl) UpdateSubtask(subtaskID int, userID, title string) (*model.Subtask, error) {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return nil, ErrSubtaskTitleRequired
+	}
+
+	subtask, err := s.subtaskRepo.GetByID(subtaskID)
+	if err != nil {
+		return nil, err
+	}
+	if subtask == nil {
+		return nil, ErrSubtaskNotFound
+	}
+
+	task, err := s.taskRepo.GetByID(subtask.TaskID)
+	if err != nil {
+		return nil, err
+	}
+	if task == nil {
+		return nil, ErrTaskNotFoundDB
+	}
+	if task.UserID != userID {
+		return nil, ErrUnauthorizedTask
+	}
+
+	subtask.Title = title
+	subtask.UpdatedAt = time.Now().UTC()
+
+	if err := s.subtaskRepo.Update(subtask); err != nil {
+		return nil, err
+	}
+
+	return subtask, nil
+}
+
+func (s *subtaskServiceImpl) DeleteSubtask(subtaskID int, userID string) error {
+	subtask, err := s.subtaskRepo.GetByID(subtaskID)
+	if err != nil {
+		return err
+	}
+	if subtask == nil {
+		return ErrSubtaskNotFound
+	}
+
+	task, err := s.taskRepo.GetByID(subtask.TaskID)
+	if err != nil {
+		return err
+	}
+	if task == nil {
+		return ErrTaskNotFoundDB
+	}
+	if task.UserID != userID {
+		return ErrUnauthorizedTask
+	}
+
+	return s.subtaskRepo.Delete(subtaskID)
+}
+
+
 
