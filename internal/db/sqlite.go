@@ -128,5 +128,22 @@ func createSchema(db *sql.DB) error {
 	);`
 
 	_, err = db.Exec(subtaskQuery)
+	if err != nil {
+		return err
+	}
+
+	commentQuery := `
+	CREATE TABLE IF NOT EXISTS task_comments (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		task_id INTEGER NOT NULL,
+		user_id TEXT NOT NULL,
+		content TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(commentQuery)
 	return err
 }
