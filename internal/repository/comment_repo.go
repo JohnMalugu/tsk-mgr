@@ -99,6 +99,3 @@ func (r *commentRepositoryImpl) Delete(id int) error {
 	_, err := r.db.Exec(query, id)
 	return err
 }
-
-
-

@@ -124,9 +124,3 @@ func (r *subtaskRepositoryImpl) ReorderSubtasks(taskID int, subtaskIDs []int) er
 
 	return tx.Commit()
 }
-
-
-
-
-
-

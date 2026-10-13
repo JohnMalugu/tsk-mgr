@@ -11,7 +11,7 @@ import (
 
 var (
 	ErrCommentContentRequired = errors.New("comment content is required")
-	ErrUnauthorizedComment     = errors.New("unauthorized to access this comment")
+	ErrUnauthorizedComment    = errors.New("unauthorized to access this comment")
 )
 
 type CommentService interface {

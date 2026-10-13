@@ -217,4 +217,3 @@ func (h *SubtaskHandler) HandleReorder(w http.ResponseWriter, r *http.Request, t
 
 	w.WriteHeader(http.StatusOK)
 }
-
