@@ -62,4 +62,29 @@ func (r *subtaskRepositoryImpl) GetByID(id int) (*model.Subtask, error) {
 	return &s, nil
 }
 
+func (r *subtaskRepositoryImpl) GetByTaskID(taskID int) ([]*model.Subtask, error) {
+	query := `
+	SELECT id, task_id, title, completed, position, created_at, updated_at
+	FROM subtasks WHERE task_id = ? ORDER BY position ASC, created_at ASC`
+
+	rows, err := r.db.Query(query, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []*model.Subtask
+	for rows.Next() {
+		var s model.Subtask
+		err := rows.Scan(&s.ID, &s.TaskID, &s.Title, &s.Completed, &s.Position, &s.CreatedAt, &s.UpdatedAt)
+		if err != nil {
+			return nil, err
+		}
+		list = append(list, &s)
+	}
+
+	return list, rows.Err()
+}
+
+
 
