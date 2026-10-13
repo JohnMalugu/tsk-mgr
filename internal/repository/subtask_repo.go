@@ -86,5 +86,17 @@ func (r *subtaskRepositoryImpl) GetByTaskID(taskID int) ([]*model.Subtask, error
 	return list, rows.Err()
 }
 
+func (r *subtaskRepositoryImpl) Update(subtask *model.Subtask) error {
+	query := `
+	UPDATE subtasks
+	SET title = ?, completed = ?, position = ?, updated_at = ?
+	WHERE id = ?`
+
+	_, err := r.db.Exec(query,
+		subtask.Title, subtask.Completed, subtask.Position, subtask.UpdatedAt, subtask.ID)
+	return err
+}
+
+
 
 
