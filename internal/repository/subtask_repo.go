@@ -97,6 +97,13 @@ func (r *subtaskRepositoryImpl) Update(subtask *model.Subtask) error {
 	return err
 }
 
+func (r *subtaskRepositoryImpl) Delete(id int) error {
+	query := `DELETE FROM subtasks WHERE id = ?`
+	_, err := r.db.Exec(query, id)
+	return err
+}
+
+
 
 
 
