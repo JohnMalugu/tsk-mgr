@@ -168,6 +168,38 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if strings.HasPrefix(r.URL.Path, "/v2/tasks/") && strings.Contains(r.URL.Path, "/comments") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/tasks/")
+		parts := strings.Split(trimmed, "/")
+		if len(parts) == 2 && parts[1] == "comments" {
+			if taskID, err := strconv.Atoi(parts[0]); err == nil {
+				if r.Method == http.MethodGet {
+					handler.GlobalCommentHandler.HandleList(w, r, taskID)
+					return
+				}
+				if r.Method == http.MethodPost {
+					handler.GlobalCommentHandler.HandleCreate(w, r, taskID)
+					return
+				}
+			}
+		}
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/v2/comments/") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/comments/")
+		if id, err := strconv.Atoi(trimmed); err == nil {
+			switch r.Method {
+			case http.MethodPut:
+				handler.GlobalCommentHandler.HandleUpdate(w, r, id)
+				return
+			case http.MethodDelete:
+				handler.GlobalCommentHandler.HandleDelete(w, r, id)
+				return
+			}
+		}
+	}
+
+
 
 	if r.URL.Path == "/projects" && r.Method == http.MethodPost {
 		handler.GlobalProjectHandler.HandleCreate(w, r)
