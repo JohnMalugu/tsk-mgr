@@ -43,3 +43,23 @@ func (r *subtaskRepositoryImpl) Create(subtask *model.Subtask) error {
 	return err
 }
 
+func (r *subtaskRepositoryImpl) GetByID(id int) (*model.Subtask, error) {
+	query := `
+	SELECT id, task_id, title, completed, position, created_at, updated_at
+	FROM subtasks WHERE id = ?`
+
+	row := r.db.QueryRow(query, id)
+	var s model.Subtask
+
+	err := row.Scan(&s.ID, &s.TaskID, &s.Title, &s.Completed, &s.Position, &s.CreatedAt, &s.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &s, nil
+}
+
+
