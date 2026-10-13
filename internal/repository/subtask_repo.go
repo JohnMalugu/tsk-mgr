@@ -103,6 +103,29 @@ func (r *subtaskRepositoryImpl) Delete(id int) error {
 	return err
 }
 
+func (r *subtaskRepositoryImpl) ReorderSubtasks(taskID int, subtaskIDs []int) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`UPDATE subtasks SET position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND task_id = ?`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for idx, id := range subtaskIDs {
+		if _, err := stmt.Exec(idx, id, taskID); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+
 
 
 
