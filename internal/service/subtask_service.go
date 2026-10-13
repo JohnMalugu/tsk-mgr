@@ -177,5 +177,21 @@ func (s *subtaskServiceImpl) DeleteSubtask(subtaskID int, userID string) error {
 	return s.subtaskRepo.Delete(subtaskID)
 }
 
+func (s *subtaskServiceImpl) ReorderSubtasks(taskID int, userID string, subtaskIDs []int) error {
+	task, err := s.taskRepo.GetByID(taskID)
+	if err != nil {
+		return err
+	}
+	if task == nil {
+		return ErrTaskNotFoundDB
+	}
+	if task.UserID != userID {
+		return ErrUnauthorizedTask
+	}
+
+	return s.subtaskRepo.ReorderSubtasks(taskID, subtaskIDs)
+}
+
+
 
 
