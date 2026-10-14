@@ -105,4 +105,46 @@ func (s *timeTrackingServiceImpl) StopTimer(userID string) (*model.TimeEntryDB, 
 	return active, nil
 }
 
+func (s *timeTrackingServiceImpl) GetActiveTimer(userID string) (*model.TimeEntryDB, error) {
+	active, err := s.timeRepo.GetActiveTimerByUser(userID)
+	if err != nil {
+		return nil, err
+	}
+	if active == nil {
+		return nil, nil
+	}
+
+	// Calculate live elapsed seconds
+	active.DurationSeconds = int64(time.Now().UTC().Sub(active.StartedAt).Seconds())
+	return active, nil
+}
+
+func (s *timeTrackingServiceImpl) GetTaskTimeEntries(taskID int, userID string) ([]*model.TimeEntryDB, error) {
+	task, err := s.taskRepo.GetByID(taskID)
+	if err != nil {
+		return nil, err
+	}
+	if task == nil {
+		return nil, ErrTaskNotFoundDB
+	}
+	if task.UserID != userID {
+		return nil, ErrUnauthorizedTask
+	}
+
+	entries, err := s.timeRepo.GetByTaskID(taskID)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	for _, e := range entries {
+		if e.EndedAt == nil {
+			e.DurationSeconds = int64(now.Sub(e.StartedAt).Seconds())
+		}
+	}
+
+	return entries, nil
+}
+
+
 
