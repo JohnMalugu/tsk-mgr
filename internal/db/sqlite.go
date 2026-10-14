@@ -165,5 +165,15 @@ func createSchema(db *sql.DB) error {
 	);`
 
 	_, err = db.Exec(timeEntriesQuery)
+	if err != nil {
+		return err
+	}
+
+	indexQuery := `
+	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
+	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
+	`
+
+	_, err = db.Exec(indexQuery)
 	return err
 }
