@@ -110,6 +110,18 @@ func (r *timeEntryRepositoryImpl) GetByTaskID(taskID int) ([]*model.TimeEntryDB,
 	return list, rows.Err()
 }
 
+func (r *timeEntryRepositoryImpl) Update(entry *model.TimeEntryDB) error {
+	query := `
+	UPDATE time_entries
+	SET ended_at = ?, duration_seconds = ?, note = ?, updated_at = ?
+	WHERE id = ?`
+
+	_, err := r.db.Exec(query,
+		entry.EndedAt, entry.DurationSeconds, entry.Note, entry.UpdatedAt, entry.ID)
+	return err
+}
+
+
 
 
 
