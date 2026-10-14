@@ -50,6 +50,10 @@ func main() {
 	commentSvc := service.NewCommentService(commentRepo, taskRepo)
 	handler.InitCommentHandler(commentSvc)
 
+	timeRepo := repository.NewTimeEntryRepository(sqliteDB)
+	timeSvc := service.NewTimeTrackingService(timeRepo, taskRepo)
+	handler.InitTimeHandler(timeSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
