@@ -220,4 +220,61 @@ func (h *TimeHandler) HandleDeleteTimeEntry(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *TimeHandler) HandleGetTaskTimeSummary(w http.ResponseWriter, r *http.Request, taskID int) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	summary, err := h.svc.GetTaskTimeSummary(taskID, userID)
+	if err != nil {
+		if err == service.ErrTaskNotFoundDB {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err == service.ErrUnauthorizedTask {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(summary)
+}
+
+func (h *TimeHandler) HandleGetTimeReport(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var fromPtr *time.Time
+	if fromStr := r.URL.Query().Get("from"); fromStr != "" {
+		if t, err := parseTimeFlexible(fromStr); err == nil {
+			fromPtr = &t
+		}
+	}
+
+	var toPtr *time.Time
+	if toStr := r.URL.Query().Get("to"); toStr != "" {
+		if t, err := parseTimeFlexible(toStr); err == nil {
+			toPtr = &t
+		}
+	}
+
+	report, err := h.svc.GetTimeReport(userID, fromPtr, toPtr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(report)
+}
+
+
 
