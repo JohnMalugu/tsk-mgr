@@ -45,3 +45,24 @@ func (r *timeEntryRepositoryImpl) Create(entry *model.TimeEntryDB) error {
 	return err
 }
 
+func (r *timeEntryRepositoryImpl) GetByID(id int) (*model.TimeEntryDB, error) {
+	query := `
+	SELECT id, task_id, user_id, started_at, ended_at, duration_seconds, note, created_at, updated_at
+	FROM time_entries WHERE id = ?`
+
+	row := r.db.QueryRow(query, id)
+	var e model.TimeEntryDB
+
+	err := row.Scan(&e.ID, &e.TaskID, &e.UserID, &e.StartedAt, &e.EndedAt,
+		&e.DurationSeconds, &e.Note, &e.CreatedAt, &e.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &e, nil
+}
+
+
