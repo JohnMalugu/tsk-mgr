@@ -146,5 +146,42 @@ func (s *timeTrackingServiceImpl) GetTaskTimeEntries(taskID int, userID string) 
 	return entries, nil
 }
 
+func (s *timeTrackingServiceImpl) LogManualTime(taskID int, userID string, startedAt, endedAt time.Time, note string) (*model.TimeEntryDB, error) {
+	if !endedAt.After(startedAt) {
+		return nil, ErrInvalidTimeRange
+	}
+
+	task, err := s.taskRepo.GetByID(taskID)
+	if err != nil {
+		return nil, err
+	}
+	if task == nil {
+		return nil, ErrTaskNotFoundDB
+	}
+	if task.UserID != userID {
+		return nil, ErrUnauthorizedTask
+	}
+
+	duration := int64(endedAt.Sub(startedAt).Seconds())
+	now := time.Now().UTC()
+	entry := &model.TimeEntryDB{
+		TaskID:          taskID,
+		UserID:          userID,
+		StartedAt:       startedAt.UTC(),
+		EndedAt:         &endedAt,
+		DurationSeconds: duration,
+		Note:            strings.TrimSpace(note),
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+
+	if err := s.timeRepo.Create(entry); err != nil {
+		return nil, err
+	}
+
+	return entry, nil
+}
+
+
 
 
