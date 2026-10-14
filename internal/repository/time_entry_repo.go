@@ -85,5 +85,31 @@ func (r *timeEntryRepositoryImpl) GetActiveTimerByUser(userID string) (*model.Ti
 	return &e, nil
 }
 
+func (r *timeEntryRepositoryImpl) GetByTaskID(taskID int) ([]*model.TimeEntryDB, error) {
+	query := `
+	SELECT id, task_id, user_id, started_at, ended_at, duration_seconds, note, created_at, updated_at
+	FROM time_entries WHERE task_id = ? ORDER BY started_at DESC`
+
+	rows, err := r.db.Query(query, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []*model.TimeEntryDB
+	for rows.Next() {
+		var e model.TimeEntryDB
+		err := rows.Scan(&e.ID, &e.TaskID, &e.UserID, &e.StartedAt, &e.EndedAt,
+			&e.DurationSeconds, &e.Note, &e.CreatedAt, &e.UpdatedAt)
+		if err != nil {
+			return nil, err
+		}
+		list = append(list, &e)
+	}
+
+	return list, rows.Err()
+}
+
+
 
 
