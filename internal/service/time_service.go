@@ -182,6 +182,115 @@ func (s *timeTrackingServiceImpl) LogManualTime(taskID int, userID string, start
 	return entry, nil
 }
 
+func (s *timeTrackingServiceImpl) DeleteTimeEntry(entryID int, userID string) error {
+	entry, err := s.timeRepo.GetByID(entryID)
+	if err != nil {
+		return err
+	}
+	if entry == nil {
+		return ErrTimeEntryNotFoundDB
+	}
+	if entry.UserID != userID {
+		return ErrUnauthorizedTimeEntry
+	}
+
+	return s.timeRepo.Delete(entryID)
+}
+
+func (s *timeTrackingServiceImpl) GetTaskTimeSummary(taskID int, userID string) (*model.TaskTimeSummaryDB, error) {
+	task, err := s.taskRepo.GetByID(taskID)
+	if err != nil {
+		return nil, err
+	}
+	if task == nil {
+		return nil, ErrTaskNotFoundDB
+	}
+	if task.UserID != userID {
+		return nil, ErrUnauthorizedTask
+	}
+
+	entries, err := s.timeRepo.GetByTaskID(taskID)
+	if err != nil {
+		return nil, err
+	}
+
+	var actualSeconds int64
+	now := time.Now().UTC()
+	for _, e := range entries {
+		if e.EndedAt == nil {
+			actualSeconds += int64(now.Sub(e.StartedAt).Seconds())
+		} else {
+			actualSeconds += e.DurationSeconds
+		}
+	}
+
+	estimatedSeconds := int64(task.EstimateMinutes) * 60
+	varianceSeconds := actualSeconds - estimatedSeconds
+
+	return &model.TaskTimeSummaryDB{
+		TaskID:           taskID,
+		EstimatedSeconds: estimatedSeconds,
+		ActualSeconds:    actualSeconds,
+		VarianceSeconds:  varianceSeconds,
+	}, nil
+}
+
+func (s *timeTrackingServiceImpl) GetTimeReport(userID string, from, to *time.Time) (*model.TimeReportDB, error) {
+	entries, err := s.timeRepo.GetUserTimeEntriesInRange(userID, from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	tasks, err := s.taskRepo.GetByUserID(userID)
+	if err != nil {
+		return nil, err
+	}
+	taskTitleMap := make(map[int]string)
+	for _, t := range tasks {
+		taskTitleMap[t.ID] = t.Title
+	}
+
+	var totalSeconds int64
+	var activeCount int
+	var completedCount int
+	taskDurationMap := make(map[int]int64)
+
+	now := time.Now().UTC()
+	for _, e := range entries {
+		var d int64
+		if e.EndedAt == nil {
+			activeCount++
+			d = int64(now.Sub(e.StartedAt).Seconds())
+		} else {
+			completedCount++
+			d = e.DurationSeconds
+		}
+		totalSeconds += d
+		taskDurationMap[e.TaskID] += d
+	}
+
+	var byTask []model.TaskTimeTotalDB
+	for tID, d := range taskDurationMap {
+		title := taskTitleMap[tID]
+		if title == "" {
+			title = "Unknown Task"
+		}
+		byTask = append(byTask, model.TaskTimeTotalDB{
+			TaskID:       tID,
+			TaskTitle:    title,
+			TotalSeconds: d,
+		})
+	}
+
+	return &model.TimeReportDB{
+		TotalSeconds: totalSeconds,
+		EntryCount:   completedCount,
+		ActiveCount:  activeCount,
+		ByTask:       byTask,
+	}, nil
+}
+
+
 
 
 
