@@ -79,3 +79,30 @@ func (s *timeTrackingServiceImpl) StartTimer(taskID int, userID, note string) (*
 	return entry, nil
 }
 
+func (s *timeTrackingServiceImpl) StopTimer(userID string) (*model.TimeEntryDB, error) {
+	active, err := s.timeRepo.GetActiveTimerByUser(userID)
+	if err != nil {
+		return nil, err
+	}
+	if active == nil {
+		return nil, ErrNoActiveTimerFound
+	}
+
+	endedAt := time.Now().UTC()
+	duration := int64(endedAt.Sub(active.StartedAt).Seconds())
+	if duration < 0 {
+		duration = 0
+	}
+
+	active.EndedAt = &endedAt
+	active.DurationSeconds = duration
+	active.UpdatedAt = endedAt
+
+	if err := s.timeRepo.Update(active); err != nil {
+		return nil, err
+	}
+
+	return active, nil
+}
+
+
