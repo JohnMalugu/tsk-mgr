@@ -121,6 +121,13 @@ func (r *timeEntryRepositoryImpl) Update(entry *model.TimeEntryDB) error {
 	return err
 }
 
+func (r *timeEntryRepositoryImpl) Delete(id int) error {
+	query := `DELETE FROM time_entries WHERE id = ?`
+	_, err := r.db.Exec(query, id)
+	return err
+}
+
+
 
 
 
