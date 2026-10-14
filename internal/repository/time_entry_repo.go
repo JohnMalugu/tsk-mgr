@@ -24,3 +24,24 @@ type timeEntryRepositoryImpl struct {
 func NewTimeEntryRepository(db *sql.DB) TimeEntryRepository {
 	return &timeEntryRepositoryImpl{db: db}
 }
+
+func (r *timeEntryRepositoryImpl) Create(entry *model.TimeEntryDB) error {
+	query := `
+	INSERT INTO time_entries (task_id, user_id, started_at, ended_at, duration_seconds, note, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+
+	result, err := r.db.Exec(query,
+		entry.TaskID, entry.UserID, entry.StartedAt, entry.EndedAt,
+		entry.DurationSeconds, entry.Note, entry.CreatedAt, entry.UpdatedAt)
+	if err != nil {
+		return err
+	}
+
+	id, err := result.LastInsertId()
+	if err == nil {
+		entry.ID = int(id)
+	}
+
+	return err
+}
+
