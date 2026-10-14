@@ -171,3 +171,53 @@ func parseTimeFlexible(s string) (time.Time, error) {
 	return time.Time{}, errors.New("cannot parse time")
 }
 
+func (h *TimeHandler) HandleGetTaskTimeEntries(w http.ResponseWriter, r *http.Request, taskID int) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	entries, err := h.svc.GetTaskTimeEntries(taskID, userID)
+	if err != nil {
+		if err == service.ErrTaskNotFoundDB {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err == service.ErrUnauthorizedTask {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(entries)
+}
+
+func (h *TimeHandler) HandleDeleteTimeEntry(w http.ResponseWriter, r *http.Request, entryID int) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	err := h.svc.DeleteTimeEntry(entryID, userID)
+	if err != nil {
+		if err == service.ErrTimeEntryNotFoundDB {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err == service.ErrUnauthorizedTimeEntry {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+
