@@ -199,6 +199,69 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if r.URL.Path == "/v2/timer" && r.Method == http.MethodGet {
+		handler.GlobalTimeHandler.HandleGetActiveTimer(w, r)
+		return
+	}
+
+	if r.URL.Path == "/v2/timer/stop" && r.Method == http.MethodPost {
+		handler.GlobalTimeHandler.HandleStopTimer(w, r)
+		return
+	}
+
+	if r.URL.Path == "/v2/time/report" && r.Method == http.MethodGet {
+		handler.GlobalTimeHandler.HandleGetTimeReport(w, r)
+		return
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/v2/time/") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/time/")
+		if id, err := strconv.Atoi(trimmed); err == nil && r.Method == http.MethodDelete {
+			handler.GlobalTimeHandler.HandleDeleteTimeEntry(w, r, id)
+			return
+		}
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/v2/tasks/") && strings.Contains(r.URL.Path, "/timer/start") && r.Method == http.MethodPost {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/tasks/")
+		parts := strings.Split(trimmed, "/")
+		if len(parts) >= 2 {
+			if taskID, err := strconv.Atoi(parts[0]); err == nil {
+				handler.GlobalTimeHandler.HandleStartTimer(w, r, taskID)
+				return
+			}
+		}
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/v2/tasks/") && strings.Contains(r.URL.Path, "/time/summary") && r.Method == http.MethodGet {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/tasks/")
+		parts := strings.Split(trimmed, "/")
+		if len(parts) >= 2 {
+			if taskID, err := strconv.Atoi(parts[0]); err == nil {
+				handler.GlobalTimeHandler.HandleGetTaskTimeSummary(w, r, taskID)
+				return
+			}
+		}
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/v2/tasks/") && strings.Contains(r.URL.Path, "/time") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/tasks/")
+		parts := strings.Split(trimmed, "/")
+		if len(parts) == 2 && parts[1] == "time" {
+			if taskID, err := strconv.Atoi(parts[0]); err == nil {
+				if r.Method == http.MethodGet {
+					handler.GlobalTimeHandler.HandleGetTaskTimeEntries(w, r, taskID)
+					return
+				}
+				if r.Method == http.MethodPost {
+					handler.GlobalTimeHandler.HandleLogManualTime(w, r, taskID)
+					return
+				}
+			}
+		}
+	}
+
+
 	if r.URL.Path == "/projects" && r.Method == http.MethodPost {
 		handler.GlobalProjectHandler.HandleCreate(w, r)
 		return
