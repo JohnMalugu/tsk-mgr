@@ -145,5 +145,25 @@ func createSchema(db *sql.DB) error {
 	);`
 
 	_, err = db.Exec(commentQuery)
+	if err != nil {
+		return err
+	}
+
+	timeEntriesQuery := `
+	CREATE TABLE IF NOT EXISTS time_entries (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		task_id INTEGER NOT NULL,
+		user_id TEXT NOT NULL,
+		started_at DATETIME NOT NULL,
+		ended_at DATETIME,
+		duration_seconds INTEGER NOT NULL DEFAULT 0,
+		note TEXT,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(timeEntriesQuery)
 	return err
 }
