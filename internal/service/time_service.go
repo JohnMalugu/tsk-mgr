@@ -11,10 +11,10 @@ import (
 
 var (
 	ErrActiveTimerExists     = errors.New("an active timer is already running")
-	ErrNoActiveTimerFound     = errors.New("no active timer is currently running")
-	ErrInvalidTimeRange       = errors.New("ended time must be after started time")
-	ErrTimeEntryNotFoundDB    = errors.New("time entry not found")
-	ErrUnauthorizedTimeEntry  = errors.New("unauthorized to access this time entry")
+	ErrNoActiveTimerFound    = errors.New("no active timer is currently running")
+	ErrInvalidTimeRange      = errors.New("ended time must be after started time")
+	ErrTimeEntryNotFoundDB   = errors.New("time entry not found")
+	ErrUnauthorizedTimeEntry = errors.New("unauthorized to access this time entry")
 )
 
 type TimeTrackingService interface {
@@ -289,8 +289,3 @@ func (s *timeTrackingServiceImpl) GetTimeReport(userID string, from, to *time.Ti
 		ByTask:       byTask,
 	}, nil
 }
-
-
-
-
-

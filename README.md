@@ -47,6 +47,22 @@ Other task workflows include:
 Task creation, update, and comment requests reject unknown fields and enforce request-size limits. List pagination is bounded to 100 records per request.
 Live timers and manual time entries are accepted only for tasks that are not completed or canceled.
 
+## Persistent V2 API & Time Tracking (SQLite)
+
+The API includes authenticated, multi-tenant SQLite persistence under `/v2` with JWT authentication and Argon2id password hashing:
+
+- `POST /v2/auth/register` & `POST /v2/auth/login`
+- `GET|POST /v2/tasks`, `GET|PUT|DELETE /v2/tasks/{id}`, `PATCH /v2/tasks/{id}/complete`
+- `GET|POST /v2/tasks/{id}/subtasks`, `PATCH|DELETE /v2/subtasks/{id}`
+- `GET|POST /v2/tasks/{id}/comments`, `PATCH|DELETE /v2/comments/{id}`
+- `POST /v2/tasks/{id}/timer/start` to start an active timer (ensures single concurrent timer per user)
+- `POST /v2/timer/stop` to stop the current active timer and record elapsed seconds
+- `GET /v2/timer` to fetch current active timer with live duration
+- `GET|POST /v2/tasks/{id}/time` to list time entries or log manual time with start/end timestamps
+- `GET /v2/tasks/{id}/time/summary` for actual vs. estimated variance analysis
+- `GET /v2/time/report?from={start}&to={end}` for date-range aggregated time breakdown across tasks
+- `DELETE /v2/time/{id}` to remove a time entry
+
 ## Current limitations
 
 State is held in process memory and is reset when the server restarts. Run a single server instance; this implementation is not durable or shared across replicas. The API does not yet authenticate callers or isolate workspaces, so it should not be exposed to an untrusted network. Persistent storage and an identity/authorization model should be selected before using it for multi-user or production data.

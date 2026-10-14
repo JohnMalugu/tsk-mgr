@@ -162,10 +162,3 @@ func (r *timeEntryRepositoryImpl) GetUserTimeEntriesInRange(userID string, from,
 
 	return list, rows.Err()
 }
-
-
-
-
-
-
-

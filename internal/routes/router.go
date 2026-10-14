@@ -261,7 +261,6 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-
 	if r.URL.Path == "/projects" && r.Method == http.MethodPost {
 		handler.GlobalProjectHandler.HandleCreate(w, r)
 		return
