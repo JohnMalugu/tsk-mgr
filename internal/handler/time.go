@@ -2,7 +2,9 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
 )
@@ -78,3 +80,94 @@ func (h *TimeHandler) HandleStopTimer(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(entry)
 }
+
+func (h *TimeHandler) HandleGetActiveTimer(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	entry, err := h.svc.GetActiveTimer(userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if entry == nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{"active": false})
+		return
+	}
+
+	json.NewEncoder(w).Encode(entry)
+}
+
+type LogManualTimeRequest struct {
+	StartedAt string `json:"started_at"`
+	EndedAt   string `json:"ended_at"`
+	Note      string `json:"note"`
+}
+
+func (h *TimeHandler) HandleLogManualTime(w http.ResponseWriter, r *http.Request, taskID int) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req LogManualTimeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
+		return
+	}
+
+	startedAt, err := parseTimeFlexible(req.StartedAt)
+	if err != nil {
+		http.Error(w, "Invalid started_at format", http.StatusBadRequest)
+		return
+	}
+
+	endedAt, err := parseTimeFlexible(req.EndedAt)
+	if err != nil {
+		http.Error(w, "Invalid ended_at format", http.StatusBadRequest)
+		return
+	}
+
+	entry, err := h.svc.LogManualTime(taskID, userID, startedAt, endedAt, req.Note)
+	if err != nil {
+		if err == service.ErrInvalidTimeRange {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err == service.ErrTaskNotFoundDB {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err == service.ErrUnauthorizedTask {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(entry)
+}
+
+func parseTimeFlexible(s string) (time.Time, error) {
+	formats := []string{
+		time.RFC3339,
+		"2006-01-02T15:04:05",
+		"2006-01-02 15:04:05",
+	}
+	for _, f := range formats {
+		if t, err := time.Parse(f, s); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, errors.New("cannot parse time")
+}
+
