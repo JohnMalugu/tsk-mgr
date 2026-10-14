@@ -127,6 +127,43 @@ func (r *timeEntryRepositoryImpl) Delete(id int) error {
 	return err
 }
 
+func (r *timeEntryRepositoryImpl) GetUserTimeEntriesInRange(userID string, from, to *time.Time) ([]*model.TimeEntryDB, error) {
+	query := `
+	SELECT id, task_id, user_id, started_at, ended_at, duration_seconds, note, created_at, updated_at
+	FROM time_entries WHERE user_id = ?`
+
+	args := []interface{}{userID}
+	if from != nil {
+		query += " AND started_at >= ?"
+		args = append(args, *from)
+	}
+	if to != nil {
+		query += " AND started_at <= ?"
+		args = append(args, *to)
+	}
+	query += " ORDER BY started_at ASC"
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []*model.TimeEntryDB
+	for rows.Next() {
+		var e model.TimeEntryDB
+		err := rows.Scan(&e.ID, &e.TaskID, &e.UserID, &e.StartedAt, &e.EndedAt,
+			&e.DurationSeconds, &e.Note, &e.CreatedAt, &e.UpdatedAt)
+		if err != nil {
+			return nil, err
+		}
+		list = append(list, &e)
+	}
+
+	return list, rows.Err()
+}
+
+
 
 
 
