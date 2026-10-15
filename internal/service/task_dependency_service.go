@@ -211,3 +211,45 @@ func (s *taskDependencyServiceImpl) GetDependents(taskID int, userID string) ([]
 	}
 	return result, nil
 }
+
+func (s *taskDependencyServiceImpl) GetBlockedTasks(userID string) ([]*model.Task, error) {
+	tasks, err := s.taskRepo.GetByUserID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	taskMap := make(map[int]*model.Task)
+	for _, t := range tasks {
+		taskMap[t.ID] = t
+	}
+
+	allDeps, err := s.depRepo.GetAllDependenciesForUser(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	prereqs := make(map[int][]int)
+	for _, d := range allDeps {
+		prereqs[d.TaskID] = append(prereqs[d.TaskID], d.DependsOnTaskID)
+	}
+
+	var blocked []*model.Task
+	for _, t := range tasks {
+		if t.Completed || t.Status == model.TaskStatusCompleted || t.Status == model.TaskStatusCanceled {
+			continue
+		}
+		pIDs := prereqs[t.ID]
+		hasIncompletePrereq := false
+		for _, pID := range pIDs {
+			prereqTask := taskMap[pID]
+			if prereqTask == nil || (!prereqTask.Completed && prereqTask.Status != model.TaskStatusCompleted) {
+				hasIncompletePrereq = true
+				break
+			}
+		}
+		if hasIncompletePrereq {
+			blocked = append(blocked, t)
+		}
+	}
+	return blocked, nil
+}
