@@ -96,3 +96,13 @@ func (r *taskDependencyRepositoryImpl) GetDependentsByTaskID(taskID int) ([]*mod
 	}
 	return list, rows.Err()
 }
+
+func (r *taskDependencyRepositoryImpl) Exists(taskID, dependsOnTaskID int) (bool, error) {
+	query := `SELECT COUNT(1) FROM task_dependencies WHERE task_id = ? AND depends_on_task_id = ?`
+	var count int
+	err := r.db.QueryRow(query, taskID, dependsOnTaskID).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
