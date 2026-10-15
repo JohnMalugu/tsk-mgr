@@ -36,3 +36,36 @@ func NewTaskDependencyService(depRepo repository.TaskDependencyRepository, taskR
 		taskRepo: taskRepo,
 	}
 }
+
+// wouldCreateCycle checks if adding a dependency where taskID depends on dependsOnTaskID would introduce a cycle.
+func (s *taskDependencyServiceImpl) wouldCreateCycle(taskID, dependsOnTaskID int, userID string) (bool, error) {
+	allDeps, err := s.depRepo.GetAllDependenciesForUser(userID)
+	if err != nil {
+		return false, err
+	}
+
+	adj := make(map[int][]int)
+	for _, d := range allDeps {
+		adj[d.TaskID] = append(adj[d.TaskID], d.DependsOnTaskID)
+	}
+
+	visited := make(map[int]bool)
+	var dfs func(current int) bool
+	dfs = func(current int) bool {
+		if current == taskID {
+			return true
+		}
+		if visited[current] {
+			return false
+		}
+		visited[current] = true
+		for _, next := range adj[current] {
+			if dfs(next) {
+				return true
+			}
+		}
+		return false
+	}
+
+	return dfs(dependsOnTaskID), nil
+}
