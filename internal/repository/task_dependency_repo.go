@@ -42,3 +42,19 @@ func (r *taskDependencyRepositoryImpl) AddDependency(taskID, dependsOnTaskID int
 		CreatedAt:       now,
 	}, nil
 }
+
+func (r *taskDependencyRepositoryImpl) RemoveDependency(taskID, dependsOnTaskID int) error {
+	query := `DELETE FROM task_dependencies WHERE task_id = ? AND depends_on_task_id = ?`
+	res, err := r.db.Exec(query, taskID, dependsOnTaskID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
