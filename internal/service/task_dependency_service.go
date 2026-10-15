@@ -1,6 +1,7 @@
 package service
 
 import (
+	"database/sql"
 	"errors"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -124,4 +125,23 @@ func (s *taskDependencyServiceImpl) AddDependency(taskID, dependsOnTaskID int, u
 		DependsOnTaskID: dependsOnTaskID,
 		Task:            depTask,
 	}, nil
+}
+
+func (s *taskDependencyServiceImpl) RemoveDependency(taskID, dependsOnTaskID int, userID string) error {
+	task, err := s.taskRepo.GetByID(taskID)
+	if err != nil {
+		return err
+	}
+	if task == nil {
+		return ErrTaskNotFoundDB
+	}
+	if task.UserID != userID {
+		return ErrUnauthorizedTask
+	}
+
+	err = s.depRepo.RemoveDependency(taskID, dependsOnTaskID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrDependencyNotFoundDB
+	}
+	return err
 }
