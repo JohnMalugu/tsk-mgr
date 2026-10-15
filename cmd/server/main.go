@@ -54,6 +54,10 @@ func main() {
 	timeSvc := service.NewTimeTrackingService(timeRepo, taskRepo)
 	handler.InitTimeHandler(timeSvc)
 
+	depRepo := repository.NewTaskDependencyRepository(sqliteDB)
+	depSvc := service.NewTaskDependencyService(depRepo, taskRepo)
+	handler.InitTaskDependencyHandler(depSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
