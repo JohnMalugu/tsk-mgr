@@ -58,3 +58,22 @@ func (r *taskDependencyRepositoryImpl) RemoveDependency(taskID, dependsOnTaskID 
 	}
 	return nil
 }
+
+func (r *taskDependencyRepositoryImpl) GetDependenciesByTaskID(taskID int) ([]*model.TaskDependencyDB, error) {
+	query := `SELECT id, task_id, depends_on_task_id, created_at FROM task_dependencies WHERE task_id = ? ORDER BY id ASC`
+	rows, err := r.db.Query(query, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []*model.TaskDependencyDB
+	for rows.Next() {
+		var d model.TaskDependencyDB
+		if err := rows.Scan(&d.ID, &d.TaskID, &d.DependsOnTaskID, &d.CreatedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, &d)
+	}
+	return list, rows.Err()
+}
