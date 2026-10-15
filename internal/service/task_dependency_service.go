@@ -145,3 +145,36 @@ func (s *taskDependencyServiceImpl) RemoveDependency(taskID, dependsOnTaskID int
 	}
 	return err
 }
+
+func (s *taskDependencyServiceImpl) GetDependencies(taskID int, userID string) ([]*model.TaskDependencyInfo, error) {
+	task, err := s.taskRepo.GetByID(taskID)
+	if err != nil {
+		return nil, err
+	}
+	if task == nil {
+		return nil, ErrTaskNotFoundDB
+	}
+	if task.UserID != userID {
+		return nil, ErrUnauthorizedTask
+	}
+
+	deps, err := s.depRepo.GetDependenciesByTaskID(taskID)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []*model.TaskDependencyInfo
+	for _, d := range deps {
+		depTask, err := s.taskRepo.GetByID(d.DependsOnTaskID)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, &model.TaskDependencyInfo{
+			DependencyID:    d.ID,
+			TaskID:          d.TaskID,
+			DependsOnTaskID: d.DependsOnTaskID,
+			Task:            depTask,
+		})
+	}
+	return result, nil
+}
