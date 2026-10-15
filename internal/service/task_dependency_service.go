@@ -69,3 +69,59 @@ func (s *taskDependencyServiceImpl) wouldCreateCycle(taskID, dependsOnTaskID int
 
 	return dfs(dependsOnTaskID), nil
 }
+
+func (s *taskDependencyServiceImpl) AddDependency(taskID, dependsOnTaskID int, userID string) (*model.TaskDependencyInfo, error) {
+	if taskID == dependsOnTaskID {
+		return nil, ErrDependencySelfRefDB
+	}
+
+	task, err := s.taskRepo.GetByID(taskID)
+	if err != nil {
+		return nil, err
+	}
+	if task == nil {
+		return nil, ErrTaskNotFoundDB
+	}
+	if task.UserID != userID {
+		return nil, ErrUnauthorizedTask
+	}
+
+	depTask, err := s.taskRepo.GetByID(dependsOnTaskID)
+	if err != nil {
+		return nil, err
+	}
+	if depTask == nil {
+		return nil, ErrTaskNotFoundDB
+	}
+	if depTask.UserID != userID {
+		return nil, ErrUnauthorizedTask
+	}
+
+	exists, err := s.depRepo.Exists(taskID, dependsOnTaskID)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return nil, ErrDependencyExistsDB
+	}
+
+	cycle, err := s.wouldCreateCycle(taskID, dependsOnTaskID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if cycle {
+		return nil, ErrDependencyCycleDB
+	}
+
+	dep, err := s.depRepo.AddDependency(taskID, dependsOnTaskID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.TaskDependencyInfo{
+		DependencyID:    dep.ID,
+		TaskID:          taskID,
+		DependsOnTaskID: dependsOnTaskID,
+		Task:            depTask,
+	}, nil
+}
