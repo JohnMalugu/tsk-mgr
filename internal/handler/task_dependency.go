@@ -85,3 +85,75 @@ func (h *TaskDependencyHandler) HandleRemoveDependency(w http.ResponseWriter, r 
 
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (h *TaskDependencyHandler) HandleGetDependencies(w http.ResponseWriter, r *http.Request, taskID int) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	deps, err := h.svc.GetDependencies(taskID, userID)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrTaskNotFoundDB):
+			http.Error(w, err.Error(), http.StatusNotFound)
+		case errors.Is(err, service.ErrUnauthorizedTask):
+			http.Error(w, err.Error(), http.StatusForbidden)
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(deps)
+}
+
+func (h *TaskDependencyHandler) HandleGetDependents(w http.ResponseWriter, r *http.Request, taskID int) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	dependents, err := h.svc.GetDependents(taskID, userID)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrTaskNotFoundDB):
+			http.Error(w, err.Error(), http.StatusNotFound)
+		case errors.Is(err, service.ErrUnauthorizedTask):
+			http.Error(w, err.Error(), http.StatusForbidden)
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(dependents)
+}
+
+func (h *TaskDependencyHandler) HandleGetDAGSummary(w http.ResponseWriter, r *http.Request, taskID int) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	summary, err := h.svc.GetDAGSummary(taskID, userID)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrTaskNotFoundDB):
+			http.Error(w, err.Error(), http.StatusNotFound)
+		case errors.Is(err, service.ErrUnauthorizedTask):
+			http.Error(w, err.Error(), http.StatusForbidden)
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(summary)
+}
