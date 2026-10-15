@@ -101,6 +101,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.URL.Path == "/v2/tasks/blocked" && r.Method == http.MethodGet {
+		handler.GlobalTaskDependencyHandler.HandleGetBlockedTasks(w, r)
+		return
+	}
+
+	if r.URL.Path == "/v2/tasks/ready" && r.Method == http.MethodGet {
+		handler.GlobalTaskDependencyHandler.HandleGetReadyTasks(w, r)
+		return
+	}
+
 	if strings.HasPrefix(r.URL.Path, "/v2/tasks/") {
 		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/tasks/")
 		if strings.HasSuffix(trimmed, "/complete") && r.Method == http.MethodPatch {
@@ -257,6 +267,52 @@ func Router(w http.ResponseWriter, r *http.Request) {
 					handler.GlobalTimeHandler.HandleLogManualTime(w, r, taskID)
 					return
 				}
+			}
+		}
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/v2/tasks/") && strings.Contains(r.URL.Path, "/dependencies") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/tasks/")
+		parts := strings.Split(trimmed, "/")
+		if len(parts) >= 2 && parts[1] == "dependencies" {
+			if taskID, err := strconv.Atoi(parts[0]); err == nil {
+				if len(parts) == 2 {
+					if r.Method == http.MethodGet {
+						handler.GlobalTaskDependencyHandler.HandleGetDependencies(w, r, taskID)
+						return
+					}
+					if r.Method == http.MethodPost {
+						handler.GlobalTaskDependencyHandler.HandleAddDependency(w, r, taskID)
+						return
+					}
+				} else if len(parts) == 3 && r.Method == http.MethodDelete {
+					if depID, err := strconv.Atoi(parts[2]); err == nil {
+						handler.GlobalTaskDependencyHandler.HandleRemoveDependency(w, r, taskID, depID)
+						return
+					}
+				}
+			}
+		}
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/v2/tasks/") && strings.Contains(r.URL.Path, "/dependents") && r.Method == http.MethodGet {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/tasks/")
+		parts := strings.Split(trimmed, "/")
+		if len(parts) == 2 && parts[1] == "dependents" {
+			if taskID, err := strconv.Atoi(parts[0]); err == nil {
+				handler.GlobalTaskDependencyHandler.HandleGetDependents(w, r, taskID)
+				return
+			}
+		}
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/v2/tasks/") && strings.Contains(r.URL.Path, "/dag") && r.Method == http.MethodGet {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/tasks/")
+		parts := strings.Split(trimmed, "/")
+		if len(parts) == 2 && parts[1] == "dag" {
+			if taskID, err := strconv.Atoi(parts[0]); err == nil {
+				handler.GlobalTaskDependencyHandler.HandleGetDAGSummary(w, r, taskID)
+				return
 			}
 		}
 	}
