@@ -178,3 +178,36 @@ func (s *taskDependencyServiceImpl) GetDependencies(taskID int, userID string) (
 	}
 	return result, nil
 }
+
+func (s *taskDependencyServiceImpl) GetDependents(taskID int, userID string) ([]*model.TaskDependencyInfo, error) {
+	task, err := s.taskRepo.GetByID(taskID)
+	if err != nil {
+		return nil, err
+	}
+	if task == nil {
+		return nil, ErrTaskNotFoundDB
+	}
+	if task.UserID != userID {
+		return nil, ErrUnauthorizedTask
+	}
+
+	dependents, err := s.depRepo.GetDependentsByTaskID(taskID)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []*model.TaskDependencyInfo
+	for _, d := range dependents {
+		parentTask, err := s.taskRepo.GetByID(d.TaskID)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, &model.TaskDependencyInfo{
+			DependencyID:    d.ID,
+			TaskID:          d.TaskID,
+			DependsOnTaskID: d.DependsOnTaskID,
+			Task:            parentTask,
+		})
+	}
+	return result, nil
+}
