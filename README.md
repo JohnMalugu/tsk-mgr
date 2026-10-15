@@ -62,6 +62,13 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET /v2/tasks/{id}/time/summary` for actual vs. estimated variance analysis
 - `GET /v2/time/report?from={start}&to={end}` for date-range aggregated time breakdown across tasks
 - `DELETE /v2/time/{id}` to remove a time entry
+- `POST /v2/tasks/{id}/dependencies` to link prerequisite tasks (enforces user isolation and DAG cycle prevention)
+- `DELETE /v2/tasks/{id}/dependencies/{dependencyId}` to remove a prerequisite relationship
+- `GET /v2/tasks/{id}/dependencies` to retrieve prerequisite tasks with enriched task details
+- `GET /v2/tasks/{id}/dependents` to retrieve downstream dependent tasks
+- `GET /v2/tasks/{id}/dag` for complete task DAG summary including blocked status and blocking task IDs
+- `GET /v2/tasks/blocked` for queue of tasks blocked by incomplete prerequisites
+- `GET /v2/tasks/ready` for actionable queue of unblocked tasks ready for work
 
 ## Current limitations
 
