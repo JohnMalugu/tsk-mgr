@@ -111,3 +111,110 @@ func TestTaskDependencyService_AddAndCycle(t *testing.T) {
 		t.Fatalf("expected 1 dependency (t2) for t3, got %+v", deps)
 	}
 }
+
+func TestTaskDependencyService_RemoveAndQueues(t *testing.T) {
+	depSvc, taskSvc := setupTestTaskDependencySvc(t)
+	userID := "user-queue-1"
+
+	// 1. Create 3 tasks
+	taskA, err := taskSvc.CreateTask(userID, "Task A", "First step", time.Now().Add(24*time.Hour), 30, "high")
+	if err != nil {
+		t.Fatalf("failed to create task A: %v", err)
+	}
+	taskB, err := taskSvc.CreateTask(userID, "Task B", "Second step", time.Now().Add(24*time.Hour), 30, "medium")
+	if err != nil {
+		t.Fatalf("failed to create task B: %v", err)
+	}
+	taskC, err := taskSvc.CreateTask(userID, "Task C", "Third step", time.Now().Add(24*time.Hour), 30, "low")
+	if err != nil {
+		t.Fatalf("failed to create task C: %v", err)
+	}
+
+	// 2. Link B -> A (B depends on A) and C -> B (C depends on B)
+	if _, err := depSvc.AddDependency(taskB.ID, taskA.ID, userID); err != nil {
+		t.Fatalf("failed to link B -> A: %v", err)
+	}
+	if _, err := depSvc.AddDependency(taskC.ID, taskB.ID, userID); err != nil {
+		t.Fatalf("failed to link C -> B: %v", err)
+	}
+
+	// 3. Test DAG Summary for Task B
+	summaryB, err := depSvc.GetDAGSummary(taskB.ID, userID)
+	if err != nil {
+		t.Fatalf("failed to get DAG summary for B: %v", err)
+	}
+	if !summaryB.IsBlocked || len(summaryB.BlockingTaskIDs) != 1 || summaryB.BlockingTaskIDs[0] != taskA.ID {
+		t.Errorf("expected B to be blocked by A, got %+v", summaryB)
+	}
+	if len(summaryB.DependentIDs) != 1 || summaryB.DependentIDs[0] != taskC.ID {
+		t.Errorf("expected C to be dependent of B, got %+v", summaryB)
+	}
+
+	// 4. Test GetBlockedTasks initially (B and C should be blocked)
+	blocked, err := depSvc.GetBlockedTasks(userID)
+	if err != nil {
+		t.Fatalf("failed to get blocked tasks: %v", err)
+	}
+	if len(blocked) != 2 {
+		t.Fatalf("expected 2 blocked tasks (B, C), got %d", len(blocked))
+	}
+
+	// 5. Test GetReadyTasks initially (Only A is ready)
+	ready, err := depSvc.GetReadyTasks(userID)
+	if err != nil {
+		t.Fatalf("failed to get ready tasks: %v", err)
+	}
+	if len(ready) != 1 || ready[0].ID != taskA.ID {
+		t.Fatalf("expected only task A to be ready, got %+v", ready)
+	}
+
+	// 6. Complete Task A -> unblocks Task B!
+	if _, err := taskSvc.CompleteTask(taskA.ID, userID, true); err != nil {
+		t.Fatalf("failed to complete task A: %v", err)
+	}
+
+	// Now B should be ready, C is still blocked (by B)
+	readyAfterA, err := depSvc.GetReadyTasks(userID)
+	if err != nil {
+		t.Fatalf("failed to get ready tasks after completing A: %v", err)
+	}
+	if len(readyAfterA) != 1 || readyAfterA[0].ID != taskB.ID {
+		t.Fatalf("expected Task B to be ready, got %+v", readyAfterA)
+	}
+
+	blockedAfterA, err := depSvc.GetBlockedTasks(userID)
+	if err != nil {
+		t.Fatalf("failed to get blocked tasks after completing A: %v", err)
+	}
+	if len(blockedAfterA) != 1 || blockedAfterA[0].ID != taskC.ID {
+		t.Fatalf("expected only Task C to be blocked, got %+v", blockedAfterA)
+	}
+
+	// 7. Remove dependency of C on B
+	// Removing non-existent dependency
+	if err := depSvc.RemoveDependency(taskC.ID, 99999, userID); err != ErrDependencyNotFoundDB {
+		t.Fatalf("expected ErrDependencyNotFoundDB, got %v", err)
+	}
+
+	// Valid remove
+	if err := depSvc.RemoveDependency(taskC.ID, taskB.ID, userID); err != nil {
+		t.Fatalf("failed to remove C -> B dependency: %v", err)
+	}
+
+	// 8. Now C has no prerequisites, so C is also ready and no tasks are blocked!
+	readyAfterRemove, err := depSvc.GetReadyTasks(userID)
+	if err != nil {
+		t.Fatalf("failed to get ready tasks after removal: %v", err)
+	}
+	if len(readyAfterRemove) != 2 {
+		t.Fatalf("expected 2 ready tasks (B and C), got %d", len(readyAfterRemove))
+	}
+
+	blockedAfterRemove, err := depSvc.GetBlockedTasks(userID)
+	if err != nil {
+		t.Fatalf("failed to get blocked tasks after removal: %v", err)
+	}
+	if len(blockedAfterRemove) != 0 {
+		t.Fatalf("expected 0 blocked tasks, got %d", len(blockedAfterRemove))
+	}
+}
