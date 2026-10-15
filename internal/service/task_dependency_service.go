@@ -253,3 +253,92 @@ func (s *taskDependencyServiceImpl) GetBlockedTasks(userID string) ([]*model.Tas
 	}
 	return blocked, nil
 }
+
+func (s *taskDependencyServiceImpl) GetReadyTasks(userID string) ([]*model.Task, error) {
+	tasks, err := s.taskRepo.GetByUserID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	taskMap := make(map[int]*model.Task)
+	for _, t := range tasks {
+		taskMap[t.ID] = t
+	}
+
+	allDeps, err := s.depRepo.GetAllDependenciesForUser(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	prereqs := make(map[int][]int)
+	for _, d := range allDeps {
+		prereqs[d.TaskID] = append(prereqs[d.TaskID], d.DependsOnTaskID)
+	}
+
+	var ready []*model.Task
+	for _, t := range tasks {
+		if t.Completed || t.Status == model.TaskStatusCompleted || t.Status == model.TaskStatusCanceled {
+			continue
+		}
+		pIDs := prereqs[t.ID]
+		isBlocked := false
+		for _, pID := range pIDs {
+			prereqTask := taskMap[pID]
+			if prereqTask == nil || (!prereqTask.Completed && prereqTask.Status != model.TaskStatusCompleted) {
+				isBlocked = true
+				break
+			}
+		}
+		if !isBlocked {
+			ready = append(ready, t)
+		}
+	}
+	return ready, nil
+}
+
+func (s *taskDependencyServiceImpl) GetDAGSummary(taskID int, userID string) (*model.TaskDAGSummary, error) {
+	task, err := s.taskRepo.GetByID(taskID)
+	if err != nil {
+		return nil, err
+	}
+	if task == nil {
+		return nil, ErrTaskNotFoundDB
+	}
+	if task.UserID != userID {
+		return nil, ErrUnauthorizedTask
+	}
+
+	deps, err := s.depRepo.GetDependenciesByTaskID(taskID)
+	if err != nil {
+		return nil, err
+	}
+	dependents, err := s.depRepo.GetDependentsByTaskID(taskID)
+	if err != nil {
+		return nil, err
+	}
+
+	var prereqIDs []int
+	var blockingIDs []int
+	for _, d := range deps {
+		prereqIDs = append(prereqIDs, d.DependsOnTaskID)
+		pTask, err := s.taskRepo.GetByID(d.DependsOnTaskID)
+		if err == nil && pTask != nil {
+			if !pTask.Completed && pTask.Status != model.TaskStatusCompleted {
+				blockingIDs = append(blockingIDs, pTask.ID)
+			}
+		}
+	}
+
+	var dependentIDs []int
+	for _, dep := range dependents {
+		dependentIDs = append(dependentIDs, dep.TaskID)
+	}
+
+	return &model.TaskDAGSummary{
+		TaskID:          taskID,
+		PrerequisiteIDs: prereqIDs,
+		DependentIDs:    dependentIDs,
+		IsBlocked:       len(blockingIDs) > 0,
+		BlockingTaskIDs: blockingIDs,
+	}, nil
+}
