@@ -106,3 +106,27 @@ func (r *taskDependencyRepositoryImpl) Exists(taskID, dependsOnTaskID int) (bool
 	}
 	return count > 0, nil
 }
+
+func (r *taskDependencyRepositoryImpl) GetAllDependenciesForUser(userID string) ([]*model.TaskDependencyDB, error) {
+	query := `
+	SELECT td.id, td.task_id, td.depends_on_task_id, td.created_at
+	FROM task_dependencies td
+	INNER JOIN tasks t ON td.task_id = t.id
+	WHERE t.user_id = ?
+	ORDER BY td.id ASC`
+	rows, err := r.db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []*model.TaskDependencyDB
+	for rows.Next() {
+		var d model.TaskDependencyDB
+		if err := rows.Scan(&d.ID, &d.TaskID, &d.DependsOnTaskID, &d.CreatedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, &d)
+	}
+	return list, rows.Err()
+}
