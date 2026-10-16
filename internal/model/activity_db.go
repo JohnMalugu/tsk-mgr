@@ -30,3 +30,16 @@ type PaginatedActivities struct {
 	Offset int           `json:"offset"`
 	Limit  int           `json:"limit"`
 }
+
+// ActionCount holds the occurrence count for a specific activity action.
+type ActionCount struct {
+	Action string `json:"action"`
+	Count  int    `json:"count"`
+}
+
+// ActivitySummary aggregates activity metrics for a user over a time window.
+type ActivitySummary struct {
+	TotalEvents     int           `json:"totalEvents"`
+	ActionBreakdown []ActionCount `json:"actionBreakdown"`
+	RecentEvents    []*ActivityDB `json:"recentEvents"`
+}
