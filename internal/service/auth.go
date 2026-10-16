@@ -30,6 +30,7 @@ func NewAuthService(repo repository.UserRepository) AuthService {
 	}
 }
 
+
 func (s *authServiceImpl) Register(username, email, password string) (*model.User, error) {
 	existingUser, err := s.repo.GetByUsername(username)
 	if err != nil {
