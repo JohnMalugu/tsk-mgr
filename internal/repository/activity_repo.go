@@ -152,3 +152,44 @@ func (r *activityRepositoryImpl) ListByUserID(userID string, filter *model.Activ
 	}
 	return list, rows.Err()
 }
+
+func (r *activityRepositoryImpl) ListByTaskID(taskID int, offset, limit int) ([]*model.ActivityDB, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := `
+	SELECT id, user_id, task_id, action, summary, details_json, created_at
+	FROM activities
+	WHERE task_id = ?
+	ORDER BY created_at DESC, id DESC
+	LIMIT ? OFFSET ?`
+
+	rows, err := r.db.Query(query, taskID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []*model.ActivityDB
+	for rows.Next() {
+		var a model.ActivityDB
+		var tID sql.NullInt64
+		var details sql.NullString
+		if err := rows.Scan(&a.ID, &a.UserID, &tID, &a.Action, &a.Summary, &details, &a.CreatedAt); err != nil {
+			return nil, err
+		}
+		if tID.Valid {
+			tid := int(tID.Int64)
+			a.TaskID = &tid
+		}
+		if details.Valid {
+			a.DetailsJSON = details.String
+		}
+		list = append(list, &a)
+	}
+	return list, rows.Err()
+}
