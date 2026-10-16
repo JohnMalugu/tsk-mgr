@@ -152,3 +152,38 @@ func (s *activityServiceImpl) GetTaskActivity(taskID int, userID string, offset,
 
 	return items, nil
 }
+
+func (s *activityServiceImpl) GetActivitySummary(userID string, from, to *time.Time) (*model.ActivitySummary, error) {
+	stats, err := s.activityRepo.GetActivityStats(userID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	if stats == nil {
+		stats = []model.ActionCount{}
+	}
+
+	total := 0
+	for _, sc := range stats {
+		total += sc.Count
+	}
+
+	recentFilter := &model.ActivityFilter{
+		From:   from,
+		To:     to,
+		Offset: 0,
+		Limit:  10,
+	}
+	recent, err := s.activityRepo.ListByUserID(userID, recentFilter)
+	if err != nil {
+		return nil, err
+	}
+	if recent == nil {
+		recent = []*model.ActivityDB{}
+	}
+
+	return &model.ActivitySummary{
+		TotalEvents:     total,
+		ActionBreakdown: stats,
+		RecentEvents:    recent,
+	}, nil
+}
