@@ -185,6 +185,24 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	activitiesQuery := `
+	CREATE TABLE IF NOT EXISTS activities (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id TEXT NOT NULL,
+		task_id INTEGER,
+		action TEXT NOT NULL,
+		summary TEXT NOT NULL,
+		details_json TEXT,
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(activitiesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
