@@ -52,3 +52,39 @@ func (r *activityRepositoryImpl) Create(activity *model.ActivityDB) error {
 	activity.ID = int(id)
 	return nil
 }
+
+func (r *activityRepositoryImpl) GetByID(id int) (*model.ActivityDB, error) {
+	query := `
+	SELECT id, user_id, task_id, action, summary, details_json, created_at
+	FROM activities
+	WHERE id = ?`
+
+	var a model.ActivityDB
+	var taskID sql.NullInt64
+	var details sql.NullString
+
+	err := r.db.QueryRow(query, id).Scan(
+		&a.ID,
+		&a.UserID,
+		&taskID,
+		&a.Action,
+		&a.Summary,
+		&details,
+		&a.CreatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	if taskID.Valid {
+		tid := int(taskID.Int64)
+		a.TaskID = &tid
+	}
+	if details.Valid {
+		a.DetailsJSON = details.String
+	}
+	return &a, nil
+}
