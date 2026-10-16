@@ -61,6 +61,7 @@ func main() {
 	activityRepo := repository.NewActivityRepository(sqliteDB)
 	activitySvc := service.NewActivityService(activityRepo, taskRepo)
 	handler.InitActivityHandler(activitySvc)
+	taskDBSvc.SetActivityService(activitySvc)
 
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
