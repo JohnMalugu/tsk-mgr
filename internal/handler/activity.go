@@ -146,3 +146,44 @@ func (h *ActivityHandler) HandleGetActivitySummary(w http.ResponseWriter, r *htt
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(summary)
 }
+
+type PurgeActivitiesRequest struct {
+	RetentionDays int `json:"retentionDays"`
+}
+
+func (h *ActivityHandler) HandlePurgeActivities(w http.ResponseWriter, r *http.Request) {
+	_, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	days := 90
+	if r.Body != nil {
+		var req PurgeActivitiesRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil && req.RetentionDays > 0 {
+			days = req.RetentionDays
+		}
+	}
+	if qDays := r.URL.Query().Get("days"); qDays != "" {
+		if d, err := strconv.Atoi(qDays); err == nil && d > 0 {
+			days = d
+		}
+	}
+
+	purged, err := h.svc.PurgeOldActivities(days)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidRetentionCutoff) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"purged":        purged,
+		"retentionDays": days,
+	})
+}
