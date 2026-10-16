@@ -1,7 +1,9 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -33,4 +35,52 @@ func NewActivityService(activityRepo repository.ActivityRepository, taskRepo rep
 		activityRepo: activityRepo,
 		taskRepo:     taskRepo,
 	}
+}
+
+func (s *activityServiceImpl) RecordActivity(userID string, taskID *int, action, summary string, details interface{}) (*model.ActivityDB, error) {
+	action = strings.TrimSpace(action)
+	if action == "" {
+		return nil, ErrActivityActionRequired
+	}
+
+	summary = strings.TrimSpace(summary)
+	if summary == "" {
+		return nil, ErrActivitySummaryRequired
+	}
+
+	if taskID != nil {
+		task, err := s.taskRepo.GetByID(*taskID)
+		if err != nil {
+			return nil, err
+		}
+		if task == nil {
+			return nil, ErrTaskNotFoundDB
+		}
+		if task.UserID != userID {
+			return nil, ErrUnauthorizedTask
+		}
+	}
+
+	var detailsJSON string
+	if details != nil {
+		b, err := json.Marshal(details)
+		if err == nil {
+			detailsJSON = string(b)
+		}
+	}
+
+	entry := &model.ActivityDB{
+		UserID:      userID,
+		TaskID:      taskID,
+		Action:      action,
+		Summary:     summary,
+		DetailsJSON: detailsJSON,
+		CreatedAt:   time.Now().UTC(),
+	}
+
+	if err := s.activityRepo.Create(entry); err != nil {
+		return nil, err
+	}
+
+	return entry, nil
 }
