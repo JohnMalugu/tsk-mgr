@@ -88,3 +88,67 @@ func (r *activityRepositoryImpl) GetByID(id int) (*model.ActivityDB, error) {
 	}
 	return &a, nil
 }
+
+func (r *activityRepositoryImpl) ListByUserID(userID string, filter *model.ActivityFilter) ([]*model.ActivityDB, error) {
+	query := `SELECT id, user_id, task_id, action, summary, details_json, created_at FROM activities WHERE user_id = ?`
+	args := []interface{}{userID}
+
+	if filter != nil {
+		if filter.Action != "" {
+			query += ` AND action = ?`
+			args = append(args, filter.Action)
+		}
+		if filter.TaskID != nil {
+			query += ` AND task_id = ?`
+			args = append(args, *filter.TaskID)
+		}
+		if filter.From != nil {
+			query += ` AND created_at >= ?`
+			args = append(args, *filter.From)
+		}
+		if filter.To != nil {
+			query += ` AND created_at <= ?`
+			args = append(args, *filter.To)
+		}
+	}
+
+	query += ` ORDER BY created_at DESC, id DESC`
+
+	limit := 50
+	offset := 0
+	if filter != nil {
+		if filter.Limit > 0 {
+			limit = filter.Limit
+		}
+		if filter.Offset > 0 {
+			offset = filter.Offset
+		}
+	}
+	query += ` LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []*model.ActivityDB
+	for rows.Next() {
+		var a model.ActivityDB
+		var taskID sql.NullInt64
+		var details sql.NullString
+		if err := rows.Scan(&a.ID, &a.UserID, &taskID, &a.Action, &a.Summary, &details, &a.CreatedAt); err != nil {
+			return nil, err
+		}
+		if taskID.Valid {
+			tid := int(taskID.Int64)
+			a.TaskID = &tid
+		}
+		if details.Valid {
+			a.DetailsJSON = details.String
+		}
+		list = append(list, &a)
+	}
+	return list, rows.Err()
+}
