@@ -58,6 +58,10 @@ func main() {
 	depSvc := service.NewTaskDependencyService(depRepo, taskRepo)
 	handler.InitTaskDependencyHandler(depSvc)
 
+	activityRepo := repository.NewActivityRepository(sqliteDB)
+	activitySvc := service.NewActivityService(activityRepo, taskRepo)
+	handler.InitActivityHandler(activitySvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
