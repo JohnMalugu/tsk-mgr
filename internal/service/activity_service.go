@@ -187,3 +187,12 @@ func (s *activityServiceImpl) GetActivitySummary(userID string, from, to *time.T
 		RecentEvents:    recent,
 	}, nil
 }
+
+func (s *activityServiceImpl) PurgeOldActivities(retentionDays int) (int64, error) {
+	if retentionDays <= 0 {
+		return 0, ErrInvalidRetentionCutoff
+	}
+
+	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
+	return s.activityRepo.PurgeOlderThan(cutoff)
+}
