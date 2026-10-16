@@ -317,6 +317,32 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if r.URL.Path == "/v2/activity/summary" && r.Method == http.MethodGet {
+		handler.GlobalActivityHandler.HandleGetActivitySummary(w, r)
+		return
+	}
+
+	if r.URL.Path == "/v2/activity/purge" && r.Method == http.MethodPost {
+		handler.GlobalActivityHandler.HandlePurgeActivities(w, r)
+		return
+	}
+
+	if r.URL.Path == "/v2/activity" && r.Method == http.MethodGet {
+		handler.GlobalActivityHandler.HandleGetUserActivity(w, r)
+		return
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/v2/tasks/") && strings.Contains(r.URL.Path, "/activity") && r.Method == http.MethodGet {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/tasks/")
+		parts := strings.Split(trimmed, "/")
+		if len(parts) == 2 && parts[1] == "activity" {
+			if taskID, err := strconv.Atoi(parts[0]); err == nil {
+				handler.GlobalActivityHandler.HandleGetTaskActivity(w, r, taskID)
+				return
+			}
+		}
+	}
+
 	if r.URL.Path == "/projects" && r.Method == http.MethodPost {
 		handler.GlobalProjectHandler.HandleCreate(w, r)
 		return
