@@ -20,14 +20,20 @@ type TaskDBService interface {
 	UpdateTask(id int, userID, title, description string, dueDate time.Time, estimateMinutes int, completed bool, status, priority string) (*model.Task, error)
 	DeleteTask(id int, userID string) error
 	CompleteTask(id int, userID string, completed bool) (*model.Task, error)
+	SetActivityService(activitySvc ActivityService)
 }
 
 type taskDBServiceImpl struct {
-	repo repository.TaskRepository
+	repo        repository.TaskRepository
+	activitySvc ActivityService
 }
 
 func NewTaskDBService(repo repository.TaskRepository) TaskDBService {
 	return &taskDBServiceImpl{repo: repo}
+}
+
+func (s *taskDBServiceImpl) SetActivityService(activitySvc ActivityService) {
+	s.activitySvc = activitySvc
 }
 
 func (s *taskDBServiceImpl) CreateTask(userID, title, description string, dueDate time.Time, estimateMinutes int, priority string) (*model.Task, error) {
@@ -47,6 +53,10 @@ func (s *taskDBServiceImpl) CreateTask(userID, title, description string, dueDat
 
 	if err := s.repo.Create(task); err != nil {
 		return nil, err
+	}
+
+	if s.activitySvc != nil {
+		_, _ = s.activitySvc.RecordActivity(userID, &task.ID, "task_created", "Created task: "+task.Title, nil)
 	}
 
 	return task, nil
@@ -91,16 +101,28 @@ func (s *taskDBServiceImpl) UpdateTask(id int, userID, title, description string
 		return nil, err
 	}
 
+	if s.activitySvc != nil {
+		_, _ = s.activitySvc.RecordActivity(userID, &task.ID, "task_updated", "Updated task: "+task.Title, nil)
+	}
+
 	return task, nil
 }
 
 func (s *taskDBServiceImpl) DeleteTask(id int, userID string) error {
-	_, err := s.GetTask(id, userID)
+	task, err := s.GetTask(id, userID)
 	if err != nil {
 		return err
 	}
 
-	return s.repo.Delete(id)
+	if err := s.repo.Delete(id); err != nil {
+		return err
+	}
+
+	if s.activitySvc != nil {
+		_, _ = s.activitySvc.RecordActivity(userID, &id, "task_deleted", "Deleted task: "+task.Title, nil)
+	}
+
+	return nil
 }
 
 func (s *taskDBServiceImpl) CompleteTask(id int, userID string, completed bool) (*model.Task, error) {
@@ -119,6 +141,16 @@ func (s *taskDBServiceImpl) CompleteTask(id int, userID string, completed bool) 
 
 	if err := s.repo.Update(task); err != nil {
 		return nil, err
+	}
+
+	if s.activitySvc != nil {
+		action := "task_reopened"
+		summary := "Reopened task: " + task.Title
+		if completed {
+			action = "task_completed"
+			summary = "Completed task: " + task.Title
+		}
+		_, _ = s.activitySvc.RecordActivity(userID, &task.ID, action, summary, nil)
 	}
 
 	return task, nil
