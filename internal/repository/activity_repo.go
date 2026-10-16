@@ -221,3 +221,38 @@ func (r *activityRepositoryImpl) CountByUserID(userID string, filter *model.Acti
 	err := r.db.QueryRow(query, args...).Scan(&total)
 	return total, err
 }
+
+func (r *activityRepositoryImpl) GetActivityStats(userID string, from, to *time.Time) ([]model.ActionCount, error) {
+	query := `
+	SELECT action, COUNT(1) as cnt
+	FROM activities
+	WHERE user_id = ?`
+	args := []interface{}{userID}
+
+	if from != nil {
+		query += ` AND created_at >= ?`
+		args = append(args, *from)
+	}
+	if to != nil {
+		query += ` AND created_at <= ?`
+		args = append(args, *to)
+	}
+
+	query += ` GROUP BY action ORDER BY cnt DESC, action ASC`
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []model.ActionCount
+	for rows.Next() {
+		var ac model.ActionCount
+		if err := rows.Scan(&ac.Action, &ac.Count); err != nil {
+			return nil, err
+		}
+		stats = append(stats, ac)
+	}
+	return stats, rows.Err()
+}
