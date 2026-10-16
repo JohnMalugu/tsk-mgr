@@ -256,3 +256,12 @@ func (r *activityRepositoryImpl) GetActivityStats(userID string, from, to *time.
 	}
 	return stats, rows.Err()
 }
+
+func (r *activityRepositoryImpl) PurgeOlderThan(cutoff time.Time) (int64, error) {
+	query := `DELETE FROM activities WHERE created_at < ?`
+	res, err := r.db.Exec(query, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
