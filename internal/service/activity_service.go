@@ -84,3 +84,39 @@ func (s *activityServiceImpl) RecordActivity(userID string, taskID *int, action,
 
 	return entry, nil
 }
+
+func (s *activityServiceImpl) GetUserActivity(userID string, filter *model.ActivityFilter) (*model.PaginatedActivities, error) {
+	if filter == nil {
+		filter = &model.ActivityFilter{}
+	}
+
+	if filter.Limit <= 0 {
+		filter.Limit = 20
+	} else if filter.Limit > 100 {
+		filter.Limit = 100
+	}
+
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	total, err := s.activityRepo.CountByUserID(userID, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	items, err := s.activityRepo.ListByUserID(userID, filter)
+	if err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []*model.ActivityDB{}
+	}
+
+	return &model.PaginatedActivities{
+		Items:  items,
+		Total:  total,
+		Offset: filter.Offset,
+		Limit:  filter.Limit,
+	}, nil
+}
