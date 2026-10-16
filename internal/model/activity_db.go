@@ -12,3 +12,21 @@ type ActivityDB struct {
 	DetailsJSON string    `json:"detailsJson,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"`
 }
+
+// ActivityFilter specifies criteria for querying activity feeds.
+type ActivityFilter struct {
+	Action string     `json:"action,omitempty"`
+	TaskID *int       `json:"taskId,omitempty"`
+	From   *time.Time `json:"from,omitempty"`
+	To     *time.Time `json:"to,omitempty"`
+	Offset int        `json:"offset"`
+	Limit  int        `json:"limit"`
+}
+
+// PaginatedActivities wraps activity items with pagination metadata.
+type PaginatedActivities struct {
+	Items  []*ActivityDB `json:"items"`
+	Total  int           `json:"total"`
+	Offset int           `json:"offset"`
+	Limit  int           `json:"limit"`
+}
