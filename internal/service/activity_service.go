@@ -120,3 +120,35 @@ func (s *activityServiceImpl) GetUserActivity(userID string, filter *model.Activ
 		Limit:  filter.Limit,
 	}, nil
 }
+
+func (s *activityServiceImpl) GetTaskActivity(taskID int, userID string, offset, limit int) ([]*model.ActivityDB, error) {
+	task, err := s.taskRepo.GetByID(taskID)
+	if err != nil {
+		return nil, err
+	}
+	if task == nil {
+		return nil, ErrTaskNotFoundDB
+	}
+	if task.UserID != userID {
+		return nil, ErrUnauthorizedTask
+	}
+
+	if limit <= 0 {
+		limit = 20
+	} else if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	items, err := s.activityRepo.ListByTaskID(taskID, offset, limit)
+	if err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []*model.ActivityDB{}
+	}
+
+	return items, nil
+}
