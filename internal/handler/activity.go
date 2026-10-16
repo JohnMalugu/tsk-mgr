@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -78,6 +79,46 @@ func (h *ActivityHandler) HandleGetUserActivity(w http.ResponseWriter, r *http.R
 	res, err := h.svc.GetUserActivity(userID, filter)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(res)
+}
+
+func (h *ActivityHandler) HandleGetTaskActivity(w http.ResponseWriter, r *http.Request, taskID int) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	q := r.URL.Query()
+	offset := 0
+	limit := 20
+
+	if offStr := q.Get("offset"); offStr != "" {
+		if off, err := strconv.Atoi(offStr); err == nil {
+			offset = off
+		}
+	}
+
+	if limStr := q.Get("limit"); limStr != "" {
+		if lim, err := strconv.Atoi(limStr); err == nil {
+			limit = lim
+		}
+	}
+
+	res, err := h.svc.GetTaskActivity(taskID, userID, offset, limit)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrTaskNotFoundDB):
+			http.Error(w, err.Error(), http.StatusNotFound)
+		case errors.Is(err, service.ErrUnauthorizedTask):
+			http.Error(w, err.Error(), http.StatusForbidden)
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 		return
 	}
 
