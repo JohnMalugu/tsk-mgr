@@ -208,6 +208,7 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
 	CREATE INDEX IF NOT EXISTS idx_task_dependencies_task_id ON task_dependencies(task_id);
 	CREATE INDEX IF NOT EXISTS idx_task_dependencies_depends_on ON task_dependencies(depends_on_task_id);
+	CREATE INDEX IF NOT EXISTS idx_activities_user_created ON activities(user_id, created_at DESC);
 	`
 
 	_, err = db.Exec(indexQuery)
