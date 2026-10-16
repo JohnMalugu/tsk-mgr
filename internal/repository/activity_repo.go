@@ -193,3 +193,31 @@ func (r *activityRepositoryImpl) ListByTaskID(taskID int, offset, limit int) ([]
 	}
 	return list, rows.Err()
 }
+
+func (r *activityRepositoryImpl) CountByUserID(userID string, filter *model.ActivityFilter) (int, error) {
+	query := `SELECT COUNT(1) FROM activities WHERE user_id = ?`
+	args := []interface{}{userID}
+
+	if filter != nil {
+		if filter.Action != "" {
+			query += ` AND action = ?`
+			args = append(args, filter.Action)
+		}
+		if filter.TaskID != nil {
+			query += ` AND task_id = ?`
+			args = append(args, *filter.TaskID)
+		}
+		if filter.From != nil {
+			query += ` AND created_at >= ?`
+			args = append(args, *filter.From)
+		}
+		if filter.To != nil {
+			query += ` AND created_at <= ?`
+			args = append(args, *filter.To)
+		}
+	}
+
+	var total int
+	err := r.db.QueryRow(query, args...).Scan(&total)
+	return total, err
+}
