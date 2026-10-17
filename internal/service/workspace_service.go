@@ -396,5 +396,52 @@ func (s *workspaceDBServiceImpl) InviteMember(actingUserID string, workspaceID i
 }
 
 func (s *workspaceDBServiceImpl) AcceptInvite(userID string, token string) (*model.WorkspaceMemberDB, error) {
-	return nil, nil
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil, errors.New("token is required")
+	}
+
+	inv, err := s.repo.GetInviteByToken(token)
+	if err != nil {
+		return nil, err
+	}
+	if inv == nil {
+		return nil, ErrInviteNotFoundDB
+	}
+
+	if inv.Status != "pending" || time.Now().UTC().After(inv.ExpiresAt) {
+		return nil, ErrInviteExpired
+	}
+
+	ws, err := s.repo.GetByID(inv.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if ws == nil {
+		return nil, ErrWorkspaceNotFoundDB
+	}
+
+	existing, err := s.repo.GetMember(inv.WorkspaceID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		_ = s.repo.UpdateInviteStatus(inv.ID, "accepted")
+		return existing, nil
+	}
+
+	member := &model.WorkspaceMemberDB{
+		WorkspaceID: inv.WorkspaceID,
+		UserID:      userID,
+		Role:        inv.Role,
+	}
+	if err := s.repo.AddMember(member); err != nil {
+		return nil, err
+	}
+
+	if err := s.repo.UpdateInviteStatus(inv.ID, "accepted"); err != nil {
+		return nil, err
+	}
+
+	return member, nil
 }
