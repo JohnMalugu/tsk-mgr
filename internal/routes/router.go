@@ -421,6 +421,77 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// V2 Workspaces & Invites
+	if r.URL.Path == "/v2/workspaces" {
+		if handler.GlobalWorkspaceDBHandler == nil {
+			http.Error(w, "Workspace handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		if r.Method == http.MethodPost {
+			handler.GlobalWorkspaceDBHandler.HandleCreate(w, r)
+			return
+		}
+		if r.Method == http.MethodGet {
+			handler.GlobalWorkspaceDBHandler.HandleList(w, r)
+			return
+		}
+	}
+
+	if r.URL.Path == "/v2/invites/accept" && r.Method == http.MethodPost {
+		if handler.GlobalWorkspaceDBHandler != nil {
+			handler.GlobalWorkspaceDBHandler.HandleAcceptInvite(w, r)
+			return
+		}
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/v2/workspaces/") {
+		if handler.GlobalWorkspaceDBHandler == nil {
+			http.Error(w, "Workspace handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/workspaces/")
+		parts := strings.Split(trimmed, "/")
+		wsIDStr := parts[0]
+
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				handler.GlobalWorkspaceDBHandler.HandleGet(w, r, wsIDStr)
+				return
+			case http.MethodPut, http.MethodPatch:
+				handler.GlobalWorkspaceDBHandler.HandleUpdate(w, r, wsIDStr)
+				return
+			case http.MethodDelete:
+				handler.GlobalWorkspaceDBHandler.HandleDelete(w, r, wsIDStr)
+				return
+			}
+		} else if len(parts) == 2 {
+			if parts[1] == "members" {
+				if r.Method == http.MethodGet {
+					handler.GlobalWorkspaceDBHandler.HandleListMembers(w, r, wsIDStr)
+					return
+				}
+				if r.Method == http.MethodPost {
+					handler.GlobalWorkspaceDBHandler.HandleAddMember(w, r, wsIDStr)
+					return
+				}
+			} else if parts[1] == "invites" && r.Method == http.MethodPost {
+				handler.GlobalWorkspaceDBHandler.HandleInviteMember(w, r, wsIDStr)
+				return
+			}
+		} else if len(parts) == 3 && parts[1] == "members" {
+			targetUserID := parts[2]
+			if r.Method == http.MethodPut || r.Method == http.MethodPatch {
+				handler.GlobalWorkspaceDBHandler.HandleUpdateMemberRole(w, r, wsIDStr, targetUserID)
+				return
+			}
+			if r.Method == http.MethodDelete {
+				handler.GlobalWorkspaceDBHandler.HandleRemoveMember(w, r, wsIDStr, targetUserID)
+				return
+			}
+		}
+	}
+
 	if r.URL.Path == "/tasks/summary" {
 		handler.HandleTaskSummary(w, r)
 		return
