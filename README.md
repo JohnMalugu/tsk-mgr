@@ -69,6 +69,10 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET /v2/tasks/{id}/dag` for complete task DAG summary including blocked status and blocking task IDs
 - `GET /v2/tasks/blocked` for queue of tasks blocked by incomplete prerequisites
 - `GET /v2/tasks/ready` for actionable queue of unblocked tasks ready for work
+- `GET /v2/activity?offset={n}&limit={n}&action={action}&from={timestamp}&to={timestamp}&taskId={id}` for paginated audit log feed with multi-criteria filtering
+- `GET /v2/activity/summary?from={timestamp}&to={timestamp}` for aggregated activity metrics, action breakdown, and recent event stream
+- `POST /v2/activity/purge` to execute audit log retention cleanup with configurable day cutoff
+- `GET /v2/tasks/{id}/activity?offset={n}&limit={n}` for task-specific immutable changelog and audit trail
 
 ## Current limitations
 
