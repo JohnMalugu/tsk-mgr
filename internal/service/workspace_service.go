@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -43,8 +44,69 @@ func NewWorkspaceDBService(repo repository.WorkspaceRepository) WorkspaceDBServi
 	return &workspaceDBServiceImpl{repo: repo}
 }
 
+func slugify(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	lastDash := false
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			lastDash = false
+		} else if !lastDash && b.Len() > 0 {
+			b.WriteRune('-')
+			lastDash = true
+		}
+	}
+	res := strings.Trim(b.String(), "-")
+	if res == "" {
+		return "workspace"
+	}
+	return res
+}
+
 func (s *workspaceDBServiceImpl) CreateWorkspace(userID string, req *model.CreateWorkspaceRequest) (*model.WorkspaceDB, error) {
-	return nil, nil
+	if req == nil {
+		return nil, ErrWorkspaceNameRequired
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, ErrWorkspaceNameRequired
+	}
+
+	slug := strings.TrimSpace(req.Slug)
+	if slug == "" {
+		slug = slugify(name)
+	} else {
+		slug = slugify(slug)
+	}
+
+	existing, err := s.repo.GetBySlug(slug)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return nil, ErrWorkspaceSlugTaken
+	}
+
+	ws := &model.WorkspaceDB{
+		Name:    name,
+		Slug:    slug,
+		OwnerID: userID,
+	}
+	if err := s.repo.Create(ws); err != nil {
+		return nil, err
+	}
+
+	member := &model.WorkspaceMemberDB{
+		WorkspaceID: ws.ID,
+		UserID:      userID,
+		Role:        model.RoleOwner,
+	}
+	if err := s.repo.AddMember(member); err != nil {
+		return nil, err
+	}
+
+	return ws, nil
 }
 
 func (s *workspaceDBServiceImpl) GetWorkspace(userID string, workspaceID int) (*model.WorkspaceDetailResponse, error) {
