@@ -1,8 +1,11 @@
 package service
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -340,8 +343,56 @@ func (s *workspaceDBServiceImpl) RemoveMember(actingUserID string, workspaceID i
 	return s.repo.RemoveMember(workspaceID, targetUserID)
 }
 
+func generateToken() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
 func (s *workspaceDBServiceImpl) InviteMember(actingUserID string, workspaceID int, req *model.InviteMemberRequest) (*model.WorkspaceInviteDB, error) {
-	return nil, nil
+	if req == nil || strings.TrimSpace(req.Email) == "" {
+		return nil, errors.New("email is required")
+	}
+
+	ws, err := s.repo.GetByID(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if ws == nil {
+		return nil, ErrWorkspaceNotFoundDB
+	}
+
+	actor, err := s.repo.GetMember(workspaceID, actingUserID)
+	if err != nil {
+		return nil, err
+	}
+	if (actor == nil || !actor.Role.CanManageMembers()) && ws.OwnerID != actingUserID {
+		return nil, ErrUnauthorizedWorkspace
+	}
+
+	role := req.Role
+	if role == "" {
+		role = model.RoleMember
+	}
+	if !role.IsValid() {
+		return nil, ErrInvalidWorkspaceRole
+	}
+
+	inv := &model.WorkspaceInviteDB{
+		WorkspaceID: workspaceID,
+		Email:       strings.ToLower(strings.TrimSpace(req.Email)),
+		Role:        role,
+		InvitedBy:   actingUserID,
+		Token:       generateToken(),
+		Status:      "pending",
+		ExpiresAt:   time.Now().UTC().Add(7 * 24 * time.Hour),
+	}
+
+	if err := s.repo.CreateInvite(inv); err != nil {
+		return nil, err
+	}
+
+	return inv, nil
 }
 
 func (s *workspaceDBServiceImpl) AcceptInvite(userID string, token string) (*model.WorkspaceMemberDB, error) {
