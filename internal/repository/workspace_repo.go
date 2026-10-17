@@ -200,10 +200,34 @@ func (r *workspaceRepositoryImpl) ListMembers(workspaceID int) ([]*model.Workspa
 }
 
 func (r *workspaceRepositoryImpl) UpdateMemberRole(workspaceID int, userID string, role model.WorkspaceRole) error {
+	query := `UPDATE workspace_members SET role = ? WHERE workspace_id = ? AND user_id = ?`
+	res, err := r.db.Exec(query, role, workspaceID, userID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
 	return nil
 }
 
 func (r *workspaceRepositoryImpl) RemoveMember(workspaceID int, userID string) error {
+	query := `DELETE FROM workspace_members WHERE workspace_id = ? AND user_id = ?`
+	res, err := r.db.Exec(query, workspaceID, userID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
 	return nil
 }
 
