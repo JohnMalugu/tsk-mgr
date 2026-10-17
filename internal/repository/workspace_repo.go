@@ -232,14 +232,59 @@ func (r *workspaceRepositoryImpl) RemoveMember(workspaceID int, userID string) e
 }
 
 func (r *workspaceRepositoryImpl) CreateInvite(inv *model.WorkspaceInviteDB) error {
+	now := time.Now().UTC()
+	if inv.CreatedAt.IsZero() {
+		inv.CreatedAt = now
+	}
+	if inv.Status == "" {
+		inv.Status = "pending"
+	}
+	query := `
+	INSERT INTO workspace_invites (workspace_id, email, role, invited_by, token, status, expires_at, created_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+	res, err := r.db.Exec(query, inv.WorkspaceID, inv.Email, inv.Role, inv.InvitedBy, inv.Token, inv.Status, inv.ExpiresAt, inv.CreatedAt)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	inv.ID = int(id)
 	return nil
 }
 
 func (r *workspaceRepositoryImpl) GetInviteByToken(token string) (*model.WorkspaceInviteDB, error) {
-	return nil, nil
+	query := `
+	SELECT id, workspace_id, email, role, invited_by, token, status, expires_at, created_at
+	FROM workspace_invites
+	WHERE token = ?`
+	var inv model.WorkspaceInviteDB
+	err := r.db.QueryRow(query, token).Scan(
+		&inv.ID, &inv.WorkspaceID, &inv.Email, &inv.Role, &inv.InvitedBy, &inv.Token, &inv.Status, &inv.ExpiresAt, &inv.CreatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &inv, nil
 }
 
 func (r *workspaceRepositoryImpl) UpdateInviteStatus(id int, status string) error {
+	query := `UPDATE workspace_invites SET status = ? WHERE id = ?`
+	res, err := r.db.Exec(query, status, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
 	return nil
 }
 
