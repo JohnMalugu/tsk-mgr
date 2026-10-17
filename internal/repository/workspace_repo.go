@@ -85,15 +85,58 @@ func (r *workspaceRepositoryImpl) GetBySlug(slug string) (*model.WorkspaceDB, er
 }
 
 func (r *workspaceRepositoryImpl) ListUserWorkspaces(userID string) ([]*model.WorkspaceDB, error) {
-	return nil, nil
+	query := `
+	SELECT DISTINCT w.id, w.name, w.slug, w.owner_id, w.created_at, w.updated_at
+	FROM workspaces w
+	LEFT JOIN workspace_members wm ON w.id = wm.workspace_id
+	WHERE w.owner_id = ? OR wm.user_id = ?
+	ORDER BY w.created_at DESC`
+
+	rows, err := r.db.Query(query, userID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []*model.WorkspaceDB
+	for rows.Next() {
+		var w model.WorkspaceDB
+		if err := rows.Scan(&w.ID, &w.Name, &w.Slug, &w.OwnerID, &w.CreatedAt, &w.UpdatedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, &w)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
 func (r *workspaceRepositoryImpl) Update(w *model.WorkspaceDB) error {
-	return nil
+	w.UpdatedAt = time.Now().UTC()
+	query := `UPDATE workspaces SET name = ?, slug = ?, updated_at = ? WHERE id = ?`
+	_, err := r.db.Exec(query, w.Name, w.Slug, w.UpdatedAt, w.ID)
+	return err
 }
 
 func (r *workspaceRepositoryImpl) Delete(id int) error {
-	return nil
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`DELETE FROM workspace_invites WHERE workspace_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM workspace_members WHERE workspace_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM workspaces WHERE id = ?`, id); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 func (r *workspaceRepositoryImpl) AddMember(m *model.WorkspaceMemberDB) error {
