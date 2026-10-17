@@ -151,11 +151,54 @@ func (s *workspaceDBServiceImpl) ListUserWorkspaces(userID string) ([]*model.Wor
 }
 
 func (s *workspaceDBServiceImpl) UpdateWorkspace(userID string, workspaceID int, req *model.UpdateWorkspaceRequest) (*model.WorkspaceDB, error) {
-	return nil, nil
+	ws, err := s.repo.GetByID(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if ws == nil {
+		return nil, ErrWorkspaceNotFoundDB
+	}
+
+	member, err := s.repo.GetMember(workspaceID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if (member == nil || !member.Role.CanManageWorkspace()) && ws.OwnerID != userID {
+		return nil, ErrUnauthorizedWorkspace
+	}
+
+	if req == nil || strings.TrimSpace(req.Name) == "" {
+		return nil, ErrWorkspaceNameRequired
+	}
+
+	ws.Name = strings.TrimSpace(req.Name)
+	if err := s.repo.Update(ws); err != nil {
+		return nil, err
+	}
+
+	return ws, nil
 }
 
 func (s *workspaceDBServiceImpl) DeleteWorkspace(userID string, workspaceID int) error {
-	return nil
+	ws, err := s.repo.GetByID(workspaceID)
+	if err != nil {
+		return err
+	}
+	if ws == nil {
+		return ErrWorkspaceNotFoundDB
+	}
+
+	if ws.OwnerID != userID {
+		member, err := s.repo.GetMember(workspaceID, userID)
+		if err != nil {
+			return err
+		}
+		if member == nil || member.Role != model.RoleOwner {
+			return ErrUnauthorizedWorkspace
+		}
+	}
+
+	return s.repo.Delete(workspaceID)
 }
 
 func (s *workspaceDBServiceImpl) AddMember(actingUserID string, workspaceID int, req *model.AddMemberRequest) (*model.WorkspaceMemberDB, error) {
