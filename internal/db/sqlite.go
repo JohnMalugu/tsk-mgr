@@ -264,6 +264,11 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_activities_user_created ON activities(user_id, created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_activities_task_created ON activities(task_id, created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_activities_action ON activities(action);
+	CREATE INDEX IF NOT EXISTS idx_workspaces_owner_id ON workspaces(owner_id);
+	CREATE INDEX IF NOT EXISTS idx_workspace_members_user ON workspace_members(user_id);
+	CREATE INDEX IF NOT EXISTS idx_workspace_members_ws ON workspace_members(workspace_id, role);
+	CREATE INDEX IF NOT EXISTS idx_workspace_invites_token ON workspace_invites(token);
+	CREATE INDEX IF NOT EXISTS idx_workspace_invites_ws ON workspace_invites(workspace_id, status);
 	`
 
 	_, err = db.Exec(indexQuery)
