@@ -140,15 +140,63 @@ func (r *workspaceRepositoryImpl) Delete(id int) error {
 }
 
 func (r *workspaceRepositoryImpl) AddMember(m *model.WorkspaceMemberDB) error {
+	if m.JoinedAt.IsZero() {
+		m.JoinedAt = time.Now().UTC()
+	}
+	query := `
+	INSERT INTO workspace_members (workspace_id, user_id, role, joined_at)
+	VALUES (?, ?, ?, ?)`
+	res, err := r.db.Exec(query, m.WorkspaceID, m.UserID, m.Role, m.JoinedAt)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	m.ID = int(id)
 	return nil
 }
 
 func (r *workspaceRepositoryImpl) GetMember(workspaceID int, userID string) (*model.WorkspaceMemberDB, error) {
-	return nil, nil
+	query := `SELECT id, workspace_id, user_id, role, joined_at FROM workspace_members WHERE workspace_id = ? AND user_id = ?`
+	var m model.WorkspaceMemberDB
+	err := r.db.QueryRow(query, workspaceID, userID).Scan(&m.ID, &m.WorkspaceID, &m.UserID, &m.Role, &m.JoinedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &m, nil
 }
 
 func (r *workspaceRepositoryImpl) ListMembers(workspaceID int) ([]*model.WorkspaceMemberInfo, error) {
-	return nil, nil
+	query := `
+	SELECT wm.id, wm.workspace_id, wm.user_id, COALESCE(u.email, ''), wm.role, wm.joined_at
+	FROM workspace_members wm
+	LEFT JOIN users u ON wm.user_id = u.id
+	WHERE wm.workspace_id = ?
+	ORDER BY wm.joined_at ASC`
+
+	rows, err := r.db.Query(query, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []*model.WorkspaceMemberInfo
+	for rows.Next() {
+		var m model.WorkspaceMemberInfo
+		if err := rows.Scan(&m.ID, &m.WorkspaceID, &m.UserID, &m.Email, &m.Role, &m.JoinedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, &m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
 func (r *workspaceRepositoryImpl) UpdateMemberRole(workspaceID int, userID string, role model.WorkspaceRole) error {
