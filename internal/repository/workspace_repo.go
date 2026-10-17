@@ -287,4 +287,3 @@ func (r *workspaceRepositoryImpl) UpdateInviteStatus(id int, status string) erro
 	}
 	return nil
 }
-

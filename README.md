@@ -73,6 +73,12 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET /v2/activity/summary?from={timestamp}&to={timestamp}` for aggregated activity metrics, action breakdown, and recent event stream
 - `POST /v2/activity/purge` to execute audit log retention cleanup with configurable day cutoff
 - `GET /v2/tasks/{id}/activity?offset={n}&limit={n}` for task-specific immutable changelog and audit trail
+- `GET|POST /v2/workspaces` to list user workspaces or create a new workspace with automatic owner assignment
+- `GET|PUT|DELETE /v2/workspaces/{id}` to fetch workspace details, update metadata, or delete workspace (with owner guard)
+- `GET|POST /v2/workspaces/{id}/members` to list workspace members or add a member with role assignment (`owner`, `admin`, `member`, `viewer`)
+- `PUT|DELETE /v2/workspaces/{id}/members/{userId}` to update member role or remove members (with owner protection and self-leave support)
+- `POST /v2/workspaces/{id}/invites` to generate secure 7-day invitation tokens for team onboarding
+- `POST /v2/invites/accept` to accept an invitation token and join the workspace with the designated role
 
 ## Current limitations
 

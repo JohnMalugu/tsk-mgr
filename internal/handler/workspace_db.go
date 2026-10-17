@@ -410,7 +410,3 @@ func (h *WorkspaceDBHandler) HandleAcceptInvite(w http.ResponseWriter, r *http.R
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(member)
 }
-
-
-
-
