@@ -202,11 +202,72 @@ func (s *workspaceDBServiceImpl) DeleteWorkspace(userID string, workspaceID int)
 }
 
 func (s *workspaceDBServiceImpl) AddMember(actingUserID string, workspaceID int, req *model.AddMemberRequest) (*model.WorkspaceMemberDB, error) {
-	return nil, nil
+	if req == nil || strings.TrimSpace(req.UserID) == "" {
+		return nil, errors.New("user_id is required")
+	}
+
+	ws, err := s.repo.GetByID(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if ws == nil {
+		return nil, ErrWorkspaceNotFoundDB
+	}
+
+	actor, err := s.repo.GetMember(workspaceID, actingUserID)
+	if err != nil {
+		return nil, err
+	}
+	if (actor == nil || !actor.Role.CanManageMembers()) && ws.OwnerID != actingUserID {
+		return nil, ErrUnauthorizedWorkspace
+	}
+
+	role := req.Role
+	if role == "" {
+		role = model.RoleMember
+	}
+	if !role.IsValid() {
+		return nil, ErrInvalidWorkspaceRole
+	}
+
+	existing, err := s.repo.GetMember(workspaceID, req.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return nil, ErrAlreadyWorkspaceMember
+	}
+
+	m := &model.WorkspaceMemberDB{
+		WorkspaceID: workspaceID,
+		UserID:      strings.TrimSpace(req.UserID),
+		Role:        role,
+	}
+	if err := s.repo.AddMember(m); err != nil {
+		return nil, err
+	}
+
+	return m, nil
 }
 
 func (s *workspaceDBServiceImpl) ListMembers(actingUserID string, workspaceID int) ([]*model.WorkspaceMemberInfo, error) {
-	return nil, nil
+	ws, err := s.repo.GetByID(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if ws == nil {
+		return nil, ErrWorkspaceNotFoundDB
+	}
+
+	actor, err := s.repo.GetMember(workspaceID, actingUserID)
+	if err != nil {
+		return nil, err
+	}
+	if actor == nil && ws.OwnerID != actingUserID {
+		return nil, ErrUnauthorizedWorkspace
+	}
+
+	return s.repo.ListMembers(workspaceID)
 }
 
 func (s *workspaceDBServiceImpl) UpdateMemberRole(actingUserID string, workspaceID int, targetUserID string, req *model.UpdateMemberRoleRequest) error {
