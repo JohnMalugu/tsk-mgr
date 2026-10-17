@@ -219,6 +219,23 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	workspaceMembersQuery := `
+	CREATE TABLE IF NOT EXISTS workspace_members (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		user_id TEXT NOT NULL,
+		role TEXT NOT NULL DEFAULT 'member',
+		joined_at DATETIME NOT NULL,
+		UNIQUE(workspace_id, user_id),
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(workspaceMembersQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
