@@ -63,6 +63,10 @@ func main() {
 	handler.InitActivityHandler(activitySvc)
 	taskDBSvc.SetActivityService(activitySvc)
 
+	workspaceRepo := repository.NewWorkspaceRepository(sqliteDB)
+	workspaceSvc := service.NewWorkspaceDBService(workspaceRepo)
+	handler.InitWorkspaceDBHandler(workspaceSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
@@ -121,6 +125,9 @@ func main() {
 	fmt.Printf("   DELETE http://localhost:8080/tasks/{id}\n")
 	fmt.Printf("   PATCH  http://localhost:8080/tasks/{id}/complete\n")
 	fmt.Printf("   POST   http://localhost:8080/tasks/{id}/reopen\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/workspaces\n")
+	fmt.Printf("   POST   http://localhost:8080/v2/workspaces\n")
+	fmt.Printf("   POST   http://localhost:8080/v2/invites/accept\n")
 	fmt.Printf("\n")
 
 	server := &http.Server{
