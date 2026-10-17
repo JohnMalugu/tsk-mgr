@@ -332,5 +332,85 @@ func (h *WorkspaceDBHandler) HandleRemoveMember(w http.ResponseWriter, r *http.R
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "member removed successfully"})
 }
 
+func (h *WorkspaceDBHandler) HandleInviteMember(w http.ResponseWriter, r *http.Request, wsIDStr string) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	wsID, err := strconv.Atoi(wsIDStr)
+	if err != nil {
+		http.Error(w, "Invalid workspace ID", http.StatusBadRequest)
+		return
+	}
+
+	var req model.InviteMemberRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	inv, err := h.svc.InviteMember(userID, wsID, &req)
+	if err != nil {
+		if errors.Is(err, service.ErrWorkspaceNotFoundDB) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, service.ErrUnauthorizedWorkspace) {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		if errors.Is(err, service.ErrInvalidWorkspaceRole) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(inv)
+}
+
+func (h *WorkspaceDBHandler) HandleAcceptInvite(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	member, err := h.svc.AcceptInvite(userID, req.Token)
+	if err != nil {
+		if errors.Is(err, service.ErrInviteNotFoundDB) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, service.ErrInviteExpired) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if errors.Is(err, service.ErrWorkspaceNotFoundDB) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(member)
+}
+
+
 
 
