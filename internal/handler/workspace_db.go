@@ -178,4 +178,159 @@ func (h *WorkspaceDBHandler) HandleDelete(w http.ResponseWriter, r *http.Request
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "workspace deleted successfully"})
 }
 
+func (h *WorkspaceDBHandler) HandleListMembers(w http.ResponseWriter, r *http.Request, wsIDStr string) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	wsID, err := strconv.Atoi(wsIDStr)
+	if err != nil {
+		http.Error(w, "Invalid workspace ID", http.StatusBadRequest)
+		return
+	}
+
+	members, err := h.svc.ListMembers(userID, wsID)
+	if err != nil {
+		if errors.Is(err, service.ErrWorkspaceNotFoundDB) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, service.ErrUnauthorizedWorkspace) {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if members == nil {
+		members = []*model.WorkspaceMemberInfo{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(members)
+}
+
+func (h *WorkspaceDBHandler) HandleAddMember(w http.ResponseWriter, r *http.Request, wsIDStr string) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	wsID, err := strconv.Atoi(wsIDStr)
+	if err != nil {
+		http.Error(w, "Invalid workspace ID", http.StatusBadRequest)
+		return
+	}
+
+	var req model.AddMemberRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	member, err := h.svc.AddMember(userID, wsID, &req)
+	if err != nil {
+		if errors.Is(err, service.ErrWorkspaceNotFoundDB) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, service.ErrUnauthorizedWorkspace) {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		if errors.Is(err, service.ErrAlreadyWorkspaceMember) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		if errors.Is(err, service.ErrInvalidWorkspaceRole) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(member)
+}
+
+func (h *WorkspaceDBHandler) HandleUpdateMemberRole(w http.ResponseWriter, r *http.Request, wsIDStr, targetUserID string) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	wsID, err := strconv.Atoi(wsIDStr)
+	if err != nil {
+		http.Error(w, "Invalid workspace ID", http.StatusBadRequest)
+		return
+	}
+
+	var req model.UpdateMemberRoleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := h.svc.UpdateMemberRole(userID, wsID, targetUserID, &req); err != nil {
+		if errors.Is(err, service.ErrWorkspaceNotFoundDB) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, service.ErrUnauthorizedWorkspace) {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		if errors.Is(err, service.ErrCannotRemoveOwner) || errors.Is(err, service.ErrInvalidWorkspaceRole) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "member role updated successfully"})
+}
+
+func (h *WorkspaceDBHandler) HandleRemoveMember(w http.ResponseWriter, r *http.Request, wsIDStr, targetUserID string) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	wsID, err := strconv.Atoi(wsIDStr)
+	if err != nil {
+		http.Error(w, "Invalid workspace ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.svc.RemoveMember(userID, wsID, targetUserID); err != nil {
+		if errors.Is(err, service.ErrWorkspaceNotFoundDB) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, service.ErrUnauthorizedWorkspace) {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		if errors.Is(err, service.ErrCannotRemoveOwner) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "member removed successfully"})
+}
+
+
 
