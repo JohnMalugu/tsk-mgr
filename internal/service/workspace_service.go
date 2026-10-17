@@ -110,11 +110,44 @@ func (s *workspaceDBServiceImpl) CreateWorkspace(userID string, req *model.Creat
 }
 
 func (s *workspaceDBServiceImpl) GetWorkspace(userID string, workspaceID int) (*model.WorkspaceDetailResponse, error) {
-	return nil, nil
+	ws, err := s.repo.GetByID(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if ws == nil {
+		return nil, ErrWorkspaceNotFoundDB
+	}
+
+	member, err := s.repo.GetMember(workspaceID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if member == nil && ws.OwnerID != userID {
+		return nil, ErrUnauthorizedWorkspace
+	}
+
+	role := model.RoleViewer
+	if member != nil {
+		role = member.Role
+	} else if ws.OwnerID == userID {
+		role = model.RoleOwner
+	}
+
+	members, err := s.repo.ListMembers(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.WorkspaceDetailResponse{
+		Workspace:   ws,
+		MyRole:      role,
+		MemberCount: len(members),
+		Members:     members,
+	}, nil
 }
 
 func (s *workspaceDBServiceImpl) ListUserWorkspaces(userID string) ([]*model.WorkspaceDB, error) {
-	return nil, nil
+	return s.repo.ListUserWorkspaces(userID)
 }
 
 func (s *workspaceDBServiceImpl) UpdateWorkspace(userID string, workspaceID int, req *model.UpdateWorkspaceRequest) (*model.WorkspaceDB, error) {
