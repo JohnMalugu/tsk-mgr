@@ -40,3 +40,30 @@ type WorkspaceDB struct {
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
+
+// WorkspaceMemberDB represents a membership record in SQLite.
+type WorkspaceMemberDB struct {
+	ID          int           `json:"id"`
+	WorkspaceID int           `json:"workspaceId"`
+	UserID      string        `json:"userId"`
+	Role        WorkspaceRole `json:"role"`
+	JoinedAt    time.Time     `json:"joinedAt"`
+}
+
+// WorkspaceMemberInfo enriches member data with user details.
+type WorkspaceMemberInfo struct {
+	ID          int           `json:"id"`
+	WorkspaceID int           `json:"workspaceId"`
+	UserID      string        `json:"userId"`
+	Email       string        `json:"email,omitempty"`
+	Role        WorkspaceRole `json:"role"`
+	JoinedAt    time.Time     `json:"joinedAt"`
+}
+
+// WorkspaceDetailResponse contains full workspace details, current user role, and members.
+type WorkspaceDetailResponse struct {
+	Workspace   *WorkspaceDB           `json:"workspace"`
+	MyRole      WorkspaceRole          `json:"myRole"`
+	MemberCount int                    `json:"memberCount"`
+	Members     []*WorkspaceMemberInfo `json:"members,omitempty"`
+}
