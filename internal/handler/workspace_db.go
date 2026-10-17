@@ -107,3 +107,75 @@ func (h *WorkspaceDBHandler) HandleGet(w http.ResponseWriter, r *http.Request, i
 	_ = json.NewEncoder(w).Encode(detail)
 }
 
+func (h *WorkspaceDBHandler) HandleUpdate(w http.ResponseWriter, r *http.Request, idStr string) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid workspace ID", http.StatusBadRequest)
+		return
+	}
+
+	var req model.UpdateWorkspaceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	ws, err := h.svc.UpdateWorkspace(userID, id, &req)
+	if err != nil {
+		if errors.Is(err, service.ErrWorkspaceNotFoundDB) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, service.ErrUnauthorizedWorkspace) {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		if errors.Is(err, service.ErrWorkspaceNameRequired) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(ws)
+}
+
+func (h *WorkspaceDBHandler) HandleDelete(w http.ResponseWriter, r *http.Request, idStr string) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid workspace ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.svc.DeleteWorkspace(userID, id); err != nil {
+		if errors.Is(err, service.ErrWorkspaceNotFoundDB) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, service.ErrUnauthorizedWorkspace) {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "workspace deleted successfully"})
+}
+
+
