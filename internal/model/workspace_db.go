@@ -67,3 +67,39 @@ type WorkspaceDetailResponse struct {
 	MemberCount int                    `json:"memberCount"`
 	Members     []*WorkspaceMemberInfo `json:"members,omitempty"`
 }
+
+// WorkspaceInviteDB represents an invitation to join a workspace.
+type WorkspaceInviteDB struct {
+	ID          int           `json:"id"`
+	WorkspaceID int           `json:"workspaceId"`
+	Email       string        `json:"email"`
+	Role        WorkspaceRole `json:"role"`
+	InvitedBy   string        `json:"invitedBy"`
+	Token       string        `json:"token"`
+	Status      string        `json:"status"` // pending, accepted, revoked
+	ExpiresAt   time.Time     `json:"expiresAt"`
+	CreatedAt   time.Time     `json:"createdAt"`
+}
+
+type CreateWorkspaceRequest struct {
+	Name string `json:"name"`
+	Slug string `json:"slug,omitempty"`
+}
+
+type UpdateWorkspaceRequest struct {
+	Name string `json:"name"`
+}
+
+type AddMemberRequest struct {
+	UserID string        `json:"userId"`
+	Role   WorkspaceRole `json:"role"`
+}
+
+type UpdateMemberRoleRequest struct {
+	Role WorkspaceRole `json:"role"`
+}
+
+type InviteMemberRequest struct {
+	Email string        `json:"email"`
+	Role  WorkspaceRole `json:"role"`
+}
