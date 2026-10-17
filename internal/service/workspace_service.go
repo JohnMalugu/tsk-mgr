@@ -271,11 +271,73 @@ func (s *workspaceDBServiceImpl) ListMembers(actingUserID string, workspaceID in
 }
 
 func (s *workspaceDBServiceImpl) UpdateMemberRole(actingUserID string, workspaceID int, targetUserID string, req *model.UpdateMemberRoleRequest) error {
-	return nil
+	if req == nil || !req.Role.IsValid() {
+		return ErrInvalidWorkspaceRole
+	}
+
+	ws, err := s.repo.GetByID(workspaceID)
+	if err != nil {
+		return err
+	}
+	if ws == nil {
+		return ErrWorkspaceNotFoundDB
+	}
+
+	actor, err := s.repo.GetMember(workspaceID, actingUserID)
+	if err != nil {
+		return err
+	}
+	if (actor == nil || !actor.Role.CanManageMembers()) && ws.OwnerID != actingUserID {
+		return ErrUnauthorizedWorkspace
+	}
+
+	if ws.OwnerID == targetUserID {
+		return ErrCannotRemoveOwner
+	}
+
+	target, err := s.repo.GetMember(workspaceID, targetUserID)
+	if err != nil {
+		return err
+	}
+	if target == nil {
+		return errors.New("member not found")
+	}
+
+	return s.repo.UpdateMemberRole(workspaceID, targetUserID, req.Role)
 }
 
 func (s *workspaceDBServiceImpl) RemoveMember(actingUserID string, workspaceID int, targetUserID string) error {
-	return nil
+	ws, err := s.repo.GetByID(workspaceID)
+	if err != nil {
+		return err
+	}
+	if ws == nil {
+		return ErrWorkspaceNotFoundDB
+	}
+
+	if ws.OwnerID == targetUserID {
+		return ErrCannotRemoveOwner
+	}
+
+	if actingUserID != targetUserID {
+		actor, err := s.repo.GetMember(workspaceID, actingUserID)
+		if err != nil {
+			return err
+		}
+		if (actor == nil || !actor.Role.CanManageMembers()) && ws.OwnerID != actingUserID {
+			return ErrUnauthorizedWorkspace
+		}
+	}
+
+	target, err := s.repo.GetMember(workspaceID, targetUserID)
+	if err != nil {
+		return err
+	}
+	if target == nil {
+		return errors.New("member not found")
+	}
+
+	return s.repo.RemoveMember(workspaceID, targetUserID)
 }
 
 func (s *workspaceDBServiceImpl) InviteMember(actingUserID string, workspaceID int, req *model.InviteMemberRequest) (*model.WorkspaceInviteDB, error) {
