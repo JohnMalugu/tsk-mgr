@@ -121,4 +121,65 @@ func (h *NotificationHandler) HandleMarkAllAsRead(w http.ResponseWriter, r *http
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "all notifications marked as read"})
 }
 
+func (h *NotificationHandler) HandleDelete(w http.ResponseWriter, r *http.Request, idStr string) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid notification ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.svc.DeleteNotification(id, userID); err != nil {
+		if errors.Is(err, service.ErrNotificationNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "notification deleted successfully"})
+}
+
+func (h *NotificationHandler) HandleSendNotification(w http.ResponseWriter, r *http.Request) {
+	actingUserID, ok := r.Context().Value("userID").(string)
+	if !ok || actingUserID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req model.CreateNotificationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	notif, err := h.svc.Send(&req)
+	if err != nil {
+		if errors.Is(err, service.ErrNotificationTitleEmpty) ||
+			errors.Is(err, service.ErrNotificationUserIDEmpty) ||
+			errors.Is(err, service.ErrInvalidNotificationType) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if notif == nil {
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "suppressed_by_preferences"})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(notif)
+}
+
+
 
