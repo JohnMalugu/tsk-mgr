@@ -79,4 +79,19 @@ type NotificationFilter struct {
 	Limit      int              `json:"limit,omitempty"`
 }
 
+// NotificationSummaryResponse packages list output with pagination and counters.
+type NotificationSummaryResponse struct {
+	Notifications []*NotificationDB `json:"notifications"`
+	Total         int               `json:"total"`
+	UnreadCount   int               `json:"unreadCount"`
+	Offset        int               `json:"offset"`
+	Limit         int               `json:"limit"`
+}
+
+// UnreadCountResponse carries the count of unread notifications for badges.
+type UnreadCountResponse struct {
+	UnreadCount int `json:"unreadCount"`
+}
+
+
 
