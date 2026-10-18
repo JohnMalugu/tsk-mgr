@@ -67,6 +67,10 @@ func main() {
 	workspaceSvc := service.NewWorkspaceDBService(workspaceRepo)
 	handler.InitWorkspaceDBHandler(workspaceSvc)
 
+	notificationRepo := repository.NewNotificationRepository(sqliteDB)
+	notificationSvc := service.NewNotificationService(notificationRepo)
+	handler.InitNotificationHandler(notificationSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
@@ -128,6 +132,9 @@ func main() {
 	fmt.Printf("   GET    http://localhost:8080/v2/workspaces\n")
 	fmt.Printf("   POST   http://localhost:8080/v2/workspaces\n")
 	fmt.Printf("   POST   http://localhost:8080/v2/invites/accept\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/notifications\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/notifications/unread-count\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/notifications/preferences\n")
 	fmt.Printf("\n")
 
 	server := &http.Server{
