@@ -2,6 +2,8 @@ package repository
 
 import (
 	"database/sql"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -75,7 +77,70 @@ func (r *notificationRepositoryImpl) GetByID(id int) (*model.NotificationDB, err
 }
 
 func (r *notificationRepositoryImpl) List(filter model.NotificationFilter) ([]*model.NotificationDB, int, error) {
-	return nil, 0, nil
+	where := []string{"user_id = ?"}
+	args := []interface{}{filter.UserID}
+
+	if filter.Type != "" {
+		where = append(where, "type = ?")
+		args = append(args, filter.Type)
+	}
+	if filter.UnreadOnly {
+		where = append(where, "is_read = 0")
+	}
+
+	whereClause := strings.Join(where, " AND ")
+
+	countQuery := "SELECT COUNT(*) FROM notifications WHERE " + whereClause
+	var total int
+	if err := r.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, user_id, COALESCE(actor_id, ''), type, title, message, COALESCE(entity_type, ''), COALESCE(entity_id, ''), is_read, read_at, created_at
+	FROM notifications
+	WHERE %s
+	ORDER BY created_at DESC
+	LIMIT ? OFFSET ?`, whereClause)
+
+	listArgs := append(args, limit, offset)
+	rows, err := r.db.Query(query, listArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var list []*model.NotificationDB
+	for rows.Next() {
+		var n model.NotificationDB
+		var readAt sql.NullTime
+		if err := rows.Scan(
+			&n.ID, &n.UserID, &n.ActorID, &n.Type, &n.Title, &n.Message, &n.EntityType, &n.EntityID, &n.IsRead, &readAt, &n.CreatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		if readAt.Valid {
+			n.ReadAt = &readAt.Time
+		}
+		list = append(list, &n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return list, total, nil
 }
 
 func (r *notificationRepositoryImpl) MarkAsRead(id int, userID string) error {
