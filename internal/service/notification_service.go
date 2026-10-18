@@ -179,9 +179,55 @@ func (s *notificationServiceImpl) GetUnreadCount(userID string) (int, error) {
 }
 
 func (s *notificationServiceImpl) GetPreferences(userID string) (*model.NotificationPreferencesDB, error) {
-	return nil, nil
+	if strings.TrimSpace(userID) == "" {
+		return nil, ErrNotificationUserIDEmpty
+	}
+	pref, err := s.repo.GetPreferences(userID)
+	if err != nil {
+		return nil, err
+	}
+	if pref == nil {
+		return model.DefaultNotificationPreferences(userID), nil
+	}
+	return pref, nil
 }
 
 func (s *notificationServiceImpl) UpdatePreferences(userID string, req *model.UpdatePreferencesRequest) (*model.NotificationPreferencesDB, error) {
-	return nil, nil
+	if strings.TrimSpace(userID) == "" {
+		return nil, ErrNotificationUserIDEmpty
+	}
+	pref, err := s.repo.GetPreferences(userID)
+	if err != nil {
+		return nil, err
+	}
+	if pref == nil {
+		pref = model.DefaultNotificationPreferences(userID)
+	}
+
+	if req != nil {
+		if req.EmailEnabled != nil {
+			pref.EmailEnabled = *req.EmailEnabled
+		}
+		if req.InAppEnabled != nil {
+			pref.InAppEnabled = *req.InAppEnabled
+		}
+		if req.NotifyTaskAssigned != nil {
+			pref.NotifyTaskAssigned = *req.NotifyTaskAssigned
+		}
+		if req.NotifyTaskDueSoon != nil {
+			pref.NotifyTaskDueSoon = *req.NotifyTaskDueSoon
+		}
+		if req.NotifyComment != nil {
+			pref.NotifyComment = *req.NotifyComment
+		}
+		if req.NotifyInvite != nil {
+			pref.NotifyInvite = *req.NotifyInvite
+		}
+	}
+
+	if err := s.repo.UpsertPreferences(pref); err != nil {
+		return nil, err
+	}
+
+	return pref, nil
 }
