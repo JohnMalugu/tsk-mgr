@@ -158,11 +158,24 @@ func (s *notificationServiceImpl) MarkAllAsRead(userID string) error {
 }
 
 func (s *notificationServiceImpl) DeleteNotification(id int, userID string) error {
+	if strings.TrimSpace(userID) == "" {
+		return ErrNotificationUserIDEmpty
+	}
+	err := s.repo.Delete(id, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotificationNotFound
+		}
+		return err
+	}
 	return nil
 }
 
 func (s *notificationServiceImpl) GetUnreadCount(userID string) (int, error) {
-	return 0, nil
+	if strings.TrimSpace(userID) == "" {
+		return 0, ErrNotificationUserIDEmpty
+	}
+	return s.repo.CountUnread(userID)
 }
 
 func (s *notificationServiceImpl) GetPreferences(userID string) (*model.NotificationPreferencesDB, error) {
