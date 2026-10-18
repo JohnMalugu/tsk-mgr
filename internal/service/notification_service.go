@@ -1,6 +1,7 @@
 package service
 
 import (
+	"database/sql"
 	"errors"
 	"strings"
 
@@ -136,11 +137,24 @@ func (s *notificationServiceImpl) ListNotifications(filter model.NotificationFil
 }
 
 func (s *notificationServiceImpl) MarkAsRead(id int, userID string) error {
+	if strings.TrimSpace(userID) == "" {
+		return ErrNotificationUserIDEmpty
+	}
+	err := s.repo.MarkAsRead(id, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotificationNotFound
+		}
+		return err
+	}
 	return nil
 }
 
 func (s *notificationServiceImpl) MarkAllAsRead(userID string) error {
-	return nil
+	if strings.TrimSpace(userID) == "" {
+		return ErrNotificationUserIDEmpty
+	}
+	return s.repo.MarkAllAsRead(userID)
 }
 
 func (s *notificationServiceImpl) DeleteNotification(id int, userID string) error {
