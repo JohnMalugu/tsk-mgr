@@ -492,6 +492,73 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// V2 Notifications & Preferences
+	if r.URL.Path == "/v2/notifications" {
+		if handler.GlobalNotificationHandler == nil {
+			http.Error(w, "Notification handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		if r.Method == http.MethodGet {
+			handler.GlobalNotificationHandler.HandleList(w, r)
+			return
+		}
+		if r.Method == http.MethodPost {
+			handler.GlobalNotificationHandler.HandleSendNotification(w, r)
+			return
+		}
+	}
+
+	if r.URL.Path == "/v2/notifications/unread-count" && r.Method == http.MethodGet {
+		if handler.GlobalNotificationHandler != nil {
+			handler.GlobalNotificationHandler.HandleGetUnreadCount(w, r)
+			return
+		}
+	}
+
+	if r.URL.Path == "/v2/notifications/read-all" && r.Method == http.MethodPost {
+		if handler.GlobalNotificationHandler != nil {
+			handler.GlobalNotificationHandler.HandleMarkAllAsRead(w, r)
+			return
+		}
+	}
+
+	if r.URL.Path == "/v2/notifications/preferences" {
+		if handler.GlobalNotificationHandler == nil {
+			http.Error(w, "Notification handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		if r.Method == http.MethodGet {
+			handler.GlobalNotificationHandler.HandleGetPreferences(w, r)
+			return
+		}
+		if r.Method == http.MethodPut || r.Method == http.MethodPatch {
+			handler.GlobalNotificationHandler.HandleUpdatePreferences(w, r)
+			return
+		}
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/v2/notifications/") {
+		if handler.GlobalNotificationHandler == nil {
+			http.Error(w, "Notification handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/notifications/")
+		parts := strings.Split(trimmed, "/")
+		idStr := parts[0]
+
+		if len(parts) == 1 {
+			if r.Method == http.MethodDelete {
+				handler.GlobalNotificationHandler.HandleDelete(w, r, idStr)
+				return
+			}
+		} else if len(parts) == 2 && parts[1] == "read" {
+			if r.Method == http.MethodPost || r.Method == http.MethodPatch {
+				handler.GlobalNotificationHandler.HandleMarkAsRead(w, r, idStr)
+				return
+			}
+		}
+	}
+
 	if r.URL.Path == "/tasks/summary" {
 		handler.HandleTaskSummary(w, r)
 		return
