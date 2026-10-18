@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -77,4 +78,47 @@ func (h *NotificationHandler) HandleGetUnreadCount(w http.ResponseWriter, r *htt
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(model.UnreadCountResponse{UnreadCount: count})
 }
+
+func (h *NotificationHandler) HandleMarkAsRead(w http.ResponseWriter, r *http.Request, idStr string) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid notification ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.svc.MarkAsRead(id, userID); err != nil {
+		if errors.Is(err, service.ErrNotificationNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "notification marked as read"})
+}
+
+func (h *NotificationHandler) HandleMarkAllAsRead(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if err := h.svc.MarkAllAsRead(userID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "all notifications marked as read"})
+}
+
 
