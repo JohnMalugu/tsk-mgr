@@ -144,11 +144,42 @@ func (r *notificationRepositoryImpl) List(filter model.NotificationFilter) ([]*m
 }
 
 func (r *notificationRepositoryImpl) MarkAsRead(id int, userID string) error {
+	now := time.Now().UTC()
+	query := `
+	UPDATE notifications
+	SET is_read = 1, read_at = ?
+	WHERE id = ? AND user_id = ? AND is_read = 0`
+
+	res, err := r.db.Exec(query, now, id, userID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		var exists int
+		err := r.db.QueryRow("SELECT COUNT(*) FROM notifications WHERE id = ? AND user_id = ?", id, userID).Scan(&exists)
+		if err != nil {
+			return err
+		}
+		if exists == 0 {
+			return sql.ErrNoRows
+		}
+	}
 	return nil
 }
 
 func (r *notificationRepositoryImpl) MarkAllAsRead(userID string) error {
-	return nil
+	now := time.Now().UTC()
+	query := `
+	UPDATE notifications
+	SET is_read = 1, read_at = ?
+	WHERE user_id = ? AND is_read = 0`
+
+	_, err := r.db.Exec(query, now, userID)
+	return err
 }
 
 func (r *notificationRepositoryImpl) Delete(id int, userID string) error {
