@@ -157,3 +157,75 @@ func TestNotificationService_ReadTrackingAndDelete(t *testing.T) {
 		t.Fatalf("expected unread count 0, got %d, err: %v", count, err)
 	}
 }
+
+func TestNotificationService_MarkAllAsReadAndListFilter(t *testing.T) {
+	svc := setupTestNotificationSvc(t)
+	user := "user-dan"
+
+	// Create 3 notifications
+	for i := 1; i <= 3; i++ {
+		_, err := svc.Send(&model.CreateNotificationRequest{
+			UserID: user,
+			Type:   model.NotificationTypeTaskDueSoon,
+			Title:  "Task is due soon",
+		})
+		if err != nil {
+			t.Fatalf("send failed: %v", err)
+		}
+	}
+
+	// List all
+	summary, err := svc.ListNotifications(model.NotificationFilter{
+		UserID: user,
+	})
+	if err != nil || summary.Total != 3 || summary.UnreadCount != 3 {
+		t.Fatalf("expected 3 total and 3 unread, got %d and %d", summary.Total, summary.UnreadCount)
+	}
+
+	// Mark all as read
+	if err := svc.MarkAllAsRead(user); err != nil {
+		t.Fatalf("mark all as read failed: %v", err)
+	}
+
+	// Verify unread count is 0
+	count, err := svc.GetUnreadCount(user)
+	if err != nil || count != 0 {
+		t.Fatalf("expected unread count 0, got %d", count)
+	}
+
+	// Filter unread only should return 0 items
+	summaryUnread, err := svc.ListNotifications(model.NotificationFilter{
+		UserID:     user,
+		UnreadOnly: true,
+	})
+	if err != nil || len(summaryUnread.Notifications) != 0 {
+		t.Fatalf("expected 0 unread notifications in list, got %d", len(summaryUnread.Notifications))
+	}
+
+	// Preferences check and toggle all
+	tTrue := true
+	tFalse := false
+	updatedPref, err := svc.UpdatePreferences(user, &model.UpdatePreferencesRequest{
+		EmailEnabled:       &tFalse,
+		InAppEnabled:       &tTrue,
+		NotifyTaskAssigned: &tFalse,
+		NotifyTaskDueSoon:  &tTrue,
+		NotifyComment:      &tFalse,
+		NotifyInvite:       &tTrue,
+	})
+	if err != nil {
+		t.Fatalf("update preferences failed: %v", err)
+	}
+	if updatedPref.EmailEnabled || !updatedPref.InAppEnabled || updatedPref.NotifyTaskAssigned || !updatedPref.NotifyTaskDueSoon {
+		t.Fatalf("preferences not saved correctly: %+v", updatedPref)
+	}
+
+	fetchedPref, err := svc.GetPreferences(user)
+	if err != nil {
+		t.Fatalf("get preferences failed: %v", err)
+	}
+	if fetchedPref.EmailEnabled != false || fetchedPref.InAppEnabled != true {
+		t.Fatalf("mismatched fetched preferences: %+v", fetchedPref)
+	}
+}
+
