@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -36,7 +37,65 @@ func NewNotificationService(repo repository.NotificationRepository) Notification
 }
 
 func (s *notificationServiceImpl) Send(req *model.CreateNotificationRequest) (*model.NotificationDB, error) {
-	return nil, nil
+	if req == nil {
+		return nil, ErrNotificationTitleEmpty
+	}
+	userID := strings.TrimSpace(req.UserID)
+	if userID == "" {
+		return nil, ErrNotificationUserIDEmpty
+	}
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		return nil, ErrNotificationTitleEmpty
+	}
+	if !req.Type.IsValid() {
+		return nil, ErrInvalidNotificationType
+	}
+
+	// Check user preferences
+	pref, err := s.repo.GetPreferences(userID)
+	if err != nil {
+		return nil, err
+	}
+	if pref != nil {
+		if !pref.InAppEnabled {
+			return nil, nil // Silently suppressed by user preference
+		}
+		switch req.Type {
+		case model.NotificationTypeTaskAssigned:
+			if !pref.NotifyTaskAssigned {
+				return nil, nil
+			}
+		case model.NotificationTypeTaskDueSoon:
+			if !pref.NotifyTaskDueSoon {
+				return nil, nil
+			}
+		case model.NotificationTypeCommentAdded:
+			if !pref.NotifyComment {
+				return nil, nil
+			}
+		case model.NotificationTypeWorkspaceInvite:
+			if !pref.NotifyInvite {
+				return nil, nil
+			}
+		}
+	}
+
+	notif := &model.NotificationDB{
+		UserID:     userID,
+		Type:       req.Type,
+		Title:      title,
+		Message:    strings.TrimSpace(req.Message),
+		EntityType: req.EntityType,
+		EntityID:   req.EntityID,
+		IsRead:     false,
+	}
+
+	if err := s.repo.Create(notif); err != nil {
+		return nil, err
+	}
+
+	return notif, nil
 }
 
 func (s *notificationServiceImpl) ListNotifications(filter model.NotificationFilter) (*model.NotificationSummaryResponse, error) {
