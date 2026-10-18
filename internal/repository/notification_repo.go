@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
@@ -28,11 +29,49 @@ func NewNotificationRepository(db *sql.DB) NotificationRepository {
 }
 
 func (r *notificationRepositoryImpl) Create(n *model.NotificationDB) error {
+	now := time.Now().UTC()
+	if n.CreatedAt.IsZero() {
+		n.CreatedAt = now
+	}
+
+	query := `
+	INSERT INTO notifications (user_id, actor_id, type, title, message, entity_type, entity_id, is_read, read_at, created_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query, n.UserID, n.ActorID, n.Type, n.Title, n.Message, n.EntityType, n.EntityID, n.IsRead, n.ReadAt, n.CreatedAt)
+	if err != nil {
+		return err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	n.ID = int(id)
 	return nil
 }
 
 func (r *notificationRepositoryImpl) GetByID(id int) (*model.NotificationDB, error) {
-	return nil, nil
+	query := `
+	SELECT id, user_id, COALESCE(actor_id, ''), type, title, message, COALESCE(entity_type, ''), COALESCE(entity_id, ''), is_read, read_at, created_at
+	FROM notifications
+	WHERE id = ?`
+
+	var n model.NotificationDB
+	var readAt sql.NullTime
+	err := r.db.QueryRow(query, id).Scan(
+		&n.ID, &n.UserID, &n.ActorID, &n.Type, &n.Title, &n.Message, &n.EntityType, &n.EntityID, &n.IsRead, &readAt, &n.CreatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if readAt.Valid {
+		n.ReadAt = &readAt.Time
+	}
+	return &n, nil
 }
 
 func (r *notificationRepositoryImpl) List(filter model.NotificationFilter) ([]*model.NotificationDB, int, error) {
