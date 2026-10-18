@@ -70,3 +70,13 @@ func DefaultNotificationPreferences(userID string) *NotificationPreferencesDB {
 	}
 }
 
+// NotificationFilter specifies query parameters for filtering notifications.
+type NotificationFilter struct {
+	UserID     string           `json:"userId"`
+	Type       NotificationType `json:"type,omitempty"`
+	UnreadOnly bool             `json:"unreadOnly,omitempty"`
+	Offset     int              `json:"offset,omitempty"`
+	Limit      int              `json:"limit,omitempty"`
+}
+
+
