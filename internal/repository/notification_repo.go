@@ -206,9 +206,38 @@ func (r *notificationRepositoryImpl) CountUnread(userID string) (int, error) {
 }
 
 func (r *notificationRepositoryImpl) GetPreferences(userID string) (*model.NotificationPreferencesDB, error) {
-	return nil, nil
+	query := `
+	SELECT user_id, email_enabled, in_app_enabled, notify_task_assigned, notify_task_due_soon, notify_comment, notify_invite, updated_at
+	FROM notification_preferences
+	WHERE user_id = ?`
+
+	var p model.NotificationPreferencesDB
+	err := r.db.QueryRow(query, userID).Scan(
+		&p.UserID, &p.EmailEnabled, &p.InAppEnabled, &p.NotifyTaskAssigned, &p.NotifyTaskDueSoon, &p.NotifyComment, &p.NotifyInvite, &p.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &p, nil
 }
 
 func (r *notificationRepositoryImpl) UpsertPreferences(p *model.NotificationPreferencesDB) error {
-	return nil
+	p.UpdatedAt = time.Now().UTC()
+	query := `
+	INSERT INTO notification_preferences (user_id, email_enabled, in_app_enabled, notify_task_assigned, notify_task_due_soon, notify_comment, notify_invite, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(user_id) DO UPDATE SET
+		email_enabled = excluded.email_enabled,
+		in_app_enabled = excluded.in_app_enabled,
+		notify_task_assigned = excluded.notify_task_assigned,
+		notify_task_due_soon = excluded.notify_task_due_soon,
+		notify_comment = excluded.notify_comment,
+		notify_invite = excluded.notify_invite,
+		updated_at = excluded.updated_at`
+
+	_, err := r.db.Exec(query, p.UserID, p.EmailEnabled, p.InAppEnabled, p.NotifyTaskAssigned, p.NotifyTaskDueSoon, p.NotifyComment, p.NotifyInvite, p.UpdatedAt)
+	return err
 }
