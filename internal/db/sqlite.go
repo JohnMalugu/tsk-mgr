@@ -309,6 +309,7 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_workspace_members_ws ON workspace_members(workspace_id, role);
 	CREATE INDEX IF NOT EXISTS idx_workspace_invites_token ON workspace_invites(token);
 	CREATE INDEX IF NOT EXISTS idx_workspace_invites_ws ON workspace_invites(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read);
 	`
 
 	_, err = db.Exec(indexQuery)
