@@ -256,6 +256,28 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	notificationsQuery := `
+	CREATE TABLE IF NOT EXISTS notifications (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id TEXT NOT NULL,
+		actor_id TEXT,
+		type TEXT NOT NULL,
+		title TEXT NOT NULL,
+		message TEXT NOT NULL,
+		entity_type TEXT,
+		entity_id TEXT,
+		is_read BOOLEAN NOT NULL DEFAULT 0,
+		read_at DATETIME,
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+		FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL
+	);`
+
+	_, err = db.Exec(notificationsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
