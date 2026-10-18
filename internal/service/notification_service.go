@@ -99,7 +99,40 @@ func (s *notificationServiceImpl) Send(req *model.CreateNotificationRequest) (*m
 }
 
 func (s *notificationServiceImpl) ListNotifications(filter model.NotificationFilter) (*model.NotificationSummaryResponse, error) {
-	return nil, nil
+	if strings.TrimSpace(filter.UserID) == "" {
+		return nil, ErrNotificationUserIDEmpty
+	}
+
+	if filter.Limit <= 0 {
+		filter.Limit = 20
+	}
+	if filter.Limit > 100 {
+		filter.Limit = 100
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	items, total, err := s.repo.List(filter)
+	if err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []*model.NotificationDB{}
+	}
+
+	unreadCount, err := s.repo.CountUnread(filter.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.NotificationSummaryResponse{
+		Notifications: items,
+		Total:         total,
+		UnreadCount:   unreadCount,
+		Offset:        filter.Offset,
+		Limit:         filter.Limit,
+	}, nil
 }
 
 func (s *notificationServiceImpl) MarkAsRead(id int, userID string) error {
