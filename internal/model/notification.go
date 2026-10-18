@@ -93,5 +93,26 @@ type UnreadCountResponse struct {
 	UnreadCount int `json:"unreadCount"`
 }
 
+// CreateNotificationRequest captures input payload to trigger a notification.
+type CreateNotificationRequest struct {
+	UserID     string           `json:"userId"`
+	Type       NotificationType `json:"type"`
+	Title      string           `json:"title"`
+	Message    string           `json:"message"`
+	EntityType string           `json:"entityType,omitempty"`
+	EntityID   string           `json:"entityId,omitempty"`
+}
+
+// UpdatePreferencesRequest holds partial or full updates to user notification preferences.
+type UpdatePreferencesRequest struct {
+	EmailEnabled       *bool `json:"emailEnabled,omitempty"`
+	InAppEnabled       *bool `json:"inAppEnabled,omitempty"`
+	NotifyTaskAssigned *bool `json:"notifyTaskAssigned,omitempty"`
+	NotifyTaskDueSoon  *bool `json:"notifyTaskDueSoon,omitempty"`
+	NotifyComment      *bool `json:"notifyComment,omitempty"`
+	NotifyInvite       *bool `json:"notifyInvite,omitempty"`
+}
+
+
 
 
