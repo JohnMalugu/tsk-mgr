@@ -278,6 +278,24 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	notificationPreferencesQuery := `
+	CREATE TABLE IF NOT EXISTS notification_preferences (
+		user_id TEXT PRIMARY KEY,
+		email_enabled BOOLEAN NOT NULL DEFAULT 1,
+		in_app_enabled BOOLEAN NOT NULL DEFAULT 1,
+		notify_task_assigned BOOLEAN NOT NULL DEFAULT 1,
+		notify_task_due_soon BOOLEAN NOT NULL DEFAULT 1,
+		notify_comment BOOLEAN NOT NULL DEFAULT 1,
+		notify_invite BOOLEAN NOT NULL DEFAULT 1,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(notificationPreferencesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
