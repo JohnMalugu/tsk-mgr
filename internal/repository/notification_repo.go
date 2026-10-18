@@ -183,11 +183,26 @@ func (r *notificationRepositoryImpl) MarkAllAsRead(userID string) error {
 }
 
 func (r *notificationRepositoryImpl) Delete(id int, userID string) error {
+	query := `DELETE FROM notifications WHERE id = ? AND user_id = ?`
+	res, err := r.db.Exec(query, id, userID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
 	return nil
 }
 
 func (r *notificationRepositoryImpl) CountUnread(userID string) (int, error) {
-	return 0, nil
+	query := `SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0`
+	var count int
+	err := r.db.QueryRow(query, userID).Scan(&count)
+	return count, err
 }
 
 func (r *notificationRepositoryImpl) GetPreferences(userID string) (*model.NotificationPreferencesDB, error) {
