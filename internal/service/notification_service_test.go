@@ -228,4 +228,3 @@ func TestNotificationService_MarkAllAsReadAndListFilter(t *testing.T) {
 		t.Fatalf("mismatched fetched preferences: %+v", fetchedPref)
 	}
 }
-

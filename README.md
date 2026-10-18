@@ -79,6 +79,13 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `PUT|DELETE /v2/workspaces/{id}/members/{userId}` to update member role or remove members (with owner protection and self-leave support)
 - `POST /v2/workspaces/{id}/invites` to generate secure 7-day invitation tokens for team onboarding
 - `POST /v2/invites/accept` to accept an invitation token and join the workspace with the designated role
+- `GET /v2/notifications?offset={n}&limit={n}&type={type}&unreadOnly={true|false}` to list user notifications with counters and pagination
+- `POST /v2/notifications` to trigger an in-app alert (enforces user topic and channel preferences)
+- `GET /v2/notifications/unread-count` for real-time badge counters
+- `POST /v2/notifications/read-all` to mark all unread notifications as read
+- `POST|PATCH /v2/notifications/{id}/read` to mark an individual notification as read
+- `DELETE /v2/notifications/{id}` to remove a notification record
+- `GET|PUT|PATCH /v2/notifications/preferences` to retrieve or customize per-topic and channel notification preferences
 
 ## Current limitations
 

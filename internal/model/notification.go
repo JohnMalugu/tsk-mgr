@@ -112,7 +112,3 @@ type UpdatePreferencesRequest struct {
 	NotifyComment      *bool `json:"notifyComment,omitempty"`
 	NotifyInvite       *bool `json:"notifyInvite,omitempty"`
 }
-
-
-
-

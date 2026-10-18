@@ -220,7 +220,3 @@ func (h *NotificationHandler) HandleUpdatePreferences(w http.ResponseWriter, r *
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(pref)
 }
-
-
-
-
