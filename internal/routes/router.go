@@ -559,6 +559,79 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// V2 Webhooks & Deliveries
+	if r.URL.Path == "/v2/webhooks" {
+		if handler.GlobalWebhookHandler == nil {
+			http.Error(w, "Webhook handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		if r.Method == http.MethodGet {
+			handler.GlobalWebhookHandler.HandleListSubscriptions(w, r)
+			return
+		}
+		if r.Method == http.MethodPost {
+			handler.GlobalWebhookHandler.HandleCreateSubscription(w, r)
+			return
+		}
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/v2/webhooks/deliveries/") && strings.HasSuffix(r.URL.Path, "/retry") && r.Method == http.MethodPost {
+		if handler.GlobalWebhookHandler == nil {
+			http.Error(w, "Webhook handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/webhooks/deliveries/")
+		deliveryIDStr := strings.TrimSuffix(trimmed, "/retry")
+		if deliveryID, err := strconv.ParseInt(deliveryIDStr, 10, 64); err == nil {
+			handler.GlobalWebhookHandler.HandleRetryDelivery(w, r, deliveryID)
+			return
+		}
+		http.Error(w, "Invalid delivery ID", http.StatusBadRequest)
+		return
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/v2/webhooks/") {
+		if handler.GlobalWebhookHandler == nil {
+			http.Error(w, "Webhook handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/webhooks/")
+		parts := strings.Split(trimmed, "/")
+		id, err := strconv.ParseInt(parts[0], 10, 64)
+		if err != nil {
+			http.Error(w, "Invalid webhook ID", http.StatusBadRequest)
+			return
+		}
+
+		if len(parts) == 1 {
+			if r.Method == http.MethodGet {
+				handler.GlobalWebhookHandler.HandleGetSubscription(w, r, id)
+				return
+			}
+			if r.Method == http.MethodPut || r.Method == http.MethodPatch {
+				handler.GlobalWebhookHandler.HandleUpdateSubscription(w, r, id)
+				return
+			}
+			if r.Method == http.MethodDelete {
+				handler.GlobalWebhookHandler.HandleDeleteSubscription(w, r, id)
+				return
+			}
+		} else if len(parts) == 2 {
+			if parts[1] == "ping" && r.Method == http.MethodPost {
+				handler.GlobalWebhookHandler.HandlePingSubscription(w, r, id)
+				return
+			}
+			if parts[1] == "deliveries" && r.Method == http.MethodGet {
+				handler.GlobalWebhookHandler.HandleListDeliveries(w, r, id)
+				return
+			}
+			if parts[1] == "stats" && r.Method == http.MethodGet {
+				handler.GlobalWebhookHandler.HandleGetStats(w, r, id)
+				return
+			}
+		}
+	}
+
 	if r.URL.Path == "/tasks/summary" {
 		handler.HandleTaskSummary(w, r)
 		return
