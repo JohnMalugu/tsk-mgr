@@ -317,6 +317,28 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	webhookDeliveriesQuery := `
+	CREATE TABLE IF NOT EXISTS webhook_deliveries (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		subscription_id INTEGER NOT NULL,
+		event_type TEXT NOT NULL,
+		payload_json TEXT NOT NULL,
+		status_code INTEGER NOT NULL DEFAULT 0,
+		response_headers TEXT NOT NULL DEFAULT '',
+		response_body TEXT NOT NULL DEFAULT '',
+		duration_ms INTEGER NOT NULL DEFAULT 0,
+		attempt_number INTEGER NOT NULL DEFAULT 1,
+		status TEXT NOT NULL,
+		error_message TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (subscription_id) REFERENCES webhook_subscriptions(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(webhookDeliveriesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
