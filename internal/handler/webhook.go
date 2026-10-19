@@ -157,4 +157,49 @@ func (h *WebhookHandler) HandleUpdateSubscription(w http.ResponseWriter, r *http
 	_ = json.NewEncoder(w).Encode(sub)
 }
 
+// HandleDeleteSubscription removes an existing subscription
+func (h *WebhookHandler) HandleDeleteSubscription(w http.ResponseWriter, r *http.Request, id int64) {
+	userID := getWebhookUser(r)
+
+	if err := h.svc.DeleteSubscription(id, userID); err != nil {
+		if errors.Is(err, service.ErrWebhookNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, service.ErrUnauthorizedWebhookAccess) {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Webhook subscription deleted successfully"})
+}
+
+// HandlePingSubscription triggers a live test ping delivery to the subscription's target URL
+func (h *WebhookHandler) HandlePingSubscription(w http.ResponseWriter, r *http.Request, id int64) {
+	userID := getWebhookUser(r)
+
+	delivery, err := h.svc.PingWebhook(id, userID)
+	if err != nil {
+		if errors.Is(err, service.ErrWebhookNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, service.ErrUnauthorizedWebhookAccess) {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(delivery)
+}
+
+
 
