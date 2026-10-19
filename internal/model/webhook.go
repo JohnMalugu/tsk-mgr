@@ -120,4 +120,21 @@ type DeliveryFilter struct {
 	Limit          int    `json:"limit"`
 }
 
+// WebhookSummary represents a paginated list of webhook subscriptions
+type WebhookSummary struct {
+	Subscriptions []WebhookSubscriptionDB `json:"subscriptions"`
+	Total         int                     `json:"total"`
+	Offset        int                     `json:"offset"`
+	Limit         int                     `json:"limit"`
+}
+
+// DeliverySummary represents a paginated list of webhook delivery records
+type DeliverySummary struct {
+	Deliveries []WebhookDeliveryDB `json:"deliveries"`
+	Total      int                 `json:"total"`
+	Offset     int                 `json:"offset"`
+	Limit      int                 `json:"limit"`
+}
+
+
 
