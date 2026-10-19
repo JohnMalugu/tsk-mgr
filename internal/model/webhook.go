@@ -101,3 +101,23 @@ type WebhookEvent struct {
 	Data         interface{} `json:"data"`
 }
 
+// WebhookFilter defines criteria for querying registered webhooks
+type WebhookFilter struct {
+	WorkspaceID int64  `json:"workspace_id"`
+	UserID      string `json:"user_id"`
+	IsActive    *bool  `json:"is_active"`
+	EventType   string `json:"event_type"`
+	Offset      int    `json:"offset"`
+	Limit       int    `json:"limit"`
+}
+
+// DeliveryFilter defines criteria for querying delivery execution logs
+type DeliveryFilter struct {
+	SubscriptionID int64  `json:"subscription_id"`
+	Status         string `json:"status"`
+	EventType      string `json:"event_type"`
+	Offset         int    `json:"offset"`
+	Limit          int    `json:"limit"`
+}
+
+
