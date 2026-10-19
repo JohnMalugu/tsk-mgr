@@ -88,3 +88,16 @@ type WebhookDeliveryDB struct {
 	ErrorMessage    string    `json:"error_message,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
 }
+
+// WebhookEvent represents the standard JSON envelope delivered to external endpoints
+type WebhookEvent struct {
+	EventID      string      `json:"event_id"`
+	EventType    string      `json:"event_type"`
+	Timestamp    time.Time   `json:"timestamp"`
+	WorkspaceID  int64       `json:"workspace_id"`
+	ActorUserID  string      `json:"actor_user_id,omitempty"`
+	ResourceType string      `json:"resource_type"`
+	ResourceID   string      `json:"resource_id"`
+	Data         interface{} `json:"data"`
+}
+
