@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -86,7 +87,83 @@ func (r *sqlWebhookRepository) GetSubscriptionByID(id int64) (*model.WebhookSubs
 }
 
 func (r *sqlWebhookRepository) ListSubscriptions(filter model.WebhookFilter) ([]model.WebhookSubscriptionDB, int, error) {
-	return nil, 0, nil
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID > 0 {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.UserID != "" {
+		conditions = append(conditions, "user_id = ?")
+		args = append(args, filter.UserID)
+	}
+	if filter.IsActive != nil {
+		conditions = append(conditions, "is_active = ?")
+		args = append(args, *filter.IsActive)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM webhook_subscriptions %s", whereClause)
+	var total int
+	err := r.db.QueryRow(countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count subscriptions: %w", err)
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, workspace_id, user_id, target_url, secret_token, event_types, is_active, description, created_at, updated_at
+	FROM webhook_subscriptions
+	%s
+	ORDER BY id DESC
+	LIMIT ? OFFSET ?`, whereClause)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.Query(query, queryArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to list subscriptions: %w", err)
+	}
+	defer rows.Close()
+
+	var subs []model.WebhookSubscriptionDB
+	for rows.Next() {
+		var sub model.WebhookSubscriptionDB
+		var eventsRaw string
+		if err := rows.Scan(&sub.ID, &sub.WorkspaceID, &sub.UserID, &sub.TargetURL, &sub.SecretToken, &eventsRaw, &sub.IsActive, &sub.Description, &sub.CreatedAt, &sub.UpdatedAt); err != nil {
+			return nil, 0, err
+		}
+		if eventsRaw != "" {
+			_ = json.Unmarshal([]byte(eventsRaw), &sub.EventTypes)
+		}
+		if filter.EventType != "" {
+			matched := false
+			for _, et := range sub.EventTypes {
+				if model.MatchesWebhookEventType(et, filter.EventType) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				continue
+			}
+		}
+		subs = append(subs, sub)
+	}
+
+	return subs, total, nil
 }
 
 func (r *sqlWebhookRepository) UpdateSubscription(sub *model.WebhookSubscriptionDB) error {
