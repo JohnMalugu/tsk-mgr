@@ -3,6 +3,8 @@ package service
 import (
 	"errors"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -54,7 +56,67 @@ func NewWebhookService(repo repository.WebhookRepository, client HTTPClient) Web
 }
 
 func (s *webhookService) CreateSubscription(userID string, req *model.CreateWebhookRequest) (*model.WebhookSubscriptionDB, error) {
-	return nil, nil
+	if req == nil {
+		return nil, errors.New("request cannot be nil")
+	}
+
+	targetURL := strings.TrimSpace(req.TargetURL)
+	if !strings.HasPrefix(targetURL, "http://") && !strings.HasPrefix(targetURL, "https://") {
+		return nil, ErrInvalidTargetURL
+	}
+
+	if len(req.EventTypes) == 0 {
+		return nil, ErrNoEventsSpecified
+	}
+
+	var validEvents []string
+	for _, et := range req.EventTypes {
+		trimmed := strings.TrimSpace(et)
+		if trimmed == "" {
+			continue
+		}
+		if !model.IsValidWebhookEventType(trimmed) {
+			return nil, ErrInvalidEventType
+		}
+		validEvents = append(validEvents, trimmed)
+	}
+
+	if len(validEvents) == 0 {
+		return nil, ErrNoEventsSpecified
+	}
+
+	secret := strings.TrimSpace(req.SecretToken)
+	if secret == "" {
+		generated, err := GenerateRandomSecret(DefaultSecretByteLength)
+		if err != nil {
+			return nil, err
+		}
+		secret = generated
+	}
+
+	isActive := true
+	if req.IsActive != nil {
+		isActive = *req.IsActive
+	}
+
+	sub := &model.WebhookSubscriptionDB{
+		WorkspaceID: req.WorkspaceID,
+		UserID:      userID,
+		TargetURL:   targetURL,
+		SecretToken: secret,
+		EventTypes:  validEvents,
+		IsActive:    isActive,
+		Description: strings.TrimSpace(req.Description),
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	id, err := s.repo.CreateSubscription(sub)
+	if err != nil {
+		return nil, err
+	}
+	sub.ID = id
+	return sub, nil
 }
 
 func (s *webhookService) GetSubscription(id int64) (*model.WebhookSubscriptionDB, error) {
