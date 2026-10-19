@@ -201,5 +201,75 @@ func (h *WebhookHandler) HandlePingSubscription(w http.ResponseWriter, r *http.R
 	_ = json.NewEncoder(w).Encode(delivery)
 }
 
+// HandleListDeliveries returns delivery records for a webhook subscription
+func (h *WebhookHandler) HandleListDeliveries(w http.ResponseWriter, r *http.Request, subscriptionID int64) {
+	filter := model.DeliveryFilter{
+		SubscriptionID: subscriptionID,
+	}
+
+	if status := r.URL.Query().Get("status"); status != "" {
+		filter.Status = status
+	}
+	if et := r.URL.Query().Get("event_type"); et != "" {
+		filter.EventType = et
+	}
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		if off, err := strconv.Atoi(offsetStr); err == nil {
+			filter.Offset = off
+		}
+	}
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if lim, err := strconv.Atoi(limitStr); err == nil {
+			filter.Limit = lim
+		}
+	}
+
+	summary, err := h.svc.ListDeliveries(filter)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(summary)
+}
+
+// HandleRetryDelivery re-attempts a previously recorded delivery
+func (h *WebhookHandler) HandleRetryDelivery(w http.ResponseWriter, r *http.Request, deliveryID int64) {
+	delivery, err := h.svc.RetryDelivery(deliveryID)
+	if err != nil {
+		if errors.Is(err, service.ErrDeliveryNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, service.ErrWebhookNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(delivery)
+}
+
+// HandleGetStats returns delivery analytics and metrics for a subscription
+func (h *WebhookHandler) HandleGetStats(w http.ResponseWriter, r *http.Request, subscriptionID int64) {
+	stats, err := h.svc.GetWebhookStats(subscriptionID)
+	if err != nil {
+		if errors.Is(err, service.ErrWebhookNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(stats)
+}
+
+
 
 
