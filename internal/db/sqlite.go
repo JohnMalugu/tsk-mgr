@@ -354,6 +354,8 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_workspace_invites_ws ON workspace_invites(workspace_id, status);
 	CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read);
 	CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_webhook_subs_workspace ON webhook_subscriptions(workspace_id, is_active);
+	CREATE INDEX IF NOT EXISTS idx_webhook_subs_user ON webhook_subscriptions(user_id);
 	`
 
 	_, err = db.Exec(indexQuery)
