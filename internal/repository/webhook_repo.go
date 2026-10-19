@@ -281,7 +281,80 @@ func (r *sqlWebhookRepository) GetDeliveryByID(id int64) (*model.WebhookDelivery
 }
 
 func (r *sqlWebhookRepository) ListDeliveries(filter model.DeliveryFilter) ([]model.WebhookDeliveryDB, int, error) {
-	return nil, 0, nil
+	var conditions []string
+	var args []interface{}
+
+	if filter.SubscriptionID > 0 {
+		conditions = append(conditions, "subscription_id = ?")
+		args = append(args, filter.SubscriptionID)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+	if filter.EventType != "" {
+		conditions = append(conditions, "event_type = ?")
+		args = append(args, filter.EventType)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM webhook_deliveries %s", whereClause)
+	var total int
+	err := r.db.QueryRow(countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count webhook deliveries: %w", err)
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, subscription_id, event_type, payload_json, status_code, response_headers, response_body, duration_ms, attempt_number, status, error_message, created_at
+	FROM webhook_deliveries
+	%s
+	ORDER BY id DESC
+	LIMIT ? OFFSET ?`, whereClause)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.Query(query, queryArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to list webhook deliveries: %w", err)
+	}
+	defer rows.Close()
+
+	var list []model.WebhookDeliveryDB
+	for rows.Next() {
+		var d model.WebhookDeliveryDB
+		if err := rows.Scan(
+			&d.ID,
+			&d.SubscriptionID,
+			&d.EventType,
+			&d.PayloadJSON,
+			&d.StatusCode,
+			&d.ResponseHeaders,
+			&d.ResponseBody,
+			&d.DurationMs,
+			&d.AttemptNumber,
+			&d.Status,
+			&d.ErrorMessage,
+			&d.CreatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		list = append(list, d)
+	}
+
+	return list, total, nil
 }
 
 func (r *sqlWebhookRepository) GetWebhookStats(subscriptionID int64) (*model.WebhookStats, error) {
