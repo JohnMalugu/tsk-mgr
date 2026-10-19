@@ -358,6 +358,40 @@ func (r *sqlWebhookRepository) ListDeliveries(filter model.DeliveryFilter) ([]mo
 }
 
 func (r *sqlWebhookRepository) GetWebhookStats(subscriptionID int64) (*model.WebhookStats, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		COUNT(*) as total,
+		COALESCE(SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END), 0) as successes,
+		COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as failures,
+		COALESCE(AVG(duration_ms), 0) as avg_duration,
+		MAX(created_at) as last_delivery
+	FROM webhook_deliveries
+	WHERE subscription_id = ?`
+
+	row := r.db.QueryRow(query, subscriptionID)
+	var stats model.WebhookStats
+	stats.SubscriptionID = subscriptionID
+
+	var lastDelivery sql.NullTime
+	err := row.Scan(
+		&stats.TotalDeliveries,
+		&stats.SuccessfulDeliveries,
+		&stats.FailedDeliveries,
+		&stats.AverageDurationMs,
+		&lastDelivery,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to aggregate webhook stats: %w", err)
+	}
+
+	if lastDelivery.Valid {
+		stats.LastDeliveryAt = &lastDelivery.Time
+	}
+
+	if stats.TotalDeliveries > 0 {
+		stats.SuccessRate = float64(stats.SuccessfulDeliveries) / float64(stats.TotalDeliveries) * 100.0
+	}
+
+	return &stats, nil
 }
 
