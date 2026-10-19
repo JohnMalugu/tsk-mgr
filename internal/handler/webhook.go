@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
@@ -81,4 +82,79 @@ func (h *WebhookHandler) HandleGetSubscription(w http.ResponseWriter, r *http.Re
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(sub)
 }
+
+// HandleListSubscriptions lists webhook subscriptions matching optional query parameters
+func (h *WebhookHandler) HandleListSubscriptions(w http.ResponseWriter, r *http.Request) {
+	filter := model.WebhookFilter{}
+
+	if wsStr := r.URL.Query().Get("workspace_id"); wsStr != "" {
+		if wsID, err := strconv.ParseInt(wsStr, 10, 64); err == nil {
+			filter.WorkspaceID = wsID
+		}
+	}
+	if uid := r.URL.Query().Get("user_id"); uid != "" {
+		filter.UserID = uid
+	}
+	if actStr := r.URL.Query().Get("is_active"); actStr != "" {
+		act := actStr == "true" || actStr == "1"
+		filter.IsActive = &act
+	}
+	if et := r.URL.Query().Get("event_type"); et != "" {
+		filter.EventType = et
+	}
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		if off, err := strconv.Atoi(offsetStr); err == nil {
+			filter.Offset = off
+		}
+	}
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if lim, err := strconv.Atoi(limitStr); err == nil {
+			filter.Limit = lim
+		}
+	}
+
+	summary, err := h.svc.ListSubscriptions(filter)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(summary)
+}
+
+// HandleUpdateSubscription modifies an existing subscription
+func (h *WebhookHandler) HandleUpdateSubscription(w http.ResponseWriter, r *http.Request, id int64) {
+	userID := getWebhookUser(r)
+
+	var req model.UpdateWebhookRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON payload: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	sub, err := h.svc.UpdateSubscription(id, userID, &req)
+	if err != nil {
+		if errors.Is(err, service.ErrWebhookNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, service.ErrUnauthorizedWebhookAccess) {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		if errors.Is(err, service.ErrInvalidTargetURL) ||
+			errors.Is(err, service.ErrNoEventsSpecified) ||
+			errors.Is(err, service.ErrInvalidEventType) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(sub)
+}
+
 
