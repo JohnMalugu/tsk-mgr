@@ -453,5 +453,13 @@ func (s *webhookService) RetryDelivery(deliveryID int64) (*model.WebhookDelivery
 }
 
 func (s *webhookService) GetWebhookStats(subscriptionID int64) (*model.WebhookStats, error) {
-	return nil, nil
+	sub, err := s.repo.GetSubscriptionByID(subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	if sub == nil {
+		return nil, ErrWebhookNotFound
+	}
+
+	return s.repo.GetWebhookStats(subscriptionID)
 }
