@@ -2,6 +2,7 @@ package model
 
 import (
 	"strings"
+	"time"
 )
 
 // WebhookEventType represents the domain event that triggers a webhook
@@ -50,3 +51,18 @@ func MatchesWebhookEventType(subscriptionPattern, actualEvent string) bool {
 	}
 	return strings.EqualFold(strings.TrimSpace(subscriptionPattern), strings.TrimSpace(actualEvent))
 }
+
+// WebhookSubscriptionDB represents a webhook subscriber registered in a workspace
+type WebhookSubscriptionDB struct {
+	ID          int64     `json:"id"`
+	WorkspaceID int64     `json:"workspace_id"`
+	UserID      string    `json:"user_id"`
+	TargetURL   string    `json:"target_url"`
+	SecretToken string    `json:"secret_token,omitempty"`
+	EventTypes  []string  `json:"event_types"`
+	IsActive    bool      `json:"is_active"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
