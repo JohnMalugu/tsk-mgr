@@ -71,6 +71,10 @@ func main() {
 	notificationSvc := service.NewNotificationService(notificationRepo)
 	handler.InitNotificationHandler(notificationSvc)
 
+	webhookRepo := repository.NewWebhookRepository(sqliteDB)
+	webhookSvc := service.NewWebhookService(webhookRepo, nil)
+	handler.InitWebhookHandler(webhookSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
@@ -135,6 +139,12 @@ func main() {
 	fmt.Printf("   GET    http://localhost:8080/v2/notifications\n")
 	fmt.Printf("   GET    http://localhost:8080/v2/notifications/unread-count\n")
 	fmt.Printf("   GET    http://localhost:8080/v2/notifications/preferences\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/webhooks\n")
+	fmt.Printf("   POST   http://localhost:8080/v2/webhooks\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/webhooks/{id}\n")
+	fmt.Printf("   POST   http://localhost:8080/v2/webhooks/{id}/ping\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/webhooks/{id}/deliveries\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/webhooks/{id}/stats\n")
 	fmt.Printf("\n")
 
 	server := &http.Server{
