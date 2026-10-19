@@ -147,6 +147,26 @@ type WebhookStats struct {
 	LastDeliveryAt       *time.Time `json:"last_delivery_at,omitempty"`
 }
 
+// CreateWebhookRequest represents the payload to register a new webhook
+type CreateWebhookRequest struct {
+	WorkspaceID int64    `json:"workspace_id"`
+	TargetURL   string   `json:"target_url"`
+	SecretToken string   `json:"secret_token,omitempty"`
+	EventTypes  []string `json:"event_types"`
+	Description string   `json:"description,omitempty"`
+	IsActive    *bool    `json:"is_active,omitempty"`
+}
+
+// UpdateWebhookRequest represents updates to an existing webhook subscription
+type UpdateWebhookRequest struct {
+	TargetURL   *string  `json:"target_url,omitempty"`
+	SecretToken *string  `json:"secret_token,omitempty"`
+	EventTypes  []string `json:"event_types,omitempty"`
+	Description *string  `json:"description,omitempty"`
+	IsActive    *bool    `json:"is_active,omitempty"`
+}
+
+
 
 
 
