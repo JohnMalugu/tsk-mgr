@@ -396,15 +396,60 @@ func (s *webhookService) PingWebhook(subscriptionID int64, userID string) (*mode
 }
 
 func (s *webhookService) ListDeliveries(filter model.DeliveryFilter) (*model.DeliverySummary, error) {
-	return nil, nil
+	if filter.Limit <= 0 {
+		filter.Limit = 20
+	}
+	if filter.Limit > 100 {
+		filter.Limit = 100
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	deliveries, total, err := s.repo.ListDeliveries(filter)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.DeliverySummary{
+		Deliveries: deliveries,
+		Total:      total,
+		Offset:     filter.Offset,
+		Limit:      filter.Limit,
+	}, nil
 }
 
 func (s *webhookService) GetDelivery(id int64) (*model.WebhookDeliveryDB, error) {
-	return nil, nil
+	delivery, err := s.repo.GetDeliveryByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if delivery == nil {
+		return nil, ErrDeliveryNotFound
+	}
+	return delivery, nil
 }
 
 func (s *webhookService) RetryDelivery(deliveryID int64) (*model.WebhookDeliveryDB, error) {
-	return nil, nil
+	prevDelivery, err := s.repo.GetDeliveryByID(deliveryID)
+	if err != nil {
+		return nil, err
+	}
+	if prevDelivery == nil {
+		return nil, ErrDeliveryNotFound
+	}
+
+	sub, err := s.repo.GetSubscriptionByID(prevDelivery.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	if sub == nil {
+		return nil, ErrWebhookNotFound
+	}
+
+	retryAttempt := prevDelivery.AttemptNumber + 1
+	delivery := s.executeDelivery(sub, prevDelivery.EventType, []byte(prevDelivery.PayloadJSON), retryAttempt)
+	return delivery, nil
 }
 
 func (s *webhookService) GetWebhookStats(subscriptionID int64) (*model.WebhookStats, error) {
