@@ -210,11 +210,74 @@ func (r *sqlWebhookRepository) DeleteSubscription(id int64) error {
 }
 
 func (r *sqlWebhookRepository) CreateDelivery(delivery *model.WebhookDeliveryDB) (int64, error) {
-	return 0, nil
+	query := `
+	INSERT INTO webhook_deliveries (
+		subscription_id, event_type, payload_json, status_code, response_headers, response_body, duration_ms, attempt_number, status, error_message, created_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	now := time.Now()
+	if delivery.CreatedAt.IsZero() {
+		delivery.CreatedAt = now
+	}
+	if delivery.AttemptNumber <= 0 {
+		delivery.AttemptNumber = 1
+	}
+
+	res, err := r.db.Exec(
+		query,
+		delivery.SubscriptionID,
+		delivery.EventType,
+		delivery.PayloadJSON,
+		delivery.StatusCode,
+		delivery.ResponseHeaders,
+		delivery.ResponseBody,
+		delivery.DurationMs,
+		delivery.AttemptNumber,
+		delivery.Status,
+		delivery.ErrorMessage,
+		delivery.CreatedAt,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to insert webhook delivery: %w", err)
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	delivery.ID = id
+	return id, nil
 }
 
 func (r *sqlWebhookRepository) GetDeliveryByID(id int64) (*model.WebhookDeliveryDB, error) {
-	return nil, nil
+	query := `
+	SELECT id, subscription_id, event_type, payload_json, status_code, response_headers, response_body, duration_ms, attempt_number, status, error_message, created_at
+	FROM webhook_deliveries
+	WHERE id = ?`
+
+	row := r.db.QueryRow(query, id)
+	var d model.WebhookDeliveryDB
+	err := row.Scan(
+		&d.ID,
+		&d.SubscriptionID,
+		&d.EventType,
+		&d.PayloadJSON,
+		&d.StatusCode,
+		&d.ResponseHeaders,
+		&d.ResponseBody,
+		&d.DurationMs,
+		&d.AttemptNumber,
+		&d.Status,
+		&d.ErrorMessage,
+		&d.CreatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to query webhook delivery: %w", err)
+	}
+	return &d, nil
 }
 
 func (r *sqlWebhookRepository) ListDeliveries(filter model.DeliveryFilter) ([]model.WebhookDeliveryDB, int, error) {
