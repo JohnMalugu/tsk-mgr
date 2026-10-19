@@ -155,11 +155,88 @@ func (s *webhookService) ListSubscriptions(filter model.WebhookFilter) (*model.W
 }
 
 func (s *webhookService) UpdateSubscription(id int64, userID string, req *model.UpdateWebhookRequest) (*model.WebhookSubscriptionDB, error) {
-	return nil, nil
+	if req == nil {
+		return nil, errors.New("request cannot be nil")
+	}
+
+	sub, err := s.repo.GetSubscriptionByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if sub == nil {
+		return nil, ErrWebhookNotFound
+	}
+
+	if userID != "" && sub.UserID != userID {
+		return nil, ErrUnauthorizedWebhookAccess
+	}
+
+	if req.TargetURL != nil {
+		url := strings.TrimSpace(*req.TargetURL)
+		if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+			return nil, ErrInvalidTargetURL
+		}
+		sub.TargetURL = url
+	}
+
+	if req.EventTypes != nil {
+		if len(req.EventTypes) == 0 {
+			return nil, ErrNoEventsSpecified
+		}
+		var validEvents []string
+		for _, et := range req.EventTypes {
+			trimmed := strings.TrimSpace(et)
+			if trimmed == "" {
+				continue
+			}
+			if !model.IsValidWebhookEventType(trimmed) {
+				return nil, ErrInvalidEventType
+			}
+			validEvents = append(validEvents, trimmed)
+		}
+		if len(validEvents) == 0 {
+			return nil, ErrNoEventsSpecified
+		}
+		sub.EventTypes = validEvents
+	}
+
+	if req.SecretToken != nil {
+		secret := strings.TrimSpace(*req.SecretToken)
+		if secret != "" {
+			sub.SecretToken = secret
+		}
+	}
+
+	if req.Description != nil {
+		sub.Description = strings.TrimSpace(*req.Description)
+	}
+
+	if req.IsActive != nil {
+		sub.IsActive = *req.IsActive
+	}
+
+	sub.UpdatedAt = time.Now()
+	if err := s.repo.UpdateSubscription(sub); err != nil {
+		return nil, err
+	}
+
+	return sub, nil
 }
 
 func (s *webhookService) DeleteSubscription(id int64, userID string) error {
-	return nil
+	sub, err := s.repo.GetSubscriptionByID(id)
+	if err != nil {
+		return err
+	}
+	if sub == nil {
+		return ErrWebhookNotFound
+	}
+
+	if userID != "" && sub.UserID != userID {
+		return ErrUnauthorizedWebhookAccess
+	}
+
+	return s.repo.DeleteSubscription(id)
 }
 
 func (s *webhookService) DispatchEvent(event *model.WebhookEvent) ([]model.WebhookDeliveryDB, error) {
