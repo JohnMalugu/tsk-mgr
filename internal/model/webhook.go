@@ -136,5 +136,17 @@ type DeliverySummary struct {
 	Limit      int                 `json:"limit"`
 }
 
+// WebhookStats represents aggregated health and delivery metrics for a webhook subscription
+type WebhookStats struct {
+	SubscriptionID       int64      `json:"subscription_id"`
+	TotalDeliveries      int        `json:"total_deliveries"`
+	SuccessfulDeliveries int        `json:"successful_deliveries"`
+	FailedDeliveries     int        `json:"failed_deliveries"`
+	SuccessRate          float64    `json:"success_rate"`
+	AverageDurationMs    float64    `json:"average_duration_ms"`
+	LastDeliveryAt       *time.Time `json:"last_delivery_at,omitempty"`
+}
+
+
 
 
