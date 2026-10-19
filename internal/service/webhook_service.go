@@ -358,7 +358,41 @@ func (s *webhookService) executeDelivery(sub *model.WebhookSubscriptionDB, event
 }
 
 func (s *webhookService) PingWebhook(subscriptionID int64, userID string) (*model.WebhookDeliveryDB, error) {
-	return nil, nil
+	sub, err := s.repo.GetSubscriptionByID(subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	if sub == nil {
+		return nil, ErrWebhookNotFound
+	}
+
+	if userID != "" && sub.UserID != userID {
+		return nil, ErrUnauthorizedWebhookAccess
+	}
+
+	pingEvent := &model.WebhookEvent{
+		EventID:      fmt.Sprintf("evt_ping_%d_%d", sub.ID, time.Now().UnixNano()),
+		EventType:    string(model.WebhookEventPing),
+		Timestamp:    time.Now(),
+		WorkspaceID:  sub.WorkspaceID,
+		ActorUserID:  userID,
+		ResourceType: "webhook_subscription",
+		ResourceID:   strconv.FormatInt(sub.ID, 10),
+		Data: map[string]interface{}{
+			"message":         "Ping event triggered from tsk-mgr",
+			"subscription_id": sub.ID,
+			"target_url":      sub.TargetURL,
+			"event_types":     sub.EventTypes,
+		},
+	}
+
+	payloadBytes, err := json.Marshal(pingEvent)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal ping event: %w", err)
+	}
+
+	delivery := s.executeDelivery(sub, string(model.WebhookEventPing), payloadBytes, 1)
+	return delivery, nil
 }
 
 func (s *webhookService) ListDeliveries(filter model.DeliveryFilter) (*model.DeliverySummary, error) {
