@@ -16,11 +16,11 @@ import (
 )
 
 var (
-	ErrWebhookNotFound          = errors.New("webhook subscription not found")
-	ErrInvalidTargetURL         = errors.New("invalid webhook target URL, must begin with http:// or https://")
-	ErrNoEventsSpecified        = errors.New("at least one valid event type must be specified")
-	ErrInvalidEventType         = errors.New("one or more specified event types are not supported")
-	ErrDeliveryNotFound         = errors.New("webhook delivery record not found")
+	ErrWebhookNotFound           = errors.New("webhook subscription not found")
+	ErrInvalidTargetURL          = errors.New("invalid webhook target URL, must begin with http:// or https://")
+	ErrNoEventsSpecified         = errors.New("at least one valid event type must be specified")
+	ErrInvalidEventType          = errors.New("one or more specified event types are not supported")
+	ErrDeliveryNotFound          = errors.New("webhook delivery record not found")
 	ErrUnauthorizedWebhookAccess = errors.New("unauthorized access to webhook subscription")
 )
 

@@ -9,15 +9,15 @@ import (
 type WebhookEventType string
 
 const (
-	WebhookEventWildcard             WebhookEventType = "*"
-	WebhookEventTaskCreated          WebhookEventType = "task.created"
-	WebhookEventTaskUpdated          WebhookEventType = "task.updated"
-	WebhookEventTaskCompleted        WebhookEventType = "task.completed"
-	WebhookEventTaskDeleted          WebhookEventType = "task.deleted"
-	WebhookEventCommentCreated       WebhookEventType = "comment.created"
-	WebhookEventNotificationCreated  WebhookEventType = "notification.created"
+	WebhookEventWildcard              WebhookEventType = "*"
+	WebhookEventTaskCreated           WebhookEventType = "task.created"
+	WebhookEventTaskUpdated           WebhookEventType = "task.updated"
+	WebhookEventTaskCompleted         WebhookEventType = "task.completed"
+	WebhookEventTaskDeleted           WebhookEventType = "task.deleted"
+	WebhookEventCommentCreated        WebhookEventType = "comment.created"
+	WebhookEventNotificationCreated   WebhookEventType = "notification.created"
 	WebhookEventWorkspaceMemberJoined WebhookEventType = "workspace.member_joined"
-	WebhookEventPing                 WebhookEventType = "webhook.ping"
+	WebhookEventPing                  WebhookEventType = "webhook.ping"
 )
 
 // SupportedWebhookEventTypes list all valid event types
@@ -165,8 +165,3 @@ type UpdateWebhookRequest struct {
 	Description *string  `json:"description,omitempty"`
 	IsActive    *bool    `json:"is_active,omitempty"`
 }
-
-
-
-
-

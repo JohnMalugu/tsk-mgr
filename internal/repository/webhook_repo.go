@@ -372,20 +372,25 @@ func (r *sqlWebhookRepository) GetWebhookStats(subscriptionID int64) (*model.Web
 	var stats model.WebhookStats
 	stats.SubscriptionID = subscriptionID
 
-	var lastDelivery sql.NullTime
+	var lastDeliveryStr sql.NullString
 	err := row.Scan(
 		&stats.TotalDeliveries,
 		&stats.SuccessfulDeliveries,
 		&stats.FailedDeliveries,
 		&stats.AverageDurationMs,
-		&lastDelivery,
+		&lastDeliveryStr,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to aggregate webhook stats: %w", err)
 	}
 
-	if lastDelivery.Valid {
-		stats.LastDeliveryAt = &lastDelivery.Time
+	if lastDeliveryStr.Valid && lastDeliveryStr.String != "" {
+		for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02 15:04:05.999999999-07:00", "2006-01-02 15:04:05.999999999", "2006-01-02 15:04:05"} {
+			if t, err := time.Parse(layout, lastDeliveryStr.String); err == nil {
+				stats.LastDeliveryAt = &t
+				break
+			}
+		}
 	}
 
 	if stats.TotalDeliveries > 0 {
@@ -394,4 +399,3 @@ func (r *sqlWebhookRepository) GetWebhookStats(subscriptionID int64) (*model.Web
 
 	return &stats, nil
 }
-

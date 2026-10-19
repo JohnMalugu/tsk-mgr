@@ -86,6 +86,14 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `POST|PATCH /v2/notifications/{id}/read` to mark an individual notification as read
 - `DELETE /v2/notifications/{id}` to remove a notification record
 - `GET|PUT|PATCH /v2/notifications/preferences` to retrieve or customize per-topic and channel notification preferences
+- `GET /v2/webhooks?workspace_id={id}&is_active={true|false}&event_type={type}` to list registered webhook endpoints
+- `POST /v2/webhooks` to register a webhook with event filtering and auto-generated HMAC-SHA256 secret token
+- `GET|PUT|PATCH /v2/webhooks/{id}` to fetch subscription details, modify target URL, or toggle active state
+- `DELETE /v2/webhooks/{id}` to remove a webhook subscription
+- `POST /v2/webhooks/{id}/ping` to trigger an immediate live test delivery with `X-Webhook-Signature-256` HMAC validation
+- `GET /v2/webhooks/{id}/deliveries?status={success|failed}` for chronological audit log of HTTP webhook dispatch attempts
+- `GET /v2/webhooks/{id}/stats` for delivery success rate, average response latency, and health analytics
+- `POST /v2/webhooks/deliveries/{deliveryId}/retry` to re-attempt an existing webhook delivery
 
 ## Current limitations
 
