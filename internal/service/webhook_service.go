@@ -1,8 +1,13 @@
 package service
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -240,7 +245,116 @@ func (s *webhookService) DeleteSubscription(id int64, userID string) error {
 }
 
 func (s *webhookService) DispatchEvent(event *model.WebhookEvent) ([]model.WebhookDeliveryDB, error) {
-	return nil, nil
+	if event == nil {
+		return nil, errors.New("event cannot be nil")
+	}
+
+	if event.Timestamp.IsZero() {
+		event.Timestamp = time.Now()
+	}
+	if event.EventID == "" {
+		event.EventID = fmt.Sprintf("evt_%d_%s", event.Timestamp.UnixNano(), event.EventType)
+	}
+
+	tTrue := true
+	filter := model.WebhookFilter{
+		WorkspaceID: event.WorkspaceID,
+		IsActive:    &tTrue,
+		Limit:       1000,
+	}
+
+	subs, _, err := s.repo.ListSubscriptions(filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list subscriptions for dispatch: %w", err)
+	}
+
+	payloadBytes, err := json.Marshal(event)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal webhook payload: %w", err)
+	}
+
+	var deliveries []model.WebhookDeliveryDB
+	for _, sub := range subs {
+		matched := false
+		for _, pattern := range sub.EventTypes {
+			if model.MatchesWebhookEventType(pattern, event.EventType) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			continue
+		}
+
+		delivery := s.executeDelivery(&sub, event.EventType, payloadBytes, 1)
+		deliveries = append(deliveries, *delivery)
+	}
+
+	return deliveries, nil
+}
+
+func (s *webhookService) executeDelivery(sub *model.WebhookSubscriptionDB, eventType string, payloadBytes []byte, attemptNumber int) *model.WebhookDeliveryDB {
+	delivery := &model.WebhookDeliveryDB{
+		SubscriptionID: sub.ID,
+		EventType:      eventType,
+		PayloadJSON:    string(payloadBytes),
+		AttemptNumber:  attemptNumber,
+		CreatedAt:      time.Now(),
+	}
+
+	req, err := http.NewRequest(http.MethodPost, sub.TargetURL, bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		delivery.Status = model.WebhookDeliveryStatusFailed
+		delivery.ErrorMessage = fmt.Sprintf("failed to create request: %v", err)
+		_, _ = s.repo.CreateDelivery(delivery)
+		return delivery
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "tsk-mgr-webhook-dispatcher/1.0")
+	req.Header.Set("X-Webhook-Event", eventType)
+	req.Header.Set("X-Webhook-Delivery", fmt.Sprintf("del_%d_%d", sub.ID, time.Now().UnixNano()))
+	req.Header.Set("X-Webhook-Timestamp", strconv.FormatInt(time.Now().Unix(), 10))
+
+	if sub.SecretToken != "" {
+		signature := ComputeWebhookSignature(payloadBytes, sub.SecretToken)
+		req.Header.Set("X-Webhook-Signature-256", signature)
+	}
+
+	start := time.Now()
+	resp, err := s.httpClient.Do(req)
+	duration := time.Since(start).Milliseconds()
+	delivery.DurationMs = duration
+
+	if err != nil {
+		delivery.Status = model.WebhookDeliveryStatusFailed
+		delivery.ErrorMessage = err.Error()
+		_, _ = s.repo.CreateDelivery(delivery)
+		return delivery
+	}
+	defer resp.Body.Close()
+
+	delivery.StatusCode = resp.StatusCode
+
+	var headerPairs []string
+	for k, v := range resp.Header {
+		headerPairs = append(headerPairs, fmt.Sprintf("%s: %s", k, strings.Join(v, ", ")))
+	}
+	delivery.ResponseHeaders = strings.Join(headerPairs, "\n")
+
+	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+	delivery.ResponseBody = string(bodyBytes)
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		delivery.Status = model.WebhookDeliveryStatusSuccess
+	} else {
+		delivery.Status = model.WebhookDeliveryStatusFailed
+		delivery.ErrorMessage = fmt.Sprintf("HTTP status code: %d", resp.StatusCode)
+	}
+
+	id, _ := s.repo.CreateDelivery(delivery)
+	delivery.ID = id
+	return delivery
 }
 
 func (s *webhookService) PingWebhook(subscriptionID int64, userID string) (*model.WebhookDeliveryDB, error) {
