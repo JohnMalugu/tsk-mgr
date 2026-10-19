@@ -167,10 +167,45 @@ func (r *sqlWebhookRepository) ListSubscriptions(filter model.WebhookFilter) ([]
 }
 
 func (r *sqlWebhookRepository) UpdateSubscription(sub *model.WebhookSubscriptionDB) error {
+	eventsJSON, err := json.Marshal(sub.EventTypes)
+	if err != nil {
+		return fmt.Errorf("failed to marshal event types: %w", err)
+	}
+
+	sub.UpdatedAt = time.Now()
+	query := `
+	UPDATE webhook_subscriptions
+	SET target_url = ?, secret_token = ?, event_types = ?, is_active = ?, description = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query, sub.TargetURL, sub.SecretToken, string(eventsJSON), sub.IsActive, sub.Description, sub.UpdatedAt, sub.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update webhook subscription: %w", err)
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
 	return nil
 }
 
 func (r *sqlWebhookRepository) DeleteSubscription(id int64) error {
+	query := `DELETE FROM webhook_subscriptions WHERE id = ?`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete webhook subscription: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
 	return nil
 }
 
