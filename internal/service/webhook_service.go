@@ -120,11 +120,38 @@ func (s *webhookService) CreateSubscription(userID string, req *model.CreateWebh
 }
 
 func (s *webhookService) GetSubscription(id int64) (*model.WebhookSubscriptionDB, error) {
-	return nil, nil
+	sub, err := s.repo.GetSubscriptionByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if sub == nil {
+		return nil, ErrWebhookNotFound
+	}
+	return sub, nil
 }
 
 func (s *webhookService) ListSubscriptions(filter model.WebhookFilter) (*model.WebhookSummary, error) {
-	return nil, nil
+	if filter.Limit <= 0 {
+		filter.Limit = 20
+	}
+	if filter.Limit > 100 {
+		filter.Limit = 100
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	subs, total, err := s.repo.ListSubscriptions(filter)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.WebhookSummary{
+		Subscriptions: subs,
+		Total:         total,
+		Offset:        filter.Offset,
+		Limit:         filter.Limit,
+	}, nil
 }
 
 func (s *webhookService) UpdateSubscription(id int64, userID string, req *model.UpdateWebhookRequest) (*model.WebhookSubscriptionDB, error) {
