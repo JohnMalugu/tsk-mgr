@@ -2,6 +2,8 @@ package service
 
 import (
 	"errors"
+	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -45,15 +47,68 @@ func NewSprintService(repo repository.SprintRepository) SprintService {
 }
 
 func (s *sprintService) CreateSprint(req *model.CreateSprintRequest) (*model.SprintDB, error) {
-	return nil, nil
+	if req == nil {
+		return nil, errors.New("request cannot be nil")
+	}
+
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, ErrSprintNameRequired
+	}
+
+	sprint := &model.SprintDB{
+		WorkspaceID: req.WorkspaceID,
+		ProjectID:   req.ProjectID,
+		Name:        name,
+		Goal:        strings.TrimSpace(req.Goal),
+		Status:      model.SprintStatusPlanned,
+		StartDate:   req.StartDate,
+		EndDate:     req.EndDate,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	id, err := s.repo.CreateSprint(sprint)
+	if err != nil {
+		return nil, err
+	}
+	sprint.ID = id
+	return sprint, nil
 }
 
 func (s *sprintService) GetSprint(id int64) (*model.SprintDB, error) {
-	return nil, nil
+	sprint, err := s.repo.GetSprintByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if sprint == nil {
+		return nil, ErrSprintNotFound
+	}
+	return sprint, nil
 }
 
 func (s *sprintService) ListSprints(filter model.SprintFilter) (*model.SprintSummary, error) {
-	return nil, nil
+	if filter.Limit <= 0 {
+		filter.Limit = 20
+	}
+	if filter.Limit > 100 {
+		filter.Limit = 100
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	sprints, total, err := s.repo.ListSprints(filter)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.SprintSummary{
+		Sprints: sprints,
+		Total:   total,
+		Offset:  filter.Offset,
+		Limit:   filter.Limit,
+	}, nil
 }
 
 func (s *sprintService) UpdateSprint(id int64, req *model.UpdateSprintRequest) (*model.SprintDB, error) {
