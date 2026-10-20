@@ -75,6 +75,10 @@ func main() {
 	webhookSvc := service.NewWebhookService(webhookRepo, nil)
 	handler.InitWebhookHandler(webhookSvc)
 
+	sprintRepo := repository.NewSprintRepository(sqliteDB)
+	sprintSvc := service.NewSprintService(sprintRepo)
+	handler.InitSprintHandler(sprintSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
@@ -145,6 +149,12 @@ func main() {
 	fmt.Printf("   POST   http://localhost:8080/v2/webhooks/{id}/ping\n")
 	fmt.Printf("   GET    http://localhost:8080/v2/webhooks/{id}/deliveries\n")
 	fmt.Printf("   GET    http://localhost:8080/v2/webhooks/{id}/stats\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/sprints\n")
+	fmt.Printf("   POST   http://localhost:8080/v2/sprints\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/sprints/{id}\n")
+	fmt.Printf("   POST   http://localhost:8080/v2/sprints/{id}/start\n")
+	fmt.Printf("   POST   http://localhost:8080/v2/sprints/{id}/complete\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/sprints/{id}/metrics\n")
 	fmt.Printf("\n")
 
 	server := &http.Server{

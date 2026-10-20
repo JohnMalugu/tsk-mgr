@@ -632,6 +632,92 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Sprints API (/v2/sprints)
+	if r.URL.Path == "/v2/sprints" {
+		if r.Method == http.MethodPost {
+			handler.GlobalSprintHandler.HandleCreate(w, r)
+			return
+		}
+		if r.Method == http.MethodGet {
+			handler.GlobalSprintHandler.HandleList(w, r)
+			return
+		}
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/v2/sprints/") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/sprints/")
+		parts := strings.Split(trimmed, "/")
+
+		if len(parts) == 1 {
+			id, err := strconv.ParseInt(parts[0], 10, 64)
+			if err == nil {
+				switch r.Method {
+				case http.MethodGet:
+					handler.GlobalSprintHandler.HandleGet(w, r, id)
+					return
+				case http.MethodPut, http.MethodPatch:
+					handler.GlobalSprintHandler.HandleUpdate(w, r, id)
+					return
+				case http.MethodDelete:
+					handler.GlobalSprintHandler.HandleDelete(w, r, id)
+					return
+				}
+			}
+		}
+
+		if len(parts) == 2 {
+			id, err := strconv.ParseInt(parts[0], 10, 64)
+			if err == nil {
+				switch parts[1] {
+				case "start":
+					if r.Method == http.MethodPost {
+						handler.GlobalSprintHandler.HandleStart(w, r, id)
+						return
+					}
+				case "complete":
+					if r.Method == http.MethodPost {
+						handler.GlobalSprintHandler.HandleComplete(w, r, id)
+						return
+					}
+				case "close":
+					if r.Method == http.MethodPost {
+						handler.GlobalSprintHandler.HandleClose(w, r, id)
+						return
+					}
+				case "tasks":
+					if r.Method == http.MethodGet {
+						handler.GlobalSprintHandler.HandleGetTasks(w, r, id)
+						return
+					}
+					if r.Method == http.MethodPost {
+						handler.GlobalSprintHandler.HandleAddTask(w, r, id)
+						return
+					}
+				case "metrics":
+					if r.Method == http.MethodGet {
+						handler.GlobalSprintHandler.HandleGetMetrics(w, r, id)
+						return
+					}
+				}
+			}
+		}
+
+		if len(parts) == 3 && parts[1] == "tasks" {
+			sprintID, err1 := strconv.ParseInt(parts[0], 10, 64)
+			taskID, err2 := strconv.ParseInt(parts[2], 10, 64)
+			if err1 == nil && err2 == nil {
+				if r.Method == http.MethodDelete {
+					handler.GlobalSprintHandler.HandleRemoveTask(w, r, sprintID, taskID)
+					return
+				}
+				if r.Method == http.MethodPut || r.Method == http.MethodPatch {
+					handler.GlobalSprintHandler.HandleUpdateStoryPoints(w, r, sprintID, taskID)
+					return
+				}
+			}
+		}
+	}
+
 	if r.URL.Path == "/tasks/summary" {
 		handler.HandleTaskSummary(w, r)
 		return
