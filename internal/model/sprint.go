@@ -93,6 +93,26 @@ type SprintMetrics struct {
 	CompletionPercentage float64      `json:"completion_percentage"`
 }
 
+// CreateSprintRequest represents payload to create a new sprint
+type CreateSprintRequest struct {
+	WorkspaceID int64      `json:"workspace_id"`
+	ProjectID   int64      `json:"project_id"`
+	Name        string     `json:"name"`
+	Goal        string     `json:"goal,omitempty"`
+	StartDate   *time.Time `json:"start_date,omitempty"`
+	EndDate     *time.Time `json:"end_date,omitempty"`
+}
+
+// UpdateSprintRequest represents payload to modify sprint metadata
+type UpdateSprintRequest struct {
+	Name      *string       `json:"name,omitempty"`
+	Goal      *string       `json:"goal,omitempty"`
+	Status    *SprintStatus `json:"status,omitempty"`
+	StartDate *time.Time    `json:"start_date,omitempty"`
+	EndDate   *time.Time    `json:"end_date,omitempty"`
+}
+
+
 
 
 
