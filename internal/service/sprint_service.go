@@ -10,17 +10,17 @@ import (
 )
 
 var (
-	ErrSprintNotFound       = errors.New("sprint not found")
-	ErrSprintNameRequired   = errors.New("sprint name is required")
-	ErrInvalidSprintStatus  = errors.New("invalid sprint status")
-	ErrActiveSprintExists   = errors.New("another sprint is already active in this project")
-	ErrSprintCannotStart    = errors.New("only planned sprints can be started")
-	ErrSprintCannotComplete      = errors.New("only active sprints can be completed")
-	ErrSprintCannotClose         = errors.New("only completed sprints can be closed")
-	ErrSprintClosed              = errors.New("cannot modify a closed sprint")
-	ErrCannotDeleteActiveSprint  = errors.New("cannot delete an active sprint")
-	ErrTaskAlreadyInSprint       = errors.New("task is already assigned to this sprint")
-	ErrInvalidStoryPoints        = errors.New("story points must be non-negative")
+	ErrSprintNotFound           = errors.New("sprint not found")
+	ErrSprintNameRequired       = errors.New("sprint name is required")
+	ErrInvalidSprintStatus      = errors.New("invalid sprint status")
+	ErrActiveSprintExists       = errors.New("another sprint is already active in this project")
+	ErrSprintCannotStart        = errors.New("only planned sprints can be started")
+	ErrSprintCannotComplete     = errors.New("only active sprints can be completed")
+	ErrSprintCannotClose        = errors.New("only completed sprints can be closed")
+	ErrSprintClosed             = errors.New("cannot modify a closed sprint")
+	ErrCannotDeleteActiveSprint = errors.New("cannot delete an active sprint")
+	ErrTaskAlreadyInSprint      = errors.New("task is already assigned to this sprint")
+	ErrInvalidStoryPoints       = errors.New("story points must be non-negative")
 )
 
 // SprintService handles agile sprint lifecycle, task scoping, and velocity metrics
@@ -279,6 +279,16 @@ func (s *sprintService) AddTaskToSprint(sprintID int64, req *model.AddTaskToSpri
 	}
 	if sprint.Status == model.SprintStatusArchived {
 		return ErrSprintClosed
+	}
+
+	tasks, err := s.repo.GetSprintTasks(sprintID)
+	if err != nil {
+		return err
+	}
+	for _, t := range tasks {
+		if t.TaskID == req.TaskID {
+			return ErrTaskAlreadyInSprint
+		}
 	}
 
 	err = s.repo.AddTaskToSprint(sprintID, req.TaskID, req.StoryPoints)

@@ -399,4 +399,3 @@ func (r *sqlSprintRepository) GetSprintMetrics(sprintID int64) (*model.SprintMet
 
 	return metrics, nil
 }
-

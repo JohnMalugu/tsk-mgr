@@ -122,9 +122,3 @@ type AddTaskToSprintRequest struct {
 type UpdateStoryPointsRequest struct {
 	StoryPoints int `json:"story_points"`
 }
-
-
-
-
-
-

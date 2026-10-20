@@ -94,6 +94,15 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET /v2/webhooks/{id}/deliveries?status={success|failed}` for chronological audit log of HTTP webhook dispatch attempts
 - `GET /v2/webhooks/{id}/stats` for delivery success rate, average response latency, and health analytics
 - `POST /v2/webhooks/deliveries/{deliveryId}/retry` to re-attempt an existing webhook delivery
+- `GET|POST /v2/sprints` to query sprints by workspace/project/status or create a new sprint milestone
+- `GET|PUT|DELETE /v2/sprints/{id}` to inspect sprint details, update metadata, or delete non-active sprints
+- `POST /v2/sprints/{id}/start` to start a sprint milestone (enforces single-active sprint per project)
+- `POST /v2/sprints/{id}/complete` to complete an active sprint and record completion timestamp
+- `POST /v2/sprints/{id}/close` to archive a completed sprint
+- `GET|POST /v2/sprints/{id}/tasks` to view sprint task backlog or scope a task into a sprint with Agile story points
+- `PUT|PATCH /v2/sprints/{id}/tasks/{taskId}` to update task story points estimation
+- `DELETE /v2/sprints/{id}/tasks/{taskId}` to remove a task from the sprint backlog
+- `GET /v2/sprints/{id}/metrics` to calculate live burndown metrics, velocity, story points, and status breakdown
 
 ## Current limitations
 
