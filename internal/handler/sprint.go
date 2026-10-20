@@ -200,3 +200,98 @@ func (h *SprintHandler) HandleClose(w http.ResponseWriter, r *http.Request, id i
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(sprint)
 }
+
+func (h *SprintHandler) HandleAddTask(w http.ResponseWriter, r *http.Request, sprintID int64) {
+	var req model.AddTaskToSprintRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	err := h.svc.AddTaskToSprint(sprintID, &req)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrSprintNotFound):
+			http.Error(w, err.Error(), http.StatusNotFound)
+		case errors.Is(err, service.ErrSprintClosed), errors.Is(err, service.ErrInvalidStoryPoints):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		case errors.Is(err, service.ErrTaskAlreadyInSprint):
+			http.Error(w, err.Error(), http.StatusConflict)
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+}
+
+func (h *SprintHandler) HandleRemoveTask(w http.ResponseWriter, r *http.Request, sprintID, taskID int64) {
+	err := h.svc.RemoveTaskFromSprint(sprintID, taskID)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrSprintNotFound):
+			http.Error(w, err.Error(), http.StatusNotFound)
+		case errors.Is(err, service.ErrSprintClosed):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *SprintHandler) HandleGetTasks(w http.ResponseWriter, r *http.Request, sprintID int64) {
+	tasks, err := h.svc.GetSprintTasks(sprintID)
+	if err != nil {
+		if errors.Is(err, service.ErrSprintNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(tasks)
+}
+
+func (h *SprintHandler) HandleUpdateStoryPoints(w http.ResponseWriter, r *http.Request, sprintID, taskID int64) {
+	var req model.UpdateStoryPointsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	err := h.svc.UpdateTaskStoryPoints(sprintID, taskID, req.StoryPoints)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrSprintNotFound):
+			http.Error(w, err.Error(), http.StatusNotFound)
+		case errors.Is(err, service.ErrSprintClosed), errors.Is(err, service.ErrInvalidStoryPoints):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *SprintHandler) HandleGetMetrics(w http.ResponseWriter, r *http.Request, sprintID int64) {
+	metrics, err := h.svc.GetSprintMetrics(sprintID)
+	if err != nil {
+		if errors.Is(err, service.ErrSprintNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(metrics)
+}
