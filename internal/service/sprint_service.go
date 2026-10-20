@@ -263,21 +263,88 @@ func (s *sprintService) CloseSprint(id int64) (*model.SprintDB, error) {
 }
 
 func (s *sprintService) AddTaskToSprint(sprintID int64, req *model.AddTaskToSprintRequest) error {
+	if req == nil {
+		return errors.New("request cannot be nil")
+	}
+	if req.StoryPoints < 0 {
+		return ErrInvalidStoryPoints
+	}
+
+	sprint, err := s.repo.GetSprintByID(sprintID)
+	if err != nil {
+		return err
+	}
+	if sprint == nil {
+		return ErrSprintNotFound
+	}
+	if sprint.Status == model.SprintStatusArchived {
+		return ErrSprintClosed
+	}
+
+	err = s.repo.AddTaskToSprint(sprintID, req.TaskID, req.StoryPoints)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "unique") || strings.Contains(strings.ToLower(err.Error()), "constraint") {
+			return ErrTaskAlreadyInSprint
+		}
+		return err
+	}
 	return nil
 }
 
 func (s *sprintService) RemoveTaskFromSprint(sprintID, taskID int64) error {
-	return nil
+	sprint, err := s.repo.GetSprintByID(sprintID)
+	if err != nil {
+		return err
+	}
+	if sprint == nil {
+		return ErrSprintNotFound
+	}
+	if sprint.Status == model.SprintStatusArchived {
+		return ErrSprintClosed
+	}
+
+	return s.repo.RemoveTaskFromSprint(sprintID, taskID)
 }
 
 func (s *sprintService) GetSprintTasks(sprintID int64) ([]model.SprintTaskDB, error) {
-	return nil, nil
+	sprint, err := s.repo.GetSprintByID(sprintID)
+	if err != nil {
+		return nil, err
+	}
+	if sprint == nil {
+		return nil, ErrSprintNotFound
+	}
+
+	return s.repo.GetSprintTasks(sprintID)
 }
 
 func (s *sprintService) UpdateTaskStoryPoints(sprintID, taskID int64, storyPoints int) error {
-	return nil
+	if storyPoints < 0 {
+		return ErrInvalidStoryPoints
+	}
+
+	sprint, err := s.repo.GetSprintByID(sprintID)
+	if err != nil {
+		return err
+	}
+	if sprint == nil {
+		return ErrSprintNotFound
+	}
+	if sprint.Status == model.SprintStatusArchived {
+		return ErrSprintClosed
+	}
+
+	return s.repo.UpdateTaskStoryPoints(sprintID, taskID, storyPoints)
 }
 
 func (s *sprintService) GetSprintMetrics(sprintID int64) (*model.SprintMetrics, error) {
-	return nil, nil
+	sprint, err := s.repo.GetSprintByID(sprintID)
+	if err != nil {
+		return nil, err
+	}
+	if sprint == nil {
+		return nil, ErrSprintNotFound
+	}
+
+	return s.repo.GetSprintMetrics(sprintID)
 }
