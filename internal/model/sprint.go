@@ -112,6 +112,18 @@ type UpdateSprintRequest struct {
 	EndDate   *time.Time    `json:"end_date,omitempty"`
 }
 
+// AddTaskToSprintRequest represents payload to assign a task to a sprint
+type AddTaskToSprintRequest struct {
+	TaskID      int64 `json:"task_id"`
+	StoryPoints int   `json:"story_points,omitempty"`
+}
+
+// UpdateStoryPointsRequest represents payload to adjust story points estimation on a task
+type UpdateStoryPointsRequest struct {
+	StoryPoints int `json:"story_points"`
+}
+
+
 
 
 
