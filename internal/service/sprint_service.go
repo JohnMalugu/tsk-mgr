@@ -178,7 +178,38 @@ func (s *sprintService) DeleteSprint(id int64) error {
 }
 
 func (s *sprintService) StartSprint(id int64) (*model.SprintDB, error) {
-	return nil, nil
+	sprint, err := s.repo.GetSprintByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if sprint == nil {
+		return nil, ErrSprintNotFound
+	}
+
+	if sprint.Status != model.SprintStatusPlanned {
+		return nil, ErrSprintCannotStart
+	}
+
+	active, err := s.repo.GetActiveSprintByProject(sprint.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+	if active != nil && active.ID != sprint.ID {
+		return nil, ErrActiveSprintExists
+	}
+
+	now := time.Now()
+	sprint.Status = model.SprintStatusActive
+	if sprint.StartDate == nil {
+		sprint.StartDate = &now
+	}
+	sprint.UpdatedAt = now
+
+	if err := s.repo.UpdateSprint(sprint); err != nil {
+		return nil, err
+	}
+
+	return sprint, nil
 }
 
 func (s *sprintService) CompleteSprint(id int64) (*model.SprintDB, error) {
