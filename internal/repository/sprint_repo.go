@@ -269,15 +269,69 @@ func (r *sqlSprintRepository) GetActiveSprintByProject(projectID int64) (*model.
 }
 
 func (r *sqlSprintRepository) AddTaskToSprint(sprintID, taskID int64, storyPoints int) error {
+	query := `
+	INSERT INTO sprint_tasks (sprint_id, task_id, story_points, added_at)
+	VALUES (?, ?, ?, ?)
+	ON CONFLICT(sprint_id, task_id) DO UPDATE SET story_points = excluded.story_points`
+
+	_, err := r.db.Exec(query, sprintID, taskID, storyPoints, time.Now())
+	if err != nil {
+		return fmt.Errorf("failed to add task to sprint: %w", err)
+	}
 	return nil
 }
 
 func (r *sqlSprintRepository) RemoveTaskFromSprint(sprintID, taskID int64) error {
+	query := `DELETE FROM sprint_tasks WHERE sprint_id = ? AND task_id = ?`
+	res, err := r.db.Exec(query, sprintID, taskID)
+	if err != nil {
+		return fmt.Errorf("failed to remove task from sprint: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
 	return nil
 }
 
 func (r *sqlSprintRepository) GetSprintTasks(sprintID int64) ([]model.SprintTaskDB, error) {
-	return nil, nil
+	query := `
+	SELECT st.id, st.sprint_id, st.task_id, st.story_points, st.added_at,
+	       COALESCE(t.title, '') as task_title,
+	       COALESCE(t.status, 'todo') as task_status,
+	       COALESCE(t.priority, 'medium') as task_priority
+	FROM sprint_tasks st
+	LEFT JOIN tasks t ON st.task_id = t.id
+	WHERE st.sprint_id = ?
+	ORDER BY st.added_at ASC`
+
+	rows, err := r.db.Query(query, sprintID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query sprint tasks: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []model.SprintTaskDB
+	for rows.Next() {
+		var st model.SprintTaskDB
+		if err := rows.Scan(
+			&st.ID,
+			&st.SprintID,
+			&st.TaskID,
+			&st.StoryPoints,
+			&st.AddedAt,
+			&st.TaskTitle,
+			&st.TaskStatus,
+			&st.TaskPriority,
+		); err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, st)
+	}
+	return tasks, nil
 }
 
 func (r *sqlSprintRepository) UpdateTaskStoryPoints(sprintID, taskID int64, storyPoints int) error {
