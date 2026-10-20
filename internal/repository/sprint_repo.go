@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -107,7 +108,82 @@ func (r *sqlSprintRepository) GetSprintByID(id int64) (*model.SprintDB, error) {
 }
 
 func (r *sqlSprintRepository) ListSprints(filter model.SprintFilter) ([]model.SprintDB, int, error) {
-	return nil, 0, nil
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID > 0 {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.ProjectID > 0 {
+		conditions = append(conditions, "project_id = ?")
+		args = append(args, filter.ProjectID)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, string(filter.Status))
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM sprints %s", whereClause)
+	var total int
+	err := r.db.QueryRow(countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count sprints: %w", err)
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, workspace_id, project_id, name, goal, status, start_date, end_date, total_points, completed_points, created_at, updated_at
+	FROM sprints
+	%s
+	ORDER BY id DESC
+	LIMIT ? OFFSET ?`, whereClause)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.Query(query, queryArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to list sprints: %w", err)
+	}
+	defer rows.Close()
+
+	var list []model.SprintDB
+	for rows.Next() {
+		var s model.SprintDB
+		var statusStr string
+		if err := rows.Scan(
+			&s.ID,
+			&s.WorkspaceID,
+			&s.ProjectID,
+			&s.Name,
+			&s.Goal,
+			&statusStr,
+			&s.StartDate,
+			&s.EndDate,
+			&s.TotalPoints,
+			&s.CompletedPoints,
+			&s.CreatedAt,
+			&s.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		s.Status = model.SprintStatus(statusStr)
+		list = append(list, s)
+	}
+
+	return list, total, nil
 }
 
 func (r *sqlSprintRepository) UpdateSprint(sprint *model.SprintDB) error {
