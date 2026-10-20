@@ -49,3 +49,16 @@ type SprintDB struct {
 	UpdatedAt       time.Time    `json:"updated_at"`
 }
 
+// SprintTaskDB represents the association between a sprint and a task with story points
+type SprintTaskDB struct {
+	ID           int64     `json:"id"`
+	SprintID     int64     `json:"sprint_id"`
+	TaskID       int64     `json:"task_id"`
+	StoryPoints  int       `json:"story_points"`
+	AddedAt      time.Time `json:"added_at"`
+	TaskTitle    string    `json:"task_title,omitempty"`
+	TaskStatus   string    `json:"task_status,omitempty"`
+	TaskPriority string    `json:"task_priority,omitempty"`
+}
+
+
