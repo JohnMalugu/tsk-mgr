@@ -15,9 +15,12 @@ var (
 	ErrInvalidSprintStatus  = errors.New("invalid sprint status")
 	ErrActiveSprintExists   = errors.New("another sprint is already active in this project")
 	ErrSprintCannotStart    = errors.New("only planned sprints can be started")
-	ErrSprintCannotComplete = errors.New("only active sprints can be completed")
-	ErrTaskAlreadyInSprint  = errors.New("task is already assigned to this sprint")
-	ErrInvalidStoryPoints   = errors.New("story points must be non-negative")
+	ErrSprintCannotComplete      = errors.New("only active sprints can be completed")
+	ErrSprintCannotClose         = errors.New("only completed sprints can be closed")
+	ErrSprintClosed              = errors.New("cannot modify a closed sprint")
+	ErrCannotDeleteActiveSprint  = errors.New("cannot delete an active sprint")
+	ErrTaskAlreadyInSprint       = errors.New("task is already assigned to this sprint")
+	ErrInvalidStoryPoints        = errors.New("story points must be non-negative")
 )
 
 // SprintService handles agile sprint lifecycle, task scoping, and velocity metrics
@@ -112,11 +115,66 @@ func (s *sprintService) ListSprints(filter model.SprintFilter) (*model.SprintSum
 }
 
 func (s *sprintService) UpdateSprint(id int64, req *model.UpdateSprintRequest) (*model.SprintDB, error) {
-	return nil, nil
+	if req == nil {
+		return nil, errors.New("request cannot be nil")
+	}
+
+	sprint, err := s.repo.GetSprintByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if sprint == nil {
+		return nil, ErrSprintNotFound
+	}
+
+	if sprint.Status == model.SprintStatusArchived {
+		return nil, ErrSprintClosed
+	}
+
+	if req.Name != nil {
+		name := strings.TrimSpace(*req.Name)
+		if name == "" {
+			return nil, ErrSprintNameRequired
+		}
+		sprint.Name = name
+	}
+	if req.Goal != nil {
+		sprint.Goal = strings.TrimSpace(*req.Goal)
+	}
+	if req.StartDate != nil {
+		sprint.StartDate = req.StartDate
+	}
+	if req.EndDate != nil {
+		sprint.EndDate = req.EndDate
+	}
+	if req.Status != nil {
+		if !model.IsValidSprintStatus(string(*req.Status)) {
+			return nil, ErrInvalidSprintStatus
+		}
+		sprint.Status = *req.Status
+	}
+	sprint.UpdatedAt = time.Now()
+
+	if err := s.repo.UpdateSprint(sprint); err != nil {
+		return nil, err
+	}
+
+	return sprint, nil
 }
 
 func (s *sprintService) DeleteSprint(id int64) error {
-	return nil
+	sprint, err := s.repo.GetSprintByID(id)
+	if err != nil {
+		return err
+	}
+	if sprint == nil {
+		return ErrSprintNotFound
+	}
+	if sprint.Status == model.SprintStatusActive {
+		return ErrCannotDeleteActiveSprint
+	}
+
+	return s.repo.DeleteSprint(id)
 }
 
 func (s *sprintService) StartSprint(id int64) (*model.SprintDB, error) {
