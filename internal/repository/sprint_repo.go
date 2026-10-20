@@ -187,15 +187,85 @@ func (r *sqlSprintRepository) ListSprints(filter model.SprintFilter) ([]model.Sp
 }
 
 func (r *sqlSprintRepository) UpdateSprint(sprint *model.SprintDB) error {
+	sprint.UpdatedAt = time.Now()
+	query := `
+	UPDATE sprints
+	SET name = ?, goal = ?, status = ?, start_date = ?, end_date = ?, total_points = ?, completed_points = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query,
+		sprint.Name,
+		sprint.Goal,
+		string(sprint.Status),
+		sprint.StartDate,
+		sprint.EndDate,
+		sprint.TotalPoints,
+		sprint.CompletedPoints,
+		sprint.UpdatedAt,
+		sprint.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update sprint: %w", err)
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
 	return nil
 }
 
 func (r *sqlSprintRepository) DeleteSprint(id int64) error {
+	query := `DELETE FROM sprints WHERE id = ?`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete sprint: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
 	return nil
 }
 
 func (r *sqlSprintRepository) GetActiveSprintByProject(projectID int64) (*model.SprintDB, error) {
-	return nil, nil
+	query := `
+	SELECT id, workspace_id, project_id, name, goal, status, start_date, end_date, total_points, completed_points, created_at, updated_at
+	FROM sprints
+	WHERE project_id = ? AND status = ?
+	LIMIT 1`
+
+	row := r.db.QueryRow(query, projectID, string(model.SprintStatusActive))
+	var s model.SprintDB
+	var statusStr string
+	err := row.Scan(
+		&s.ID,
+		&s.WorkspaceID,
+		&s.ProjectID,
+		&s.Name,
+		&s.Goal,
+		&statusStr,
+		&s.StartDate,
+		&s.EndDate,
+		&s.TotalPoints,
+		&s.CompletedPoints,
+		&s.CreatedAt,
+		&s.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to query active sprint: %w", err)
+	}
+	s.Status = model.SprintStatus(statusStr)
+	return &s, nil
 }
 
 func (r *sqlSprintRepository) AddTaskToSprint(sprintID, taskID int64, storyPoints int) error {
