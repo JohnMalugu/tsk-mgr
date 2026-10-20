@@ -61,4 +61,22 @@ type SprintTaskDB struct {
 	TaskPriority string    `json:"task_priority,omitempty"`
 }
 
+// SprintFilter defines criteria for querying sprints
+type SprintFilter struct {
+	WorkspaceID int64        `json:"workspace_id"`
+	ProjectID   int64        `json:"project_id"`
+	Status      SprintStatus `json:"status"`
+	Offset      int          `json:"offset"`
+	Limit       int          `json:"limit"`
+}
+
+// SprintSummary represents a paginated list of sprints
+type SprintSummary struct {
+	Sprints []SprintDB `json:"sprints"`
+	Total   int        `json:"total"`
+	Offset  int        `json:"offset"`
+	Limit   int        `json:"limit"`
+}
+
+
 
