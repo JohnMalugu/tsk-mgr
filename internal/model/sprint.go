@@ -78,5 +78,21 @@ type SprintSummary struct {
 	Limit   int        `json:"limit"`
 }
 
+// SprintMetrics contains calculated burndown and velocity statistics for a sprint
+type SprintMetrics struct {
+	SprintID             int64        `json:"sprint_id"`
+	SprintName           string       `json:"sprint_name"`
+	Status               SprintStatus `json:"status"`
+	TotalTasks           int          `json:"total_tasks"`
+	CompletedTasks       int          `json:"completed_tasks"`
+	InProgressTasks      int          `json:"in_progress_tasks"`
+	TodoTasks            int          `json:"todo_tasks"`
+	TotalStoryPoints     int          `json:"total_story_points"`
+	CompletedStoryPoints int          `json:"completed_story_points"`
+	RemainingStoryPoints int          `json:"remaining_story_points"`
+	CompletionPercentage float64      `json:"completion_percentage"`
+}
+
+
 
 
