@@ -213,11 +213,53 @@ func (s *sprintService) StartSprint(id int64) (*model.SprintDB, error) {
 }
 
 func (s *sprintService) CompleteSprint(id int64) (*model.SprintDB, error) {
-	return nil, nil
+	sprint, err := s.repo.GetSprintByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if sprint == nil {
+		return nil, ErrSprintNotFound
+	}
+
+	if sprint.Status != model.SprintStatusActive {
+		return nil, ErrSprintCannotComplete
+	}
+
+	now := time.Now()
+	sprint.Status = model.SprintStatusCompleted
+	if sprint.EndDate == nil {
+		sprint.EndDate = &now
+	}
+	sprint.UpdatedAt = now
+
+	if err := s.repo.UpdateSprint(sprint); err != nil {
+		return nil, err
+	}
+
+	return sprint, nil
 }
 
 func (s *sprintService) CloseSprint(id int64) (*model.SprintDB, error) {
-	return nil, nil
+	sprint, err := s.repo.GetSprintByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if sprint == nil {
+		return nil, ErrSprintNotFound
+	}
+
+	if sprint.Status != model.SprintStatusCompleted {
+		return nil, ErrSprintCannotClose
+	}
+
+	sprint.Status = model.SprintStatusArchived
+	sprint.UpdatedAt = time.Now()
+
+	if err := s.repo.UpdateSprint(sprint); err != nil {
+		return nil, err
+	}
+
+	return sprint, nil
 }
 
 func (s *sprintService) AddTaskToSprint(sprintID int64, req *model.AddTaskToSprintRequest) error {
