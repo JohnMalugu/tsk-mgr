@@ -362,6 +362,23 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	sprintTasksQuery := `
+	CREATE TABLE IF NOT EXISTS sprint_tasks (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		sprint_id INTEGER NOT NULL,
+		task_id INTEGER NOT NULL,
+		story_points INTEGER NOT NULL DEFAULT 0,
+		added_at DATETIME NOT NULL,
+		UNIQUE(sprint_id, task_id),
+		FOREIGN KEY (sprint_id) REFERENCES sprints(id) ON DELETE CASCADE,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(sprintTasksQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
