@@ -2,6 +2,8 @@ package repository
 
 import (
 	"database/sql"
+	"fmt"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
@@ -31,11 +33,77 @@ func NewSprintRepository(db *sql.DB) SprintRepository {
 }
 
 func (r *sqlSprintRepository) CreateSprint(sprint *model.SprintDB) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if sprint.CreatedAt.IsZero() {
+		sprint.CreatedAt = now
+	}
+	if sprint.UpdatedAt.IsZero() {
+		sprint.UpdatedAt = now
+	}
+	if sprint.Status == "" {
+		sprint.Status = model.SprintStatusPlanned
+	}
+
+	query := `
+	INSERT INTO sprints (workspace_id, project_id, name, goal, status, start_date, end_date, total_points, completed_points, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query,
+		sprint.WorkspaceID,
+		sprint.ProjectID,
+		sprint.Name,
+		sprint.Goal,
+		string(sprint.Status),
+		sprint.StartDate,
+		sprint.EndDate,
+		sprint.TotalPoints,
+		sprint.CompletedPoints,
+		sprint.CreatedAt,
+		sprint.UpdatedAt,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to insert sprint: %w", err)
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	sprint.ID = id
+	return id, nil
 }
 
 func (r *sqlSprintRepository) GetSprintByID(id int64) (*model.SprintDB, error) {
-	return nil, nil
+	query := `
+	SELECT id, workspace_id, project_id, name, goal, status, start_date, end_date, total_points, completed_points, created_at, updated_at
+	FROM sprints
+	WHERE id = ?`
+
+	row := r.db.QueryRow(query, id)
+	var s model.SprintDB
+	var statusStr string
+	err := row.Scan(
+		&s.ID,
+		&s.WorkspaceID,
+		&s.ProjectID,
+		&s.Name,
+		&s.Goal,
+		&statusStr,
+		&s.StartDate,
+		&s.EndDate,
+		&s.TotalPoints,
+		&s.CompletedPoints,
+		&s.CreatedAt,
+		&s.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to query sprint: %w", err)
+	}
+	s.Status = model.SprintStatus(statusStr)
+	return &s, nil
 }
 
 func (r *sqlSprintRepository) ListSprints(filter model.SprintFilter) ([]model.SprintDB, int, error) {
