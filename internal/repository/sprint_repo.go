@@ -335,9 +335,68 @@ func (r *sqlSprintRepository) GetSprintTasks(sprintID int64) ([]model.SprintTask
 }
 
 func (r *sqlSprintRepository) UpdateTaskStoryPoints(sprintID, taskID int64, storyPoints int) error {
+	query := `UPDATE sprint_tasks SET story_points = ? WHERE sprint_id = ? AND task_id = ?`
+	res, err := r.db.Exec(query, storyPoints, sprintID, taskID)
+	if err != nil {
+		return fmt.Errorf("failed to update task story points: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
 	return nil
 }
 
 func (r *sqlSprintRepository) GetSprintMetrics(sprintID int64) (*model.SprintMetrics, error) {
-	return nil, nil
+	sprint, err := r.GetSprintByID(sprintID)
+	if err != nil {
+		return nil, err
+	}
+	if sprint == nil {
+		return nil, sql.ErrNoRows
+	}
+
+	query := `
+	SELECT 
+		COUNT(*) as total_tasks,
+		COALESCE(SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END), 0) as completed_tasks,
+		COALESCE(SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END), 0) as in_progress_tasks,
+		COALESCE(SUM(CASE WHEN t.status = 'todo' THEN 1 ELSE 0 END), 0) as todo_tasks,
+		COALESCE(SUM(st.story_points), 0) as total_points,
+		COALESCE(SUM(CASE WHEN t.status = 'completed' THEN st.story_points ELSE 0 END), 0) as completed_points
+	FROM sprint_tasks st
+	LEFT JOIN tasks t ON st.task_id = t.id
+	WHERE st.sprint_id = ?`
+
+	row := r.db.QueryRow(query, sprintID)
+	metrics := &model.SprintMetrics{
+		SprintID:   sprint.ID,
+		SprintName: sprint.Name,
+		Status:     sprint.Status,
+	}
+
+	err = row.Scan(
+		&metrics.TotalTasks,
+		&metrics.CompletedTasks,
+		&metrics.InProgressTasks,
+		&metrics.TodoTasks,
+		&metrics.TotalStoryPoints,
+		&metrics.CompletedStoryPoints,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate sprint metrics: %w", err)
+	}
+
+	metrics.RemainingStoryPoints = metrics.TotalStoryPoints - metrics.CompletedStoryPoints
+	if metrics.TotalStoryPoints > 0 {
+		metrics.CompletionPercentage = float64(metrics.CompletedStoryPoints) / float64(metrics.TotalStoryPoints) * 100.0
+	} else if metrics.TotalTasks > 0 {
+		metrics.CompletionPercentage = float64(metrics.CompletedTasks) / float64(metrics.TotalTasks) * 100.0
+	}
+
+	return metrics, nil
 }
+
