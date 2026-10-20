@@ -2,6 +2,7 @@ package model
 
 import (
 	"strings"
+	"time"
 )
 
 // SprintStatus represents the current lifecycle state of a sprint or iteration
@@ -31,3 +32,20 @@ func IsValidSprintStatus(status string) bool {
 	}
 	return false
 }
+
+// SprintDB represents a sprint or iteration entity stored in the database
+type SprintDB struct {
+	ID              int64        `json:"id"`
+	WorkspaceID     int64        `json:"workspace_id"`
+	ProjectID       int64        `json:"project_id"`
+	Name            string       `json:"name"`
+	Goal            string       `json:"goal"`
+	Status          SprintStatus `json:"status"`
+	StartDate       *time.Time   `json:"start_date,omitempty"`
+	EndDate         *time.Time   `json:"end_date,omitempty"`
+	TotalPoints     int          `json:"total_points"`
+	CompletedPoints int          `json:"completed_points"`
+	CreatedAt       time.Time    `json:"created_at"`
+	UpdatedAt       time.Time    `json:"updated_at"`
+}
+
