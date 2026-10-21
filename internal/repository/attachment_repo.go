@@ -108,7 +108,38 @@ func (r *sqlAttachmentRepository) GetAttachmentByID(id int64) (*model.Attachment
 }
 
 func (r *sqlAttachmentRepository) GetAttachmentByChecksum(workspaceID int64, checksum string) (*model.AttachmentDB, error) {
-	return nil, nil
+	query := `
+	SELECT id, task_id, user_id, workspace_id, filename, original_name, file_size, content_type,
+		storage_path, checksum_sha256, download_count, is_archived, created_at, updated_at
+	FROM attachments
+	WHERE workspace_id = ? AND checksum_sha256 = ? AND is_archived = 0
+	LIMIT 1`
+
+	row := r.db.QueryRow(query, workspaceID, checksum)
+	var att model.AttachmentDB
+	err := row.Scan(
+		&att.ID,
+		&att.TaskID,
+		&att.UserID,
+		&att.WorkspaceID,
+		&att.Filename,
+		&att.OriginalName,
+		&att.FileSize,
+		&att.ContentType,
+		&att.StoragePath,
+		&att.ChecksumSHA256,
+		&att.DownloadCount,
+		&att.IsArchived,
+		&att.CreatedAt,
+		&att.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get attachment by checksum: %w", err)
+	}
+	return &att, nil
 }
 
 func (r *sqlAttachmentRepository) ListAttachments(filter model.AttachmentFilter) ([]model.AttachmentDB, int, error) {
