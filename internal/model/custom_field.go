@@ -118,7 +118,7 @@ type SetCustomFieldValueRequest struct {
 
 // BulkSetCustomFieldItem represents a single field assignment within a bulk update
 type BulkSetCustomFieldItem struct {
-	TaskID int64                      `json:"task_id"`
+	TaskID int64                        `json:"task_id"`
 	Fields []SetCustomFieldValueRequest `json:"fields"`
 }
 

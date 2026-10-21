@@ -103,6 +103,12 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `PUT|PATCH /v2/sprints/{id}/tasks/{taskId}` to update task story points estimation
 - `DELETE /v2/sprints/{id}/tasks/{taskId}` to remove a task from the sprint backlog
 - `GET /v2/sprints/{id}/metrics` to calculate live burndown metrics, velocity, story points, and status breakdown
+- `GET|POST /v2/custom-fields` to query custom field schemas by workspace/project/type or define a new dynamic attribute schema (`text`, `number`, `dropdown`, `boolean`, `date`, `url`)
+- `GET|PUT|DELETE /v2/custom-fields/{id}` to fetch field schema, modify metadata and dropdown choices, or delete custom field
+- `POST /v2/custom-fields/bulk` to bulk assign custom field values across multiple tasks in a single operation
+- `GET /v2/custom-fields/search?workspace_id={id}&field_key={key}&query_value={val}` to search and filter tasks by specific custom field value
+- `GET|POST|PUT /v2/tasks/{id}/custom-fields` to retrieve enriched custom fields for a task or assign a typed custom field value
+- `DELETE /v2/tasks/{id}/custom-fields/{fieldId}` to remove a custom field assignment from a task
 
 ## Current limitations
 
