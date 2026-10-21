@@ -122,7 +122,44 @@ func (r *sqlCustomFieldRepository) GetFieldDefinitionByID(id int64) (*model.Cust
 }
 
 func (r *sqlCustomFieldRepository) GetFieldDefinitionByKey(workspaceID int64, key string) (*model.CustomFieldDefinition, error) {
-	return nil, nil
+	query := `
+	SELECT id, workspace_id, project_id, name, field_key, description, type, required, options, default_value, created_at, updated_at
+	FROM custom_field_definitions
+	WHERE workspace_id = ? AND field_key = ?`
+
+	row := r.db.QueryRow(query, workspaceID, key)
+	var def model.CustomFieldDefinition
+	var typeStr, optionsStr string
+	err := row.Scan(
+		&def.ID,
+		&def.WorkspaceID,
+		&def.ProjectID,
+		&def.Name,
+		&def.FieldKey,
+		&def.Description,
+		&typeStr,
+		&def.Required,
+		&optionsStr,
+		&def.DefaultValue,
+		&def.CreatedAt,
+		&def.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get custom field definition by key: %w", err)
+	}
+
+	def.Type = model.CustomFieldType(typeStr)
+	if optionsStr != "" {
+		_ = json.Unmarshal([]byte(optionsStr), &def.Options)
+	}
+	if def.Options == nil {
+		def.Options = []string{}
+	}
+
+	return &def, nil
 }
 
 func (r *sqlCustomFieldRepository) ListFieldDefinitions(filter model.CustomFieldFilter) ([]model.CustomFieldDefinition, int, error) {
