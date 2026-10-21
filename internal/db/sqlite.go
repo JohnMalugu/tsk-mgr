@@ -449,6 +449,10 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_sprint_tasks_task ON sprint_tasks(task_id);
 	CREATE INDEX IF NOT EXISTS idx_custom_fields_ws ON custom_field_definitions(workspace_id, project_id);
 	CREATE INDEX IF NOT EXISTS idx_custom_fields_key ON custom_field_definitions(workspace_id, field_key);
+	CREATE INDEX IF NOT EXISTS idx_custom_values_field ON custom_field_values(field_id);
+	CREATE INDEX IF NOT EXISTS idx_custom_values_task ON custom_field_values(task_id);
+	CREATE INDEX IF NOT EXISTS idx_custom_values_text ON custom_field_values(field_id, value_text);
+	CREATE INDEX IF NOT EXISTS idx_custom_values_num ON custom_field_values(field_id, value_number);
 	`
 
 	_, err = db.Exec(indexQuery)
