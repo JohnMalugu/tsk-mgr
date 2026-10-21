@@ -403,6 +403,27 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	customValuesQuery := `
+	CREATE TABLE IF NOT EXISTS custom_field_values (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		field_id INTEGER NOT NULL,
+		task_id INTEGER NOT NULL,
+		value_text TEXT,
+		value_number REAL,
+		value_boolean INTEGER,
+		value_date DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		UNIQUE(field_id, task_id),
+		FOREIGN KEY (field_id) REFERENCES custom_field_definitions(id) ON DELETE CASCADE,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(customValuesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
