@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -155,4 +156,31 @@ func (h *AttachmentHandler) HandleUploadAttachment(w http.ResponseWriter, r *htt
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(att)
+}
+
+// HandleDownloadAttachment streams the raw binary file with caching headers (ETag, If-None-Match) and Content-Disposition
+func (h *AttachmentHandler) HandleDownloadAttachment(w http.ResponseWriter, r *http.Request, id int64) {
+	reader, att, etag, err := h.svc.OpenAttachmentFile(id)
+	if err != nil {
+		if errors.Is(err, service.ErrAttachmentNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer reader.Close()
+
+	if clientETag := r.Header.Get("If-None-Match"); clientETag != "" && clientETag == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Content-Type", att.ContentType)
+	w.Header().Set("Content-Length", strconv.FormatInt(att.FileSize, 10))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", att.Filename))
+
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(w, reader)
 }
