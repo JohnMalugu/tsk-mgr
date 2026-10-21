@@ -330,5 +330,8 @@ func (s *attachmentService) DeleteAttachment(id int64) error {
 }
 
 func (s *attachmentService) GetStorageMetrics(workspaceID int64) (*model.StorageMetrics, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrInvalidWorkspaceID
+	}
+	return s.repo.GetStorageMetrics(workspaceID)
 }
