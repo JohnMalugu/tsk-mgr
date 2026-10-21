@@ -783,6 +783,59 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Task Attachments API (/v2/tasks/{id}/attachments)
+	if strings.HasPrefix(r.URL.Path, "/v2/tasks/") && strings.Contains(r.URL.Path, "/attachments") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/tasks/")
+		parts := strings.Split(trimmed, "/")
+		if len(parts) >= 2 && parts[1] == "attachments" {
+			taskID, err := strconv.ParseInt(parts[0], 10, 64)
+			if err == nil {
+				if r.Method == http.MethodPost {
+					handler.GlobalAttachmentHandler.HandleUploadAttachment(w, r, taskID)
+					return
+				}
+				if r.Method == http.MethodGet {
+					handler.GlobalAttachmentHandler.HandleListAttachments(w, r, &taskID)
+					return
+				}
+			}
+		}
+	}
+
+	// File Assets & Attachments API (/v2/attachments)
+	if r.URL.Path == "/v2/attachments" && r.Method == http.MethodGet {
+		handler.GlobalAttachmentHandler.HandleListAttachments(w, r, nil)
+		return
+	}
+	if r.URL.Path == "/v2/attachments/metrics" && r.Method == http.MethodGet {
+		handler.GlobalAttachmentHandler.HandleGetStorageMetrics(w, r, 0)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/v2/attachments/") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/attachments/")
+		parts := strings.Split(trimmed, "/")
+		id, err := strconv.ParseInt(parts[0], 10, 64)
+		if err == nil {
+			if len(parts) == 2 && parts[1] == "download" && r.Method == http.MethodGet {
+				handler.GlobalAttachmentHandler.HandleDownloadAttachment(w, r, id)
+				return
+			}
+			if len(parts) == 1 {
+				switch r.Method {
+				case http.MethodGet:
+					handler.GlobalAttachmentHandler.HandleGetAttachment(w, r, id)
+					return
+				case http.MethodPut, http.MethodPatch:
+					handler.GlobalAttachmentHandler.HandleUpdateAttachment(w, r, id)
+					return
+				case http.MethodDelete:
+					handler.GlobalAttachmentHandler.HandleDeleteAttachment(w, r, id)
+					return
+				}
+			}
+		}
+	}
+
 	if r.URL.Path == "/tasks/summary" {
 		handler.HandleTaskSummary(w, r)
 		return
