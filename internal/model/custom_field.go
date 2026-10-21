@@ -53,3 +53,16 @@ type CustomFieldDefinition struct {
 	CreatedAt    time.Time       `json:"created_at"`
 	UpdatedAt    time.Time       `json:"updated_at"`
 }
+
+// CustomFieldValue represents the stored typed value for a custom field attached to a task
+type CustomFieldValue struct {
+	ID           int64      `json:"id"`
+	FieldID      int64      `json:"field_id"`
+	TaskID       int64      `json:"task_id"`
+	ValueText    *string    `json:"value_text,omitempty"`
+	ValueNumber  *float64   `json:"value_number,omitempty"`
+	ValueBoolean *bool      `json:"value_boolean,omitempty"`
+	ValueDate    *time.Time `json:"value_date,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+}
