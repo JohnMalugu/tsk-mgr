@@ -381,7 +381,33 @@ func validateAndExtractValue(def *model.CustomFieldDefinition, req *model.SetCus
 }
 
 func (s *customFieldService) SetFieldValue(taskID int64, req *model.SetCustomFieldValueRequest) (*model.CustomFieldValue, error) {
-	return nil, nil
+	if req == nil {
+		return nil, errors.New("request cannot be nil")
+	}
+
+	if req.FieldID <= 0 {
+		return nil, ErrCustomFieldNotFound
+	}
+
+	def, err := s.repo.GetFieldDefinitionByID(req.FieldID)
+	if err != nil {
+		return nil, err
+	}
+	if def == nil {
+		return nil, ErrCustomFieldNotFound
+	}
+
+	val, err := validateAndExtractValue(def, req)
+	if err != nil {
+		return nil, err
+	}
+	val.TaskID = taskID
+
+	if err := s.repo.SetFieldValue(val); err != nil {
+		return nil, err
+	}
+
+	return val, nil
 }
 
 func (s *customFieldService) GetTaskCustomFields(taskID int64) ([]model.TaskCustomFieldValueDTO, error) {
@@ -389,7 +415,15 @@ func (s *customFieldService) GetTaskCustomFields(taskID int64) ([]model.TaskCust
 }
 
 func (s *customFieldService) DeleteFieldValue(taskID, fieldID int64) error {
-	return nil
+	def, err := s.repo.GetFieldDefinitionByID(fieldID)
+	if err != nil {
+		return err
+	}
+	if def == nil {
+		return ErrCustomFieldNotFound
+	}
+
+	return s.repo.DeleteFieldValue(taskID, fieldID)
 }
 
 func (s *customFieldService) BulkSetCustomFields(req *model.BulkSetCustomFieldRequest) error {
