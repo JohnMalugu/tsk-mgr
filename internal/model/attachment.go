@@ -1,6 +1,7 @@
 package model
 
 import (
+	"strings"
 	"time"
 )
 
@@ -67,4 +68,23 @@ type UploadAttachmentRequest struct {
 type UpdateAttachmentRequest struct {
 	Filename   *string `json:"filename,omitempty"`
 	IsArchived *bool   `json:"is_archived,omitempty"`
+}
+
+// BlockedFileExtensions contains dangerous executable and script extensions prohibited from upload
+var BlockedFileExtensions = []string{
+	".exe", ".bat", ".cmd", ".sh", ".bash", ".bin", ".msi", ".dll", ".so", ".dylib", ".vbs", ".ps1", ".jar",
+}
+
+// MaxAttachmentSizeBytes defines the maximum allowed file size (50MB)
+const MaxAttachmentSizeBytes = 50 * 1024 * 1024
+
+// IsBlockedExtension checks whether a given file extension is prohibited for security
+func IsBlockedExtension(filename string) bool {
+	lower := strings.ToLower(filename)
+	for _, ext := range BlockedFileExtensions {
+		if strings.HasSuffix(lower, ext) {
+			return true
+		}
+	}
+	return false
 }
