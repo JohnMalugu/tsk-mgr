@@ -181,11 +181,70 @@ func (s *customFieldService) ListFieldDefinitions(filter model.CustomFieldFilter
 }
 
 func (s *customFieldService) UpdateFieldDefinition(id int64, req *model.UpdateCustomFieldRequest) (*model.CustomFieldDefinition, error) {
-	return nil, nil
+	if req == nil {
+		return nil, errors.New("request cannot be nil")
+	}
+
+	def, err := s.repo.GetFieldDefinitionByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if def == nil {
+		return nil, ErrCustomFieldNotFound
+	}
+
+	if req.Name != nil {
+		trimmedName := strings.TrimSpace(*req.Name)
+		if trimmedName == "" {
+			return nil, ErrCustomFieldNameRequired
+		}
+		def.Name = trimmedName
+	}
+
+	if req.Description != nil {
+		def.Description = strings.TrimSpace(*req.Description)
+	}
+
+	if req.Required != nil {
+		def.Required = *req.Required
+	}
+
+	if req.DefaultValue != nil {
+		def.DefaultValue = req.DefaultValue
+	}
+
+	if req.Options != nil {
+		var cleanedOptions []string
+		for _, opt := range *req.Options {
+			trimmed := strings.TrimSpace(opt)
+			if trimmed != "" {
+				cleanedOptions = append(cleanedOptions, trimmed)
+			}
+		}
+		if def.Type == model.CustomFieldTypeDropdown && len(cleanedOptions) == 0 {
+			return nil, ErrDropdownOptionsRequired
+		}
+		def.Options = cleanedOptions
+	}
+
+	def.UpdatedAt = time.Now()
+	if err := s.repo.UpdateFieldDefinition(def); err != nil {
+		return nil, err
+	}
+
+	return def, nil
 }
 
 func (s *customFieldService) DeleteFieldDefinition(id int64) error {
-	return nil
+	def, err := s.repo.GetFieldDefinitionByID(id)
+	if err != nil {
+		return err
+	}
+	if def == nil {
+		return ErrCustomFieldNotFound
+	}
+
+	return s.repo.DeleteFieldDefinition(id)
 }
 
 func (s *customFieldService) SetFieldValue(taskID int64, req *model.SetCustomFieldValueRequest) (*model.CustomFieldValue, error) {
