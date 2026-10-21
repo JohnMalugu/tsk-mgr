@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -143,7 +144,96 @@ func (r *sqlAttachmentRepository) GetAttachmentByChecksum(workspaceID int64, che
 }
 
 func (r *sqlAttachmentRepository) ListAttachments(filter model.AttachmentFilter) ([]model.AttachmentDB, int, error) {
-	return nil, 0, nil
+	var conditions []string
+	var args []interface{}
+
+	if filter.TaskID != nil {
+		conditions = append(conditions, "task_id = ?")
+		args = append(args, *filter.TaskID)
+	}
+	if filter.WorkspaceID != nil {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, *filter.WorkspaceID)
+	}
+	if filter.UserID != nil {
+		conditions = append(conditions, "user_id = ?")
+		args = append(args, *filter.UserID)
+	}
+	if filter.ContentType != nil {
+		conditions = append(conditions, "content_type LIKE ?")
+		args = append(args, "%"+*filter.ContentType+"%")
+	}
+	if filter.IsArchived != nil {
+		conditions = append(conditions, "is_archived = ?")
+		args = append(args, *filter.IsArchived)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM attachments %s", whereClause)
+	var total int
+	err := r.db.QueryRow(countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count attachments: %w", err)
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, task_id, user_id, workspace_id, filename, original_name, file_size, content_type,
+		storage_path, checksum_sha256, download_count, is_archived, created_at, updated_at
+	FROM attachments
+	%s
+	ORDER BY id DESC
+	LIMIT ? OFFSET ?`, whereClause)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.Query(query, queryArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query attachments: %w", err)
+	}
+	defer rows.Close()
+
+	var atts []model.AttachmentDB
+	for rows.Next() {
+		var att model.AttachmentDB
+		err := rows.Scan(
+			&att.ID,
+			&att.TaskID,
+			&att.UserID,
+			&att.WorkspaceID,
+			&att.Filename,
+			&att.OriginalName,
+			&att.FileSize,
+			&att.ContentType,
+			&att.StoragePath,
+			&att.ChecksumSHA256,
+			&att.DownloadCount,
+			&att.IsArchived,
+			&att.CreatedAt,
+			&att.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to scan attachment: %w", err)
+		}
+		atts = append(atts, att)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("row error listing attachments: %w", err)
+	}
+
+	return atts, total, nil
 }
 
 func (r *sqlAttachmentRepository) UpdateAttachment(att *model.AttachmentDB) error {
