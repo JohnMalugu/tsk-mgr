@@ -2,6 +2,9 @@ package repository
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
@@ -28,11 +31,80 @@ func NewAttachmentRepository(db *sql.DB) AttachmentRepository {
 }
 
 func (r *sqlAttachmentRepository) CreateAttachment(att *model.AttachmentDB) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if att.CreatedAt.IsZero() {
+		att.CreatedAt = now
+	}
+	if att.UpdatedAt.IsZero() {
+		att.UpdatedAt = now
+	}
+
+	query := `
+	INSERT INTO attachments (
+		task_id, user_id, workspace_id, filename, original_name, file_size, content_type,
+		storage_path, checksum_sha256, download_count, is_archived, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(
+		query,
+		att.TaskID,
+		att.UserID,
+		att.WorkspaceID,
+		att.Filename,
+		att.OriginalName,
+		att.FileSize,
+		att.ContentType,
+		att.StoragePath,
+		att.ChecksumSHA256,
+		att.DownloadCount,
+		att.IsArchived,
+		att.CreatedAt,
+		att.UpdatedAt,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create attachment: %w", err)
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get last insert ID: %w", err)
+	}
+	att.ID = id
+	return id, nil
 }
 
 func (r *sqlAttachmentRepository) GetAttachmentByID(id int64) (*model.AttachmentDB, error) {
-	return nil, nil
+	query := `
+	SELECT id, task_id, user_id, workspace_id, filename, original_name, file_size, content_type,
+		storage_path, checksum_sha256, download_count, is_archived, created_at, updated_at
+	FROM attachments
+	WHERE id = ?`
+
+	row := r.db.QueryRow(query, id)
+	var att model.AttachmentDB
+	err := row.Scan(
+		&att.ID,
+		&att.TaskID,
+		&att.UserID,
+		&att.WorkspaceID,
+		&att.Filename,
+		&att.OriginalName,
+		&att.FileSize,
+		&att.ContentType,
+		&att.StoragePath,
+		&att.ChecksumSHA256,
+		&att.DownloadCount,
+		&att.IsArchived,
+		&att.CreatedAt,
+		&att.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get attachment by id: %w", err)
+	}
+	return &att, nil
 }
 
 func (r *sqlAttachmentRepository) GetAttachmentByChecksum(workspaceID int64, checksum string) (*model.AttachmentDB, error) {
