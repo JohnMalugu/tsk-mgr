@@ -286,10 +286,46 @@ func (s *attachmentService) OpenAttachmentFile(id int64) (io.ReadCloser, *model.
 }
 
 func (s *attachmentService) UpdateAttachment(id int64, req *model.UpdateAttachmentRequest) (*model.AttachmentDB, error) {
-	return nil, nil
+	att, err := s.GetAttachment(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Filename != nil {
+		sanitized := SanitizeFilename(*req.Filename)
+		if model.IsBlockedExtension(sanitized) {
+			return nil, ErrBlockedFileType
+		}
+		att.Filename = sanitized
+	}
+
+	if req.IsArchived != nil {
+		att.IsArchived = *req.IsArchived
+	}
+
+	if err := s.repo.UpdateAttachment(att); err != nil {
+		return nil, err
+	}
+
+	return att, nil
 }
 
 func (s *attachmentService) DeleteAttachment(id int64) error {
+	att, err := s.GetAttachment(id)
+	if err != nil {
+		return err
+	}
+
+	if err := s.repo.DeleteAttachment(id); err != nil {
+		return err
+	}
+
+	// If no other record in the workspace uses this file path, clean up physical disk storage
+	other, _ := s.repo.GetAttachmentByChecksum(att.WorkspaceID, att.ChecksumSHA256)
+	if other == nil {
+		_ = s.removeFile(att.StoragePath)
+	}
+
 	return nil
 }
 
