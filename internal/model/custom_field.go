@@ -66,3 +66,19 @@ type CustomFieldValue struct {
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 }
+
+// TaskCustomFieldValueDTO represents an enriched custom field value with full field metadata for API responses
+type TaskCustomFieldValueDTO struct {
+	FieldID      int64           `json:"field_id"`
+	FieldName    string          `json:"field_name"`
+	FieldKey     string          `json:"field_key"`
+	Type         CustomFieldType `json:"type"`
+	Required     bool            `json:"required"`
+	Options      []string        `json:"options,omitempty"`
+	Value        interface{}     `json:"value"`
+	ValueText    *string         `json:"value_text,omitempty"`
+	ValueNumber  *float64        `json:"value_number,omitempty"`
+	ValueBoolean *bool           `json:"value_boolean,omitempty"`
+	ValueDate    *time.Time      `json:"value_date,omitempty"`
+	UpdatedAt    time.Time       `json:"updated_at"`
+}
