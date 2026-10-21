@@ -287,6 +287,20 @@ func (r *sqlAttachmentRepository) DeleteAttachment(id int64) error {
 }
 
 func (r *sqlAttachmentRepository) IncrementDownloadCount(id int64) error {
+	query := `UPDATE attachments SET download_count = download_count + 1 WHERE id = ?`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return fmt.Errorf("failed to increment download count for attachment %d: %w", id, err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrAttachmentNotFound
+	}
+
 	return nil
 }
 
