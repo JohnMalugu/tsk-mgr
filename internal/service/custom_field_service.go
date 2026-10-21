@@ -411,7 +411,7 @@ func (s *customFieldService) SetFieldValue(taskID int64, req *model.SetCustomFie
 }
 
 func (s *customFieldService) GetTaskCustomFields(taskID int64) ([]model.TaskCustomFieldValueDTO, error) {
-	return nil, nil
+	return s.repo.GetFieldValuesByTask(taskID)
 }
 
 func (s *customFieldService) DeleteFieldValue(taskID, fieldID int64) error {
@@ -427,9 +427,31 @@ func (s *customFieldService) DeleteFieldValue(taskID, fieldID int64) error {
 }
 
 func (s *customFieldService) BulkSetCustomFields(req *model.BulkSetCustomFieldRequest) error {
+	if req == nil {
+		return errors.New("request cannot be nil")
+	}
+
+	for _, item := range req.Assignments {
+		for _, f := range item.Fields {
+			fCopy := f
+			if _, err := s.SetFieldValue(item.TaskID, &fCopy); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
 func (s *customFieldService) FindTasksByFieldValue(filter model.CustomFieldValueFilter) ([]int64, int, error) {
-	return nil, 0, nil
+	if filter.Limit <= 0 {
+		filter.Limit = 20
+	}
+	if filter.Limit > 100 {
+		filter.Limit = 100
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	return s.repo.FindTasksByFieldValue(filter)
 }
