@@ -470,5 +470,79 @@ func (r *sqlCustomFieldRepository) DeleteFieldValue(taskID, fieldID int64) error
 }
 
 func (r *sqlCustomFieldRepository) FindTasksByFieldValue(filter model.CustomFieldValueFilter) ([]int64, int, error) {
-	return nil, 0, nil
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID > 0 {
+		conditions = append(conditions, "d.workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.FieldID > 0 {
+		conditions = append(conditions, "v.field_id = ?")
+		args = append(args, filter.FieldID)
+	}
+	if filter.FieldKey != "" {
+		conditions = append(conditions, "d.field_key = ?")
+		args = append(args, filter.FieldKey)
+	}
+	if filter.QueryValue != "" {
+		conditions = append(conditions, "(v.value_text LIKE ? OR CAST(v.value_number AS TEXT) = ?)")
+		args = append(args, "%"+filter.QueryValue+"%", filter.QueryValue)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf(`
+	SELECT COUNT(DISTINCT v.task_id)
+	FROM custom_field_values v
+	JOIN custom_field_definitions d ON v.field_id = d.id
+	%s`, whereClause)
+
+	var total int
+	err := r.db.QueryRow(countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count tasks by custom field value: %w", err)
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT DISTINCT v.task_id
+	FROM custom_field_values v
+	JOIN custom_field_definitions d ON v.field_id = d.id
+	%s
+	ORDER BY v.task_id ASC
+	LIMIT ? OFFSET ?`, whereClause)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.Query(query, queryArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query tasks by custom field value: %w", err)
+	}
+	defer rows.Close()
+
+	var taskIDs []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, 0, fmt.Errorf("failed to scan task ID: %w", err)
+		}
+		taskIDs = append(taskIDs, id)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("row error finding tasks by custom field value: %w", err)
+	}
+
+	return taskIDs, total, nil
 }
