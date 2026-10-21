@@ -2,6 +2,8 @@ package service
 
 import (
 	"errors"
+	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -45,8 +47,87 @@ func NewCustomFieldService(repo repository.CustomFieldRepository) CustomFieldSer
 	return &customFieldService{repo: repo}
 }
 
+func slugifyKey(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var sb strings.Builder
+	lastUnderscore := false
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			sb.WriteRune(r)
+			lastUnderscore = false
+		} else if r == ' ' || r == '-' || r == '_' {
+			if !lastUnderscore && sb.Len() > 0 {
+				sb.WriteRune('_')
+				lastUnderscore = true
+			}
+		}
+	}
+	return strings.Trim(sb.String(), "_")
+}
+
 func (s *customFieldService) CreateFieldDefinition(req *model.CreateCustomFieldRequest) (*model.CustomFieldDefinition, error) {
-	return nil, nil
+	if req == nil {
+		return nil, errors.New("request cannot be nil")
+	}
+
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, ErrCustomFieldNameRequired
+	}
+
+	if !model.IsValidCustomFieldType(string(req.Type)) {
+		return nil, ErrInvalidCustomFieldType
+	}
+
+	var cleanedOptions []string
+	if req.Type == model.CustomFieldTypeDropdown {
+		for _, opt := range req.Options {
+			trimmed := strings.TrimSpace(opt)
+			if trimmed != "" {
+				cleanedOptions = append(cleanedOptions, trimmed)
+			}
+		}
+		if len(cleanedOptions) == 0 {
+			return nil, ErrDropdownOptionsRequired
+		}
+	}
+
+	fieldKey := slugifyKey(req.FieldKey)
+	if fieldKey == "" {
+		fieldKey = slugifyKey(name)
+	}
+	if fieldKey == "" {
+		return nil, ErrCustomFieldKeyInvalid
+	}
+
+	existing, err := s.repo.GetFieldDefinitionByKey(req.WorkspaceID, fieldKey)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return nil, ErrCustomFieldKeyTaken
+	}
+
+	def := &model.CustomFieldDefinition{
+		WorkspaceID:  req.WorkspaceID,
+		ProjectID:    req.ProjectID,
+		Name:         name,
+		FieldKey:     fieldKey,
+		Description:  strings.TrimSpace(req.Description),
+		Type:         req.Type,
+		Required:     req.Required,
+		Options:      cleanedOptions,
+		DefaultValue: req.DefaultValue,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+
+	id, err := s.repo.CreateFieldDefinition(def)
+	if err != nil {
+		return nil, err
+	}
+	def.ID = id
+	return def, nil
 }
 
 func (s *customFieldService) GetFieldDefinition(id int64) (*model.CustomFieldDefinition, error) {
