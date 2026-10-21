@@ -51,3 +51,20 @@ type StorageMetrics struct {
 	MimeBreakdown  map[string]int64 `json:"mime_breakdown"`
 	LargestFiles   []AttachmentDB   `json:"largest_files"`
 }
+
+// UploadAttachmentRequest represents payload to attach a file to a task
+type UploadAttachmentRequest struct {
+	TaskID        int64  `json:"task_id"`
+	UserID        string `json:"user_id"`
+	WorkspaceID   int64  `json:"workspace_id"`
+	Filename      string `json:"filename"`
+	ContentType   string `json:"content_type"`
+	ContentBase64 string `json:"content_base64,omitempty"`
+	RawBytes      []byte `json:"-"`
+}
+
+// UpdateAttachmentRequest represents payload to modify an attachment's metadata
+type UpdateAttachmentRequest struct {
+	Filename   *string `json:"filename,omitempty"`
+	IsArchived *bool   `json:"is_archived,omitempty"`
+}
