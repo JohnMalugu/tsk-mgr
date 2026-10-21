@@ -305,5 +305,84 @@ func (r *sqlAttachmentRepository) IncrementDownloadCount(id int64) error {
 }
 
 func (r *sqlAttachmentRepository) GetStorageMetrics(workspaceID int64) (*model.StorageMetrics, error) {
-	return nil, nil
+	metrics := &model.StorageMetrics{
+		WorkspaceID:   workspaceID,
+		MimeBreakdown: make(map[string]int64),
+		LargestFiles:  []model.AttachmentDB{},
+	}
+
+	totalsQuery := `
+	SELECT COUNT(*), COALESCE(SUM(file_size), 0), COALESCE(SUM(download_count), 0)
+	FROM attachments
+	WHERE workspace_id = ? AND is_archived = 0`
+
+	err := r.db.QueryRow(totalsQuery, workspaceID).Scan(
+		&metrics.TotalFiles,
+		&metrics.TotalBytes,
+		&metrics.TotalDownloads,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get storage totals: %w", err)
+	}
+
+	mimeQuery := `
+	SELECT content_type, COUNT(*)
+	FROM attachments
+	WHERE workspace_id = ? AND is_archived = 0
+	GROUP BY content_type`
+
+	mimeRows, err := r.db.Query(mimeQuery, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query mime breakdown: %w", err)
+	}
+	defer mimeRows.Close()
+
+	for mimeRows.Next() {
+		var mime string
+		var count int64
+		if err := mimeRows.Scan(&mime, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan mime breakdown: %w", err)
+		}
+		metrics.MimeBreakdown[mime] = count
+	}
+
+	largestQuery := `
+	SELECT id, task_id, user_id, workspace_id, filename, original_name, file_size, content_type,
+		storage_path, checksum_sha256, download_count, is_archived, created_at, updated_at
+	FROM attachments
+	WHERE workspace_id = ? AND is_archived = 0
+	ORDER BY file_size DESC
+	LIMIT 5`
+
+	largeRows, err := r.db.Query(largestQuery, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query largest attachments: %w", err)
+	}
+	defer largeRows.Close()
+
+	for largeRows.Next() {
+		var att model.AttachmentDB
+		err := largeRows.Scan(
+			&att.ID,
+			&att.TaskID,
+			&att.UserID,
+			&att.WorkspaceID,
+			&att.Filename,
+			&att.OriginalName,
+			&att.FileSize,
+			&att.ContentType,
+			&att.StoragePath,
+			&att.ChecksumSHA256,
+			&att.DownloadCount,
+			&att.IsArchived,
+			&att.CreatedAt,
+			&att.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan largest attachment: %w", err)
+		}
+		metrics.LargestFiles = append(metrics.LargestFiles, att)
+	}
+
+	return metrics, nil
 }
