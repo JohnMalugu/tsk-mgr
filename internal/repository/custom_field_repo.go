@@ -351,11 +351,105 @@ func (r *sqlCustomFieldRepository) SetFieldValue(val *model.CustomFieldValue) er
 }
 
 func (r *sqlCustomFieldRepository) GetFieldValueByTaskAndField(taskID, fieldID int64) (*model.CustomFieldValue, error) {
-	return nil, nil
+	query := `
+	SELECT id, field_id, task_id, value_text, value_number, value_boolean, value_date, created_at, updated_at
+	FROM custom_field_values
+	WHERE task_id = ? AND field_id = ?`
+
+	row := r.db.QueryRow(query, taskID, fieldID)
+	var val model.CustomFieldValue
+	err := row.Scan(
+		&val.ID,
+		&val.FieldID,
+		&val.TaskID,
+		&val.ValueText,
+		&val.ValueNumber,
+		&val.ValueBoolean,
+		&val.ValueDate,
+		&val.CreatedAt,
+		&val.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get custom field value: %w", err)
+	}
+	return &val, nil
 }
 
 func (r *sqlCustomFieldRepository) GetFieldValuesByTask(taskID int64) ([]model.TaskCustomFieldValueDTO, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		d.id, d.name, d.field_key, d.type, d.required, d.options,
+		v.value_text, v.value_number, v.value_boolean, v.value_date, v.updated_at
+	FROM custom_field_values v
+	JOIN custom_field_definitions d ON v.field_id = d.id
+	WHERE v.task_id = ?
+	ORDER BY d.id ASC`
+
+	rows, err := r.db.Query(query, taskID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get custom field values by task: %w", err)
+	}
+	defer rows.Close()
+
+	var result []model.TaskCustomFieldValueDTO
+	for rows.Next() {
+		var dto model.TaskCustomFieldValueDTO
+		var typeStr, optionsStr string
+		err := rows.Scan(
+			&dto.FieldID,
+			&dto.FieldName,
+			&dto.FieldKey,
+			&typeStr,
+			&dto.Required,
+			&optionsStr,
+			&dto.ValueText,
+			&dto.ValueNumber,
+			&dto.ValueBoolean,
+			&dto.ValueDate,
+			&dto.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan task custom field value: %w", err)
+		}
+
+		dto.Type = model.CustomFieldType(typeStr)
+		if optionsStr != "" {
+			_ = json.Unmarshal([]byte(optionsStr), &dto.Options)
+		}
+		if dto.Options == nil {
+			dto.Options = []string{}
+		}
+
+		switch dto.Type {
+		case model.CustomFieldTypeNumber:
+			if dto.ValueNumber != nil {
+				dto.Value = *dto.ValueNumber
+			}
+		case model.CustomFieldTypeBoolean:
+			if dto.ValueBoolean != nil {
+				dto.Value = *dto.ValueBoolean
+			}
+		case model.CustomFieldTypeDate:
+			if dto.ValueDate != nil {
+				dto.Value = *dto.ValueDate
+			}
+		default:
+			if dto.ValueText != nil {
+				dto.Value = *dto.ValueText
+			}
+		}
+
+		result = append(result, dto)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("row error fetching task custom field values: %w", err)
+	}
+
+	return result, nil
 }
 
 func (r *sqlCustomFieldRepository) DeleteFieldValue(taskID, fieldID int64) error {
