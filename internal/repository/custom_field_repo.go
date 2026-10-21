@@ -311,6 +311,42 @@ func (r *sqlCustomFieldRepository) DeleteFieldDefinition(id int64) error {
 }
 
 func (r *sqlCustomFieldRepository) SetFieldValue(val *model.CustomFieldValue) error {
+	now := time.Now()
+	if val.CreatedAt.IsZero() {
+		val.CreatedAt = now
+	}
+	val.UpdatedAt = now
+
+	query := `
+	INSERT INTO custom_field_values (
+		field_id, task_id, value_text, value_number, value_boolean, value_date, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(field_id, task_id) DO UPDATE SET
+		value_text = excluded.value_text,
+		value_number = excluded.value_number,
+		value_boolean = excluded.value_boolean,
+		value_date = excluded.value_date,
+		updated_at = excluded.updated_at`
+
+	res, err := r.db.Exec(
+		query,
+		val.FieldID,
+		val.TaskID,
+		val.ValueText,
+		val.ValueNumber,
+		val.ValueBoolean,
+		val.ValueDate,
+		val.CreatedAt,
+		val.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set custom field value: %w", err)
+	}
+
+	id, err := res.LastInsertId()
+	if err == nil && id > 0 {
+		val.ID = id
+	}
 	return nil
 }
 
@@ -323,6 +359,19 @@ func (r *sqlCustomFieldRepository) GetFieldValuesByTask(taskID int64) ([]model.T
 }
 
 func (r *sqlCustomFieldRepository) DeleteFieldValue(taskID, fieldID int64) error {
+	query := `DELETE FROM custom_field_values WHERE task_id = ? AND field_id = ?`
+	res, err := r.db.Exec(query, taskID, fieldID)
+	if err != nil {
+		return fmt.Errorf("failed to delete custom field value: %w", err)
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
 	return nil
 }
 
