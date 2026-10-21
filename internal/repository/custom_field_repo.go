@@ -258,10 +258,55 @@ func (r *sqlCustomFieldRepository) ListFieldDefinitions(filter model.CustomField
 }
 
 func (r *sqlCustomFieldRepository) UpdateFieldDefinition(def *model.CustomFieldDefinition) error {
+	def.UpdatedAt = time.Now()
+	optionsJSON, err := json.Marshal(def.Options)
+	if err != nil {
+		optionsJSON = []byte("[]")
+	}
+
+	query := `
+	UPDATE custom_field_definitions
+	SET name = ?, description = ?, required = ?, options = ?, default_value = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(
+		query,
+		def.Name,
+		def.Description,
+		def.Required,
+		string(optionsJSON),
+		def.DefaultValue,
+		def.UpdatedAt,
+		def.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update custom field definition: %w", err)
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
 	return nil
 }
 
 func (r *sqlCustomFieldRepository) DeleteFieldDefinition(id int64) error {
+	query := `DELETE FROM custom_field_definitions WHERE id = ?`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete custom field definition: %w", err)
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
 	return nil
 }
 
