@@ -379,6 +379,30 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	customFieldsQuery := `
+	CREATE TABLE IF NOT EXISTS custom_field_definitions (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		project_id INTEGER,
+		name TEXT NOT NULL,
+		field_key TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		type TEXT NOT NULL,
+		required INTEGER NOT NULL DEFAULT 0,
+		options TEXT NOT NULL DEFAULT '[]',
+		default_value TEXT,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		UNIQUE(workspace_id, field_key),
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(customFieldsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
