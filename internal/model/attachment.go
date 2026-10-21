@@ -32,3 +32,22 @@ type AttachmentFilter struct {
 	Offset      int     `json:"offset"`
 	Limit       int     `json:"limit"`
 }
+
+// AttachmentSummary represents a paginated list of attachments with total metadata
+type AttachmentSummary struct {
+	Attachments []AttachmentDB `json:"attachments"`
+	Total       int            `json:"total"`
+	TotalBytes  int64          `json:"total_bytes"`
+	Offset      int            `json:"offset"`
+	Limit       int            `json:"limit"`
+}
+
+// StorageMetrics summarizes workspace file asset storage consumption and MIME distribution
+type StorageMetrics struct {
+	WorkspaceID    int64            `json:"workspace_id"`
+	TotalFiles     int              `json:"total_files"`
+	TotalBytes     int64            `json:"total_bytes"`
+	TotalDownloads int64            `json:"total_downloads"`
+	MimeBreakdown  map[string]int64 `json:"mime_breakdown"`
+	LargestFiles   []AttachmentDB   `json:"largest_files"`
+}
