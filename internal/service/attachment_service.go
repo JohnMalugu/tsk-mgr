@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -166,7 +167,54 @@ func (s *attachmentService) removeFile(storagePath string) error {
 }
 
 func (s *attachmentService) UploadAttachment(req *model.UploadAttachmentRequest) (*model.AttachmentDB, error) {
-	return nil, nil
+	data, err := ValidateUpload(req)
+	if err != nil {
+		return nil, err
+	}
+
+	checksum := CalculateSHA256(data)
+	sanitized := SanitizeFilename(req.Filename)
+
+	var storagePath string
+	existing, err := s.repo.GetAttachmentByChecksum(req.WorkspaceID, checksum)
+	if err == nil && existing != nil && existing.StoragePath != "" {
+		// Deduplication hit: reuse existing physical file
+		storagePath = existing.StoragePath
+	} else {
+		savedPath, err := s.saveFile(req.WorkspaceID, req.TaskID, sanitized, checksum, data)
+		if err != nil {
+			return nil, err
+		}
+		storagePath = savedPath
+	}
+
+	now := time.Now()
+	att := &model.AttachmentDB{
+		TaskID:         req.TaskID,
+		UserID:         req.UserID,
+		WorkspaceID:    req.WorkspaceID,
+		Filename:       sanitized,
+		OriginalName:   req.Filename,
+		FileSize:       int64(len(data)),
+		ContentType:    req.ContentType,
+		StoragePath:    storagePath,
+		ChecksumSHA256: checksum,
+		DownloadCount:  0,
+		IsArchived:     false,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+
+	id, err := s.repo.CreateAttachment(att)
+	if err != nil {
+		if existing == nil {
+			_ = s.removeFile(storagePath)
+		}
+		return nil, fmt.Errorf("failed to save attachment metadata: %w", err)
+	}
+
+	att.ID = id
+	return att, nil
 }
 
 func (s *attachmentService) GetAttachment(id int64) (*model.AttachmentDB, error) {
