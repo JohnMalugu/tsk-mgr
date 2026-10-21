@@ -10,6 +10,9 @@ import (
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
 
+// ErrAttachmentNotFound is returned when an attachment is not found
+var ErrAttachmentNotFound = errors.New("attachment not found")
+
 // AttachmentRepository defines persistence operations for task file attachments and storage metrics
 type AttachmentRepository interface {
 	CreateAttachment(att *model.AttachmentDB) (int64, error)
@@ -237,10 +240,49 @@ func (r *sqlAttachmentRepository) ListAttachments(filter model.AttachmentFilter)
 }
 
 func (r *sqlAttachmentRepository) UpdateAttachment(att *model.AttachmentDB) error {
+	query := `
+	UPDATE attachments
+	SET filename = ?, content_type = ?, is_archived = ?, updated_at = ?
+	WHERE id = ?`
+
+	att.UpdatedAt = time.Now()
+	res, err := r.db.Exec(query,
+		att.Filename,
+		att.ContentType,
+		att.IsArchived,
+		att.UpdatedAt,
+		att.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update attachment %d: %w", att.ID, err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrAttachmentNotFound
+	}
+
 	return nil
 }
 
 func (r *sqlAttachmentRepository) DeleteAttachment(id int64) error {
+	query := `DELETE FROM attachments WHERE id = ?`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete attachment %d: %w", id, err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrAttachmentNotFound
+	}
+
 	return nil
 }
 
