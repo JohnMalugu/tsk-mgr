@@ -21,3 +21,14 @@ type AttachmentDB struct {
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 }
+
+// AttachmentFilter represents criteria to filter and paginate attachments
+type AttachmentFilter struct {
+	TaskID      *int64  `json:"task_id,omitempty"`
+	WorkspaceID *int64  `json:"workspace_id,omitempty"`
+	UserID      *string `json:"user_id,omitempty"`
+	ContentType *string `json:"content_type,omitempty"`
+	IsArchived  *bool   `json:"is_archived,omitempty"`
+	Offset      int     `json:"offset"`
+	Limit       int     `json:"limit"`
+}
