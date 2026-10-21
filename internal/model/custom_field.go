@@ -82,3 +82,25 @@ type TaskCustomFieldValueDTO struct {
 	ValueDate    *time.Time      `json:"value_date,omitempty"`
 	UpdatedAt    time.Time       `json:"updated_at"`
 }
+
+// CreateCustomFieldRequest represents the payload to create a new custom field definition
+type CreateCustomFieldRequest struct {
+	WorkspaceID  int64           `json:"workspace_id"`
+	ProjectID    *int64          `json:"project_id,omitempty"`
+	Name         string          `json:"name"`
+	FieldKey     string          `json:"field_key,omitempty"`
+	Description  string          `json:"description,omitempty"`
+	Type         CustomFieldType `json:"type"`
+	Required     bool            `json:"required"`
+	Options      []string        `json:"options,omitempty"`
+	DefaultValue *string         `json:"default_value,omitempty"`
+}
+
+// UpdateCustomFieldRequest represents the payload to update an existing custom field definition
+type UpdateCustomFieldRequest struct {
+	Name         *string   `json:"name,omitempty"`
+	Description  *string   `json:"description,omitempty"`
+	Required     *bool     `json:"required,omitempty"`
+	Options      *[]string `json:"options,omitempty"`
+	DefaultValue *string   `json:"default_value,omitempty"`
+}
