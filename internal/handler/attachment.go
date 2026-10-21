@@ -3,7 +3,10 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
@@ -82,4 +85,74 @@ func (h *AttachmentHandler) HandleDeleteAttachment(w http.ResponseWriter, r *htt
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// HandleUploadAttachment handles both JSON (base64) and multipart/form-data file uploads
+func (h *AttachmentHandler) HandleUploadAttachment(w http.ResponseWriter, r *http.Request, taskID int64) {
+	var req model.UploadAttachmentRequest
+	req.TaskID = taskID
+
+	contentType := r.Header.Get("Content-Type")
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		err := r.ParseMultipartForm(model.MaxAttachmentSizeBytes)
+		if err != nil {
+			http.Error(w, "Failed to parse multipart form: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		file, header, err := r.FormFile("file")
+		if err != nil {
+			http.Error(w, "Missing 'file' field in multipart form", http.StatusBadRequest)
+			return
+		}
+		defer file.Close()
+
+		rawBytes, err := io.ReadAll(file)
+		if err != nil {
+			http.Error(w, "Failed to read uploaded file: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		req.RawBytes = rawBytes
+		req.Filename = header.Filename
+		req.ContentType = header.Header.Get("Content-Type")
+
+		if wsStr := r.FormValue("workspace_id"); wsStr != "" {
+			if wsID, err := strconv.ParseInt(wsStr, 10, 64); err == nil {
+				req.WorkspaceID = wsID
+			}
+		}
+		if uID := r.FormValue("user_id"); uID != "" {
+			req.UserID = uID
+		}
+	} else {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid input: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if req.TaskID == 0 {
+			req.TaskID = taskID
+		}
+	}
+
+	att, err := h.svc.UploadAttachment(&req)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidTaskID),
+			errors.Is(err, service.ErrInvalidWorkspaceID),
+			errors.Is(err, service.ErrInvalidUserID),
+			errors.Is(err, service.ErrInvalidFilename),
+			errors.Is(err, service.ErrEmptyFile),
+			errors.Is(err, service.ErrFileTooLarge),
+			errors.Is(err, service.ErrBlockedFileType):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(att)
 }
