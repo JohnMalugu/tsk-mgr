@@ -424,6 +424,31 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	attachmentsQuery := `
+	CREATE TABLE IF NOT EXISTS attachments (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		task_id INTEGER NOT NULL,
+		user_id TEXT NOT NULL,
+		workspace_id INTEGER NOT NULL,
+		filename TEXT NOT NULL,
+		original_name TEXT NOT NULL,
+		file_size INTEGER NOT NULL,
+		content_type TEXT NOT NULL,
+		storage_path TEXT NOT NULL,
+		checksum_sha256 TEXT NOT NULL,
+		download_count INTEGER NOT NULL DEFAULT 0,
+		is_archived INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(attachmentsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
