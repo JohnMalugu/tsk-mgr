@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -163,7 +164,97 @@ func (r *sqlCustomFieldRepository) GetFieldDefinitionByKey(workspaceID int64, ke
 }
 
 func (r *sqlCustomFieldRepository) ListFieldDefinitions(filter model.CustomFieldFilter) ([]model.CustomFieldDefinition, int, error) {
-	return nil, 0, nil
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID > 0 {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.ProjectID != nil {
+		conditions = append(conditions, "(project_id = ? OR project_id IS NULL)")
+		args = append(args, *filter.ProjectID)
+	}
+	if filter.Type != nil {
+		conditions = append(conditions, "type = ?")
+		args = append(args, string(*filter.Type))
+	}
+	if filter.Required != nil {
+		conditions = append(conditions, "required = ?")
+		args = append(args, *filter.Required)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM custom_field_definitions %s", whereClause)
+	var total int
+	err := r.db.QueryRow(countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count custom field definitions: %w", err)
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, workspace_id, project_id, name, field_key, description, type, required, options, default_value, created_at, updated_at
+	FROM custom_field_definitions
+	%s
+	ORDER BY id ASC
+	LIMIT ? OFFSET ?`, whereClause)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.Query(query, queryArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to list custom field definitions: %w", err)
+	}
+	defer rows.Close()
+
+	var defs []model.CustomFieldDefinition
+	for rows.Next() {
+		var def model.CustomFieldDefinition
+		var typeStr, optionsStr string
+		err := rows.Scan(
+			&def.ID,
+			&def.WorkspaceID,
+			&def.ProjectID,
+			&def.Name,
+			&def.FieldKey,
+			&def.Description,
+			&typeStr,
+			&def.Required,
+			&optionsStr,
+			&def.DefaultValue,
+			&def.CreatedAt,
+			&def.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to scan custom field definition: %w", err)
+		}
+		def.Type = model.CustomFieldType(typeStr)
+		if optionsStr != "" {
+			_ = json.Unmarshal([]byte(optionsStr), &def.Options)
+		}
+		if def.Options == nil {
+			def.Options = []string{}
+		}
+		defs = append(defs, def)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("row error listing custom field definitions: %w", err)
+	}
+
+	return defs, total, nil
 }
 
 func (r *sqlCustomFieldRepository) UpdateFieldDefinition(def *model.CustomFieldDefinition) error {
