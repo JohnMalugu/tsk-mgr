@@ -104,3 +104,25 @@ type UpdateCustomFieldRequest struct {
 	Options      *[]string `json:"options,omitempty"`
 	DefaultValue *string   `json:"default_value,omitempty"`
 }
+
+// SetCustomFieldValueRequest represents payload to assign or update a custom field value on a task
+type SetCustomFieldValueRequest struct {
+	FieldID      int64       `json:"field_id,omitempty"`
+	FieldKey     string      `json:"field_key,omitempty"`
+	Value        interface{} `json:"value"`
+	ValueText    *string     `json:"value_text,omitempty"`
+	ValueNumber  *float64    `json:"value_number,omitempty"`
+	ValueBoolean *bool       `json:"value_boolean,omitempty"`
+	ValueDate    *time.Time  `json:"value_date,omitempty"`
+}
+
+// BulkSetCustomFieldItem represents a single field assignment within a bulk update
+type BulkSetCustomFieldItem struct {
+	TaskID int64                      `json:"task_id"`
+	Fields []SetCustomFieldValueRequest `json:"fields"`
+}
+
+// BulkSetCustomFieldRequest represents the payload to set custom fields across multiple tasks
+type BulkSetCustomFieldRequest struct {
+	Assignments []BulkSetCustomFieldItem `json:"assignments"`
+}
