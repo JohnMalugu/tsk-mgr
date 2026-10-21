@@ -263,7 +263,26 @@ func (s *attachmentService) ListAttachments(filter model.AttachmentFilter) (*mod
 }
 
 func (s *attachmentService) OpenAttachmentFile(id int64) (io.ReadCloser, *model.AttachmentDB, string, error) {
-	return nil, nil, "", nil
+	att, err := s.GetAttachment(id)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if att.IsArchived {
+		return nil, nil, "", errors.New("cannot download archived attachment")
+	}
+
+	reader, err := s.readFile(att.StoragePath)
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("file not found on disk: %w", err)
+	}
+
+	etag := fmt.Sprintf("\"%s\"", att.ChecksumSHA256)
+
+	// Increment download counter
+	_ = s.repo.IncrementDownloadCount(id)
+	att.DownloadCount++
+
+	return reader, att, etag, nil
 }
 
 func (s *attachmentService) UpdateAttachment(id int64, req *model.UpdateAttachmentRequest) (*model.AttachmentDB, error) {
