@@ -79,6 +79,10 @@ func main() {
 	sprintSvc := service.NewSprintService(sprintRepo)
 	handler.InitSprintHandler(sprintSvc)
 
+	customFieldRepo := repository.NewCustomFieldRepository(sqliteDB)
+	customFieldSvc := service.NewCustomFieldService(customFieldRepo)
+	handler.InitCustomFieldHandler(customFieldSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
@@ -155,6 +159,11 @@ func main() {
 	fmt.Printf("   POST   http://localhost:8080/v2/sprints/{id}/start\n")
 	fmt.Printf("   POST   http://localhost:8080/v2/sprints/{id}/complete\n")
 	fmt.Printf("   GET    http://localhost:8080/v2/sprints/{id}/metrics\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/custom-fields\n")
+	fmt.Printf("   POST   http://localhost:8080/v2/custom-fields\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/custom-fields/{id}\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/tasks/{id}/custom-fields\n")
+	fmt.Printf("   POST   http://localhost:8080/v2/tasks/{id}/custom-fields\n")
 	fmt.Printf("\n")
 
 	server := &http.Server{
