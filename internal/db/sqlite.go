@@ -478,6 +478,10 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_custom_values_task ON custom_field_values(task_id);
 	CREATE INDEX IF NOT EXISTS idx_custom_values_text ON custom_field_values(field_id, value_text);
 	CREATE INDEX IF NOT EXISTS idx_custom_values_num ON custom_field_values(field_id, value_number);
+	CREATE INDEX IF NOT EXISTS idx_attachments_task ON attachments(task_id);
+	CREATE INDEX IF NOT EXISTS idx_attachments_ws ON attachments(workspace_id);
+	CREATE INDEX IF NOT EXISTS idx_attachments_checksum ON attachments(workspace_id, checksum_sha256);
+	CREATE INDEX IF NOT EXISTS idx_attachments_user ON attachments(user_id);
 	`
 
 	_, err = db.Exec(indexQuery)
