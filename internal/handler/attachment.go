@@ -184,3 +184,89 @@ func (h *AttachmentHandler) HandleDownloadAttachment(w http.ResponseWriter, r *h
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.Copy(w, reader)
 }
+
+// HandleListAttachments returns paginated attachments filtered by task, workspace, user, or mime type
+func (h *AttachmentHandler) HandleListAttachments(w http.ResponseWriter, r *http.Request, taskID *int64) {
+	q := r.URL.Query()
+	filter := model.AttachmentFilter{}
+
+	if taskID != nil && *taskID > 0 {
+		filter.TaskID = taskID
+	} else if tIDStr := q.Get("task_id"); tIDStr != "" {
+		if tID, err := strconv.ParseInt(tIDStr, 10, 64); err == nil {
+			filter.TaskID = &tID
+		}
+	}
+
+	if wsStr := q.Get("workspace_id"); wsStr != "" {
+		if wsID, err := strconv.ParseInt(wsStr, 10, 64); err == nil {
+			filter.WorkspaceID = &wsID
+		}
+	}
+
+	if uID := q.Get("user_id"); uID != "" {
+		filter.UserID = &uID
+	}
+
+	if ct := q.Get("content_type"); ct != "" {
+		filter.ContentType = &ct
+	}
+
+	if archStr := q.Get("is_archived"); archStr != "" {
+		if arch, err := strconv.ParseBool(archStr); err == nil {
+			filter.IsArchived = &arch
+		}
+	}
+
+	if limitStr := q.Get("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil {
+			filter.Limit = l
+		}
+	}
+
+	if offsetStr := q.Get("offset"); offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil {
+			filter.Offset = o
+		}
+	}
+
+	summary, err := h.svc.ListAttachments(filter)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(summary)
+}
+
+// HandleGetStorageMetrics returns storage consumption analytics for a workspace
+func (h *AttachmentHandler) HandleGetStorageMetrics(w http.ResponseWriter, r *http.Request, workspaceID int64) {
+	if workspaceID <= 0 {
+		if wsStr := r.URL.Query().Get("workspace_id"); wsStr != "" {
+			if wsID, err := strconv.ParseInt(wsStr, 10, 64); err == nil {
+				workspaceID = wsID
+			}
+		}
+	}
+
+	if workspaceID <= 0 {
+		http.Error(w, service.ErrInvalidWorkspaceID.Error(), http.StatusBadRequest)
+		return
+	}
+
+	metrics, err := h.svc.GetStorageMetrics(workspaceID)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidWorkspaceID) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(metrics)
+}
