@@ -83,6 +83,10 @@ func main() {
 	customFieldSvc := service.NewCustomFieldService(customFieldRepo)
 	handler.InitCustomFieldHandler(customFieldSvc)
 
+	attachmentRepo := repository.NewAttachmentRepository(sqliteDB)
+	attachmentSvc := service.NewAttachmentService(attachmentRepo, "data/uploads")
+	handler.InitAttachmentHandler(attachmentSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
