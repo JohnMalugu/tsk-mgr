@@ -131,15 +131,53 @@ func (s *customFieldService) CreateFieldDefinition(req *model.CreateCustomFieldR
 }
 
 func (s *customFieldService) GetFieldDefinition(id int64) (*model.CustomFieldDefinition, error) {
-	return nil, nil
+	def, err := s.repo.GetFieldDefinitionByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if def == nil {
+		return nil, ErrCustomFieldNotFound
+	}
+	return def, nil
 }
 
 func (s *customFieldService) GetFieldDefinitionByKey(workspaceID int64, key string) (*model.CustomFieldDefinition, error) {
-	return nil, nil
+	cleanKey := slugifyKey(key)
+	if cleanKey == "" {
+		return nil, ErrCustomFieldKeyInvalid
+	}
+	def, err := s.repo.GetFieldDefinitionByKey(workspaceID, cleanKey)
+	if err != nil {
+		return nil, err
+	}
+	if def == nil {
+		return nil, ErrCustomFieldNotFound
+	}
+	return def, nil
 }
 
 func (s *customFieldService) ListFieldDefinitions(filter model.CustomFieldFilter) (*model.CustomFieldSummary, error) {
-	return nil, nil
+	if filter.Limit <= 0 {
+		filter.Limit = 20
+	}
+	if filter.Limit > 100 {
+		filter.Limit = 100
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	defs, total, err := s.repo.ListFieldDefinitions(filter)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.CustomFieldSummary{
+		Definitions: defs,
+		Total:       total,
+		Offset:      filter.Offset,
+		Limit:       filter.Limit,
+	}, nil
 }
 
 func (s *customFieldService) UpdateFieldDefinition(id int64, req *model.UpdateCustomFieldRequest) (*model.CustomFieldDefinition, error) {
