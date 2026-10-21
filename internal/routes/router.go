@@ -718,6 +718,71 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Task Custom Fields API (/v2/tasks/{id}/custom-fields)
+	if strings.HasPrefix(r.URL.Path, "/v2/tasks/") && strings.Contains(r.URL.Path, "/custom-fields") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/tasks/")
+		parts := strings.Split(trimmed, "/")
+		if len(parts) >= 2 && parts[1] == "custom-fields" {
+			taskID, err := strconv.ParseInt(parts[0], 10, 64)
+			if err == nil {
+				if len(parts) == 2 {
+					if r.Method == http.MethodGet {
+						handler.GlobalCustomFieldHandler.HandleGetTaskCustomFields(w, r, taskID)
+						return
+					}
+					if r.Method == http.MethodPost || r.Method == http.MethodPut {
+						handler.GlobalCustomFieldHandler.HandleSetTaskCustomField(w, r, taskID)
+						return
+					}
+				}
+				if len(parts) == 3 && r.Method == http.MethodDelete {
+					fieldID, err := strconv.ParseInt(parts[2], 10, 64)
+					if err == nil {
+						handler.GlobalCustomFieldHandler.HandleDeleteTaskCustomField(w, r, taskID, fieldID)
+						return
+					}
+				}
+			}
+		}
+	}
+
+	// Custom Field Definitions API (/v2/custom-fields)
+	if r.URL.Path == "/v2/custom-fields" {
+		if r.Method == http.MethodPost {
+			handler.GlobalCustomFieldHandler.HandleCreateDefinition(w, r)
+			return
+		}
+		if r.Method == http.MethodGet {
+			handler.GlobalCustomFieldHandler.HandleListDefinitions(w, r)
+			return
+		}
+	}
+	if r.URL.Path == "/v2/custom-fields/bulk" && r.Method == http.MethodPost {
+		handler.GlobalCustomFieldHandler.HandleBulkSet(w, r)
+		return
+	}
+	if r.URL.Path == "/v2/custom-fields/search" && r.Method == http.MethodGet {
+		handler.GlobalCustomFieldHandler.HandleFindTasksByValue(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/v2/custom-fields/") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/custom-fields/")
+		id, err := strconv.ParseInt(trimmed, 10, 64)
+		if err == nil {
+			switch r.Method {
+			case http.MethodGet:
+				handler.GlobalCustomFieldHandler.HandleGetDefinition(w, r, id)
+				return
+			case http.MethodPut, http.MethodPatch:
+				handler.GlobalCustomFieldHandler.HandleUpdateDefinition(w, r, id)
+				return
+			case http.MethodDelete:
+				handler.GlobalCustomFieldHandler.HandleDeleteDefinition(w, r, id)
+				return
+			}
+		}
+	}
+
 	if r.URL.Path == "/tasks/summary" {
 		handler.HandleTaskSummary(w, r)
 		return
