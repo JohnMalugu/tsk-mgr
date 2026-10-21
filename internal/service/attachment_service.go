@@ -218,11 +218,48 @@ func (s *attachmentService) UploadAttachment(req *model.UploadAttachmentRequest)
 }
 
 func (s *attachmentService) GetAttachment(id int64) (*model.AttachmentDB, error) {
-	return nil, nil
+	if id <= 0 {
+		return nil, ErrAttachmentNotFound
+	}
+
+	att, err := s.repo.GetAttachmentByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if att == nil {
+		return nil, ErrAttachmentNotFound
+	}
+
+	return att, nil
 }
 
 func (s *attachmentService) ListAttachments(filter model.AttachmentFilter) (*model.AttachmentSummary, error) {
-	return nil, nil
+	if filter.Limit <= 0 {
+		filter.Limit = 20
+	} else if filter.Limit > 100 {
+		filter.Limit = 100
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	atts, total, err := s.repo.ListAttachments(filter)
+	if err != nil {
+		return nil, err
+	}
+
+	var totalBytes int64
+	for _, a := range atts {
+		totalBytes += a.FileSize
+	}
+
+	return &model.AttachmentSummary{
+		Attachments: atts,
+		Total:       total,
+		TotalBytes:  totalBytes,
+		Offset:      filter.Offset,
+		Limit:       filter.Limit,
+	}, nil
 }
 
 func (s *attachmentService) OpenAttachmentFile(id int64) (io.ReadCloser, *model.AttachmentDB, string, error) {
