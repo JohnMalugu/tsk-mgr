@@ -5,8 +5,10 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"unicode"
@@ -123,6 +125,44 @@ func NewAttachmentService(repo repository.AttachmentRepository, storageDir strin
 		repo:       repo,
 		storageDir: storageDir,
 	}
+}
+
+func (s *attachmentService) saveFile(workspaceID, taskID int64, filename, checksum string, data []byte) (string, error) {
+	dir := filepath.Join(s.storageDir, fmt.Sprintf("ws_%d", workspaceID), fmt.Sprintf("task_%d", taskID))
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create storage directory: %w", err)
+	}
+
+	shortChecksum := checksum
+	if len(shortChecksum) > 12 {
+		shortChecksum = shortChecksum[:12]
+	}
+	storedName := fmt.Sprintf("%s_%s", shortChecksum, filename)
+	fullPath := filepath.Join(dir, storedName)
+
+	if err := os.WriteFile(fullPath, data, 0644); err != nil {
+		return "", fmt.Errorf("failed to write attachment file to disk: %w", err)
+	}
+
+	return fullPath, nil
+}
+
+func (s *attachmentService) readFile(storagePath string) (io.ReadCloser, error) {
+	file, err := os.Open(storagePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open attachment file: %w", err)
+	}
+	return file, nil
+}
+
+func (s *attachmentService) removeFile(storagePath string) error {
+	if storagePath == "" {
+		return nil
+	}
+	if err := os.Remove(storagePath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to delete file on disk: %w", err)
+	}
+	return nil
 }
 
 func (s *attachmentService) UploadAttachment(req *model.UploadAttachmentRequest) (*model.AttachmentDB, error) {
