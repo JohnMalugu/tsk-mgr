@@ -2,6 +2,7 @@ package model
 
 import (
 	"strings"
+	"time"
 )
 
 // CustomFieldType represents the data type for a custom field definition
@@ -35,4 +36,20 @@ func IsValidCustomFieldType(t string) bool {
 		}
 	}
 	return false
+}
+
+// CustomFieldDefinition represents a custom attribute schema scoped to a workspace and optionally a project
+type CustomFieldDefinition struct {
+	ID           int64           `json:"id"`
+	WorkspaceID  int64           `json:"workspace_id"`
+	ProjectID    *int64          `json:"project_id,omitempty"`
+	Name         string          `json:"name"`
+	FieldKey     string          `json:"field_key"`
+	Description  string          `json:"description,omitempty"`
+	Type         CustomFieldType `json:"type"`
+	Required     bool            `json:"required"`
+	Options      []string        `json:"options,omitempty"`
+	DefaultValue *string         `json:"default_value,omitempty"`
+	CreatedAt    time.Time       `json:"created_at"`
+	UpdatedAt    time.Time       `json:"updated_at"`
 }
