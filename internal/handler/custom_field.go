@@ -151,3 +151,136 @@ func (h *CustomFieldHandler) HandleDeleteDefinition(w http.ResponseWriter, r *ht
 
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (h *CustomFieldHandler) HandleGetTaskCustomFields(w http.ResponseWriter, r *http.Request, taskID int64) {
+	fields, err := h.svc.GetTaskCustomFields(taskID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(fields)
+}
+
+func (h *CustomFieldHandler) HandleSetTaskCustomField(w http.ResponseWriter, r *http.Request, taskID int64) {
+	var req model.SetCustomFieldValueRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	val, err := h.svc.SetFieldValue(taskID, &req)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrCustomFieldNotFound):
+			http.Error(w, err.Error(), http.StatusNotFound)
+		case errors.Is(err, service.ErrRequiredCustomFieldMissing),
+			errors.Is(err, service.ErrInvalidDropdownValue),
+			errors.Is(err, service.ErrInvalidNumberValue),
+			errors.Is(err, service.ErrInvalidBooleanValue),
+			errors.Is(err, service.ErrInvalidDateValue),
+			errors.Is(err, service.ErrInvalidURLValue):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(val)
+}
+
+func (h *CustomFieldHandler) HandleDeleteTaskCustomField(w http.ResponseWriter, r *http.Request, taskID, fieldID int64) {
+	err := h.svc.DeleteFieldValue(taskID, fieldID)
+	if err != nil {
+		if errors.Is(err, service.ErrCustomFieldNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *CustomFieldHandler) HandleBulkSet(w http.ResponseWriter, r *http.Request) {
+	var req model.BulkSetCustomFieldRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	err := h.svc.BulkSetCustomFields(&req)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrCustomFieldNotFound):
+			http.Error(w, err.Error(), http.StatusNotFound)
+		case errors.Is(err, service.ErrRequiredCustomFieldMissing),
+			errors.Is(err, service.ErrInvalidDropdownValue),
+			errors.Is(err, service.ErrInvalidNumberValue),
+			errors.Is(err, service.ErrInvalidBooleanValue),
+			errors.Is(err, service.ErrInvalidDateValue),
+			errors.Is(err, service.ErrInvalidURLValue):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *CustomFieldHandler) HandleFindTasksByValue(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	filter := model.CustomFieldValueFilter{
+		Limit:  20,
+		Offset: 0,
+	}
+
+	if wsStr := query.Get("workspace_id"); wsStr != "" {
+		if wsID, err := strconv.ParseInt(wsStr, 10, 64); err == nil {
+			filter.WorkspaceID = wsID
+		}
+	}
+	if fStr := query.Get("field_id"); fStr != "" {
+		if fID, err := strconv.ParseInt(fStr, 10, 64); err == nil {
+			filter.FieldID = fID
+		}
+	}
+	if key := query.Get("field_key"); key != "" {
+		filter.FieldKey = key
+	}
+	if val := query.Get("query_value"); val != "" {
+		filter.QueryValue = val
+	}
+	if limitStr := query.Get("limit"); limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 {
+			filter.Limit = limit
+		}
+	}
+	if offsetStr := query.Get("offset"); offsetStr != "" {
+		if offset, err := strconv.Atoi(offsetStr); err == nil && offset >= 0 {
+			filter.Offset = offset
+		}
+	}
+
+	taskIDs, total, err := h.svc.FindTasksByFieldValue(filter)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp := map[string]interface{}{
+		"task_ids": taskIDs,
+		"total":    total,
+		"offset":   filter.Offset,
+		"limit":    filter.Limit,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
