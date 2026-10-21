@@ -126,3 +126,31 @@ type BulkSetCustomFieldItem struct {
 type BulkSetCustomFieldRequest struct {
 	Assignments []BulkSetCustomFieldItem `json:"assignments"`
 }
+
+// CustomFieldFilter provides search and pagination criteria for field definitions
+type CustomFieldFilter struct {
+	WorkspaceID int64            `json:"workspace_id"`
+	ProjectID   *int64           `json:"project_id,omitempty"`
+	Type        *CustomFieldType `json:"type,omitempty"`
+	Required    *bool            `json:"required,omitempty"`
+	Offset      int              `json:"offset"`
+	Limit       int              `json:"limit"`
+}
+
+// CustomFieldValueFilter provides criteria to search for tasks by specific custom field value
+type CustomFieldValueFilter struct {
+	WorkspaceID int64  `json:"workspace_id"`
+	FieldID     int64  `json:"field_id,omitempty"`
+	FieldKey    string `json:"field_key,omitempty"`
+	QueryValue  string `json:"query_value"`
+	Offset      int    `json:"offset"`
+	Limit       int    `json:"limit"`
+}
+
+// CustomFieldSummary represents a paginated collection of field definitions
+type CustomFieldSummary struct {
+	Definitions []CustomFieldDefinition `json:"definitions"`
+	Total       int                     `json:"total"`
+	Offset      int                     `json:"offset"`
+	Limit       int                     `json:"limit"`
+}
