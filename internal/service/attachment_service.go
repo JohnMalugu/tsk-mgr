@@ -1,12 +1,91 @@
 package service
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"io"
+	"net/http"
+	"path/filepath"
+	"strings"
+	"unicode"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
 )
+
+// SanitizeFilename cleans the filename to prevent directory traversal and remove problematic characters
+func SanitizeFilename(name string) string {
+	clean := filepath.Base(filepath.Clean(name))
+	clean = strings.ReplaceAll(clean, "..", "")
+	clean = strings.ReplaceAll(clean, "/", "")
+	clean = strings.ReplaceAll(clean, "\\", "")
+
+	var b strings.Builder
+	for _, r := range clean {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '.' || r == '-' || r == '_' {
+			b.WriteRune(r)
+		} else if unicode.IsSpace(r) {
+			b.WriteRune('_')
+		}
+	}
+	res := strings.Trim(b.String(), "._-")
+	if res == "" {
+		return "unnamed_file"
+	}
+	return res
+}
+
+// CalculateSHA256 computes the hex-encoded SHA-256 checksum of the given byte payload
+func CalculateSHA256(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+// ValidateUpload checks common constraints for file uploads
+func ValidateUpload(req *model.UploadAttachmentRequest) ([]byte, error) {
+	if req.TaskID <= 0 {
+		return nil, ErrInvalidTaskID
+	}
+	if req.WorkspaceID <= 0 {
+		return nil, ErrInvalidWorkspaceID
+	}
+	if strings.TrimSpace(req.UserID) == "" {
+		return nil, ErrInvalidUserID
+	}
+	if strings.TrimSpace(req.Filename) == "" {
+		return nil, ErrInvalidFilename
+	}
+
+	if model.IsBlockedExtension(req.Filename) {
+		return nil, ErrBlockedFileType
+	}
+
+	var data []byte
+	if len(req.RawBytes) > 0 {
+		data = req.RawBytes
+	} else if req.ContentBase64 != "" {
+		decoded, err := base64.StdEncoding.DecodeString(req.ContentBase64)
+		if err != nil {
+			return nil, errors.New("invalid base64 content")
+		}
+		data = decoded
+	}
+
+	if len(data) == 0 {
+		return nil, ErrEmptyFile
+	}
+	if len(data) > model.MaxAttachmentSizeBytes {
+		return nil, ErrFileTooLarge
+	}
+
+	if req.ContentType == "" || req.ContentType == "application/octet-stream" {
+		req.ContentType = http.DetectContentType(data)
+	}
+
+	return data, nil
+}
 
 var (
 	ErrAttachmentNotFound = errors.New("attachment not found")
