@@ -109,6 +109,14 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET /v2/custom-fields/search?workspace_id={id}&field_key={key}&query_value={val}` to search and filter tasks by specific custom field value
 - `GET|POST|PUT /v2/tasks/{id}/custom-fields` to retrieve enriched custom fields for a task or assign a typed custom field value
 - `DELETE /v2/tasks/{id}/custom-fields/{fieldId}` to remove a custom field assignment from a task
+- `POST /v2/tasks/{id}/attachments` to attach a file to a task (supports multipart/form-data and JSON base64 payloads with SHA-256 deduplication and blocked executable security rules)
+- `GET /v2/tasks/{id}/attachments` to list all file attachments associated with a specific task
+- `GET /v2/attachments?workspace_id={id}&content_type={type}&is_archived={bool}&limit={n}&offset={n}` to filter attachments across a workspace
+- `GET /v2/attachments/{id}` to retrieve attachment metadata, file size, MIME type, and checksum
+- `PUT|PATCH /v2/attachments/{id}` to update attachment metadata (filename, archive status)
+- `DELETE /v2/attachments/{id}` to remove an attachment record and delete unreferenced physical file assets from disk
+- `GET /v2/attachments/{id}/download` to stream raw binary files with HTTP conditional caching (`ETag`, `If-None-Match`) and download tracking
+- `GET /v2/attachments/metrics?workspace_id={id}` for workspace file storage quota, total bytes, download analytics, and MIME type breakdown
 
 ## Current limitations
 
