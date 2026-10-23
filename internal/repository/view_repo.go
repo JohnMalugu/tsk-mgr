@@ -277,10 +277,57 @@ func (r *sqlSavedViewRepository) DeleteView(id int64) error {
 
 
 func (r *sqlSavedViewRepository) TogglePinView(id int64) (bool, error) {
-	return false, nil
+	now := time.Now()
+	query := `
+	UPDATE saved_views SET
+		is_pinned = CASE WHEN is_pinned = 1 THEN 0 ELSE 1 END,
+		updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query, now, id)
+	if err != nil {
+		return false, err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	if rows == 0 {
+		return false, ErrViewNotFound
+	}
+
+	var isPinnedInt int
+	err = r.db.QueryRow("SELECT is_pinned FROM saved_views WHERE id = ?", id).Scan(&isPinnedInt)
+	if err != nil {
+		return false, err
+	}
+
+	return isPinnedInt == 1, nil
 }
 
 func (r *sqlSavedViewRepository) IncrementViewUsage(id int64) error {
+	now := time.Now()
+	query := `
+	UPDATE saved_views SET
+		usage_count = usage_count + 1,
+		last_used_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query, now, id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrViewNotFound
+	}
+
 	return nil
 }
+
 
