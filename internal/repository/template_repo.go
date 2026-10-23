@@ -350,5 +350,109 @@ func (r *sqlTemplateRepository) IncrementTemplateUsage(id int64) error {
 }
 
 func (r *sqlTemplateRepository) GetTemplateStats(workspaceID int64) (*model.TemplateStats, error) {
-	return nil, nil
+	stats := &model.TemplateStats{
+		WorkspaceID:       workspaceID,
+		CategoryBreakdown: []model.CategoryUsage{},
+		MostPopular:       []model.TaskTemplate{},
+	}
+
+	totalsQuery := `
+	SELECT 
+		COUNT(*),
+		COALESCE(SUM(CASE WHEN is_archived = 0 THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN is_archived = 1 THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(usage_count), 0)
+	FROM task_templates
+	WHERE workspace_id = ?`
+
+	err := r.db.QueryRow(totalsQuery, workspaceID).Scan(
+		&stats.TotalTemplates,
+		&stats.ActiveTemplates,
+		&stats.ArchivedTemplates,
+		&stats.TotalInstantiations,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query template totals: %w", err)
+	}
+
+	catQuery := `
+	SELECT category, COUNT(*), COALESCE(SUM(usage_count), 0)
+	FROM task_templates
+	WHERE workspace_id = ? AND is_archived = 0
+	GROUP BY category
+	ORDER BY COUNT(*) DESC`
+
+	catRows, err := r.db.Query(catQuery, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query category breakdown: %w", err)
+	}
+	defer catRows.Close()
+
+	for catRows.Next() {
+		var cu model.CategoryUsage
+		if err := catRows.Scan(&cu.Category, &cu.Count, &cu.UsageCount); err != nil {
+			return nil, fmt.Errorf("failed to scan category usage: %w", err)
+		}
+		stats.CategoryBreakdown = append(stats.CategoryBreakdown, cu)
+	}
+
+	popQuery := `
+	SELECT id, workspace_id, created_by_user_id, title, description, category,
+		default_priority, estimated_minutes, tags, checklist_items, subtasks,
+		usage_count, is_archived, created_at, updated_at, last_used_at
+	FROM task_templates
+	WHERE workspace_id = ? AND is_archived = 0
+	ORDER BY usage_count DESC, id DESC
+	LIMIT 5`
+
+	popRows, err := r.db.Query(popQuery, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query popular templates: %w", err)
+	}
+	defer popRows.Close()
+
+	for popRows.Next() {
+		var t model.TaskTemplate
+		var tagsJSON, checklistJSON, subtasksJSON string
+		var lastUsedAt sql.NullTime
+
+		err := popRows.Scan(
+			&t.ID,
+			&t.WorkspaceID,
+			&t.CreatedByUserID,
+			&t.Title,
+			&t.Description,
+			&t.Category,
+			&t.DefaultPriority,
+			&t.EstimatedMinutes,
+			&tagsJSON,
+			&checklistJSON,
+			&subtasksJSON,
+			&t.UsageCount,
+			&t.IsArchived,
+			&t.CreatedAt,
+			&t.UpdatedAt,
+			&lastUsedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan popular template: %w", err)
+		}
+
+		if lastUsedAt.Valid {
+			t.LastUsedAt = &lastUsedAt.Time
+		}
+		if err := json.Unmarshal([]byte(tagsJSON), &t.Tags); err != nil {
+			t.Tags = []string{}
+		}
+		if err := json.Unmarshal([]byte(checklistJSON), &t.ChecklistItems); err != nil {
+			t.ChecklistItems = []model.ChecklistBlueprint{}
+		}
+		if err := json.Unmarshal([]byte(subtasksJSON), &t.Subtasks); err != nil {
+			t.Subtasks = []model.SubtaskBlueprint{}
+		}
+
+		stats.MostPopular = append(stats.MostPopular, t)
+	}
+
+	return stats, nil
 }
