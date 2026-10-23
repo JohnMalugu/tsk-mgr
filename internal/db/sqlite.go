@@ -540,6 +540,10 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_task_templates_ws ON task_templates(workspace_id);
 	CREATE INDEX IF NOT EXISTS idx_task_templates_category ON task_templates(workspace_id, category);
 	CREATE INDEX IF NOT EXISTS idx_task_templates_usage ON task_templates(workspace_id, usage_count DESC);
+	CREATE INDEX IF NOT EXISTS idx_saved_views_ws ON saved_views(workspace_id);
+	CREATE INDEX IF NOT EXISTS idx_saved_views_user ON saved_views(user_id);
+	CREATE INDEX IF NOT EXISTS idx_saved_views_pinned ON saved_views(workspace_id, is_pinned);
+	CREATE INDEX IF NOT EXISTS idx_saved_views_usage ON saved_views(workspace_id, usage_count DESC);
 	`
 
 	_, err = db.Exec(indexQuery)
