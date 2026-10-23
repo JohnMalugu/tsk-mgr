@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -17,6 +18,107 @@ var (
 	ErrWorkspaceRequired      = errors.New("workspace_id is required")
 	ErrUnauthorizedViewAccess = errors.New("unauthorized view access")
 )
+
+var allowedSortFields = map[string]bool{
+	model.SortByCreatedAt: true,
+	model.SortByDueDate:   true,
+	model.SortByPriority:  true,
+	model.SortByTitle:     true,
+	model.SortByStatus:    true,
+	model.SortByUpdatedAt: true,
+}
+
+var allowedSortOrders = map[string]bool{
+	model.SortOrderAsc:  true,
+	model.SortOrderDesc: true,
+}
+
+var allowedGroupBys = map[string]bool{
+	model.GroupByNone:      true,
+	model.GroupByStatus:    true,
+	model.GroupByPriority:  true,
+	model.GroupByProjectID: true,
+	model.GroupByAssignee:  true,
+}
+
+func validateViewName(name string) (string, error) {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" || len(trimmed) > 100 {
+		return "", ErrInvalidViewName
+	}
+	return trimmed, nil
+}
+
+func normalizeSortBy(field string) (string, error) {
+	f := strings.ToLower(strings.TrimSpace(field))
+	if f == "" {
+		return model.SortByCreatedAt, nil
+	}
+	if !allowedSortFields[f] {
+		return "", ErrInvalidSortField
+	}
+	return f, nil
+}
+
+func normalizeSortOrder(order string) (string, error) {
+	o := strings.ToLower(strings.TrimSpace(order))
+	if o == "" {
+		return model.SortOrderDesc, nil
+	}
+	if !allowedSortOrders[o] {
+		return "", ErrInvalidSortOrder
+	}
+	return o, nil
+}
+
+func normalizeGroupBy(group string) (string, error) {
+	g := strings.ToLower(strings.TrimSpace(group))
+	if g == "" {
+		return model.GroupByNone, nil
+	}
+	if !allowedGroupBys[g] {
+		return "", ErrInvalidGroupBy
+	}
+	return g, nil
+}
+
+func sanitizeFilterCriteria(criteria *model.ViewFilterCriteria) model.ViewFilterCriteria {
+	if criteria == nil {
+		return model.ViewFilterCriteria{}
+	}
+	res := *criteria
+
+	var cleanedStatuses []string
+	for _, s := range res.Status {
+		t := strings.ToLower(strings.TrimSpace(s))
+		if t != "" {
+			cleanedStatuses = append(cleanedStatuses, t)
+		}
+	}
+	res.Status = cleanedStatuses
+
+	var cleanedPriorities []string
+	for _, p := range res.Priority {
+		t := strings.ToLower(strings.TrimSpace(p))
+		if t != "" {
+			cleanedPriorities = append(cleanedPriorities, t)
+		}
+	}
+	res.Priority = cleanedPriorities
+
+	var cleanedTags []string
+	for _, tag := range res.Tags {
+		t := strings.TrimSpace(tag)
+		if t != "" {
+			cleanedTags = append(cleanedTags, t)
+		}
+	}
+	res.Tags = cleanedTags
+	res.Search = strings.TrimSpace(res.Search)
+
+	return res
+}
+
 
 // SavedViewService orchestrates saved views, filter validation, pinning, cloning, and execution
 type SavedViewService interface {
