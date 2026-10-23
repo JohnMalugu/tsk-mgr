@@ -895,7 +895,59 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Saved Views & Custom Filter Presets API (/v2/views)
+	if r.URL.Path == "/v2/views" {
+		if r.Method == http.MethodPost {
+			handler.GlobalSavedViewHandler.HandleCreate(w, r)
+			return
+		}
+		if r.Method == http.MethodGet {
+			handler.GlobalSavedViewHandler.HandleList(w, r)
+			return
+		}
+	}
+	if strings.HasPrefix(r.URL.Path, "/v2/views/") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/views/")
+		parts := strings.Split(trimmed, "/")
+		id, err := strconv.ParseInt(parts[0], 10, 64)
+		if err == nil {
+			if len(parts) == 2 {
+				switch parts[1] {
+				case "execute":
+					if r.Method == http.MethodGet || r.Method == http.MethodPost {
+						handler.GlobalSavedViewHandler.HandleExecute(w, r, id)
+						return
+					}
+				case "pin":
+					if r.Method == http.MethodPost || r.Method == http.MethodPatch {
+						handler.GlobalSavedViewHandler.HandleTogglePin(w, r, id)
+						return
+					}
+				case "duplicate":
+					if r.Method == http.MethodPost {
+						handler.GlobalSavedViewHandler.HandleDuplicate(w, r, id)
+						return
+					}
+				}
+			}
+			if len(parts) == 1 {
+				switch r.Method {
+				case http.MethodGet:
+					handler.GlobalSavedViewHandler.HandleGetByID(w, r, id)
+					return
+				case http.MethodPut, http.MethodPatch:
+					handler.GlobalSavedViewHandler.HandleUpdate(w, r, id)
+					return
+				case http.MethodDelete:
+					handler.GlobalSavedViewHandler.HandleDelete(w, r, id)
+					return
+				}
+			}
+		}
+	}
+
 	if r.URL.Path == "/tasks/summary" {
+
 		handler.HandleTaskSummary(w, r)
 		return
 	}
