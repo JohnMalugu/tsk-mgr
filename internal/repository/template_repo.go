@@ -94,7 +94,58 @@ func (r *sqlTemplateRepository) CreateTemplate(t *model.TaskTemplate) (int64, er
 }
 
 func (r *sqlTemplateRepository) GetTemplateByID(id int64) (*model.TaskTemplate, error) {
-	return nil, nil
+	query := `
+	SELECT id, workspace_id, created_by_user_id, title, description, category,
+		default_priority, estimated_minutes, tags, checklist_items, subtasks,
+		usage_count, is_archived, created_at, updated_at, last_used_at
+	FROM task_templates
+	WHERE id = ?`
+
+	row := r.db.QueryRow(query, id)
+	var t model.TaskTemplate
+	var tagsJSON, checklistJSON, subtasksJSON string
+	var lastUsedAt sql.NullTime
+
+	err := row.Scan(
+		&t.ID,
+		&t.WorkspaceID,
+		&t.CreatedByUserID,
+		&t.Title,
+		&t.Description,
+		&t.Category,
+		&t.DefaultPriority,
+		&t.EstimatedMinutes,
+		&tagsJSON,
+		&checklistJSON,
+		&subtasksJSON,
+		&t.UsageCount,
+		&t.IsArchived,
+		&t.CreatedAt,
+		&t.UpdatedAt,
+		&lastUsedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get template %d: %w", id, err)
+	}
+
+	if lastUsedAt.Valid {
+		t.LastUsedAt = &lastUsedAt.Time
+	}
+
+	if err := json.Unmarshal([]byte(tagsJSON), &t.Tags); err != nil {
+		t.Tags = []string{}
+	}
+	if err := json.Unmarshal([]byte(checklistJSON), &t.ChecklistItems); err != nil {
+		t.ChecklistItems = []model.ChecklistBlueprint{}
+	}
+	if err := json.Unmarshal([]byte(subtasksJSON), &t.Subtasks); err != nil {
+		t.Subtasks = []model.SubtaskBlueprint{}
+	}
+
+	return &t, nil
 }
 
 func (r *sqlTemplateRepository) ListTemplates(filter model.TemplateFilter) ([]model.TaskTemplate, int, error) {
