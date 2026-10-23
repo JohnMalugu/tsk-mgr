@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -136,8 +138,70 @@ func (r *sqlSavedViewRepository) GetViewByID(id int64) (*model.SavedView, error)
 
 
 func (r *sqlSavedViewRepository) ListViews(workspaceID int64, userID string, onlyPinned bool) ([]*model.SavedView, error) {
-	return nil, nil
+	var conditions []string
+	var args []interface{}
+
+	conditions = append(conditions, "workspace_id = ?")
+	args = append(args, workspaceID)
+
+	if userID != "" {
+		conditions = append(conditions, "(is_shared = 1 OR user_id = ?)")
+		args = append(args, userID)
+	}
+
+	if onlyPinned {
+		conditions = append(conditions, "is_pinned = 1")
+	}
+
+	whereClause := strings.Join(conditions, " AND ")
+	query := fmt.Sprintf(`
+	SELECT id, workspace_id, user_id, name, description, icon, color,
+	       filter_criteria, sort_by, sort_order, group_by,
+	       is_shared, is_pinned, position, usage_count, last_used_at,
+	       created_at, updated_at
+	FROM saved_views
+	WHERE %s
+	ORDER BY is_pinned DESC, position ASC, name ASC`, whereClause)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var views []*model.SavedView
+	for rows.Next() {
+		var v model.SavedView
+		var filterJSON string
+		var sharedInt, pinnedInt int
+
+		err := rows.Scan(
+			&v.ID, &v.WorkspaceID, &v.UserID, &v.Name, &v.Description, &v.Icon, &v.Color,
+			&filterJSON, &v.SortBy, &v.SortOrder, &v.GroupBy,
+			&sharedInt, &pinnedInt, &v.Position, &v.UsageCount, &v.LastUsedAt,
+			&v.CreatedAt, &v.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		v.IsShared = sharedInt == 1
+		v.IsPinned = pinnedInt == 1
+
+		if filterJSON != "" {
+			_ = json.Unmarshal([]byte(filterJSON), &v.FilterCriteria)
+		}
+
+		views = append(views, &v)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return views, nil
 }
+
 
 func (r *sqlSavedViewRepository) UpdateView(v *model.SavedView) error {
 	return nil
