@@ -836,6 +836,65 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Task Templates & Blueprints API (/v2/templates)
+	if r.URL.Path == "/v2/templates" {
+		if r.Method == http.MethodPost {
+			handler.GlobalTemplateHandler.HandleCreateTemplate(w, r)
+			return
+		}
+		if r.Method == http.MethodGet {
+			handler.GlobalTemplateHandler.HandleListTemplates(w, r)
+			return
+		}
+	}
+	if r.URL.Path == "/v2/templates/stats" && r.Method == http.MethodGet {
+		handler.GlobalTemplateHandler.HandleGetTemplateStats(w, r, 0)
+		return
+	}
+	if r.URL.Path == "/v2/templates/import" && r.Method == http.MethodPost {
+		handler.GlobalTemplateHandler.HandleImportTemplate(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/v2/templates/") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/templates/")
+		parts := strings.Split(trimmed, "/")
+		id, err := strconv.ParseInt(parts[0], 10, 64)
+		if err == nil {
+			if len(parts) == 2 {
+				switch parts[1] {
+				case "instantiate":
+					if r.Method == http.MethodPost {
+						handler.GlobalTemplateHandler.HandleInstantiateTemplate(w, r, id)
+						return
+					}
+				case "duplicate":
+					if r.Method == http.MethodPost {
+						handler.GlobalTemplateHandler.HandleDuplicateTemplate(w, r, id)
+						return
+					}
+				case "export":
+					if r.Method == http.MethodGet {
+						handler.GlobalTemplateHandler.HandleExportTemplate(w, r, id)
+						return
+					}
+				}
+			}
+			if len(parts) == 1 {
+				switch r.Method {
+				case http.MethodGet:
+					handler.GlobalTemplateHandler.HandleGetTemplate(w, r, id)
+					return
+				case http.MethodPut, http.MethodPatch:
+					handler.GlobalTemplateHandler.HandleUpdateTemplate(w, r, id)
+					return
+				case http.MethodDelete:
+					handler.GlobalTemplateHandler.HandleDeleteTemplate(w, r, id)
+					return
+				}
+			}
+		}
+	}
+
 	if r.URL.Path == "/tasks/summary" {
 		handler.HandleTaskSummary(w, r)
 		return
