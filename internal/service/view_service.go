@@ -146,12 +146,97 @@ func NewSavedViewService(repo repository.SavedViewRepository, taskRepo repositor
 }
 
 func (s *savedViewService) CreateView(userID string, req model.CreateViewRequest) (*model.SavedView, error) {
-	return nil, nil
+	if req.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+
+	name, err := validateViewName(req.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	sortBy, err := normalizeSortBy(req.SortBy)
+	if err != nil {
+		return nil, err
+	}
+
+	sortOrder, err := normalizeSortOrder(req.SortOrder)
+	if err != nil {
+		return nil, err
+	}
+
+	groupBy, err := normalizeGroupBy(req.GroupBy)
+	if err != nil {
+		return nil, err
+	}
+
+	fc := sanitizeFilterCriteria(req.FilterCriteria)
+
+	icon := strings.TrimSpace(req.Icon)
+	if icon == "" {
+		icon = "bookmark"
+	}
+
+	color := strings.TrimSpace(req.Color)
+	if color == "" {
+		color = "#4F46E5"
+	}
+
+	isShared := false
+	if req.IsShared != nil {
+		isShared = *req.IsShared
+	}
+
+	isPinned := false
+	if req.IsPinned != nil {
+		isPinned = *req.IsPinned
+	}
+
+	position := 0
+	if req.Position != nil {
+		position = *req.Position
+	}
+
+	view := &model.SavedView{
+		WorkspaceID:    req.WorkspaceID,
+		UserID:         userID,
+		Name:           name,
+		Description:    strings.TrimSpace(req.Description),
+		Icon:           icon,
+		Color:          color,
+		FilterCriteria: fc,
+		SortBy:         sortBy,
+		SortOrder:      sortOrder,
+		GroupBy:        groupBy,
+		IsShared:       isShared,
+		IsPinned:       isPinned,
+		Position:       position,
+	}
+
+	id, err := s.repo.CreateView(view)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetViewByID(id)
 }
 
 func (s *savedViewService) GetView(userID string, id int64) (*model.SavedView, error) {
-	return nil, nil
+	view, err := s.repo.GetViewByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrViewNotFound) {
+			return nil, ErrViewNotFound
+		}
+		return nil, err
+	}
+
+	if !view.IsShared && view.UserID != userID {
+		return nil, ErrUnauthorizedViewAccess
+	}
+
+	return view, nil
 }
+
 
 func (s *savedViewService) ListViews(userID string, workspaceID int64, pinnedOnly bool) ([]*model.SavedView, error) {
 	return nil, nil
