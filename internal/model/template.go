@@ -105,3 +105,35 @@ type UpdateTemplateRequest struct {
 	Subtasks         *[]SubtaskBlueprint   `json:"subtasks,omitempty"`
 	IsArchived       *bool                 `json:"is_archived,omitempty"`
 }
+
+// CategoryUsage aggregates template counts and usage per category
+type CategoryUsage struct {
+	Category   string `json:"category"`
+	Count      int    `json:"count"`
+	UsageCount int    `json:"usage_count"`
+}
+
+// TemplateStats provides analytics on template utilization within a workspace
+type TemplateStats struct {
+	WorkspaceID         int64           `json:"workspace_id"`
+	TotalTemplates      int             `json:"total_templates"`
+	ActiveTemplates     int             `json:"active_templates"`
+	ArchivedTemplates   int             `json:"archived_templates"`
+	TotalInstantiations int             `json:"total_instantiations"`
+	CategoryBreakdown   []CategoryUsage `json:"category_breakdown"`
+	MostPopular         []TaskTemplate  `json:"most_popular"`
+}
+
+// TemplateBundle represents a portable export format for task templates
+type TemplateBundle struct {
+	Version    string       `json:"version"`
+	ExportedAt time.Time    `json:"exported_at"`
+	Template   TaskTemplate `json:"template"`
+}
+
+// ImportTemplateRequest defines payload to import a template bundle into a workspace
+type ImportTemplateRequest struct {
+	WorkspaceID     int64          `json:"workspace_id"`
+	CreatedByUserID string         `json:"created_by_user_id"`
+	Bundle          TemplateBundle `json:"bundle"`
+}
