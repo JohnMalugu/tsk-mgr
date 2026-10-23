@@ -78,3 +78,30 @@ type TemplateSummary struct {
 	Offset    int            `json:"offset"`
 	Limit     int            `json:"limit"`
 }
+
+// CreateTemplateRequest defines payload to create a new task template blueprint
+type CreateTemplateRequest struct {
+	WorkspaceID      int64                `json:"workspace_id"`
+	CreatedByUserID  string               `json:"created_by_user_id"`
+	Title            string               `json:"title"`
+	Description      string               `json:"description"`
+	Category         string               `json:"category"`
+	DefaultPriority  string               `json:"default_priority"`
+	EstimatedMinutes int                  `json:"estimated_minutes"`
+	Tags             []string             `json:"tags"`
+	ChecklistItems   []ChecklistBlueprint `json:"checklist_items"`
+	Subtasks         []SubtaskBlueprint   `json:"subtasks"`
+}
+
+// UpdateTemplateRequest defines payload to modify existing template properties
+type UpdateTemplateRequest struct {
+	Title            *string               `json:"title,omitempty"`
+	Description      *string               `json:"description,omitempty"`
+	Category         *string               `json:"category,omitempty"`
+	DefaultPriority  *string               `json:"default_priority,omitempty"`
+	EstimatedMinutes *int                  `json:"estimated_minutes,omitempty"`
+	Tags             *[]string             `json:"tags,omitempty"`
+	ChecklistItems   *[]ChecklistBlueprint `json:"checklist_items,omitempty"`
+	Subtasks         *[]SubtaskBlueprint   `json:"subtasks,omitempty"`
+	IsArchived       *bool                 `json:"is_archived,omitempty"`
+}
