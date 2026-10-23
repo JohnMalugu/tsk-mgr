@@ -389,11 +389,43 @@ func (s *templateService) InstantiateTask(templateID int64, req *model.TemplateI
 }
 
 func (s *templateService) ExportTemplate(id int64) (*model.TemplateBundle, error) {
-	return nil, nil
+	t, err := s.GetTemplate(id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.TemplateBundle{
+		Version:    "1.0",
+		ExportedAt: time.Now(),
+		Template:   *t,
+	}, nil
 }
 
 func (s *templateService) ImportTemplate(req *model.ImportTemplateRequest) (*model.TaskTemplate, error) {
-	return nil, nil
+	if req.WorkspaceID <= 0 {
+		return nil, ErrInvalidWorkspaceID
+	}
+	if strings.TrimSpace(req.CreatedByUserID) == "" {
+		return nil, ErrInvalidUserID
+	}
+	if strings.TrimSpace(req.Bundle.Template.Title) == "" {
+		return nil, ErrInvalidBundle
+	}
+
+	createReq := &model.CreateTemplateRequest{
+		WorkspaceID:      req.WorkspaceID,
+		CreatedByUserID:  req.CreatedByUserID,
+		Title:            req.Bundle.Template.Title,
+		Description:      req.Bundle.Template.Description,
+		Category:         req.Bundle.Template.Category,
+		DefaultPriority:  req.Bundle.Template.DefaultPriority,
+		EstimatedMinutes: req.Bundle.Template.EstimatedMinutes,
+		Tags:             req.Bundle.Template.Tags,
+		ChecklistItems:   req.Bundle.Template.ChecklistItems,
+		Subtasks:         req.Bundle.Template.Subtasks,
+	}
+
+	return s.CreateTemplate(createReq)
 }
 
 func (s *templateService) GetTemplateStats(workspaceID int64) (*model.TemplateStats, error) {
