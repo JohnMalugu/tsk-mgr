@@ -475,6 +475,35 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	savedViewsQuery := `
+	CREATE TABLE IF NOT EXISTS saved_views (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		user_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		icon TEXT NOT NULL DEFAULT 'bookmark',
+		color TEXT NOT NULL DEFAULT '#4F46E5',
+		filter_criteria TEXT NOT NULL DEFAULT '{}',
+		sort_by TEXT NOT NULL DEFAULT 'created_at',
+		sort_order TEXT NOT NULL DEFAULT 'desc',
+		group_by TEXT NOT NULL DEFAULT 'none',
+		is_shared INTEGER NOT NULL DEFAULT 0,
+		is_pinned INTEGER NOT NULL DEFAULT 0,
+		position INTEGER NOT NULL DEFAULT 0,
+		usage_count INTEGER NOT NULL DEFAULT 0,
+		last_used_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(savedViewsQuery)
+	if err != nil {
+		return err
+	}
+
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
