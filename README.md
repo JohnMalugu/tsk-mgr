@@ -117,6 +117,13 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `DELETE /v2/attachments/{id}` to remove an attachment record and delete unreferenced physical file assets from disk
 - `GET /v2/attachments/{id}/download` to stream raw binary files with HTTP conditional caching (`ETag`, `If-None-Match`) and download tracking
 - `GET /v2/attachments/metrics?workspace_id={id}` for workspace file storage quota, total bytes, download analytics, and MIME type breakdown
+- `GET|POST /v2/templates` to search and filter templates by category/workspace or create a new template with subtask and checklist blueprints
+- `GET|PUT|DELETE /v2/templates/{id}` to view template specification, modify metadata and blueprints, or delete a template
+- `POST /v2/templates/{id}/duplicate` to clone an existing template with its subtask and checklist blueprints
+- `POST /v2/templates/{id}/instantiate` to instantiate a new task from the template blueprint with automatic subtask generation and usage tracking
+- `GET /v2/templates/{id}/export` to export a portable template bundle JSON packet
+- `POST /v2/templates/import` to import a template bundle into a target workspace
+- `GET /v2/templates/stats?workspace_id={id}` for template usage analytics, category distribution, and most popular blueprints
 
 ## Current limitations
 
