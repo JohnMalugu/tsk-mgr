@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -267,7 +268,42 @@ func (s *templateService) DeleteTemplate(id int64) error {
 }
 
 func (s *templateService) DuplicateTemplate(id int64) (*model.TaskTemplate, error) {
-	return nil, nil
+	orig, err := s.GetTemplate(id)
+	if err != nil {
+		return nil, err
+	}
+
+	tagsCopy := make([]string, len(orig.Tags))
+	copy(tagsCopy, orig.Tags)
+
+	checklistCopy := make([]model.ChecklistBlueprint, len(orig.ChecklistItems))
+	copy(checklistCopy, orig.ChecklistItems)
+
+	subtasksCopy := make([]model.SubtaskBlueprint, len(orig.Subtasks))
+	copy(subtasksCopy, orig.Subtasks)
+
+	cloned := &model.TaskTemplate{
+		WorkspaceID:      orig.WorkspaceID,
+		CreatedByUserID:  orig.CreatedByUserID,
+		Title:            fmt.Sprintf("Copy of %s", orig.Title),
+		Description:      orig.Description,
+		Category:         orig.Category,
+		DefaultPriority:  orig.DefaultPriority,
+		EstimatedMinutes: orig.EstimatedMinutes,
+		Tags:             tagsCopy,
+		ChecklistItems:   checklistCopy,
+		Subtasks:         subtasksCopy,
+		UsageCount:       0,
+		IsArchived:       false,
+	}
+
+	newID, err := s.templateRepo.CreateTemplate(cloned)
+	if err != nil {
+		return nil, err
+	}
+
+	cloned.ID = newID
+	return cloned, nil
 }
 
 func (s *templateService) InstantiateTask(templateID int64, req *model.TemplateInstantiationRequest) (*model.InstantiatedTaskResult, error) {
