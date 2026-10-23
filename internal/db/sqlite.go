@@ -508,6 +508,9 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_attachments_ws ON attachments(workspace_id);
 	CREATE INDEX IF NOT EXISTS idx_attachments_checksum ON attachments(workspace_id, checksum_sha256);
 	CREATE INDEX IF NOT EXISTS idx_attachments_user ON attachments(user_id);
+	CREATE INDEX IF NOT EXISTS idx_task_templates_ws ON task_templates(workspace_id);
+	CREATE INDEX IF NOT EXISTS idx_task_templates_category ON task_templates(workspace_id, category);
+	CREATE INDEX IF NOT EXISTS idx_task_templates_usage ON task_templates(workspace_id, usage_count DESC);
 	`
 
 	_, err = db.Exec(indexQuery)
