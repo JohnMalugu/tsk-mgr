@@ -2,7 +2,10 @@ package repository
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
@@ -31,7 +34,63 @@ func NewTemplateRepository(db *sql.DB) TemplateRepository {
 }
 
 func (r *sqlTemplateRepository) CreateTemplate(t *model.TaskTemplate) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if t.CreatedAt.IsZero() {
+		t.CreatedAt = now
+	}
+	if t.UpdatedAt.IsZero() {
+		t.UpdatedAt = now
+	}
+
+	tagsJSON, err := json.Marshal(t.Tags)
+	if err != nil {
+		tagsJSON = []byte("[]")
+	}
+
+	checklistJSON, err := json.Marshal(t.ChecklistItems)
+	if err != nil {
+		checklistJSON = []byte("[]")
+	}
+
+	subtasksJSON, err := json.Marshal(t.Subtasks)
+	if err != nil {
+		subtasksJSON = []byte("[]")
+	}
+
+	query := `
+	INSERT INTO task_templates (
+		workspace_id, created_by_user_id, title, description, category,
+		default_priority, estimated_minutes, tags, checklist_items, subtasks,
+		usage_count, is_archived, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query,
+		t.WorkspaceID,
+		t.CreatedByUserID,
+		t.Title,
+		t.Description,
+		t.Category,
+		t.DefaultPriority,
+		t.EstimatedMinutes,
+		string(tagsJSON),
+		string(checklistJSON),
+		string(subtasksJSON),
+		t.UsageCount,
+		t.IsArchived,
+		t.CreatedAt,
+		t.UpdatedAt,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to insert task template: %w", err)
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("failed to retrieve last insert id: %w", err)
+	}
+
+	t.ID = id
+	return id, nil
 }
 
 func (r *sqlTemplateRepository) GetTemplateByID(id int64) (*model.TaskTemplate, error) {
