@@ -42,3 +42,21 @@ type TaskTemplate struct {
 	UpdatedAt        time.Time            `json:"updated_at"`
 	LastUsedAt       *time.Time           `json:"last_used_at,omitempty"`
 }
+
+// TemplateInstantiationRequest defines parameters to instantiate a new task from a template
+type TemplateInstantiationRequest struct {
+	Title          string     `json:"title,omitempty"`
+	ProjectID      *int       `json:"project_id,omitempty"`
+	AssigneeUserID string     `json:"assignee_user_id"`
+	DueDate        *time.Time `json:"due_date,omitempty"`
+	Priority       string     `json:"priority,omitempty"`
+	ExtraTags      []string   `json:"extra_tags,omitempty"`
+}
+
+// InstantiatedTaskResult encapsulates the output of a template instantiation
+type InstantiatedTaskResult struct {
+	Task                  *Task `json:"task"`
+	SubtasksCreated       int   `json:"subtasks_created"`
+	ChecklistItemsCreated int   `json:"checklist_items_created"`
+	TemplateID            int64 `json:"template_id"`
+}
