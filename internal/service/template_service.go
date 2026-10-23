@@ -106,11 +106,71 @@ func NewTemplateService(
 }
 
 func (s *templateService) CreateTemplate(req *model.CreateTemplateRequest) (*model.TaskTemplate, error) {
-	return nil, nil
+	if err := validateTemplateFields(req.Title, req.WorkspaceID, req.CreatedByUserID, req.EstimatedMinutes); err != nil {
+		return nil, err
+	}
+
+	category, err := normalizeCategory(req.Category)
+	if err != nil {
+		return nil, err
+	}
+
+	priority, err := normalizePriority(req.DefaultPriority)
+	if err != nil {
+		return nil, err
+	}
+
+	tags := req.Tags
+	if tags == nil {
+		tags = []string{}
+	}
+	checklists := req.ChecklistItems
+	if checklists == nil {
+		checklists = []model.ChecklistBlueprint{}
+	}
+	subtasks := req.Subtasks
+	if subtasks == nil {
+		subtasks = []model.SubtaskBlueprint{}
+	}
+
+	template := &model.TaskTemplate{
+		WorkspaceID:      req.WorkspaceID,
+		CreatedByUserID:  strings.TrimSpace(req.CreatedByUserID),
+		Title:            strings.TrimSpace(req.Title),
+		Description:      strings.TrimSpace(req.Description),
+		Category:         category,
+		DefaultPriority:  priority,
+		EstimatedMinutes: req.EstimatedMinutes,
+		Tags:             tags,
+		ChecklistItems:   checklists,
+		Subtasks:         subtasks,
+		UsageCount:       0,
+		IsArchived:       false,
+	}
+
+	id, err := s.templateRepo.CreateTemplate(template)
+	if err != nil {
+		return nil, err
+	}
+
+	template.ID = id
+	return template, nil
 }
 
 func (s *templateService) GetTemplate(id int64) (*model.TaskTemplate, error) {
-	return nil, nil
+	if id <= 0 {
+		return nil, ErrTemplateNotFound
+	}
+
+	t, err := s.templateRepo.GetTemplateByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if t == nil {
+		return nil, ErrTemplateNotFound
+	}
+
+	return t, nil
 }
 
 func (s *templateService) ListTemplates(filter model.TemplateFilter) (*model.TemplateSummary, error) {
