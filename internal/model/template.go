@@ -60,3 +60,21 @@ type InstantiatedTaskResult struct {
 	ChecklistItemsCreated int   `json:"checklist_items_created"`
 	TemplateID            int64 `json:"template_id"`
 }
+
+// TemplateFilter specifies criteria for querying task templates
+type TemplateFilter struct {
+	WorkspaceID *int64  `json:"workspace_id,omitempty"`
+	Category    *string `json:"category,omitempty"`
+	SearchQuery *string `json:"search_query,omitempty"`
+	IsArchived  *bool   `json:"is_archived,omitempty"`
+	Offset      int     `json:"offset"`
+	Limit       int     `json:"limit"`
+}
+
+// TemplateSummary provides paginated results of task templates
+type TemplateSummary struct {
+	Templates []TaskTemplate `json:"templates"`
+	Total     int            `json:"total"`
+	Offset    int            `json:"offset"`
+	Limit     int            `json:"limit"`
+}
