@@ -136,7 +136,6 @@ func (r *sqlSavedViewRepository) GetViewByID(id int64) (*model.SavedView, error)
 	return &v, nil
 }
 
-
 func (r *sqlSavedViewRepository) ListViews(workspaceID int64, userID string, onlyPinned bool) ([]*model.SavedView, error) {
 	var conditions []string
 	var args []interface{}
@@ -201,7 +200,6 @@ func (r *sqlSavedViewRepository) ListViews(workspaceID int64, userID string, onl
 
 	return views, nil
 }
-
 
 func (r *sqlSavedViewRepository) UpdateView(v *model.SavedView) error {
 	v.UpdatedAt = time.Now()
@@ -275,7 +273,6 @@ func (r *sqlSavedViewRepository) DeleteView(id int64) error {
 	return nil
 }
 
-
 func (r *sqlSavedViewRepository) TogglePinView(id int64) (bool, error) {
 	now := time.Now()
 	query := `
@@ -329,5 +326,3 @@ func (r *sqlSavedViewRepository) IncrementViewUsage(id int64) error {
 
 	return nil
 }
-
-

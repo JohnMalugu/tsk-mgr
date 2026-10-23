@@ -503,7 +503,6 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
-
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);

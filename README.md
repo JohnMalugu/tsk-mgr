@@ -122,8 +122,12 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `POST /v2/templates/{id}/duplicate` to clone an existing template with its subtask and checklist blueprints
 - `POST /v2/templates/{id}/instantiate` to instantiate a new task from the template blueprint with automatic subtask generation and usage tracking
 - `GET /v2/templates/{id}/export` to export a portable template bundle JSON packet
-- `POST /v2/templates/import` to import a template bundle into a target workspace
 - `GET /v2/templates/stats?workspace_id={id}` for template usage analytics, category distribution, and most popular blueprints
+- `GET|POST /v2/views` to list workspace views (with `pinned=true` filter) or register a new custom saved view with filter criteria, sorting, and grouping
+- `GET|PUT|DELETE /v2/views/{id}` to fetch view details, update view filter criteria and styling, or delete a saved view
+- `POST /v2/views/{id}/duplicate` to clone an existing saved view into a private copy or copy across workspaces
+- `POST|PATCH /v2/views/{id}/pin` to toggle the pinned favorite status of a saved view
+- `GET|POST /v2/views/{id}/execute` to execute a saved view with dynamic multi-dimensional task filtering, sorting, and group count aggregations
 
 ## Current limitations
 

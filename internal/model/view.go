@@ -129,5 +129,3 @@ type ViewSummary struct {
 	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 }
-
-

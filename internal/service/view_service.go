@@ -11,8 +11,6 @@ import (
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
 )
 
-
-
 // Domain errors for saved views
 var (
 	ErrViewNotFound           = errors.New("saved view not found")
@@ -123,7 +121,6 @@ func sanitizeFilterCriteria(criteria *model.ViewFilterCriteria) model.ViewFilter
 
 	return res
 }
-
 
 // SavedViewService orchestrates saved views, filter validation, pinning, cloning, and execution
 type SavedViewService interface {
@@ -242,7 +239,6 @@ func (s *savedViewService) GetView(userID string, id int64) (*model.SavedView, e
 	return view, nil
 }
 
-
 func (s *savedViewService) ListViews(userID string, workspaceID int64, pinnedOnly bool) ([]*model.SavedView, error) {
 	if workspaceID <= 0 {
 		return nil, ErrWorkspaceRequired
@@ -355,7 +351,6 @@ func (s *savedViewService) DeleteView(userID string, id int64) error {
 	return s.repo.DeleteView(id)
 }
 
-
 func (s *savedViewService) TogglePinView(userID string, id int64) (bool, error) {
 	view, err := s.repo.GetViewByID(id)
 	if err != nil {
@@ -371,7 +366,6 @@ func (s *savedViewService) TogglePinView(userID string, id int64) (bool, error) 
 
 	return s.repo.TogglePinView(id)
 }
-
 
 func (s *savedViewService) DuplicateView(userID string, id int64, req model.DuplicateViewRequest) (*model.SavedView, error) {
 	existing, err := s.repo.GetViewByID(id)
@@ -428,7 +422,6 @@ func (s *savedViewService) DuplicateView(userID string, id int64, req model.Dupl
 
 	return s.repo.GetViewByID(newID)
 }
-
 
 var priorityWeights = map[string]int{
 	"urgent": 4,
@@ -661,4 +654,3 @@ func (s *savedViewService) ExecuteView(userID string, id int64) (*model.ViewExec
 		ExecutedAt:  time.Now(),
 	}, nil
 }
-
