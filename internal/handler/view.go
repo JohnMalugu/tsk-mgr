@@ -196,3 +196,86 @@ func (h *SavedViewHandler) HandleDelete(w http.ResponseWriter, r *http.Request, 
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "View deleted successfully"})
 }
+
+// HandleDuplicate duplicates a saved view with an optional new name
+func (h *SavedViewHandler) HandleDuplicate(w http.ResponseWriter, r *http.Request, id int64) {
+	userID := getViewUser(r)
+
+	var req model.DuplicateViewRequest
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	cloned, err := h.svc.DuplicateView(userID, id, req)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case errors.Is(err, service.ErrViewNotFound):
+			w.WriteHeader(http.StatusNotFound)
+		case errors.Is(err, service.ErrUnauthorizedViewAccess):
+			w.WriteHeader(http.StatusForbidden)
+		case errors.Is(err, service.ErrInvalidViewName):
+			w.WriteHeader(http.StatusBadRequest)
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(cloned)
+}
+
+// HandleTogglePin toggles the pinned status of a saved view
+func (h *SavedViewHandler) HandleTogglePin(w http.ResponseWriter, r *http.Request, id int64) {
+	userID := getViewUser(r)
+
+	isPinned, err := h.svc.TogglePinView(userID, id)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case errors.Is(err, service.ErrViewNotFound):
+			w.WriteHeader(http.StatusNotFound)
+		case errors.Is(err, service.ErrUnauthorizedViewAccess):
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":        id,
+		"is_pinned": isPinned,
+	})
+}
+
+// HandleExecute executes a saved view and returns filtered tasks with grouping metrics
+func (h *SavedViewHandler) HandleExecute(w http.ResponseWriter, r *http.Request, id int64) {
+	userID := getViewUser(r)
+
+	result, err := h.svc.ExecuteView(userID, id)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case errors.Is(err, service.ErrViewNotFound):
+			w.WriteHeader(http.StatusNotFound)
+		case errors.Is(err, service.ErrUnauthorizedViewAccess):
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(result)
+}
+
