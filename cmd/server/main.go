@@ -91,6 +91,10 @@ func main() {
 	templateSvc := service.NewTemplateService(templateRepo, taskRepo, subtaskRepo)
 	handler.InitTemplateHandler(templateSvc)
 
+	savedViewRepo := repository.NewSavedViewRepository(sqliteDB)
+	savedViewSvc := service.NewSavedViewService(savedViewRepo, taskRepo)
+	handler.InitSavedViewHandler(savedViewSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
