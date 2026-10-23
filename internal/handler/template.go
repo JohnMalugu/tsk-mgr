@@ -220,3 +220,62 @@ func (h *TemplateHandler) HandleImportTemplate(w http.ResponseWriter, r *http.Re
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(tpl)
 }
+
+// HandleInstantiateTemplate creates a new task instance from a template blueprint
+func (h *TemplateHandler) HandleInstantiateTemplate(w http.ResponseWriter, r *http.Request, id int64) {
+	var req model.TemplateInstantiationRequest
+	if r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid input: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	result, err := h.svc.InstantiateTask(id, &req)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrTemplateNotFound):
+			http.Error(w, err.Error(), http.StatusNotFound)
+		case errors.Is(err, service.ErrTemplateArchived),
+			errors.Is(err, service.ErrInvalidUserID):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(result)
+}
+
+// HandleGetTemplateStats returns template usage and category statistics
+func (h *TemplateHandler) HandleGetTemplateStats(w http.ResponseWriter, r *http.Request, workspaceID int64) {
+	if workspaceID <= 0 {
+		if wsStr := r.URL.Query().Get("workspace_id"); wsStr != "" {
+			if wsID, err := strconv.ParseInt(wsStr, 10, 64); err == nil {
+				workspaceID = wsID
+			}
+		}
+	}
+
+	if workspaceID <= 0 {
+		http.Error(w, service.ErrInvalidWorkspaceID.Error(), http.StatusBadRequest)
+		return
+	}
+
+	stats, err := h.svc.GetTemplateStats(workspaceID)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidWorkspaceID) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(stats)
+}
