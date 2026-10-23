@@ -239,7 +239,11 @@ func (s *savedViewService) GetView(userID string, id int64) (*model.SavedView, e
 
 
 func (s *savedViewService) ListViews(userID string, workspaceID int64, pinnedOnly bool) ([]*model.SavedView, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+
+	return s.repo.ListViews(workspaceID, userID, pinnedOnly)
 }
 
 func (s *savedViewService) UpdateView(userID string, id int64, req model.UpdateViewRequest) (*model.SavedView, error) {
@@ -251,8 +255,21 @@ func (s *savedViewService) DeleteView(userID string, id int64) error {
 }
 
 func (s *savedViewService) TogglePinView(userID string, id int64) (bool, error) {
-	return false, nil
+	view, err := s.repo.GetViewByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrViewNotFound) {
+			return false, ErrViewNotFound
+		}
+		return false, err
+	}
+
+	if !view.IsShared && view.UserID != userID {
+		return false, ErrUnauthorizedViewAccess
+	}
+
+	return s.repo.TogglePinView(id)
 }
+
 
 func (s *savedViewService) DuplicateView(userID string, id int64, req model.DuplicateViewRequest) (*model.SavedView, error) {
 	return nil, nil
