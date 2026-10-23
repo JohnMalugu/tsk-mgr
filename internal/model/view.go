@@ -62,3 +62,41 @@ type SavedView struct {
 	CreatedAt      time.Time          `json:"created_at"`
 	UpdatedAt      time.Time          `json:"updated_at"`
 }
+
+// CreateViewRequest defines payloads for registering a new saved view
+type CreateViewRequest struct {
+	WorkspaceID    int64               `json:"workspace_id"`
+	Name           string              `json:"name"`
+	Description    string              `json:"description,omitempty"`
+	Icon           string              `json:"icon,omitempty"`
+	Color          string              `json:"color,omitempty"`
+	FilterCriteria *ViewFilterCriteria `json:"filter_criteria,omitempty"`
+	SortBy         string              `json:"sort_by,omitempty"`
+	SortOrder      string              `json:"sort_order,omitempty"`
+	GroupBy        string              `json:"group_by,omitempty"`
+	IsShared       *bool               `json:"is_shared,omitempty"`
+	IsPinned       *bool               `json:"is_pinned,omitempty"`
+	Position       *int                `json:"position,omitempty"`
+}
+
+// UpdateViewRequest defines parameters for updating an existing saved view
+type UpdateViewRequest struct {
+	Name           *string             `json:"name,omitempty"`
+	Description    *string             `json:"description,omitempty"`
+	Icon           *string             `json:"icon,omitempty"`
+	Color          *string             `json:"color,omitempty"`
+	FilterCriteria *ViewFilterCriteria `json:"filter_criteria,omitempty"`
+	SortBy         *string             `json:"sort_by,omitempty"`
+	SortOrder      *string             `json:"sort_order,omitempty"`
+	GroupBy        *string             `json:"group_by,omitempty"`
+	IsShared       *bool               `json:"is_shared,omitempty"`
+	IsPinned       *bool               `json:"is_pinned,omitempty"`
+	Position       *int                `json:"position,omitempty"`
+}
+
+// DuplicateViewRequest defines optional overrides when cloning an existing saved view
+type DuplicateViewRequest struct {
+	NewName           string `json:"new_name,omitempty"`
+	TargetWorkspaceID *int64 `json:"target_workspace_id,omitempty"`
+}
+
