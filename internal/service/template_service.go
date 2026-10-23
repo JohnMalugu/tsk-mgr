@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -307,7 +308,84 @@ func (s *templateService) DuplicateTemplate(id int64) (*model.TaskTemplate, erro
 }
 
 func (s *templateService) InstantiateTask(templateID int64, req *model.TemplateInstantiationRequest) (*model.InstantiatedTaskResult, error) {
-	return nil, nil
+	t, err := s.GetTemplate(templateID)
+	if err != nil {
+		return nil, err
+	}
+	if t.IsArchived {
+		return nil, ErrTemplateArchived
+	}
+
+	userID := strings.TrimSpace(req.AssigneeUserID)
+	if userID == "" {
+		userID = t.CreatedByUserID
+	}
+	if userID == "" {
+		return nil, ErrInvalidUserID
+	}
+
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		title = t.Title
+	}
+
+	priority := req.Priority
+	if priority == "" {
+		priority = t.DefaultPriority
+	}
+
+	dueDate := time.Now().Add(24 * time.Hour)
+	if req.DueDate != nil && !req.DueDate.IsZero() {
+		dueDate = *req.DueDate
+	}
+
+	now := time.Now()
+	task := &model.Task{
+		UserID:          userID,
+		ProjectID:       req.ProjectID,
+		Title:           title,
+		Description:     t.Description,
+		Priority:        priority,
+		Status:          model.TaskStatusTodo,
+		EstimateMinutes: t.EstimatedMinutes,
+		DueDate:         dueDate,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+		Completed:       false,
+	}
+
+	if err := s.taskRepo.Create(task); err != nil {
+		return nil, fmt.Errorf("failed to create instantiated task: %w", err)
+	}
+
+	subtasksCreated := 0
+	if s.subtaskRepo != nil && len(t.Subtasks) > 0 {
+		for _, st := range t.Subtasks {
+			subtask := &model.Subtask{
+				TaskID:    task.ID,
+				Title:     st.Title,
+				Position:  st.Position,
+				Completed: false,
+				CreatedAt: now,
+				UpdatedAt: now,
+			}
+			if err := s.subtaskRepo.Create(subtask); err == nil {
+				subtasksCreated++
+			}
+		}
+	}
+
+	checklistCreated := len(t.ChecklistItems)
+
+	// Increment template usage count
+	_ = s.templateRepo.IncrementTemplateUsage(templateID)
+
+	return &model.InstantiatedTaskResult{
+		Task:                  task,
+		SubtasksCreated:       subtasksCreated,
+		ChecklistItemsCreated: checklistCreated,
+		TemplateID:            templateID,
+	}, nil
 }
 
 func (s *templateService) ExportTemplate(id int64) (*model.TemplateBundle, error) {
