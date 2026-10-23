@@ -2,10 +2,65 @@ package service
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
 )
+
+var allowedCategories = map[string]bool{
+	model.TemplateCategoryGeneral:    true,
+	model.TemplateCategoryBugReport:  true,
+	model.TemplateCategoryFeature:    true,
+	model.TemplateCategoryOnboarding: true,
+	model.TemplateCategorySprintTask: true,
+	model.TemplateCategoryReview:     true,
+}
+
+var allowedPriorities = map[string]bool{
+	"low":    true,
+	"medium": true,
+	"high":   true,
+	"urgent": true,
+}
+
+func normalizeCategory(category string) (string, error) {
+	c := strings.ToLower(strings.TrimSpace(category))
+	if c == "" {
+		return model.TemplateCategoryGeneral, nil
+	}
+	if !allowedCategories[c] {
+		return "", ErrInvalidCategory
+	}
+	return c, nil
+}
+
+func normalizePriority(priority string) (string, error) {
+	p := strings.ToLower(strings.TrimSpace(priority))
+	if p == "" {
+		return "medium", nil
+	}
+	if !allowedPriorities[p] {
+		return "", ErrInvalidPriority
+	}
+	return p, nil
+}
+
+func validateTemplateFields(title string, wsID int64, userID string, estimatedMinutes int) error {
+	if strings.TrimSpace(title) == "" {
+		return ErrTemplateTitleRequired
+	}
+	if wsID <= 0 {
+		return ErrInvalidWorkspaceID
+	}
+	if strings.TrimSpace(userID) == "" {
+		return ErrInvalidUserID
+	}
+	if estimatedMinutes < 0 {
+		return ErrNegativeEstimate
+	}
+	return nil
+}
 
 var (
 	ErrTemplateNotFound      = errors.New("task template not found")
