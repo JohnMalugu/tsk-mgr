@@ -2,11 +2,13 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
 )
+
 
 // Domain errors for saved views
 var (
@@ -369,8 +371,61 @@ func (s *savedViewService) TogglePinView(userID string, id int64) (bool, error) 
 
 
 func (s *savedViewService) DuplicateView(userID string, id int64, req model.DuplicateViewRequest) (*model.SavedView, error) {
-	return nil, nil
+	existing, err := s.repo.GetViewByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrViewNotFound) {
+			return nil, ErrViewNotFound
+		}
+		return nil, err
+	}
+
+	if !existing.IsShared && existing.UserID != userID {
+		return nil, ErrUnauthorizedViewAccess
+	}
+
+	targetWs := existing.WorkspaceID
+	if req.TargetWorkspaceID != nil && *req.TargetWorkspaceID > 0 {
+		targetWs = *req.TargetWorkspaceID
+	}
+
+	var newName string
+	if strings.TrimSpace(req.NewName) != "" {
+		validated, err := validateViewName(req.NewName)
+		if err != nil {
+			return nil, err
+		}
+		newName = validated
+	} else {
+		newName = fmt.Sprintf("%s (Copy)", existing.Name)
+		if len(newName) > 100 {
+			newName = newName[:100]
+		}
+	}
+
+	cloned := &model.SavedView{
+		WorkspaceID:    targetWs,
+		UserID:         userID,
+		Name:           newName,
+		Description:    existing.Description,
+		Icon:           existing.Icon,
+		Color:          existing.Color,
+		FilterCriteria: existing.FilterCriteria,
+		SortBy:         existing.SortBy,
+		SortOrder:      existing.SortOrder,
+		GroupBy:        existing.GroupBy,
+		IsShared:       false,
+		IsPinned:       false,
+		Position:       existing.Position + 1,
+	}
+
+	newID, err := s.repo.CreateView(cloned)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetViewByID(newID)
 }
+
 
 func (s *savedViewService) ExecuteView(userID string, id int64) (*model.ViewExecutionResult, error) {
 	return nil, nil
