@@ -310,6 +310,20 @@ func (r *sqlTemplateRepository) UpdateTemplate(t *model.TaskTemplate) error {
 }
 
 func (r *sqlTemplateRepository) DeleteTemplate(id int64) error {
+	query := `DELETE FROM task_templates WHERE id = ?`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete template %d: %w", id, err)
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rows == 0 {
+		return ErrTemplateNotFound
+	}
+
 	return nil
 }
 
