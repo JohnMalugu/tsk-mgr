@@ -204,12 +204,77 @@ func (r *sqlSavedViewRepository) ListViews(workspaceID int64, userID string, onl
 
 
 func (r *sqlSavedViewRepository) UpdateView(v *model.SavedView) error {
+	v.UpdatedAt = time.Now()
+
+	filterJSON, err := json.Marshal(v.FilterCriteria)
+	if err != nil {
+		filterJSON = []byte("{}")
+	}
+
+	sharedInt := 0
+	if v.IsShared {
+		sharedInt = 1
+	}
+	pinnedInt := 0
+	if v.IsPinned {
+		pinnedInt = 1
+	}
+
+	query := `
+	UPDATE saved_views SET
+		name = ?,
+		description = ?,
+		icon = ?,
+		color = ?,
+		filter_criteria = ?,
+		sort_by = ?,
+		sort_order = ?,
+		group_by = ?,
+		is_shared = ?,
+		is_pinned = ?,
+		position = ?,
+		updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query,
+		v.Name, v.Description, v.Icon, v.Color,
+		string(filterJSON), v.SortBy, v.SortOrder, v.GroupBy,
+		sharedInt, pinnedInt, v.Position, v.UpdatedAt,
+		v.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrViewNotFound
+	}
+
 	return nil
 }
 
 func (r *sqlSavedViewRepository) DeleteView(id int64) error {
+	query := `DELETE FROM saved_views WHERE id = ?`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrViewNotFound
+	}
+
 	return nil
 }
+
 
 func (r *sqlSavedViewRepository) TogglePinView(id int64) (bool, error) {
 	return false, nil
