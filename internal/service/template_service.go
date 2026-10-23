@@ -429,5 +429,8 @@ func (s *templateService) ImportTemplate(req *model.ImportTemplateRequest) (*mod
 }
 
 func (s *templateService) GetTemplateStats(workspaceID int64) (*model.TemplateStats, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrInvalidWorkspaceID
+	}
+	return s.templateRepo.GetTemplateStats(workspaceID)
 }
