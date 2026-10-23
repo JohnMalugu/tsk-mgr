@@ -174,7 +174,33 @@ func (s *templateService) GetTemplate(id int64) (*model.TaskTemplate, error) {
 }
 
 func (s *templateService) ListTemplates(filter model.TemplateFilter) (*model.TemplateSummary, error) {
-	return nil, nil
+	if filter.Limit <= 0 {
+		filter.Limit = 20
+	} else if filter.Limit > 100 {
+		filter.Limit = 100
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	if filter.Category != nil {
+		normalized, err := normalizeCategory(*filter.Category)
+		if err == nil {
+			filter.Category = &normalized
+		}
+	}
+
+	list, total, err := s.templateRepo.ListTemplates(filter)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.TemplateSummary{
+		Templates: list,
+		Total:     total,
+		Offset:    filter.Offset,
+		Limit:     filter.Limit,
+	}, nil
 }
 
 func (s *templateService) UpdateTemplate(id int64, req *model.UpdateTemplateRequest) (*model.TaskTemplate, error) {
