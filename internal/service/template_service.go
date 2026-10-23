@@ -204,11 +204,66 @@ func (s *templateService) ListTemplates(filter model.TemplateFilter) (*model.Tem
 }
 
 func (s *templateService) UpdateTemplate(id int64, req *model.UpdateTemplateRequest) (*model.TaskTemplate, error) {
-	return nil, nil
+	t, err := s.GetTemplate(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Title != nil {
+		trimmed := strings.TrimSpace(*req.Title)
+		if trimmed == "" {
+			return nil, ErrTemplateTitleRequired
+		}
+		t.Title = trimmed
+	}
+	if req.Description != nil {
+		t.Description = strings.TrimSpace(*req.Description)
+	}
+	if req.Category != nil {
+		cat, err := normalizeCategory(*req.Category)
+		if err != nil {
+			return nil, err
+		}
+		t.Category = cat
+	}
+	if req.DefaultPriority != nil {
+		prio, err := normalizePriority(*req.DefaultPriority)
+		if err != nil {
+			return nil, err
+		}
+		t.DefaultPriority = prio
+	}
+	if req.EstimatedMinutes != nil {
+		if *req.EstimatedMinutes < 0 {
+			return nil, ErrNegativeEstimate
+		}
+		t.EstimatedMinutes = *req.EstimatedMinutes
+	}
+	if req.Tags != nil {
+		t.Tags = *req.Tags
+	}
+	if req.ChecklistItems != nil {
+		t.ChecklistItems = *req.ChecklistItems
+	}
+	if req.Subtasks != nil {
+		t.Subtasks = *req.Subtasks
+	}
+	if req.IsArchived != nil {
+		t.IsArchived = *req.IsArchived
+	}
+
+	if err := s.templateRepo.UpdateTemplate(t); err != nil {
+		return nil, err
+	}
+
+	return t, nil
 }
 
 func (s *templateService) DeleteTemplate(id int64) error {
-	return nil
+	if _, err := s.GetTemplate(id); err != nil {
+		return err
+	}
+	return s.templateRepo.DeleteTemplate(id)
 }
 
 func (s *templateService) DuplicateTemplate(id int64) (*model.TaskTemplate, error) {
