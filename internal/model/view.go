@@ -100,3 +100,34 @@ type DuplicateViewRequest struct {
 	TargetWorkspaceID *int64 `json:"target_workspace_id,omitempty"`
 }
 
+// ViewGroupCount stores aggregation counts by group key for view execution
+type ViewGroupCount struct {
+	GroupKey string `json:"group_key"`
+	Count    int    `json:"count"`
+}
+
+// ViewExecutionResult packages filtered, sorted tasks along with group aggregations
+type ViewExecutionResult struct {
+	View        *SavedView       `json:"view"`
+	TotalTasks  int              `json:"total_tasks"`
+	Tasks       []*Task          `json:"tasks"`
+	GroupCounts []ViewGroupCount `json:"group_counts,omitempty"`
+	ExecutedAt  time.Time        `json:"executed_at"`
+}
+
+// ViewSummary provides lightweight view metadata for listings and sidebars
+type ViewSummary struct {
+	ID          int64      `json:"id"`
+	WorkspaceID int64      `json:"workspace_id"`
+	UserID      string     `json:"user_id"`
+	Name        string     `json:"name"`
+	Icon        string     `json:"icon"`
+	Color       string     `json:"color"`
+	IsShared    bool       `json:"is_shared"`
+	IsPinned    bool       `json:"is_pinned"`
+	UsageCount  int        `json:"usage_count"`
+	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+}
+
+
