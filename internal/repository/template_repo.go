@@ -259,6 +259,53 @@ func (r *sqlTemplateRepository) ListTemplates(filter model.TemplateFilter) ([]mo
 }
 
 func (r *sqlTemplateRepository) UpdateTemplate(t *model.TaskTemplate) error {
+	t.UpdatedAt = time.Now()
+
+	tagsJSON, err := json.Marshal(t.Tags)
+	if err != nil {
+		tagsJSON = []byte("[]")
+	}
+	checklistJSON, err := json.Marshal(t.ChecklistItems)
+	if err != nil {
+		checklistJSON = []byte("[]")
+	}
+	subtasksJSON, err := json.Marshal(t.Subtasks)
+	if err != nil {
+		subtasksJSON = []byte("[]")
+	}
+
+	query := `
+	UPDATE task_templates
+	SET title = ?, description = ?, category = ?, default_priority = ?,
+		estimated_minutes = ?, tags = ?, checklist_items = ?, subtasks = ?,
+		is_archived = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query,
+		t.Title,
+		t.Description,
+		t.Category,
+		t.DefaultPriority,
+		t.EstimatedMinutes,
+		string(tagsJSON),
+		string(checklistJSON),
+		string(subtasksJSON),
+		t.IsArchived,
+		t.UpdatedAt,
+		t.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update template %d: %w", t.ID, err)
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rows == 0 {
+		return ErrTemplateNotFound
+	}
+
 	return nil
 }
 
