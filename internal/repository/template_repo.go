@@ -328,6 +328,24 @@ func (r *sqlTemplateRepository) DeleteTemplate(id int64) error {
 }
 
 func (r *sqlTemplateRepository) IncrementTemplateUsage(id int64) error {
+	query := `
+	UPDATE task_templates
+	SET usage_count = usage_count + 1, last_used_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query, time.Now(), id)
+	if err != nil {
+		return fmt.Errorf("failed to increment template usage: %w", err)
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rows == 0 {
+		return ErrTemplateNotFound
+	}
+
 	return nil
 }
 
