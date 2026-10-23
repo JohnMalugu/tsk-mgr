@@ -449,6 +449,32 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	templatesQuery := `
+	CREATE TABLE IF NOT EXISTS task_templates (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		created_by_user_id TEXT NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		category TEXT NOT NULL DEFAULT 'general',
+		default_priority TEXT NOT NULL DEFAULT 'medium',
+		estimated_minutes INTEGER NOT NULL DEFAULT 0,
+		tags TEXT NOT NULL DEFAULT '[]',
+		checklist_items TEXT NOT NULL DEFAULT '[]',
+		subtasks TEXT NOT NULL DEFAULT '[]',
+		usage_count INTEGER NOT NULL DEFAULT 0,
+		is_archived INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		last_used_at DATETIME,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(templatesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
