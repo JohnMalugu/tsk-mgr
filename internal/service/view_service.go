@@ -247,12 +247,109 @@ func (s *savedViewService) ListViews(userID string, workspaceID int64, pinnedOnl
 }
 
 func (s *savedViewService) UpdateView(userID string, id int64, req model.UpdateViewRequest) (*model.SavedView, error) {
-	return nil, nil
+	view, err := s.repo.GetViewByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrViewNotFound) {
+			return nil, ErrViewNotFound
+		}
+		return nil, err
+	}
+
+	if view.UserID != userID {
+		return nil, ErrUnauthorizedViewAccess
+	}
+
+	if req.Name != nil {
+		name, err := validateViewName(*req.Name)
+		if err != nil {
+			return nil, err
+		}
+		view.Name = name
+	}
+
+	if req.Description != nil {
+		view.Description = strings.TrimSpace(*req.Description)
+	}
+
+	if req.Icon != nil {
+		icon := strings.TrimSpace(*req.Icon)
+		if icon == "" {
+			icon = "bookmark"
+		}
+		view.Icon = icon
+	}
+
+	if req.Color != nil {
+		color := strings.TrimSpace(*req.Color)
+		if color == "" {
+			color = "#4F46E5"
+		}
+		view.Color = color
+	}
+
+	if req.FilterCriteria != nil {
+		view.FilterCriteria = sanitizeFilterCriteria(req.FilterCriteria)
+	}
+
+	if req.SortBy != nil {
+		sb, err := normalizeSortBy(*req.SortBy)
+		if err != nil {
+			return nil, err
+		}
+		view.SortBy = sb
+	}
+
+	if req.SortOrder != nil {
+		so, err := normalizeSortOrder(*req.SortOrder)
+		if err != nil {
+			return nil, err
+		}
+		view.SortOrder = so
+	}
+
+	if req.GroupBy != nil {
+		gb, err := normalizeGroupBy(*req.GroupBy)
+		if err != nil {
+			return nil, err
+		}
+		view.GroupBy = gb
+	}
+
+	if req.IsShared != nil {
+		view.IsShared = *req.IsShared
+	}
+
+	if req.IsPinned != nil {
+		view.IsPinned = *req.IsPinned
+	}
+
+	if req.Position != nil {
+		view.Position = *req.Position
+	}
+
+	if err := s.repo.UpdateView(view); err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetViewByID(id)
 }
 
 func (s *savedViewService) DeleteView(userID string, id int64) error {
-	return nil
+	view, err := s.repo.GetViewByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrViewNotFound) {
+			return ErrViewNotFound
+		}
+		return err
+	}
+
+	if view.UserID != userID {
+		return ErrUnauthorizedViewAccess
+	}
+
+	return s.repo.DeleteView(id)
 }
+
 
 func (s *savedViewService) TogglePinView(userID string, id int64) (bool, error) {
 	view, err := s.repo.GetViewByID(id)
