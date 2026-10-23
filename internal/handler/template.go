@@ -159,3 +159,64 @@ func (h *TemplateHandler) HandleDeleteTemplate(w http.ResponseWriter, r *http.Re
 
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// HandleDuplicateTemplate clones an existing template
+func (h *TemplateHandler) HandleDuplicateTemplate(w http.ResponseWriter, r *http.Request, id int64) {
+	cloned, err := h.svc.DuplicateTemplate(id)
+	if err != nil {
+		if errors.Is(err, service.ErrTemplateNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(cloned)
+}
+
+// HandleExportTemplate exports a template definition as a portable bundle
+func (h *TemplateHandler) HandleExportTemplate(w http.ResponseWriter, r *http.Request, id int64) {
+	bundle, err := h.svc.ExportTemplate(id)
+	if err != nil {
+		if errors.Is(err, service.ErrTemplateNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(bundle)
+}
+
+// HandleImportTemplate imports a template bundle into a target workspace
+func (h *TemplateHandler) HandleImportTemplate(w http.ResponseWriter, r *http.Request) {
+	var req model.ImportTemplateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	tpl, err := h.svc.ImportTemplate(&req)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidWorkspaceID),
+			errors.Is(err, service.ErrInvalidUserID),
+			errors.Is(err, service.ErrInvalidBundle),
+			errors.Is(err, service.ErrTemplateTitleRequired):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(tpl)
+}
