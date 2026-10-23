@@ -87,6 +87,10 @@ func main() {
 	attachmentSvc := service.NewAttachmentService(attachmentRepo, "data/uploads")
 	handler.InitAttachmentHandler(attachmentSvc)
 
+	templateRepo := repository.NewTemplateRepository(sqliteDB)
+	templateSvc := service.NewTemplateService(templateRepo, taskRepo, subtaskRepo)
+	handler.InitTemplateHandler(templateSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
