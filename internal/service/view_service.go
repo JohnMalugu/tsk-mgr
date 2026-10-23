@@ -3,11 +3,14 @@ package service
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
 )
+
 
 
 // Domain errors for saved views
@@ -427,6 +430,235 @@ func (s *savedViewService) DuplicateView(userID string, id int64, req model.Dupl
 }
 
 
-func (s *savedViewService) ExecuteView(userID string, id int64) (*model.ViewExecutionResult, error) {
-	return nil, nil
+var priorityWeights = map[string]int{
+	"urgent": 4,
+	"high":   3,
+	"medium": 2,
+	"low":    1,
 }
+
+func (s *savedViewService) ExecuteView(userID string, id int64) (*model.ViewExecutionResult, error) {
+	view, err := s.repo.GetViewByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrViewNotFound) {
+			return nil, ErrViewNotFound
+		}
+		return nil, err
+	}
+
+	if !view.IsShared && view.UserID != userID {
+		return nil, ErrUnauthorizedViewAccess
+	}
+
+	_ = s.repo.IncrementViewUsage(id)
+
+	// Fetch tasks for the current user and view owner if shared
+	tasksMap := make(map[int]*model.Task)
+	userTasks, err := s.taskRepo.GetByUserID(userID)
+	if err == nil {
+		for _, t := range userTasks {
+			tasksMap[t.ID] = t
+		}
+	}
+	if view.IsShared && view.UserID != userID {
+		ownerTasks, err := s.taskRepo.GetByUserID(view.UserID)
+		if err == nil {
+			for _, t := range ownerTasks {
+				tasksMap[t.ID] = t
+			}
+		}
+	}
+
+	var allTasks []*model.Task
+	for _, t := range tasksMap {
+		allTasks = append(allTasks, t)
+	}
+
+	fc := view.FilterCriteria
+	var filtered []*model.Task
+
+	statusSet := make(map[string]bool)
+	for _, st := range fc.Status {
+		statusSet[strings.ToLower(st)] = true
+	}
+
+	prioritySet := make(map[string]bool)
+	for _, pr := range fc.Priority {
+		prioritySet[strings.ToLower(pr)] = true
+	}
+
+	tagSet := make(map[string]bool)
+	for _, tg := range fc.Tags {
+		tagSet[strings.ToLower(tg)] = true
+	}
+
+	for _, task := range allTasks {
+		// Status filter
+		if len(statusSet) > 0 {
+			if !statusSet[strings.ToLower(task.Status)] {
+				continue
+			}
+		}
+
+		// Priority filter
+		if len(prioritySet) > 0 {
+			if !prioritySet[strings.ToLower(task.Priority)] {
+				continue
+			}
+		}
+
+		// Project ID filter
+		if fc.ProjectID != nil {
+			if task.ProjectID == nil || *task.ProjectID != *fc.ProjectID {
+				continue
+			}
+		}
+
+		// Assignee filter
+		if fc.AssigneeUserID != nil && *fc.AssigneeUserID != "" {
+			if task.UserID != *fc.AssigneeUserID {
+				continue
+			}
+		}
+
+		// Tags filter (at least one tag match)
+		if len(tagSet) > 0 {
+			matchedTag := false
+			for _, tg := range task.Tags {
+				if tagSet[strings.ToLower(tg)] {
+					matchedTag = true
+					break
+				}
+			}
+			if !matchedTag {
+				continue
+			}
+		}
+
+		// Has Due Date filter
+		if fc.HasDueDate != nil {
+			hasDue := !task.DueDate.IsZero()
+			if hasDue != *fc.HasDueDate {
+				continue
+			}
+		}
+
+		// Due Before filter
+		if fc.DueBefore != nil {
+			if task.DueDate.IsZero() || !task.DueDate.Before(*fc.DueBefore) {
+				continue
+			}
+		}
+
+		// Due After filter
+		if fc.DueAfter != nil {
+			if task.DueDate.IsZero() || !task.DueDate.After(*fc.DueAfter) {
+				continue
+			}
+		}
+
+		// Search term filter (title or description)
+		if fc.Search != "" {
+			searchLower := strings.ToLower(fc.Search)
+			titleMatch := strings.Contains(strings.ToLower(task.Title), searchLower)
+			descMatch := strings.Contains(strings.ToLower(task.Description), searchLower)
+			if !titleMatch && !descMatch {
+				continue
+			}
+		}
+
+		filtered = append(filtered, task)
+	}
+
+	// Sort tasks
+	isAsc := view.SortOrder == model.SortOrderAsc
+	sort.SliceStable(filtered, func(i, j int) bool {
+		ti, tj := filtered[i], filtered[j]
+		var cmp bool
+		switch view.SortBy {
+		case model.SortByDueDate:
+			if ti.DueDate.IsZero() && !tj.DueDate.IsZero() {
+				cmp = false
+			} else if !ti.DueDate.IsZero() && tj.DueDate.IsZero() {
+				cmp = true
+			} else {
+				cmp = ti.DueDate.Before(tj.DueDate)
+			}
+		case model.SortByPriority:
+			wi := priorityWeights[strings.ToLower(ti.Priority)]
+			wj := priorityWeights[strings.ToLower(tj.Priority)]
+			cmp = wi < wj
+		case model.SortByTitle:
+			cmp = strings.ToLower(ti.Title) < strings.ToLower(tj.Title)
+		case model.SortByStatus:
+			cmp = strings.ToLower(ti.Status) < strings.ToLower(tj.Status)
+		case model.SortByUpdatedAt:
+			cmp = ti.UpdatedAt.Before(tj.UpdatedAt)
+		case model.SortByCreatedAt:
+			fallthrough
+		default:
+			cmp = ti.CreatedAt.Before(tj.CreatedAt)
+		}
+
+		if isAsc {
+			return cmp
+		}
+		return !cmp
+	})
+
+	// Group Aggregations
+	var groupCounts []model.ViewGroupCount
+	if view.GroupBy != "" && view.GroupBy != model.GroupByNone {
+		counts := make(map[string]int)
+		for _, task := range filtered {
+			var key string
+			switch view.GroupBy {
+			case model.GroupByStatus:
+				key = task.Status
+				if key == "" {
+					key = "unspecified"
+				}
+			case model.GroupByPriority:
+				key = task.Priority
+				if key == "" {
+					key = "unspecified"
+				}
+			case model.GroupByProjectID:
+				if task.ProjectID != nil {
+					key = fmt.Sprintf("%d", *task.ProjectID)
+				} else {
+					key = "no_project"
+				}
+			case model.GroupByAssignee:
+				key = task.UserID
+				if key == "" {
+					key = "unassigned"
+				}
+			default:
+				key = "all"
+			}
+			counts[key]++
+		}
+
+		var keys []string
+		for k := range counts {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			groupCounts = append(groupCounts, model.ViewGroupCount{
+				GroupKey: k,
+				Count:    counts[k],
+			})
+		}
+	}
+
+	return &model.ViewExecutionResult{
+		View:        view,
+		TotalTasks:  len(filtered),
+		Tasks:       filtered,
+		GroupCounts: groupCounts,
+		ExecutedAt:  time.Now(),
+	}, nil
+}
+
