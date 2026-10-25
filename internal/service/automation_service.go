@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -17,6 +18,115 @@ var (
 	ErrInvalidConditionOperator = errors.New("invalid condition operator")
 	ErrEmptyActions             = errors.New("automation rule must have at least one action")
 )
+
+var allowedTriggers = map[string]bool{
+	model.TriggerTaskCreated:         true,
+	model.TriggerTaskStatusChanged:   true,
+	model.TriggerTaskPriorityChanged: true,
+	model.TriggerTaskAssigned:        true,
+	model.TriggerTaskCompleted:       true,
+}
+
+var allowedConditionFields = map[string]bool{
+	model.FieldStatus:      true,
+	model.FieldPriority:    true,
+	model.FieldTitle:       true,
+	model.FieldDescription: true,
+	model.FieldProjectID:   true,
+	model.FieldAssignee:    true,
+	model.FieldTags:        true,
+}
+
+var allowedConditionOperators = map[string]bool{
+	model.OpEquals:    true,
+	model.OpNotEquals: true,
+	model.OpContains:  true,
+	model.OpIn:        true,
+}
+
+var allowedActionTypes = map[string]bool{
+	model.ActionSetStatus:     true,
+	model.ActionSetPriority:   true,
+	model.ActionAddTag:        true,
+	model.ActionRemoveTag:     true,
+	model.ActionAssignUser:    true,
+	model.ActionCreateSubtask: true,
+}
+
+func validateRuleName(name string) (string, error) {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" || len(trimmed) > 100 {
+		return "", ErrRuleNameRequired
+	}
+	return trimmed, nil
+}
+
+func validateTriggerType(t string) (string, error) {
+	trimmed := strings.ToLower(strings.TrimSpace(t))
+	if !allowedTriggers[trimmed] {
+		return "", ErrInvalidTriggerType
+	}
+	return trimmed, nil
+}
+
+func validateConditions(conditions []model.AutomationCondition) ([]model.AutomationCondition, error) {
+	var validated []model.AutomationCondition
+	for _, c := range conditions {
+		field := strings.ToLower(strings.TrimSpace(c.Field))
+		if !allowedConditionFields[field] {
+			return nil, ErrInvalidConditionField
+		}
+		op := strings.ToLower(strings.TrimSpace(c.Operator))
+		if !allowedConditionOperators[op] {
+			return nil, ErrInvalidConditionOperator
+		}
+		val := strings.TrimSpace(c.Value)
+		var values []string
+		for _, v := range c.Values {
+			vt := strings.TrimSpace(v)
+			if vt != "" {
+				values = append(values, vt)
+			}
+		}
+		if op == model.OpIn && len(values) == 0 {
+			return nil, ErrInvalidConditionOperator
+		}
+		if op != model.OpIn && val == "" {
+			return nil, ErrInvalidConditionOperator
+		}
+		validated = append(validated, model.AutomationCondition{
+			Field:    field,
+			Operator: op,
+			Value:    val,
+			Values:   values,
+		})
+	}
+	return validated, nil
+}
+
+func validateActions(actions []model.AutomationAction) ([]model.AutomationAction, error) {
+	if len(actions) == 0 {
+		return nil, ErrEmptyActions
+	}
+	var validated []model.AutomationAction
+	for _, a := range actions {
+		actType := strings.ToLower(strings.TrimSpace(a.Type))
+		if !allowedActionTypes[actType] {
+			return nil, ErrInvalidActionType
+		}
+		target := strings.TrimSpace(a.TargetValue)
+		if target == "" {
+			return nil, ErrInvalidActionType
+		}
+		validated = append(validated, model.AutomationAction{
+			Type:        actType,
+			TargetValue: target,
+			ExtraInfo:   strings.TrimSpace(a.ExtraInfo),
+		})
+	}
+	return validated, nil
+}
+
 
 // AutomationService coordinates workflow rules, condition evaluation, and action execution
 type AutomationService interface {
