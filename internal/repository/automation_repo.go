@@ -395,9 +395,81 @@ func (r *sqlAutomationRepository) ListExecutionLogs(filter model.AutomationLogFi
 
 
 func (r *sqlAutomationRepository) IncrementRuleExecutionCount(id int64) error {
+	now := time.Now()
+	query := `
+	UPDATE automation_rules SET
+		execution_count = execution_count + 1,
+		last_triggered_at = ?,
+		updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query, now, now, id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrAutomationRuleNotFound
+	}
+
 	return nil
 }
 
 func (r *sqlAutomationRepository) GetAutomationMetrics(workspaceID int64) (*model.AutomationMetrics, error) {
-	return nil, nil
+	metrics := &model.AutomationMetrics{
+		WorkspaceID: workspaceID,
+	}
+
+	ruleQuery := `
+	SELECT COUNT(*), COALESCE(SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END), 0)
+	FROM automation_rules
+	WHERE workspace_id = ?`
+
+	err := r.db.QueryRow(ruleQuery, workspaceID).Scan(&metrics.TotalRules, &metrics.ActiveRules)
+	if err != nil {
+		return nil, err
+	}
+
+	logQuery := `
+	SELECT COUNT(*),
+	       COALESCE(SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END), 0),
+	       COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0),
+	       COALESCE(SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END), 0)
+	FROM automation_execution_logs
+	WHERE workspace_id = ?`
+
+	err = r.db.QueryRow(logQuery, workspaceID).Scan(
+		&metrics.TotalExecutions,
+		&metrics.SuccessfulExecutions,
+		&metrics.FailedExecutions,
+		&metrics.SkippedExecutions,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	topQuery := `
+	SELECT id, name, execution_count, last_triggered_at
+	FROM automation_rules
+	WHERE workspace_id = ? AND execution_count > 0
+	ORDER BY execution_count DESC
+	LIMIT 5`
+
+	rows, err := r.db.Query(topQuery, workspaceID)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var s model.AutomationRuleStat
+			if err := rows.Scan(&s.RuleID, &s.RuleName, &s.ExecutionCount, &s.LastTriggeredAt); err == nil {
+				metrics.TopRules = append(metrics.TopRules, s)
+			}
+		}
+	}
+
+	return metrics, nil
 }
+
