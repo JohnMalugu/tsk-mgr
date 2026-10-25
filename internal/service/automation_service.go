@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -271,6 +272,142 @@ func evaluateAllConditions(task *model.Task, conditions []model.AutomationCondit
 	}
 	return allMatched, details
 }
+
+func previewAction(task *model.Task, a model.AutomationAction) model.ActionPreviewDetail {
+	desc := ""
+	mut := ""
+	switch a.Type {
+	case model.ActionSetStatus:
+		desc = fmt.Sprintf("Change status to '%s'", a.TargetValue)
+		current := ""
+		if task != nil {
+			current = task.Status
+		}
+		mut = fmt.Sprintf("status: '%s' -> '%s'", current, a.TargetValue)
+	case model.ActionSetPriority:
+		desc = fmt.Sprintf("Change priority to '%s'", a.TargetValue)
+		current := ""
+		if task != nil {
+			current = task.Priority
+		}
+		mut = fmt.Sprintf("priority: '%s' -> '%s'", current, a.TargetValue)
+	case model.ActionAddTag:
+		desc = fmt.Sprintf("Add tag '%s'", a.TargetValue)
+		mut = fmt.Sprintf("tags: append '%s'", a.TargetValue)
+	case model.ActionRemoveTag:
+		desc = fmt.Sprintf("Remove tag '%s'", a.TargetValue)
+		mut = fmt.Sprintf("tags: remove '%s'", a.TargetValue)
+	case model.ActionAssignUser:
+		desc = fmt.Sprintf("Assign to user '%s'", a.TargetValue)
+		current := ""
+		if task != nil {
+			current = task.UserID
+		}
+		mut = fmt.Sprintf("assignee: '%s' -> '%s'", current, a.TargetValue)
+	case model.ActionCreateSubtask:
+		desc = fmt.Sprintf("Create subtask '%s'", a.TargetValue)
+		mut = fmt.Sprintf("create subtask with title '%s'", a.TargetValue)
+	default:
+		desc = fmt.Sprintf("Unknown action '%s'", a.Type)
+		mut = "no-op"
+	}
+
+	return model.ActionPreviewDetail{
+		Action:            a,
+		Description:       desc,
+		EstimatedMutation: mut,
+	}
+}
+
+func applyAction(
+	task *model.Task,
+	a model.AutomationAction,
+	taskRepo repository.TaskRepository,
+	subtaskRepo repository.SubtaskRepository,
+) (string, error) {
+	if task == nil {
+		return "", errors.New("cannot apply action to nil task")
+	}
+
+	switch a.Type {
+	case model.ActionSetStatus:
+		task.Status = a.TargetValue
+		task.Completed = (a.TargetValue == model.TaskStatusCompleted)
+		task.UpdatedAt = time.Now()
+		if err := taskRepo.Update(task); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("updated status to '%s'", a.TargetValue), nil
+
+	case model.ActionSetPriority:
+		task.Priority = a.TargetValue
+		task.UpdatedAt = time.Now()
+		if err := taskRepo.Update(task); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("updated priority to '%s'", a.TargetValue), nil
+
+	case model.ActionAddTag:
+		hasTag := false
+		for _, tag := range task.Tags {
+			if strings.EqualFold(tag, a.TargetValue) {
+				hasTag = true
+				break
+			}
+		}
+		if !hasTag {
+			task.Tags = append(task.Tags, a.TargetValue)
+			task.UpdatedAt = time.Now()
+			if err := taskRepo.Update(task); err != nil {
+				return "", err
+			}
+		}
+		return fmt.Sprintf("added tag '%s'", a.TargetValue), nil
+
+	case model.ActionRemoveTag:
+		var updatedTags []string
+		for _, tag := range task.Tags {
+			if !strings.EqualFold(tag, a.TargetValue) {
+				updatedTags = append(updatedTags, tag)
+			}
+		}
+		task.Tags = updatedTags
+		task.UpdatedAt = time.Now()
+		if err := taskRepo.Update(task); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("removed tag '%s'", a.TargetValue), nil
+
+	case model.ActionAssignUser:
+		task.UserID = a.TargetValue
+		task.UpdatedAt = time.Now()
+		if err := taskRepo.Update(task); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("assigned user to '%s'", a.TargetValue), nil
+
+	case model.ActionCreateSubtask:
+		if subtaskRepo != nil && task.ID > 0 {
+			now := time.Now()
+			sub := &model.Subtask{
+				TaskID:    task.ID,
+				Title:     a.TargetValue,
+				Completed: false,
+				Position:  1,
+				CreatedAt: now,
+				UpdatedAt: now,
+			}
+			if err := subtaskRepo.Create(sub); err != nil {
+				return "", err
+			}
+		}
+		return fmt.Sprintf("created subtask '%s'", a.TargetValue), nil
+
+	default:
+		return "skipped unknown action", nil
+	}
+}
+
 
 
 
