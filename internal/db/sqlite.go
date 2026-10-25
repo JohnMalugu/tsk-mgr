@@ -588,6 +588,10 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_saved_views_user ON saved_views(user_id);
 	CREATE INDEX IF NOT EXISTS idx_saved_views_pinned ON saved_views(workspace_id, is_pinned);
 	CREATE INDEX IF NOT EXISTS idx_saved_views_usage ON saved_views(workspace_id, usage_count DESC);
+	CREATE INDEX IF NOT EXISTS idx_automation_rules_ws ON automation_rules(workspace_id, is_active);
+	CREATE INDEX IF NOT EXISTS idx_automation_rules_trigger ON automation_rules(workspace_id, trigger_type);
+	CREATE INDEX IF NOT EXISTS idx_automation_logs_rule ON automation_execution_logs(rule_id, executed_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_automation_logs_ws ON automation_execution_logs(workspace_id, status);
 	`
 
 	_, err = db.Exec(indexQuery)
