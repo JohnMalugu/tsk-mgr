@@ -186,5 +186,35 @@ type AutomationDryRunResult struct {
 	EvaluatedAt          time.Time                   `json:"evaluated_at"`
 }
 
+// AutomationLogFilter contains criteria to filter execution logs
+type AutomationLogFilter struct {
+	WorkspaceID int64  `json:"workspace_id"`
+	RuleID      *int64 `json:"rule_id,omitempty"`
+	Status      string `json:"status,omitempty"`
+	Limit       int    `json:"limit,omitempty"`
+	Offset      int    `json:"offset,omitempty"`
+}
+
+// AutomationRuleStat aggregates execution numbers per rule
+type AutomationRuleStat struct {
+	RuleID         int64      `json:"rule_id"`
+	RuleName       string     `json:"rule_name"`
+	ExecutionCount int        `json:"execution_count"`
+	LastTriggeredAt *time.Time `json:"last_triggered_at,omitempty"`
+}
+
+// AutomationMetrics summarizes rule performance and execution outcomes for a workspace
+type AutomationMetrics struct {
+	WorkspaceID          int64                `json:"workspace_id"`
+	TotalRules           int                  `json:"total_rules"`
+	ActiveRules          int                  `json:"active_rules"`
+	TotalExecutions      int                  `json:"total_executions"`
+	SuccessfulExecutions int                  `json:"successful_executions"`
+	FailedExecutions     int                  `json:"failed_executions"`
+	SkippedExecutions    int                  `json:"skipped_executions"`
+	TopRules             []AutomationRuleStat `json:"top_rules,omitempty"`
+}
+
+
 
 
