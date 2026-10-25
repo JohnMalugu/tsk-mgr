@@ -273,3 +273,28 @@ func (h *AutomationHandler) HandleGetMetrics(w http.ResponseWriter, r *http.Requ
 	_ = json.NewEncoder(w).Encode(metrics)
 }
 
+// HandleDryRunRule tests conditions and provides action previews without executing mutations
+func (h *AutomationHandler) HandleDryRunRule(w http.ResponseWriter, r *http.Request, id int64) {
+	var req model.AutomationDryRunRequest
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	result, err := h.svc.DryRunRule(id, req)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		if errors.Is(err, service.ErrAutomationRuleNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(result)
+}
+
+
