@@ -133,3 +133,25 @@ type AutomationExecutionLog struct {
 	ExecutedAt      time.Time `json:"executed_at"`
 }
 
+// CreateAutomationRuleRequest defines payloads for registering a new automation rule
+type CreateAutomationRuleRequest struct {
+	WorkspaceID int64                 `json:"workspace_id"`
+	Name        string                `json:"name"`
+	Description string                `json:"description,omitempty"`
+	TriggerType string                `json:"trigger_type"`
+	Conditions  []AutomationCondition `json:"conditions"`
+	Actions     []AutomationAction    `json:"actions"`
+	IsActive    *bool                 `json:"is_active,omitempty"`
+}
+
+// UpdateAutomationRuleRequest defines parameters for updating an existing automation rule
+type UpdateAutomationRuleRequest struct {
+	Name        *string                `json:"name,omitempty"`
+	Description *string                `json:"description,omitempty"`
+	TriggerType *string                `json:"trigger_type,omitempty"`
+	Conditions  *[]AutomationCondition `json:"conditions,omitempty"`
+	Actions     *[]AutomationAction    `json:"actions,omitempty"`
+	IsActive    *bool                  `json:"is_active,omitempty"`
+}
+
+
