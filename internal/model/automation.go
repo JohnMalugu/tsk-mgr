@@ -19,6 +19,18 @@ const (
 	OpIn        = "in"
 )
 
+// Supported condition field targets
+const (
+	FieldStatus      = "status"
+	FieldPriority    = "priority"
+	FieldTitle       = "title"
+	FieldDescription = "description"
+	FieldProjectID   = "project_id"
+	FieldAssignee    = "assignee"
+	FieldTags        = "tags"
+)
+
+
 // Supported automation actions
 const (
 	ActionSetStatus      = "set_status"
@@ -37,12 +49,41 @@ type AutomationCondition struct {
 	Values   []string `json:"values,omitempty"`   // comparison values for "in" operator
 }
 
+// IsValid validates whether the condition has supported fields and operators
+func (c *AutomationCondition) IsValid() bool {
+	if c.Field == "" || c.Operator == "" {
+		return false
+	}
+	switch c.Operator {
+	case OpEquals, OpNotEquals, OpContains:
+		return c.Value != ""
+	case OpIn:
+		return len(c.Values) > 0
+	default:
+		return false
+	}
+}
+
 // AutomationAction represents a mutation executed when conditions match
 type AutomationAction struct {
 	Type        string `json:"type"`                  // ActionSetStatus, ActionSetPriority, etc.
 	TargetValue string `json:"target_value"`          // new status, new priority, tag name, assignee ID, etc.
 	ExtraInfo   string `json:"extra_info,omitempty"`  // additional metadata e.g. subtask title
 }
+
+// IsValid checks if action contains valid type and non-empty target
+func (a *AutomationAction) IsValid() bool {
+	if a.Type == "" || a.TargetValue == "" {
+		return false
+	}
+	switch a.Type {
+	case ActionSetStatus, ActionSetPriority, ActionAddTag, ActionRemoveTag, ActionAssignUser, ActionCreateSubtask:
+		return true
+	default:
+		return false
+	}
+}
+
 
 // AutomationRule represents a configurable reactive workflow rule
 type AutomationRule struct {
