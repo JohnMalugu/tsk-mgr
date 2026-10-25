@@ -946,7 +946,76 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Task Automations & Workflow Engine API (/v2/automations)
+	if r.URL.Path == "/v2/automations" {
+		if r.Method == http.MethodPost {
+			handler.GlobalAutomationHandler.HandleCreateRule(w, r)
+			return
+		}
+		if r.Method == http.MethodGet {
+			handler.GlobalAutomationHandler.HandleListRules(w, r)
+			return
+		}
+	}
+	if r.URL.Path == "/v2/automations/metrics" && r.Method == http.MethodGet {
+		handler.GlobalAutomationHandler.HandleGetMetrics(w, r)
+		return
+	}
+	if r.URL.Path == "/v2/automations/logs" && r.Method == http.MethodGet {
+		handler.GlobalAutomationHandler.HandleListLogs(w, r)
+		return
+	}
+	if r.URL.Path == "/v2/automations/dispatch" && r.Method == http.MethodPost {
+		handler.GlobalAutomationHandler.HandleDispatchEvent(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/v2/automations/") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/automations/")
+		parts := strings.Split(trimmed, "/")
+		id, err := strconv.ParseInt(parts[0], 10, 64)
+		if err == nil {
+			if len(parts) == 2 {
+				switch parts[1] {
+				case "toggle":
+					if r.Method == http.MethodPost || r.Method == http.MethodPatch {
+						handler.GlobalAutomationHandler.HandleToggleRule(w, r, id)
+						return
+					}
+				case "duplicate":
+					if r.Method == http.MethodPost {
+						handler.GlobalAutomationHandler.HandleDuplicateRule(w, r, id)
+						return
+					}
+				case "dry-run":
+					if r.Method == http.MethodPost {
+						handler.GlobalAutomationHandler.HandleDryRunRule(w, r, id)
+						return
+					}
+				case "logs":
+					if r.Method == http.MethodGet {
+						handler.GlobalAutomationHandler.HandleGetRuleLogs(w, r, id)
+						return
+					}
+				}
+			}
+			if len(parts) == 1 {
+				switch r.Method {
+				case http.MethodGet:
+					handler.GlobalAutomationHandler.HandleGetRule(w, r, id)
+					return
+				case http.MethodPut, http.MethodPatch:
+					handler.GlobalAutomationHandler.HandleUpdateRule(w, r, id)
+					return
+				case http.MethodDelete:
+					handler.GlobalAutomationHandler.HandleDeleteRule(w, r, id)
+					return
+				}
+			}
+		}
+	}
+
 	if r.URL.Path == "/tasks/summary" {
+
 
 		handler.HandleTaskSummary(w, r)
 		return
