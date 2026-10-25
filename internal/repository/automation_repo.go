@@ -192,16 +192,102 @@ func (r *sqlAutomationRepository) ListRules(workspaceID int64, activeOnly *bool,
 
 
 func (r *sqlAutomationRepository) UpdateRule(rule *model.AutomationRule) error {
+	rule.UpdatedAt = time.Now()
+
+	condJSON, err := json.Marshal(rule.Conditions)
+	if err != nil {
+		condJSON = []byte("[]")
+	}
+
+	actJSON, err := json.Marshal(rule.Actions)
+	if err != nil {
+		actJSON = []byte("[]")
+	}
+
+	activeInt := 0
+	if rule.IsActive {
+		activeInt = 1
+	}
+
+	query := `
+	UPDATE automation_rules SET
+		name = ?,
+		description = ?,
+		trigger_type = ?,
+		conditions_json = ?,
+		actions_json = ?,
+		is_active = ?,
+		updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query,
+		rule.Name, rule.Description, rule.TriggerType,
+		string(condJSON), string(actJSON), activeInt, rule.UpdatedAt,
+		rule.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrAutomationRuleNotFound
+	}
+
 	return nil
 }
 
 func (r *sqlAutomationRepository) DeleteRule(id int64) error {
+	query := `DELETE FROM automation_rules WHERE id = ?`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrAutomationRuleNotFound
+	}
+
 	return nil
 }
 
 func (r *sqlAutomationRepository) ToggleRuleActive(id int64) (bool, error) {
-	return false, nil
+	now := time.Now()
+	query := `
+	UPDATE automation_rules SET
+		is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END,
+		updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query, now, id)
+	if err != nil {
+		return false, err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	if rows == 0 {
+		return false, ErrAutomationRuleNotFound
+	}
+
+	var activeInt int
+	err = r.db.QueryRow("SELECT is_active FROM automation_rules WHERE id = ?", id).Scan(&activeInt)
+	if err != nil {
+		return false, err
+	}
+
+	return activeInt == 1, nil
 }
+
 
 func (r *sqlAutomationRepository) RecordExecutionLog(log *model.AutomationExecutionLog) (int64, error) {
 	return 0, nil
