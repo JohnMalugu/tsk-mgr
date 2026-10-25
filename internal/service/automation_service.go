@@ -166,16 +166,72 @@ func NewAutomationService(
 }
 
 func (s *automationService) CreateRule(userID string, req model.CreateAutomationRuleRequest) (*model.AutomationRule, error) {
-	return nil, nil
+	if req.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+
+	name, err := validateRuleName(req.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	trigger, err := validateTriggerType(req.TriggerType)
+	if err != nil {
+		return nil, err
+	}
+
+	conditions, err := validateConditions(req.Conditions)
+	if err != nil {
+		return nil, err
+	}
+
+	actions, err := validateActions(req.Actions)
+	if err != nil {
+		return nil, err
+	}
+
+	isActive := true
+	if req.IsActive != nil {
+		isActive = *req.IsActive
+	}
+
+	rule := &model.AutomationRule{
+		WorkspaceID:     req.WorkspaceID,
+		CreatedByUserID: userID,
+		Name:            name,
+		Description:     strings.TrimSpace(req.Description),
+		TriggerType:     trigger,
+		Conditions:      conditions,
+		Actions:         actions,
+		IsActive:        isActive,
+	}
+
+	id, err := s.repo.CreateRule(rule)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetRuleByID(id)
 }
 
 func (s *automationService) GetRule(id int64) (*model.AutomationRule, error) {
-	return nil, nil
+	rule, err := s.repo.GetRuleByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrAutomationRuleNotFound) {
+			return nil, ErrAutomationRuleNotFound
+		}
+		return nil, err
+	}
+	return rule, nil
 }
 
 func (s *automationService) ListRules(workspaceID int64, activeOnly *bool, triggerType string) ([]*model.AutomationRule, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	return s.repo.ListRules(workspaceID, activeOnly, triggerType)
 }
+
 
 func (s *automationService) UpdateRule(id int64, req model.UpdateAutomationRuleRequest) (*model.AutomationRule, error) {
 	return nil, nil
