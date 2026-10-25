@@ -2,7 +2,9 @@ package repository
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
@@ -34,12 +36,90 @@ func NewAutomationRepository(db *sql.DB) AutomationRepository {
 }
 
 func (r *sqlAutomationRepository) CreateRule(rule *model.AutomationRule) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if rule.CreatedAt.IsZero() {
+		rule.CreatedAt = now
+	}
+	if rule.UpdatedAt.IsZero() {
+		rule.UpdatedAt = now
+	}
+
+	condJSON, err := json.Marshal(rule.Conditions)
+	if err != nil {
+		condJSON = []byte("[]")
+	}
+
+	actJSON, err := json.Marshal(rule.Actions)
+	if err != nil {
+		actJSON = []byte("[]")
+	}
+
+	activeInt := 0
+	if rule.IsActive {
+		activeInt = 1
+	}
+
+	query := `
+	INSERT INTO automation_rules (
+		workspace_id, created_by_user_id, name, description, trigger_type,
+		conditions_json, actions_json, is_active, execution_count,
+		last_triggered_at, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query,
+		rule.WorkspaceID, rule.CreatedByUserID, rule.Name, rule.Description, rule.TriggerType,
+		string(condJSON), string(actJSON), activeInt, rule.ExecutionCount,
+		rule.LastTriggeredAt, rule.CreatedAt, rule.UpdatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	rule.ID = id
+	return id, nil
 }
 
 func (r *sqlAutomationRepository) GetRuleByID(id int64) (*model.AutomationRule, error) {
-	return nil, nil
+	query := `
+	SELECT id, workspace_id, created_by_user_id, name, description, trigger_type,
+	       conditions_json, actions_json, is_active, execution_count,
+	       last_triggered_at, created_at, updated_at
+	FROM automation_rules
+	WHERE id = ?`
+
+	row := r.db.QueryRow(query, id)
+
+	var rule model.AutomationRule
+	var condJSON, actJSON string
+	var activeInt int
+
+	err := row.Scan(
+		&rule.ID, &rule.WorkspaceID, &rule.CreatedByUserID, &rule.Name, &rule.Description, &rule.TriggerType,
+		&condJSON, &actJSON, &activeInt, &rule.ExecutionCount,
+		&rule.LastTriggeredAt, &rule.CreatedAt, &rule.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrAutomationRuleNotFound
+		}
+		return nil, err
+	}
+
+	rule.IsActive = activeInt == 1
+	if condJSON != "" {
+		_ = json.Unmarshal([]byte(condJSON), &rule.Conditions)
+	}
+	if actJSON != "" {
+		_ = json.Unmarshal([]byte(actJSON), &rule.Actions)
+	}
+
+	return &rule, nil
 }
+
 
 func (r *sqlAutomationRepository) ListRules(workspaceID int64, activeOnly *bool, triggerType string) ([]*model.AutomationRule, error) {
 	return nil, nil
