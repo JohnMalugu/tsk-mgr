@@ -297,4 +297,106 @@ func (h *AutomationHandler) HandleDryRunRule(w http.ResponseWriter, r *http.Requ
 	_ = json.NewEncoder(w).Encode(result)
 }
 
+// HandleListLogs queries execution logs across a workspace with optional status and rule filters
+func (h *AutomationHandler) HandleListLogs(w http.ResponseWriter, r *http.Request) {
+	wsIDStr := r.URL.Query().Get("workspace_id")
+	if wsIDStr == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "workspace_id query parameter is required"})
+		return
+	}
+
+	wsID, err := strconv.ParseInt(wsIDStr, 10, 64)
+	if err != nil || wsID <= 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid workspace_id"})
+		return
+	}
+
+	filter := model.AutomationLogFilter{
+		WorkspaceID: wsID,
+		Status:      r.URL.Query().Get("status"),
+	}
+
+	if ruleIDStr := r.URL.Query().Get("rule_id"); ruleIDStr != "" {
+		if rid, err := strconv.ParseInt(ruleIDStr, 10, 64); err == nil && rid > 0 {
+			filter.RuleID = &rid
+		}
+	}
+
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if lim, err := strconv.Atoi(limitStr); err == nil {
+			filter.Limit = lim
+		}
+	}
+
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		if off, err := strconv.Atoi(offsetStr); err == nil {
+			filter.Offset = off
+		}
+	}
+
+	logs, err := h.svc.ListLogs(filter)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	if logs == nil {
+		logs = []*model.AutomationExecutionLog{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(logs)
+}
+
+// HandleGetRuleLogs queries execution logs specifically for one automation rule
+func (h *AutomationHandler) HandleGetRuleLogs(w http.ResponseWriter, r *http.Request, id int64) {
+	rule, err := h.svc.GetRule(id)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		if errors.Is(err, service.ErrAutomationRuleNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	filter := model.AutomationLogFilter{
+		WorkspaceID: rule.WorkspaceID,
+		RuleID:      &id,
+		Limit:       50,
+	}
+
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if lim, err := strconv.Atoi(limitStr); err == nil {
+			filter.Limit = lim
+		}
+	}
+
+	logs, err := h.svc.ListLogs(filter)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	if logs == nil {
+		logs = []*model.AutomationExecutionLog{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(logs)
+}
+
+
 
