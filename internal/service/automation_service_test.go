@@ -484,13 +484,13 @@ func TestAutomationService_ActionExecutorAndDispatch(t *testing.T) {
 
 	// Dispatch an event where conditions do NOT match
 	unmatchedTask := &model.Task{
-		UserID:      "dev_1",
-		Title:       "Update Documentation",
-		Status:      model.TaskStatusCompleted,
-		Priority:    "low",
-		DueDate:     now,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		UserID:    "dev_1",
+		Title:     "Update Documentation",
+		Status:    model.TaskStatusCompleted,
+		Priority:  "low",
+		DueDate:   now,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 	unmatchedEvent := model.TriggerEvent{
 		WorkspaceID: 1,

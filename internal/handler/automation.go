@@ -436,7 +436,3 @@ func (h *AutomationHandler) HandleDispatchEvent(w http.ResponseWriter, r *http.R
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(logs)
 }
-
-
-
-

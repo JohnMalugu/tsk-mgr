@@ -408,9 +408,6 @@ func applyAction(
 	}
 }
 
-
-
-
 // AutomationService coordinates workflow rules, condition evaluation, and action execution
 type AutomationService interface {
 	CreateRule(userID string, req model.CreateAutomationRuleRequest) (*model.AutomationRule, error)
@@ -515,7 +512,6 @@ func (s *automationService) ListRules(workspaceID int64, activeOnly *bool, trigg
 	return s.repo.ListRules(workspaceID, activeOnly, triggerType)
 }
 
-
 func (s *automationService) UpdateRule(id int64, req model.UpdateAutomationRuleRequest) (*model.AutomationRule, error) {
 	rule, err := s.repo.GetRuleByID(id)
 	if err != nil {
@@ -593,7 +589,6 @@ func (s *automationService) ToggleRule(id int64) (bool, error) {
 	}
 	return s.repo.ToggleRuleActive(id)
 }
-
 
 func (s *automationService) DuplicateRule(userID string, id int64, req model.DuplicateRuleRequest) (*model.AutomationRule, error) {
 	orig, err := s.repo.GetRuleByID(id)
@@ -779,4 +774,3 @@ func (s *automationService) GetMetrics(workspaceID int64) (*model.AutomationMetr
 	}
 	return s.repo.GetAutomationMetrics(workspaceID)
 }
-

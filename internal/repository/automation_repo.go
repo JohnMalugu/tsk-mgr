@@ -122,7 +122,6 @@ func (r *sqlAutomationRepository) GetRuleByID(id int64) (*model.AutomationRule, 
 	return &rule, nil
 }
 
-
 func (r *sqlAutomationRepository) ListRules(workspaceID int64, activeOnly *bool, triggerType string) ([]*model.AutomationRule, error) {
 	var conditions []string
 	var args []interface{}
@@ -189,7 +188,6 @@ func (r *sqlAutomationRepository) ListRules(workspaceID int64, activeOnly *bool,
 
 	return rules, nil
 }
-
 
 func (r *sqlAutomationRepository) UpdateRule(rule *model.AutomationRule) error {
 	rule.UpdatedAt = time.Now()
@@ -287,7 +285,6 @@ func (r *sqlAutomationRepository) ToggleRuleActive(id int64) (bool, error) {
 
 	return activeInt == 1, nil
 }
-
 
 func (r *sqlAutomationRepository) RecordExecutionLog(log *model.AutomationExecutionLog) (int64, error) {
 	if log.ExecutedAt.IsZero() {
@@ -393,7 +390,6 @@ func (r *sqlAutomationRepository) ListExecutionLogs(filter model.AutomationLogFi
 	return logs, nil
 }
 
-
 func (r *sqlAutomationRepository) IncrementRuleExecutionCount(id int64) error {
 	now := time.Now()
 	query := `
@@ -472,4 +468,3 @@ func (r *sqlAutomationRepository) GetAutomationMetrics(workspaceID int64) (*mode
 
 	return metrics, nil
 }
-

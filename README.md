@@ -128,6 +128,15 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `POST /v2/views/{id}/duplicate` to clone an existing saved view into a private copy or copy across workspaces
 - `POST|PATCH /v2/views/{id}/pin` to toggle the pinned favorite status of a saved view
 - `GET|POST /v2/views/{id}/execute` to execute a saved view with dynamic multi-dimensional task filtering, sorting, and group count aggregations
+- `GET|POST /v2/automations` to list rules with workspace and trigger filters or create an event-driven automation rule (`WHEN trigger [IF conditions] THEN actions`)
+- `GET|PUT|DELETE /v2/automations/{id}` to fetch rule specification, modify trigger conditions and actions, or delete an automation rule
+- `POST|PATCH /v2/automations/{id}/toggle` to activate or deactivate an automation rule
+- `POST /v2/automations/{id}/duplicate` to clone an automation rule with customizable name and target workspace
+- `POST /v2/automations/{id}/dry-run` to simulate condition evaluation and preview estimated task mutations without altering persistent database records
+- `GET /v2/automations/{id}/logs` to inspect chronological execution logs for a specific automation rule
+- `GET /v2/automations/logs?workspace_id={id}&status={success|skipped|failed}` to query and filter execution audit trails across a workspace
+- `GET /v2/automations/metrics?workspace_id={id}` for workspace automation analytics, execution success rates, and top triggered rules
+- `POST /v2/automations/dispatch` to dispatch manual trigger events for integration testing and automated workflow verification
 
 ## Current limitations
 

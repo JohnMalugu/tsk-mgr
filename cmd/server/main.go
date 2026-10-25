@@ -102,7 +102,6 @@ func main() {
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
-
 	// Start the server
 	port := ":8080"
 	fmt.Printf("🚀 Server running on http://localhost:8080\n")

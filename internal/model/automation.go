@@ -30,23 +30,22 @@ const (
 	FieldTags        = "tags"
 )
 
-
 // Supported automation actions
 const (
-	ActionSetStatus      = "set_status"
-	ActionSetPriority    = "set_priority"
-	ActionAddTag         = "add_tag"
-	ActionRemoveTag      = "remove_tag"
-	ActionAssignUser     = "assign_user"
-	ActionCreateSubtask  = "create_subtask"
+	ActionSetStatus     = "set_status"
+	ActionSetPriority   = "set_priority"
+	ActionAddTag        = "add_tag"
+	ActionRemoveTag     = "remove_tag"
+	ActionAssignUser    = "assign_user"
+	ActionCreateSubtask = "create_subtask"
 )
 
 // AutomationCondition represents a rule predicate evaluated against task attributes
 type AutomationCondition struct {
-	Field    string   `json:"field"`              // e.g. "status", "priority", "title", "tags", "project_id"
-	Operator string   `json:"operator"`           // equals, not_equals, contains, in
-	Value    string   `json:"value,omitempty"`    // comparison value
-	Values   []string `json:"values,omitempty"`   // comparison values for "in" operator
+	Field    string   `json:"field"`            // e.g. "status", "priority", "title", "tags", "project_id"
+	Operator string   `json:"operator"`         // equals, not_equals, contains, in
+	Value    string   `json:"value,omitempty"`  // comparison value
+	Values   []string `json:"values,omitempty"` // comparison values for "in" operator
 }
 
 // IsValid validates whether the condition has supported fields and operators
@@ -66,9 +65,9 @@ func (c *AutomationCondition) IsValid() bool {
 
 // AutomationAction represents a mutation executed when conditions match
 type AutomationAction struct {
-	Type        string `json:"type"`                  // ActionSetStatus, ActionSetPriority, etc.
-	TargetValue string `json:"target_value"`          // new status, new priority, tag name, assignee ID, etc.
-	ExtraInfo   string `json:"extra_info,omitempty"`  // additional metadata e.g. subtask title
+	Type        string `json:"type"`                 // ActionSetStatus, ActionSetPriority, etc.
+	TargetValue string `json:"target_value"`         // new status, new priority, tag name, assignee ID, etc.
+	ExtraInfo   string `json:"extra_info,omitempty"` // additional metadata e.g. subtask title
 }
 
 // IsValid checks if action contains valid type and non-empty target
@@ -83,7 +82,6 @@ func (a *AutomationAction) IsValid() bool {
 		return false
 	}
 }
-
 
 // AutomationRule represents a configurable reactive workflow rule
 type AutomationRule struct {
@@ -197,9 +195,9 @@ type AutomationLogFilter struct {
 
 // AutomationRuleStat aggregates execution numbers per rule
 type AutomationRuleStat struct {
-	RuleID         int64      `json:"rule_id"`
-	RuleName       string     `json:"rule_name"`
-	ExecutionCount int        `json:"execution_count"`
+	RuleID          int64      `json:"rule_id"`
+	RuleName        string     `json:"rule_name"`
+	ExecutionCount  int        `json:"execution_count"`
 	LastTriggeredAt *time.Time `json:"last_triggered_at,omitempty"`
 }
 
@@ -240,8 +238,3 @@ type DuplicateRuleRequest struct {
 	NewName           string `json:"new_name,omitempty"`
 	TargetWorkspaceID *int64 `json:"target_workspace_id,omitempty"`
 }
-
-
-
-
-
