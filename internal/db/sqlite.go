@@ -526,6 +526,27 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	automationExecutionLogsQuery := `
+	CREATE TABLE IF NOT EXISTS automation_execution_logs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		rule_id INTEGER NOT NULL,
+		workspace_id INTEGER NOT NULL,
+		trigger_event TEXT NOT NULL,
+		status TEXT NOT NULL,
+		actions_executed TEXT NOT NULL DEFAULT '[]',
+		error_message TEXT NOT NULL DEFAULT '',
+		duration_ms INTEGER NOT NULL DEFAULT 0,
+		executed_at DATETIME NOT NULL,
+		FOREIGN KEY (rule_id) REFERENCES automation_rules(id) ON DELETE CASCADE,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(automationExecutionLogsQuery)
+	if err != nil {
+		return err
+	}
+
+
 
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
