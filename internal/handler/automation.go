@@ -190,3 +190,86 @@ func (h *AutomationHandler) HandleDeleteRule(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Automation rule deleted successfully"})
 }
+
+// HandleToggleRule toggles the active state of an automation rule
+func (h *AutomationHandler) HandleToggleRule(w http.ResponseWriter, r *http.Request, id int64) {
+	isActive, err := h.svc.ToggleRule(id)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		if errors.Is(err, service.ErrAutomationRuleNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":        id,
+		"is_active": isActive,
+	})
+}
+
+// HandleDuplicateRule duplicates an automation rule with an optional new name
+func (h *AutomationHandler) HandleDuplicateRule(w http.ResponseWriter, r *http.Request, id int64) {
+	userID := getAutomationUser(r)
+
+	var req model.DuplicateRuleRequest
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	cloned, err := h.svc.DuplicateRule(userID, id, req)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case errors.Is(err, service.ErrAutomationRuleNotFound):
+			w.WriteHeader(http.StatusNotFound)
+		case errors.Is(err, service.ErrRuleNameRequired):
+			w.WriteHeader(http.StatusBadRequest)
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(cloned)
+}
+
+// HandleGetMetrics retrieves automation analytics and execution aggregates for a workspace
+func (h *AutomationHandler) HandleGetMetrics(w http.ResponseWriter, r *http.Request) {
+	wsIDStr := r.URL.Query().Get("workspace_id")
+	if wsIDStr == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "workspace_id query parameter is required"})
+		return
+	}
+
+	wsID, err := strconv.ParseInt(wsIDStr, 10, 64)
+	if err != nil || wsID <= 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid workspace_id"})
+		return
+	}
+
+	metrics, err := h.svc.GetMetrics(wsID)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(metrics)
+}
+
