@@ -234,16 +234,83 @@ func (s *automationService) ListRules(workspaceID int64, activeOnly *bool, trigg
 
 
 func (s *automationService) UpdateRule(id int64, req model.UpdateAutomationRuleRequest) (*model.AutomationRule, error) {
-	return nil, nil
+	rule, err := s.repo.GetRuleByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrAutomationRuleNotFound) {
+			return nil, ErrAutomationRuleNotFound
+		}
+		return nil, err
+	}
+
+	if req.Name != nil {
+		name, err := validateRuleName(*req.Name)
+		if err != nil {
+			return nil, err
+		}
+		rule.Name = name
+	}
+
+	if req.Description != nil {
+		rule.Description = strings.TrimSpace(*req.Description)
+	}
+
+	if req.TriggerType != nil {
+		trigger, err := validateTriggerType(*req.TriggerType)
+		if err != nil {
+			return nil, err
+		}
+		rule.TriggerType = trigger
+	}
+
+	if req.Conditions != nil {
+		conditions, err := validateConditions(*req.Conditions)
+		if err != nil {
+			return nil, err
+		}
+		rule.Conditions = conditions
+	}
+
+	if req.Actions != nil {
+		actions, err := validateActions(*req.Actions)
+		if err != nil {
+			return nil, err
+		}
+		rule.Actions = actions
+	}
+
+	if req.IsActive != nil {
+		rule.IsActive = *req.IsActive
+	}
+
+	if err := s.repo.UpdateRule(rule); err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetRuleByID(id)
 }
 
 func (s *automationService) DeleteRule(id int64) error {
-	return nil
+	_, err := s.repo.GetRuleByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrAutomationRuleNotFound) {
+			return ErrAutomationRuleNotFound
+		}
+		return err
+	}
+	return s.repo.DeleteRule(id)
 }
 
 func (s *automationService) ToggleRule(id int64) (bool, error) {
-	return false, nil
+	_, err := s.repo.GetRuleByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrAutomationRuleNotFound) {
+			return false, ErrAutomationRuleNotFound
+		}
+		return false, err
+	}
+	return s.repo.ToggleRuleActive(id)
 }
+
 
 func (s *automationService) DuplicateRule(userID string, id int64, req model.DuplicateRuleRequest) (*model.AutomationRule, error) {
 	return nil, nil
