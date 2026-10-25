@@ -101,3 +101,35 @@ type AutomationRule struct {
 	CreatedAt       time.Time             `json:"created_at"`
 	UpdatedAt       time.Time             `json:"updated_at"`
 }
+
+// Execution status constants
+const (
+	ExecutionStatusSuccess = "success"
+	ExecutionStatusSkipped = "skipped"
+	ExecutionStatusFailed  = "failed"
+)
+
+// TriggerEvent encapsulates an event payload dispatched to evaluate automation rules
+type TriggerEvent struct {
+	WorkspaceID int64     `json:"workspace_id"`
+	UserID      string    `json:"user_id"`
+	TaskID      int       `json:"task_id"`
+	EventType   string    `json:"event_type"`
+	TaskBefore  *Task     `json:"task_before,omitempty"`
+	TaskAfter   *Task     `json:"task_after,omitempty"`
+	Timestamp   time.Time `json:"timestamp"`
+}
+
+// AutomationExecutionLog records the execution trial, condition evaluation, and actions performed
+type AutomationExecutionLog struct {
+	ID              int64     `json:"id"`
+	RuleID          int64     `json:"rule_id"`
+	WorkspaceID     int64     `json:"workspace_id"`
+	TriggerEvent    string    `json:"trigger_event"`
+	Status          string    `json:"status"` // success, skipped, failed
+	ActionsExecuted []string  `json:"actions_executed"`
+	ErrorMessage    string    `json:"error_message,omitempty"`
+	DurationMs      int64     `json:"duration_ms"`
+	ExecutedAt      time.Time `json:"executed_at"`
+}
+
