@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -126,6 +127,151 @@ func validateActions(actions []model.AutomationAction) ([]model.AutomationAction
 	}
 	return validated, nil
 }
+
+func evaluateCondition(task *model.Task, c model.AutomationCondition) model.ConditionEvaluationDetail {
+	if task == nil {
+		return model.ConditionEvaluationDetail{
+			Condition: c,
+			Matched:   false,
+			Reason:    "task is nil",
+		}
+	}
+
+	var actualStr string
+	var actualList []string
+
+	switch c.Field {
+	case model.FieldStatus:
+		actualStr = task.Status
+		actualList = []string{task.Status}
+	case model.FieldPriority:
+		actualStr = task.Priority
+		actualList = []string{task.Priority}
+	case model.FieldTitle:
+		actualStr = task.Title
+		actualList = []string{task.Title}
+	case model.FieldDescription:
+		actualStr = task.Description
+		actualList = []string{task.Description}
+	case model.FieldProjectID:
+		if task.ProjectID != nil {
+			actualStr = fmt.Sprintf("%d", *task.ProjectID)
+			actualList = []string{actualStr}
+		}
+	case model.FieldAssignee:
+		actualStr = task.UserID
+		actualList = []string{task.UserID}
+	case model.FieldTags:
+		actualList = task.Tags
+		actualStr = strings.Join(task.Tags, ", ")
+	}
+
+	matched := false
+	reason := ""
+
+	switch c.Operator {
+	case model.OpEquals:
+		target := strings.ToLower(c.Value)
+		if c.Field == model.FieldTags {
+			for _, tag := range actualList {
+				if strings.ToLower(tag) == target {
+					matched = true
+					break
+				}
+			}
+		} else {
+			matched = strings.ToLower(actualStr) == target
+		}
+		if matched {
+			reason = fmt.Sprintf("field '%s' matches '%s'", c.Field, c.Value)
+		} else {
+			reason = fmt.Sprintf("field '%s' value '%s' does not equal '%s'", c.Field, actualStr, c.Value)
+		}
+
+	case model.OpNotEquals:
+		target := strings.ToLower(c.Value)
+		if c.Field == model.FieldTags {
+			hasTag := false
+			for _, tag := range actualList {
+				if strings.ToLower(tag) == target {
+					hasTag = true
+					break
+				}
+			}
+			matched = !hasTag
+		} else {
+			matched = strings.ToLower(actualStr) != target
+		}
+		if matched {
+			reason = fmt.Sprintf("field '%s' value '%s' is not '%s'", c.Field, actualStr, c.Value)
+		} else {
+			reason = fmt.Sprintf("field '%s' equals '%s'", c.Field, c.Value)
+		}
+
+	case model.OpContains:
+		target := strings.ToLower(c.Value)
+		if c.Field == model.FieldTags {
+			for _, tag := range actualList {
+				if strings.Contains(strings.ToLower(tag), target) {
+					matched = true
+					break
+				}
+			}
+		} else {
+			matched = strings.Contains(strings.ToLower(actualStr), target)
+		}
+		if matched {
+			reason = fmt.Sprintf("field '%s' contains '%s'", c.Field, c.Value)
+		} else {
+			reason = fmt.Sprintf("field '%s' ('%s') does not contain '%s'", c.Field, actualStr, c.Value)
+		}
+
+	case model.OpIn:
+		targetMap := make(map[string]bool)
+		for _, v := range c.Values {
+			targetMap[strings.ToLower(v)] = true
+		}
+		if c.Field == model.FieldTags {
+			for _, tag := range actualList {
+				if targetMap[strings.ToLower(tag)] {
+					matched = true
+					break
+				}
+			}
+		} else {
+			matched = targetMap[strings.ToLower(actualStr)]
+		}
+		if matched {
+			reason = fmt.Sprintf("field '%s' value '%s' is present in %v", c.Field, actualStr, c.Values)
+		} else {
+			reason = fmt.Sprintf("field '%s' value '%s' is not in %v", c.Field, actualStr, c.Values)
+		}
+	}
+
+	return model.ConditionEvaluationDetail{
+		Condition:   c,
+		Matched:     matched,
+		ActualValue: actualStr,
+		Reason:      reason,
+	}
+}
+
+func evaluateAllConditions(task *model.Task, conditions []model.AutomationCondition) (bool, []model.ConditionEvaluationDetail) {
+	if len(conditions) == 0 {
+		return true, nil
+	}
+	var details []model.ConditionEvaluationDetail
+	allMatched := true
+	for _, c := range conditions {
+		detail := evaluateCondition(task, c)
+		details = append(details, detail)
+		if !detail.Matched {
+			allMatched = false
+		}
+	}
+	return allMatched, details
+}
+
 
 
 // AutomationService coordinates workflow rules, condition evaluation, and action execution
