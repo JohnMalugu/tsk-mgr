@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -122,8 +124,72 @@ func (r *sqlAutomationRepository) GetRuleByID(id int64) (*model.AutomationRule, 
 
 
 func (r *sqlAutomationRepository) ListRules(workspaceID int64, activeOnly *bool, triggerType string) ([]*model.AutomationRule, error) {
-	return nil, nil
+	var conditions []string
+	var args []interface{}
+
+	conditions = append(conditions, "workspace_id = ?")
+	args = append(args, workspaceID)
+
+	if activeOnly != nil {
+		if *activeOnly {
+			conditions = append(conditions, "is_active = 1")
+		} else {
+			conditions = append(conditions, "is_active = 0")
+		}
+	}
+
+	if strings.TrimSpace(triggerType) != "" {
+		conditions = append(conditions, "trigger_type = ?")
+		args = append(args, strings.TrimSpace(triggerType))
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, workspace_id, created_by_user_id, name, description, trigger_type,
+	       conditions_json, actions_json, is_active, execution_count,
+	       last_triggered_at, created_at, updated_at
+	FROM automation_rules
+	WHERE %s
+	ORDER BY created_at DESC`, strings.Join(conditions, " AND "))
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var rules []*model.AutomationRule
+	for rows.Next() {
+		var rule model.AutomationRule
+		var condJSON, actJSON string
+		var activeInt int
+
+		err := rows.Scan(
+			&rule.ID, &rule.WorkspaceID, &rule.CreatedByUserID, &rule.Name, &rule.Description, &rule.TriggerType,
+			&condJSON, &actJSON, &activeInt, &rule.ExecutionCount,
+			&rule.LastTriggeredAt, &rule.CreatedAt, &rule.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		rule.IsActive = activeInt == 1
+		if condJSON != "" {
+			_ = json.Unmarshal([]byte(condJSON), &rule.Conditions)
+		}
+		if actJSON != "" {
+			_ = json.Unmarshal([]byte(actJSON), &rule.Actions)
+		}
+
+		rules = append(rules, &rule)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return rules, nil
 }
+
 
 func (r *sqlAutomationRepository) UpdateRule(rule *model.AutomationRule) error {
 	return nil
