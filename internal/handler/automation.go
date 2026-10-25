@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
@@ -397,6 +398,45 @@ func (h *AutomationHandler) HandleGetRuleLogs(w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(logs)
 }
+
+// HandleDispatchEvent triggers manual event evaluation against workspace automation rules
+func (h *AutomationHandler) HandleDispatchEvent(w http.ResponseWriter, r *http.Request) {
+	var event model.TriggerEvent
+	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request body: " + err.Error()})
+		return
+	}
+
+	if event.Timestamp.IsZero() {
+		event.Timestamp = time.Now()
+	}
+	if event.UserID == "" {
+		event.UserID = getAutomationUser(r)
+	}
+
+	logs, err := h.svc.DispatchEvent(event)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		if errors.Is(err, service.ErrWorkspaceRequired) {
+			w.WriteHeader(http.StatusBadRequest)
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	if logs == nil {
+		logs = []*model.AutomationExecutionLog{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(logs)
+}
+
 
 
 
