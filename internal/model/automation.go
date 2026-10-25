@@ -215,6 +215,33 @@ type AutomationMetrics struct {
 	TopRules             []AutomationRuleStat `json:"top_rules,omitempty"`
 }
 
+// AutomationRuleSummary provides lightweight overview metadata for rule catalogs and sidebars
+type AutomationRuleSummary struct {
+	ID              int64      `json:"id"`
+	WorkspaceID     int64      `json:"workspace_id"`
+	Name            string     `json:"name"`
+	TriggerType     string     `json:"trigger_type"`
+	ConditionCount  int        `json:"condition_count"`
+	ActionCount     int        `json:"action_count"`
+	IsActive        bool       `json:"is_active"`
+	ExecutionCount  int        `json:"execution_count"`
+	LastTriggeredAt *time.Time `json:"last_triggered_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+}
+
+// BatchToggleRuleRequest enables turning multiple automation rules on or off simultaneously
+type BatchToggleRuleRequest struct {
+	RuleIDs  []int64 `json:"rule_ids"`
+	IsActive bool    `json:"is_active"`
+}
+
+// DuplicateRuleRequest defines optional overrides when cloning an automation rule
+type DuplicateRuleRequest struct {
+	NewName           string `json:"new_name,omitempty"`
+	TargetWorkspaceID *int64 `json:"target_workspace_id,omitempty"`
+}
+
+
 
 
 
