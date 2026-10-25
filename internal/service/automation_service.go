@@ -596,21 +596,187 @@ func (s *automationService) ToggleRule(id int64) (bool, error) {
 
 
 func (s *automationService) DuplicateRule(userID string, id int64, req model.DuplicateRuleRequest) (*model.AutomationRule, error) {
-	return nil, nil
+	orig, err := s.repo.GetRuleByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrAutomationRuleNotFound) {
+			return nil, ErrAutomationRuleNotFound
+		}
+		return nil, err
+	}
+
+	targetWs := orig.WorkspaceID
+	if req.TargetWorkspaceID != nil && *req.TargetWorkspaceID > 0 {
+		targetWs = *req.TargetWorkspaceID
+	}
+
+	var newName string
+	if strings.TrimSpace(req.NewName) != "" {
+		validated, err := validateRuleName(req.NewName)
+		if err != nil {
+			return nil, err
+		}
+		newName = validated
+	} else {
+		newName = fmt.Sprintf("%s (Copy)", orig.Name)
+		if len(newName) > 100 {
+			newName = newName[:100]
+		}
+	}
+
+	cloned := &model.AutomationRule{
+		WorkspaceID:     targetWs,
+		CreatedByUserID: userID,
+		Name:            newName,
+		Description:     orig.Description,
+		TriggerType:     orig.TriggerType,
+		Conditions:      orig.Conditions,
+		Actions:         orig.Actions,
+		IsActive:        false,
+	}
+
+	newID, err := s.repo.CreateRule(cloned)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetRuleByID(newID)
 }
 
 func (s *automationService) DryRunRule(id int64, req model.AutomationDryRunRequest) (*model.AutomationDryRunResult, error) {
-	return nil, nil
+	rule, err := s.repo.GetRuleByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrAutomationRuleNotFound) {
+			return nil, ErrAutomationRuleNotFound
+		}
+		return nil, err
+	}
+
+	var targetTask *model.Task
+	if req.TaskID != nil && *req.TaskID > 0 {
+		t, _ := s.taskRepo.GetByID(*req.TaskID)
+		if t != nil {
+			targetTask = t
+		}
+	}
+	if targetTask == nil && req.MockTask != nil {
+		targetTask = req.MockTask
+	}
+	if targetTask == nil {
+		now := time.Now()
+		targetTask = &model.Task{
+			ID:          1,
+			UserID:      "test_user",
+			Title:       "Sample Test Task",
+			Description: "Simulated task payload",
+			Status:      model.TaskStatusTodo,
+			Priority:    "medium",
+			DueDate:     now.Add(24 * time.Hour),
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+	}
+
+	conditionsMet, evalDetails := evaluateAllConditions(targetTask, rule.Conditions)
+
+	var previews []model.ActionPreviewDetail
+	for _, a := range rule.Actions {
+		previews = append(previews, previewAction(targetTask, a))
+	}
+
+	return &model.AutomationDryRunResult{
+		RuleID:               rule.ID,
+		RuleName:             rule.Name,
+		ConditionsMet:        conditionsMet,
+		ConditionEvaluations: evalDetails,
+		ActionsPreview:       previews,
+		EvaluatedAt:          time.Now(),
+	}, nil
 }
 
 func (s *automationService) DispatchEvent(event model.TriggerEvent) ([]*model.AutomationExecutionLog, error) {
-	return nil, nil
+	if event.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+
+	activeOnly := true
+	matchingRules, err := s.repo.ListRules(event.WorkspaceID, &activeOnly, event.EventType)
+	if err != nil {
+		return nil, err
+	}
+
+	var executionLogs []*model.AutomationExecutionLog
+
+	for _, rule := range matchingRules {
+		start := time.Now()
+		targetTask := event.TaskAfter
+		if targetTask == nil {
+			targetTask = event.TaskBefore
+		}
+		if targetTask == nil && event.TaskID > 0 {
+			t, _ := s.taskRepo.GetByID(event.TaskID)
+			if t != nil {
+				targetTask = t
+			}
+		}
+
+		conditionsMet, _ := evaluateAllConditions(targetTask, rule.Conditions)
+
+		log := &model.AutomationExecutionLog{
+			RuleID:       rule.ID,
+			WorkspaceID:  rule.WorkspaceID,
+			TriggerEvent: event.EventType,
+			ExecutedAt:   time.Now(),
+		}
+
+		if !conditionsMet {
+			log.Status = model.ExecutionStatusSkipped
+			log.DurationMs = time.Since(start).Milliseconds()
+			_, _ = s.repo.RecordExecutionLog(log)
+			executionLogs = append(executionLogs, log)
+			continue
+		}
+
+		var executedActions []string
+		var execErr error
+
+		for _, action := range rule.Actions {
+			actionMsg, err := applyAction(targetTask, action, s.taskRepo, s.subtaskRepo)
+			if err != nil {
+				execErr = err
+				break
+			}
+			executedActions = append(executedActions, actionMsg)
+		}
+
+		log.DurationMs = time.Since(start).Milliseconds()
+		log.ActionsExecuted = executedActions
+
+		if execErr != nil {
+			log.Status = model.ExecutionStatusFailed
+			log.ErrorMessage = execErr.Error()
+		} else {
+			log.Status = model.ExecutionStatusSuccess
+			_ = s.repo.IncrementRuleExecutionCount(rule.ID)
+		}
+
+		_, _ = s.repo.RecordExecutionLog(log)
+		executionLogs = append(executionLogs, log)
+	}
+
+	return executionLogs, nil
 }
 
 func (s *automationService) ListLogs(filter model.AutomationLogFilter) ([]*model.AutomationExecutionLog, error) {
-	return nil, nil
+	if filter.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	return s.repo.ListExecutionLogs(filter)
 }
 
 func (s *automationService) GetMetrics(workspaceID int64) (*model.AutomationMetrics, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	return s.repo.GetAutomationMetrics(workspaceID)
 }
+
