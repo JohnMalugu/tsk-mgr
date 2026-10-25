@@ -290,12 +290,109 @@ func (r *sqlAutomationRepository) ToggleRuleActive(id int64) (bool, error) {
 
 
 func (r *sqlAutomationRepository) RecordExecutionLog(log *model.AutomationExecutionLog) (int64, error) {
-	return 0, nil
+	if log.ExecutedAt.IsZero() {
+		log.ExecutedAt = time.Now()
+	}
+
+	actionsJSON, err := json.Marshal(log.ActionsExecuted)
+	if err != nil {
+		actionsJSON = []byte("[]")
+	}
+
+	query := `
+	INSERT INTO automation_execution_logs (
+		rule_id, workspace_id, trigger_event, status,
+		actions_executed, error_message, duration_ms, executed_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query,
+		log.RuleID, log.WorkspaceID, log.TriggerEvent, log.Status,
+		string(actionsJSON), log.ErrorMessage, log.DurationMs, log.ExecutedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	log.ID = id
+	return id, nil
 }
 
 func (r *sqlAutomationRepository) ListExecutionLogs(filter model.AutomationLogFilter) ([]*model.AutomationExecutionLog, error) {
-	return nil, nil
+	var conditions []string
+	var args []interface{}
+
+	conditions = append(conditions, "workspace_id = ?")
+	args = append(args, filter.WorkspaceID)
+
+	if filter.RuleID != nil {
+		conditions = append(conditions, "rule_id = ?")
+		args = append(args, *filter.RuleID)
+	}
+
+	if strings.TrimSpace(filter.Status) != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, strings.TrimSpace(filter.Status))
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	} else if limit > 100 {
+		limit = 100
+	}
+
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, rule_id, workspace_id, trigger_event, status,
+	       actions_executed, error_message, duration_ms, executed_at
+	FROM automation_execution_logs
+	WHERE %s
+	ORDER BY executed_at DESC
+	LIMIT ? OFFSET ?`, strings.Join(conditions, " AND "))
+
+	args = append(args, limit, offset)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var logs []*model.AutomationExecutionLog
+	for rows.Next() {
+		var l model.AutomationExecutionLog
+		var actionsJSON string
+
+		err := rows.Scan(
+			&l.ID, &l.RuleID, &l.WorkspaceID, &l.TriggerEvent, &l.Status,
+			&actionsJSON, &l.ErrorMessage, &l.DurationMs, &l.ExecutedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		if actionsJSON != "" {
+			_ = json.Unmarshal([]byte(actionsJSON), &l.ActionsExecuted)
+		}
+
+		logs = append(logs, &l)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return logs, nil
 }
+
 
 func (r *sqlAutomationRepository) IncrementRuleExecutionCount(id int64) error {
 	return nil
