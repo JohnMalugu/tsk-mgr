@@ -503,6 +503,30 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	automationRulesQuery := `
+	CREATE TABLE IF NOT EXISTS automation_rules (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		created_by_user_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		trigger_type TEXT NOT NULL,
+		conditions_json TEXT NOT NULL DEFAULT '[]',
+		actions_json TEXT NOT NULL DEFAULT '[]',
+		is_active INTEGER NOT NULL DEFAULT 1,
+		execution_count INTEGER NOT NULL DEFAULT 0,
+		last_triggered_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(automationRulesQuery)
+	if err != nil {
+		return err
+	}
+
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
