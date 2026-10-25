@@ -95,8 +95,13 @@ func main() {
 	savedViewSvc := service.NewSavedViewService(savedViewRepo, taskRepo)
 	handler.InitSavedViewHandler(savedViewSvc)
 
+	automationRepo := repository.NewAutomationRepository(sqliteDB)
+	automationSvc := service.NewAutomationService(automationRepo, taskRepo, subtaskRepo, notificationRepo)
+	handler.InitAutomationHandler(automationSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
+
 
 	// Start the server
 	port := ":8080"
