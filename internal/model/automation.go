@@ -154,4 +154,37 @@ type UpdateAutomationRuleRequest struct {
 	IsActive    *bool                  `json:"is_active,omitempty"`
 }
 
+// AutomationDryRunRequest defines parameters for testing an automation rule without saving mutations
+type AutomationDryRunRequest struct {
+	TaskID        *int   `json:"task_id,omitempty"`
+	MockTask      *Task  `json:"mock_task,omitempty"`
+	EventOverride string `json:"event_override,omitempty"`
+}
+
+// ConditionEvaluationDetail describes single condition matching outcome during simulation
+type ConditionEvaluationDetail struct {
+	Condition   AutomationCondition `json:"condition"`
+	Matched     bool                `json:"matched"`
+	ActualValue string              `json:"actual_value"`
+	Reason      string              `json:"reason"`
+}
+
+// ActionPreviewDetail describes action behavior during simulation
+type ActionPreviewDetail struct {
+	Action            AutomationAction `json:"action"`
+	Description       string           `json:"description"`
+	EstimatedMutation string           `json:"estimated_mutation"`
+}
+
+// AutomationDryRunResult encapsulates dry run simulation findings
+type AutomationDryRunResult struct {
+	RuleID               int64                       `json:"rule_id"`
+	RuleName             string                      `json:"rule_name"`
+	ConditionsMet        bool                        `json:"conditions_met"`
+	ConditionEvaluations []ConditionEvaluationDetail `json:"condition_evaluations"`
+	ActionsPreview       []ActionPreviewDetail       `json:"actions_preview"`
+	EvaluatedAt          time.Time                   `json:"evaluated_at"`
+}
+
+
 
