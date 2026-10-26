@@ -102,7 +102,85 @@ func (r *releaseRepositoryImpl) GetReleaseByID(id int64) (*model.Release, error)
 }
 
 func (r *releaseRepositoryImpl) ListReleases(filter model.ReleaseFilter) ([]*model.ReleaseSummary, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		r.id, r.workspace_id, r.project_id, r.name, r.version, r.status, r.target_date, r.released_at, r.created_at,
+		COUNT(ri.task_id) AS task_count,
+		COALESCE(SUM(CASE WHEN t.status = 'completed' OR t.completed = 1 THEN 1 ELSE 0 END), 0) AS completed_count
+	FROM releases r
+	LEFT JOIN release_items ri ON ri.release_id = r.id
+	LEFT JOIN tasks t ON t.id = ri.task_id
+	WHERE 1=1`
+
+	var args []interface{}
+	if filter.WorkspaceID > 0 {
+		query += " AND r.workspace_id = ?"
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.ProjectID != nil && *filter.ProjectID > 0 {
+		query += " AND r.project_id = ?"
+		args = append(args, *filter.ProjectID)
+	}
+	if filter.Status != "" {
+		query += " AND r.status = ?"
+		args = append(args, filter.Status)
+	}
+	if filter.Query != "" {
+		query += " AND (r.name LIKE ? OR r.version LIKE ?)"
+		pattern := "%" + filter.Query + "%"
+		args = append(args, pattern, pattern)
+	}
+
+	query += " GROUP BY r.id ORDER BY r.created_at DESC"
+
+	limit := filter.Limit
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	query += " LIMIT ?"
+	args = append(args, limit)
+
+	if filter.Offset > 0 {
+		query += " OFFSET ?"
+		args = append(args, filter.Offset)
+	}
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var summaries []*model.ReleaseSummary
+	for rows.Next() {
+		var s model.ReleaseSummary
+		var projectID sql.NullInt64
+		var targetDate, releasedAt sql.NullTime
+
+		err := rows.Scan(
+			&s.ID, &s.WorkspaceID, &projectID, &s.Name, &s.Version, &s.Status,
+			&targetDate, &releasedAt, &s.CreatedAt,
+			&s.TaskCount, &s.CompletedCount,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if projectID.Valid {
+			s.ProjectID = &projectID.Int64
+		}
+		if targetDate.Valid {
+			s.TargetDate = &targetDate.Time
+		}
+		if releasedAt.Valid {
+			s.ReleasedAt = &releasedAt.Time
+		}
+		if s.TaskCount > 0 {
+			s.CompletionPercentage = float64(s.CompletedCount) / float64(s.TaskCount) * 100.0
+		}
+		summaries = append(summaries, &s)
+	}
+
+	return summaries, rows.Err()
 }
 
 func (r *releaseRepositoryImpl) UpdateRelease(rel *model.Release) error {
