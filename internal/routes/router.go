@@ -1014,6 +1014,54 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Releases & Milestones Management API (/v2/releases)
+	if r.URL.Path == "/v2/releases" {
+		handler.GlobalReleaseHandler.HandleReleasesRoot(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/v2/releases/") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/releases/")
+		parts := strings.Split(trimmed, "/")
+		id, err := strconv.ParseInt(parts[0], 10, 64)
+		if err == nil {
+			if len(parts) == 1 {
+				switch r.Method {
+				case http.MethodGet:
+					handler.GlobalReleaseHandler.HandleGetRelease(w, r, id)
+					return
+				case http.MethodPut, http.MethodPatch:
+					handler.GlobalReleaseHandler.HandleUpdateRelease(w, r, id)
+					return
+				case http.MethodDelete:
+					handler.GlobalReleaseHandler.HandleDeleteRelease(w, r, id)
+					return
+				}
+			} else if len(parts) == 2 {
+				switch parts[1] {
+				case "status":
+					handler.GlobalReleaseHandler.HandleUpdateReleaseStatus(w, r)
+					return
+				case "tasks":
+					handler.GlobalReleaseHandler.HandleReleaseTasks(w, r)
+					return
+				case "changelog", "notes":
+					handler.GlobalReleaseHandler.HandleReleaseChangelog(w, r)
+					return
+				case "metrics":
+					handler.GlobalReleaseHandler.HandleReleaseMetrics(w, r)
+					return
+				case "clone":
+					handler.GlobalReleaseHandler.HandleCloneRelease(w, r)
+					return
+				}
+			} else if len(parts) == 3 && parts[1] == "tasks" {
+				handler.GlobalReleaseHandler.HandleReleaseTaskDetail(w, r)
+				return
+			}
+		}
+	}
+
+
 	if r.URL.Path == "/tasks/summary" {
 
 		handler.HandleTaskSummary(w, r)
