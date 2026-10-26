@@ -242,19 +242,105 @@ func (r *releaseRepositoryImpl) DeleteRelease(id int64) error {
 }
 
 func (r *releaseRepositoryImpl) AddReleaseItem(item *model.ReleaseItem) error {
+	now := time.Now()
+	item.AddedAt = now
+	incChangelog := 1
+	if !item.IncludeInChangelog {
+		incChangelog = 0
+	}
+	if item.Category == "" {
+		item.Category = model.ReleaseCategoryFeature
+	}
+
+	query := `
+	INSERT INTO release_items (release_id, task_id, category, include_in_changelog, custom_notes, added_by_user_id, added_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(release_id, task_id) DO UPDATE SET
+		category = excluded.category,
+		include_in_changelog = excluded.include_in_changelog,
+		custom_notes = excluded.custom_notes`
+
+	res, err := r.db.Exec(query,
+		item.ReleaseID, item.TaskID, item.Category, incChangelog, item.CustomNotes,
+		item.AddedByUserID, item.AddedAt,
+	)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err == nil && id > 0 {
+		item.ID = id
+	}
 	return nil
 }
 
 func (r *releaseRepositoryImpl) RemoveReleaseItem(releaseID int64, taskID int) error {
+	query := `DELETE FROM release_items WHERE release_id = ? AND task_id = ?`
+	res, err := r.db.Exec(query, releaseID, taskID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrReleaseItemNotFound
+	}
 	return nil
 }
 
 func (r *releaseRepositoryImpl) UpdateReleaseItem(item *model.ReleaseItem) error {
+	incChangelog := 1
+	if !item.IncludeInChangelog {
+		incChangelog = 0
+	}
+	query := `
+	UPDATE release_items
+	SET category = ?, include_in_changelog = ?, custom_notes = ?
+	WHERE release_id = ? AND task_id = ?`
+
+	res, err := r.db.Exec(query, item.Category, incChangelog, item.CustomNotes, item.ReleaseID, item.TaskID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrReleaseItemNotFound
+	}
 	return nil
 }
 
 func (r *releaseRepositoryImpl) GetReleaseItem(releaseID int64, taskID int) (*model.ReleaseItem, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		ri.id, ri.release_id, ri.task_id, ri.category, ri.include_in_changelog, ri.custom_notes, ri.added_by_user_id, ri.added_at,
+		t.title, t.status, t.priority, t.user_id, t.completed
+	FROM release_items ri
+	JOIN tasks t ON t.id = ri.task_id
+	WHERE ri.release_id = ? AND ri.task_id = ?`
+
+	row := r.db.QueryRow(query, releaseID, taskID)
+	var item model.ReleaseItem
+	var incChangelog int
+	var completed int
+
+	err := row.Scan(
+		&item.ID, &item.ReleaseID, &item.TaskID, &item.Category, &incChangelog, &item.CustomNotes, &item.AddedByUserID, &item.AddedAt,
+		&item.TaskTitle, &item.TaskStatus, &item.TaskPriority, &item.TaskUserID, &completed,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrReleaseItemNotFound
+		}
+		return nil, err
+	}
+	item.IncludeInChangelog = (incChangelog == 1)
+	item.TaskCompleted = (completed == 1 || item.TaskStatus == model.TaskStatusCompleted)
+	return &item, nil
 }
 
 func (r *releaseRepositoryImpl) ListReleaseItems(releaseID int64, category string) ([]*model.ReleaseItem, error) {
