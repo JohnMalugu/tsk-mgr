@@ -99,6 +99,10 @@ func main() {
 	automationSvc := service.NewAutomationService(automationRepo, taskRepo, subtaskRepo, notificationRepo)
 	handler.InitAutomationHandler(automationSvc)
 
+	releaseRepo := repository.NewReleaseRepository(sqliteDB)
+	releaseSvc := service.NewReleaseService(releaseRepo, taskRepo)
+	handler.InitReleaseHandler(releaseSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
