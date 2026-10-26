@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -181,14 +182,77 @@ func (s *releaseServiceImpl) ListReleases(filter model.ReleaseFilter) ([]*model.
 }
 
 func (s *releaseServiceImpl) UpdateRelease(id int64, req model.UpdateReleaseRequest) (*model.Release, error) {
-	return nil, nil
+	existing, err := s.GetRelease(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if existing.Status == model.ReleaseStatusReleased || existing.Status == model.ReleaseStatusArchived {
+		return nil, ErrReleaseAlreadyReleased
+	}
+
+	if req.Name != nil {
+		val, err := validateReleaseName(*req.Name)
+		if err != nil {
+			return nil, err
+		}
+		existing.Name = val
+	}
+	if req.Version != nil {
+		val, err := validateReleaseVersion(*req.Version)
+		if err != nil {
+			return nil, err
+		}
+		existing.Version = val
+	}
+	if req.Description != nil {
+		existing.Description = strings.TrimSpace(*req.Description)
+	}
+	if req.TargetDate != nil {
+		existing.TargetDate = req.TargetDate
+	}
+
+	if err := s.repo.UpdateRelease(existing); err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetReleaseByID(id)
 }
 
 func (s *releaseServiceImpl) UpdateReleaseStatus(id int64, req model.UpdateReleaseStatusRequest) (*model.Release, error) {
-	return nil, nil
+	existing, err := s.GetRelease(id)
+	if err != nil {
+		return nil, err
+	}
+
+	targetStatus := strings.ToLower(strings.TrimSpace(req.Status))
+	if err := validateReleaseStatusTransition(existing.Status, targetStatus); err != nil {
+		return nil, err
+	}
+
+	var releasedAt *time.Time
+	if targetStatus == model.ReleaseStatusReleased {
+		now := time.Now()
+		releasedAt = &now
+	} else if existing.ReleasedAt != nil {
+		releasedAt = existing.ReleasedAt
+	}
+
+	if err := s.repo.UpdateReleaseStatus(id, targetStatus, releasedAt); err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetReleaseByID(id)
 }
 
 func (s *releaseServiceImpl) DeleteRelease(id int64) error {
+	err := s.repo.DeleteRelease(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrReleaseNotFound) {
+			return ErrReleaseNotFound
+		}
+		return err
+	}
 	return nil
 }
 
