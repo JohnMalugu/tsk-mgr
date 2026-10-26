@@ -569,6 +569,27 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	releaseItemsQuery := `
+	CREATE TABLE IF NOT EXISTS release_items (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		release_id INTEGER NOT NULL,
+		task_id INTEGER NOT NULL,
+		category TEXT NOT NULL DEFAULT 'feature',
+		include_in_changelog INTEGER NOT NULL DEFAULT 1,
+		custom_notes TEXT NOT NULL DEFAULT '',
+		added_by_user_id TEXT NOT NULL,
+		added_at DATETIME NOT NULL,
+		UNIQUE(release_id, task_id),
+		FOREIGN KEY (release_id) REFERENCES releases(id) ON DELETE CASCADE,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+		FOREIGN KEY (added_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(releaseItemsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
