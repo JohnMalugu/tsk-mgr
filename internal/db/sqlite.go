@@ -634,6 +634,12 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_automation_rules_trigger ON automation_rules(workspace_id, trigger_type);
 	CREATE INDEX IF NOT EXISTS idx_automation_logs_rule ON automation_execution_logs(rule_id, executed_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_automation_logs_ws ON automation_execution_logs(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_releases_ws_status ON releases(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_releases_proj ON releases(workspace_id, project_id);
+	CREATE INDEX IF NOT EXISTS idx_releases_version ON releases(workspace_id, version);
+	CREATE INDEX IF NOT EXISTS idx_release_items_release ON release_items(release_id);
+	CREATE INDEX IF NOT EXISTS idx_release_items_task ON release_items(task_id);
+	CREATE INDEX IF NOT EXISTS idx_release_items_cat ON release_items(release_id, category);
 	`
 
 	_, err = db.Exec(indexQuery)
