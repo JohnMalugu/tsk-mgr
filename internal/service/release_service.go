@@ -257,19 +257,114 @@ func (s *releaseServiceImpl) DeleteRelease(id int64) error {
 }
 
 func (s *releaseServiceImpl) AddTasksToRelease(userID string, releaseID int64, req model.AddReleaseTasksRequest) ([]*model.ReleaseItem, error) {
-	return nil, nil
+	rel, err := s.GetRelease(releaseID)
+	if err != nil {
+		return nil, err
+	}
+
+	if rel.Status == model.ReleaseStatusFreeze {
+		return nil, ErrReleaseCodeFrozen
+	}
+	if rel.Status == model.ReleaseStatusReleased || rel.Status == model.ReleaseStatusArchived {
+		return nil, ErrReleaseAlreadyReleased
+	}
+	if len(req.Tasks) == 0 {
+		return nil, ErrNoTasksSpecified
+	}
+
+	for _, t := range req.Tasks {
+		cat, err := validateReleaseCategory(t.Category)
+		if err != nil {
+			return nil, err
+		}
+		incChangelog := true
+		if t.IncludeInChangelog != nil {
+			incChangelog = *t.IncludeInChangelog
+		}
+
+		item := &model.ReleaseItem{
+			ReleaseID:          releaseID,
+			TaskID:             t.TaskID,
+			Category:           cat,
+			IncludeInChangelog: incChangelog,
+			CustomNotes:        strings.TrimSpace(t.CustomNotes),
+			AddedByUserID:      userID,
+		}
+		if err := s.repo.AddReleaseItem(item); err != nil {
+			return nil, err
+		}
+	}
+
+	return s.repo.ListReleaseItems(releaseID, "")
 }
 
 func (s *releaseServiceImpl) RemoveTaskFromRelease(releaseID int64, taskID int) error {
+	rel, err := s.GetRelease(releaseID)
+	if err != nil {
+		return err
+	}
+
+	if rel.Status == model.ReleaseStatusFreeze {
+		return ErrReleaseCodeFrozen
+	}
+	if rel.Status == model.ReleaseStatusReleased || rel.Status == model.ReleaseStatusArchived {
+		return ErrReleaseAlreadyReleased
+	}
+
+	err = s.repo.RemoveReleaseItem(releaseID, taskID)
+	if err != nil {
+		if errors.Is(err, repository.ErrReleaseItemNotFound) {
+			return ErrReleaseItemNotFound
+		}
+		return err
+	}
 	return nil
 }
 
 func (s *releaseServiceImpl) UpdateReleaseItem(releaseID int64, taskID int, req model.UpdateReleaseItemRequest) (*model.ReleaseItem, error) {
-	return nil, nil
+	rel, err := s.GetRelease(releaseID)
+	if err != nil {
+		return nil, err
+	}
+
+	if rel.Status == model.ReleaseStatusReleased || rel.Status == model.ReleaseStatusArchived {
+		return nil, ErrReleaseAlreadyReleased
+	}
+
+	existing, err := s.repo.GetReleaseItem(releaseID, taskID)
+	if err != nil {
+		if errors.Is(err, repository.ErrReleaseItemNotFound) {
+			return nil, ErrReleaseItemNotFound
+		}
+		return nil, err
+	}
+
+	if req.Category != nil {
+		cat, err := validateReleaseCategory(*req.Category)
+		if err != nil {
+			return nil, err
+		}
+		existing.Category = cat
+	}
+	if req.IncludeInChangelog != nil {
+		existing.IncludeInChangelog = *req.IncludeInChangelog
+	}
+	if req.CustomNotes != nil {
+		existing.CustomNotes = strings.TrimSpace(*req.CustomNotes)
+	}
+
+	if err := s.repo.UpdateReleaseItem(existing); err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetReleaseItem(releaseID, taskID)
 }
 
 func (s *releaseServiceImpl) ListReleaseItems(releaseID int64, category string) ([]*model.ReleaseItem, error) {
-	return nil, nil
+	if _, err := s.GetRelease(releaseID); err != nil {
+		return nil, err
+	}
+	return s.repo.ListReleaseItems(releaseID, category)
 }
 
 func (s *releaseServiceImpl) GenerateReleaseNotes(releaseID int64, opts model.ReleaseNotesOptions) (*model.GeneratedReleaseNotes, error) {
