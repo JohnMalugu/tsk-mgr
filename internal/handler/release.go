@@ -413,4 +413,76 @@ func (h *ReleaseHandler) HandleReleaseTaskDetail(w http.ResponseWriter, r *http.
 	}
 }
 
+// HandleReleaseChangelog generates formatted release notes or JSON changelog
+func (h *ReleaseHandler) HandleReleaseChangelog(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		writeReleaseError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	id, err := extractReleaseID(r.URL.Path, "/v2/releases/")
+	if err != nil {
+		writeReleaseError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	q := r.URL.Query()
+	opts := model.ReleaseNotesOptions{
+		Format:             q.Get("format"),
+		HeaderTitle:        q.Get("title"),
+		IncludeUncompleted: q.Get("include_uncompleted") == "true" || q.Get("all") == "true",
+	}
+
+	if r.Method == http.MethodPost && r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&opts)
+	}
+
+	notes, err := h.svc.GenerateReleaseNotes(id, opts)
+	if err != nil {
+		if errors.Is(err, service.ErrReleaseNotFound) {
+			writeReleaseError(w, http.StatusNotFound, "Release not found")
+			return
+		}
+		writeReleaseError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// If client specifically requests raw markdown accept header or query param raw=true
+	if q.Get("raw") == "true" {
+		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(notes.Content))
+		return
+	}
+
+	writeReleaseJSON(w, http.StatusOK, notes)
+}
+
+// HandleReleaseMetrics calculates completion progress, health status, and category breakdown
+func (h *ReleaseHandler) HandleReleaseMetrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeReleaseError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	id, err := extractReleaseID(r.URL.Path, "/v2/releases/")
+	if err != nil {
+		writeReleaseError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	metrics, err := h.svc.GetReleaseMetrics(id)
+	if err != nil {
+		if errors.Is(err, service.ErrReleaseNotFound) {
+			writeReleaseError(w, http.StatusNotFound, "Release not found")
+			return
+		}
+		writeReleaseError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeReleaseJSON(w, http.StatusOK, metrics)
+}
+
+
 
