@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -368,7 +369,121 @@ func (s *releaseServiceImpl) ListReleaseItems(releaseID int64, category string) 
 }
 
 func (s *releaseServiceImpl) GenerateReleaseNotes(releaseID int64, opts model.ReleaseNotesOptions) (*model.GeneratedReleaseNotes, error) {
-	return nil, nil
+	rel, err := s.GetRelease(releaseID)
+	if err != nil {
+		return nil, err
+	}
+
+	items, err := s.repo.ListReleaseItems(releaseID, "")
+	if err != nil {
+		return nil, err
+	}
+
+	format := strings.ToLower(strings.TrimSpace(opts.Format))
+	if format != model.ReleaseNotesFormatJSON {
+		format = model.ReleaseNotesFormatMarkdown
+	}
+
+	categoryTitles := map[string]string{
+		model.ReleaseCategoryFeature:     "Features",
+		model.ReleaseCategoryBugfix:      "Bug Fixes",
+		model.ReleaseCategoryImprovement: "Improvements",
+		model.ReleaseCategorySecurity:    "Security Patches",
+		model.ReleaseCategoryChore:       "Chores & Maintenance",
+	}
+
+	categoryOrder := []string{
+		model.ReleaseCategoryFeature,
+		model.ReleaseCategoryBugfix,
+		model.ReleaseCategoryImprovement,
+		model.ReleaseCategorySecurity,
+		model.ReleaseCategoryChore,
+	}
+
+	sections := make(map[string][]model.ChangelogEntry)
+	totalItems := 0
+
+	for _, item := range items {
+		if !item.IncludeInChangelog {
+			continue
+		}
+		if !opts.IncludeUncompleted && !item.TaskCompleted {
+			continue
+		}
+
+		entry := model.ChangelogEntry{
+			TaskID:      item.TaskID,
+			Title:       item.TaskTitle,
+			Category:    item.Category,
+			Completed:   item.TaskCompleted,
+			CustomNotes: item.CustomNotes,
+		}
+		catKey := item.Category
+		if catKey == "" {
+			catKey = model.ReleaseCategoryFeature
+		}
+		sections[catKey] = append(sections[catKey], entry)
+		totalItems++
+	}
+
+	var contentBuilder strings.Builder
+	if format == model.ReleaseNotesFormatMarkdown {
+		header := opts.HeaderTitle
+		if header == "" {
+			header = fmt.Sprintf("%s (%s)", rel.Name, rel.Version)
+		}
+		contentBuilder.WriteString(fmt.Sprintf("# %s\n\n", header))
+
+		if rel.Description != "" {
+			contentBuilder.WriteString(fmt.Sprintf("%s\n\n", rel.Description))
+		}
+
+		if rel.ReleasedAt != nil {
+			contentBuilder.WriteString(fmt.Sprintf("**Released On:** %s\n\n", rel.ReleasedAt.Format("2006-01-02")))
+		} else if rel.TargetDate != nil {
+			contentBuilder.WriteString(fmt.Sprintf("**Target Date:** %s (Status: %s)\n\n", rel.TargetDate.Format("2006-01-02"), rel.Status))
+		} else {
+			contentBuilder.WriteString(fmt.Sprintf("**Status:** %s\n\n", rel.Status))
+		}
+
+		for _, cat := range categoryOrder {
+			entries := sections[cat]
+			if len(entries) == 0 {
+				continue
+			}
+			title := categoryTitles[cat]
+			contentBuilder.WriteString(fmt.Sprintf("### %s\n\n", title))
+			for _, e := range entries {
+				desc := e.Title
+				if e.CustomNotes != "" {
+					desc = fmt.Sprintf("%s - %s", e.Title, e.CustomNotes)
+				}
+				statusTag := ""
+				if !e.Completed {
+					statusTag = " *(in progress)*"
+				}
+				contentBuilder.WriteString(fmt.Sprintf("- %s (#%d)%s\n", desc, e.TaskID, statusTag))
+			}
+			contentBuilder.WriteString("\n")
+		}
+
+		if totalItems == 0 {
+			contentBuilder.WriteString("*No changelog items recorded for this release.*\n")
+		}
+	}
+
+	return &model.GeneratedReleaseNotes{
+		ReleaseID:   rel.ID,
+		Name:        rel.Name,
+		Version:     rel.Version,
+		Status:      rel.Status,
+		ReleasedAt:  rel.ReleasedAt,
+		Format:      format,
+		Content:     contentBuilder.String(),
+		Sections:    sections,
+		TotalItems:  totalItems,
+		GeneratedAt: time.Now(),
+	}, nil
 }
 
 func (s *releaseServiceImpl) GetReleaseMetrics(releaseID int64) (*model.ReleaseMetrics, error) {
