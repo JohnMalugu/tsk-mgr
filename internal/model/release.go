@@ -65,3 +65,27 @@ type ReleaseItem struct {
 	TaskCompleted bool   `json:"task_completed,omitempty"`
 }
 
+// CreateReleaseRequest represents payload for provisioning a new release milestone
+type CreateReleaseRequest struct {
+	WorkspaceID int64      `json:"workspace_id"`
+	ProjectID   *int64     `json:"project_id,omitempty"`
+	Name        string     `json:"name"`
+	Version     string     `json:"version"` // semver-compliant version string
+	Description string     `json:"description,omitempty"`
+	TargetDate  *time.Time `json:"target_date,omitempty"`
+}
+
+// UpdateReleaseRequest represents payload for modifying release metadata
+type UpdateReleaseRequest struct {
+	Name        *string    `json:"name,omitempty"`
+	Version     *string    `json:"version,omitempty"`
+	Description *string    `json:"description,omitempty"`
+	TargetDate  *time.Time `json:"target_date,omitempty"`
+}
+
+// UpdateReleaseStatusRequest represents payload for advancing release lifecycle
+type UpdateReleaseStatusRequest struct {
+	Status string `json:"status"` // planning, active, code_freeze, released, archived
+}
+
+
