@@ -144,6 +144,34 @@ type GeneratedReleaseNotes struct {
 	GeneratedAt time.Time                   `json:"generated_at"`
 }
 
+// Release health status indicators
+const (
+	ReleaseHealthOnTrack   = "on_track"
+	ReleaseHealthAtRisk    = "at_risk"
+	ReleaseHealthDelayed   = "delayed"
+	ReleaseHealthCompleted = "completed"
+)
+
+// ReleaseMetrics aggregates completion progress, category counts, and schedule health
+type ReleaseMetrics struct {
+	ReleaseID            int64          `json:"release_id"`
+	Name                 string         `json:"name"`
+	Version              string         `json:"version"`
+	Status               string         `json:"status"`
+	TotalTasks           int            `json:"total_tasks"`
+	CompletedTasks       int            `json:"completed_tasks"`
+	InProgressTasks      int            `json:"in_progress_tasks"`
+	PendingTasks         int            `json:"pending_tasks"`
+	CompletionPercentage float64        `json:"completion_percentage"`
+	CategoryBreakdown    map[string]int `json:"category_breakdown"`
+	HasBlockers          bool           `json:"has_blockers"`
+	BlockerCount         int            `json:"blocker_count"`
+	DaysRemaining        int            `json:"days_remaining"`
+	HealthStatus         string         `json:"health_status"` // on_track, at_risk, delayed, completed
+	CalculatedAt         time.Time      `json:"calculated_at"`
+}
+
+
 
 
 
