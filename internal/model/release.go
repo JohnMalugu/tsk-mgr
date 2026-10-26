@@ -88,4 +88,25 @@ type UpdateReleaseStatusRequest struct {
 	Status string `json:"status"` // planning, active, code_freeze, released, archived
 }
 
+// AddReleaseTaskItem specifies task ID and categorization when attaching a task to a release
+type AddReleaseTaskItem struct {
+	TaskID             int    `json:"task_id"`
+	Category           string `json:"category"` // feature, bugfix, improvement, security, chore
+	IncludeInChangelog *bool  `json:"include_in_changelog,omitempty"`
+	CustomNotes        string `json:"custom_notes,omitempty"`
+}
+
+// AddReleaseTasksRequest allows batch associating tasks with a release
+type AddReleaseTasksRequest struct {
+	Tasks []AddReleaseTaskItem `json:"tasks"`
+}
+
+// UpdateReleaseItemRequest represents payload for modifying release task categorization or changelog text
+type UpdateReleaseItemRequest struct {
+	Category           *string `json:"category,omitempty"`
+	IncludeInChangelog *bool   `json:"include_in_changelog,omitempty"`
+	CustomNotes        *string `json:"custom_notes,omitempty"`
+}
+
+
 
