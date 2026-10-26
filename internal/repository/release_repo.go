@@ -344,9 +344,84 @@ func (r *releaseRepositoryImpl) GetReleaseItem(releaseID int64, taskID int) (*mo
 }
 
 func (r *releaseRepositoryImpl) ListReleaseItems(releaseID int64, category string) ([]*model.ReleaseItem, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		ri.id, ri.release_id, ri.task_id, ri.category, ri.include_in_changelog, ri.custom_notes, ri.added_by_user_id, ri.added_at,
+		t.title, t.status, t.priority, t.user_id, t.completed
+	FROM release_items ri
+	JOIN tasks t ON t.id = ri.task_id
+	WHERE ri.release_id = ?`
+
+	var args []interface{}
+	args = append(args, releaseID)
+	if category != "" {
+		query += " AND ri.category = ?"
+		args = append(args, category)
+	}
+
+	query += " ORDER BY ri.added_at ASC, ri.id ASC"
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []*model.ReleaseItem
+	for rows.Next() {
+		var item model.ReleaseItem
+		var incChangelog int
+		var completed int
+
+		err := rows.Scan(
+			&item.ID, &item.ReleaseID, &item.TaskID, &item.Category, &incChangelog, &item.CustomNotes, &item.AddedByUserID, &item.AddedAt,
+			&item.TaskTitle, &item.TaskStatus, &item.TaskPriority, &item.TaskUserID, &completed,
+		)
+		if err != nil {
+			return nil, err
+		}
+		item.IncludeInChangelog = (incChangelog == 1)
+		item.TaskCompleted = (completed == 1 || item.TaskStatus == model.TaskStatusCompleted)
+		items = append(items, &item)
+	}
+
+	return items, rows.Err()
 }
 
 func (r *releaseRepositoryImpl) GetIncompleteTasksForRelease(releaseID int64) ([]*model.ReleaseItem, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		ri.id, ri.release_id, ri.task_id, ri.category, ri.include_in_changelog, ri.custom_notes, ri.added_by_user_id, ri.added_at,
+		t.title, t.status, t.priority, t.user_id, t.completed
+	FROM release_items ri
+	JOIN tasks t ON t.id = ri.task_id
+	WHERE ri.release_id = ? AND (t.status != 'completed' AND t.completed = 0)
+	ORDER BY ri.added_at ASC`
+
+	rows, err := r.db.Query(query, releaseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []*model.ReleaseItem
+	for rows.Next() {
+		var item model.ReleaseItem
+		var incChangelog int
+		var completed int
+
+		err := rows.Scan(
+			&item.ID, &item.ReleaseID, &item.TaskID, &item.Category, &incChangelog, &item.CustomNotes, &item.AddedByUserID, &item.AddedAt,
+			&item.TaskTitle, &item.TaskStatus, &item.TaskPriority, &item.TaskUserID, &completed,
+		)
+		if err != nil {
+			return nil, err
+		}
+		item.IncludeInChangelog = (incChangelog == 1)
+		item.TaskCompleted = (completed == 1 || item.TaskStatus == model.TaskStatusCompleted)
+		items = append(items, &item)
+	}
+
+	return items, rows.Err()
 }
+
