@@ -184,14 +184,60 @@ func (r *releaseRepositoryImpl) ListReleases(filter model.ReleaseFilter) ([]*mod
 }
 
 func (r *releaseRepositoryImpl) UpdateRelease(rel *model.Release) error {
+	rel.UpdatedAt = time.Now()
+	query := `
+	UPDATE releases
+	SET name = ?, version = ?, description = ?, target_date = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query, rel.Name, rel.Version, rel.Description, rel.TargetDate, rel.UpdatedAt, rel.ID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrReleaseNotFound
+	}
 	return nil
 }
 
 func (r *releaseRepositoryImpl) UpdateReleaseStatus(id int64, status string, releasedAt *time.Time) error {
+	now := time.Now()
+	query := `
+	UPDATE releases
+	SET status = ?, released_at = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query, status, releasedAt, now, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrReleaseNotFound
+	}
 	return nil
 }
 
 func (r *releaseRepositoryImpl) DeleteRelease(id int64) error {
+	query := `DELETE FROM releases WHERE id = ?`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrReleaseNotFound
+	}
 	return nil
 }
 
