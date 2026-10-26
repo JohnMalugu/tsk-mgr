@@ -108,5 +108,42 @@ type UpdateReleaseItemRequest struct {
 	CustomNotes        *string `json:"custom_notes,omitempty"`
 }
 
+// Release notes formatting constants
+const (
+	ReleaseNotesFormatMarkdown = "markdown"
+	ReleaseNotesFormatJSON     = "json"
+)
+
+// ReleaseNotesOptions specifies filtering and presentation flags for changelog generation
+type ReleaseNotesOptions struct {
+	Format             string `json:"format"`              // "markdown" or "json"
+	IncludeUncompleted bool   `json:"include_uncompleted"` // whether to include incomplete tasks
+	HeaderTitle        string `json:"header_title,omitempty"`
+}
+
+// ChangelogEntry represents a single bullet item in generated release notes
+type ChangelogEntry struct {
+	TaskID      int    `json:"task_id"`
+	Title       string `json:"title"`
+	Category    string `json:"category"`
+	Completed   bool   `json:"completed"`
+	CustomNotes string `json:"custom_notes,omitempty"`
+}
+
+// GeneratedReleaseNotes contains formatted changelog output and categorized items
+type GeneratedReleaseNotes struct {
+	ReleaseID   int64                       `json:"release_id"`
+	Name        string                      `json:"name"`
+	Version     string                      `json:"version"`
+	Status      string                      `json:"status"`
+	ReleasedAt  *time.Time                  `json:"released_at,omitempty"`
+	Format      string                      `json:"format"`
+	Content     string                      `json:"content"`
+	Sections    map[string][]ChangelogEntry `json:"sections,omitempty"`
+	TotalItems  int                         `json:"total_items"`
+	GeneratedAt time.Time                   `json:"generated_at"`
+}
+
+
 
 
