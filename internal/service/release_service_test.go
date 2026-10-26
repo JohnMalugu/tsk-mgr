@@ -471,4 +471,3 @@ func TestReleaseService_CloneAndRollover(t *testing.T) {
 		t.Fatalf("expected rolled over task to be openTask (%d), got %d", openTask.ID, clonedItems[0].TaskID)
 	}
 }
-

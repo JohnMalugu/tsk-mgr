@@ -519,7 +519,3 @@ func (h *ReleaseHandler) HandleCloneRelease(w http.ResponseWriter, r *http.Reque
 
 	writeReleaseJSON(w, http.StatusCreated, cloned)
 }
-
-
-
-

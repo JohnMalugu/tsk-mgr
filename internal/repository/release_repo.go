@@ -424,4 +424,3 @@ func (r *releaseRepositoryImpl) GetIncompleteTasksForRelease(releaseID int64) ([
 
 	return items, rows.Err()
 }
-

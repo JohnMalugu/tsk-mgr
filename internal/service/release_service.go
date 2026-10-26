@@ -11,16 +11,16 @@ import (
 )
 
 var (
-	ErrReleaseNotFound          = errors.New("release not found")
-	ErrReleaseNameRequired      = errors.New("release name cannot be empty")
-	ErrInvalidReleaseVersion    = errors.New("invalid release version format")
-	ErrInvalidReleaseStatus     = errors.New("invalid release status")
-	ErrInvalidStatusTransition  = errors.New("invalid release status transition")
-	ErrReleaseCodeFrozen        = errors.New("cannot modify tasks in a code-frozen release")
-	ErrReleaseAlreadyReleased   = errors.New("cannot modify a released or archived release")
-	ErrInvalidReleaseCategory   = errors.New("invalid release item category")
-	ErrNoTasksSpecified         = errors.New("no tasks specified")
-	ErrReleaseItemNotFound      = errors.New("release item not found")
+	ErrReleaseNotFound         = errors.New("release not found")
+	ErrReleaseNameRequired     = errors.New("release name cannot be empty")
+	ErrInvalidReleaseVersion   = errors.New("invalid release version format")
+	ErrInvalidReleaseStatus    = errors.New("invalid release status")
+	ErrInvalidStatusTransition = errors.New("invalid release status transition")
+	ErrReleaseCodeFrozen       = errors.New("cannot modify tasks in a code-frozen release")
+	ErrReleaseAlreadyReleased  = errors.New("cannot modify a released or archived release")
+	ErrInvalidReleaseCategory  = errors.New("invalid release item category")
+	ErrNoTasksSpecified        = errors.New("no tasks specified")
+	ErrReleaseItemNotFound     = errors.New("release item not found")
 )
 
 // ReleaseService coordinates release milestones, task scoping, changelog generation, and metrics
@@ -130,7 +130,6 @@ func validateReleaseStatusTransition(currentStatus, targetStatus string) error {
 
 	return ErrInvalidStatusTransition
 }
-
 
 func (s *releaseServiceImpl) CreateRelease(userID string, req model.CreateReleaseRequest) (*model.Release, error) {
 	if req.WorkspaceID <= 0 {
@@ -626,4 +625,3 @@ func (s *releaseServiceImpl) CloneRelease(userID string, sourceReleaseID int64, 
 
 	return s.repo.GetReleaseByID(newID)
 }
-

@@ -204,9 +204,3 @@ type ReleaseSummary struct {
 	ReleasedAt           *time.Time `json:"released_at,omitempty"`
 	CreatedAt            time.Time  `json:"created_at"`
 }
-
-
-
-
-
-

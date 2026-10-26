@@ -137,6 +137,14 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET /v2/automations/logs?workspace_id={id}&status={success|skipped|failed}` to query and filter execution audit trails across a workspace
 - `GET /v2/automations/metrics?workspace_id={id}` for workspace automation analytics, execution success rates, and top triggered rules
 - `POST /v2/automations/dispatch` to dispatch manual trigger events for integration testing and automated workflow verification
+- `GET|POST /v2/releases` to query releases by workspace/project/status or provision a new release milestone with semver and target date
+- `GET|PUT|DELETE /v2/releases/{id}` to fetch release metadata, modify target date and description, or delete a release
+- `POST|PATCH /v2/releases/{id}/status` to transition release lifecycle (`planning` -> `active` -> `code_freeze` -> `released` -> `archived`) with automatic release timestamping
+- `GET|POST /v2/releases/{id}/tasks` to view scoped release task backlog or attach tasks with categorization (`feature`, `bugfix`, `improvement`, `security`, `chore`)
+- `PUT|PATCH|DELETE /v2/releases/{id}/tasks/{taskId}` to update changelog notes and category or detach a task from the release
+- `GET|POST /v2/releases/{id}/changelog` to generate automated markdown or JSON release notes grouped by category
+- `GET /v2/releases/{id}/metrics` to compute release burndown, completion rate, category breakdown, blockers, and health status (`on_track`, `at_risk`, `delayed`, `completed`)
+- `POST /v2/releases/{id}/clone` to clone a release milestone into a new version with optional incomplete task rollover
 
 ## Current limitations
 
