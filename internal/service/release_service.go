@@ -570,5 +570,60 @@ func (s *releaseServiceImpl) GetReleaseMetrics(releaseID int64) (*model.ReleaseM
 }
 
 func (s *releaseServiceImpl) CloneRelease(userID string, sourceReleaseID int64, req model.CloneReleaseRequest) (*model.Release, error) {
-	return nil, nil
+	source, err := s.GetRelease(sourceReleaseID)
+	if err != nil {
+		return nil, err
+	}
+
+	newName, err := validateReleaseName(req.NewName)
+	if err != nil {
+		return nil, err
+	}
+	newVersion, err := validateReleaseVersion(req.NewVersion)
+	if err != nil {
+		return nil, err
+	}
+
+	targetDate := req.TargetDate
+	if targetDate == nil && source.TargetDate != nil {
+		// Default to +30 days if not explicitly specified
+		bumped := source.TargetDate.Add(30 * 24 * time.Hour)
+		targetDate = &bumped
+	}
+
+	newRel := &model.Release{
+		WorkspaceID:     source.WorkspaceID,
+		ProjectID:       source.ProjectID,
+		Name:            newName,
+		Version:         newVersion,
+		Description:     source.Description,
+		Status:          model.ReleaseStatusPlanning,
+		TargetDate:      targetDate,
+		CreatedByUserID: userID,
+	}
+
+	newID, err := s.repo.CreateRelease(newRel)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.RolloverIncomplete {
+		incompleteItems, err := s.repo.GetIncompleteTasksForRelease(sourceReleaseID)
+		if err == nil {
+			for _, item := range incompleteItems {
+				rolloverItem := &model.ReleaseItem{
+					ReleaseID:          newID,
+					TaskID:             item.TaskID,
+					Category:           item.Category,
+					IncludeInChangelog: item.IncludeInChangelog,
+					CustomNotes:        item.CustomNotes,
+					AddedByUserID:      userID,
+				}
+				_ = s.repo.AddReleaseItem(rolloverItem)
+			}
+		}
+	}
+
+	return s.repo.GetReleaseByID(newID)
 }
+
