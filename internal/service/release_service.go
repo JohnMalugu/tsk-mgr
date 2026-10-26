@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -51,6 +52,83 @@ func NewReleaseService(repo repository.ReleaseRepository, taskRepo repository.Ta
 		taskRepo: taskRepo,
 	}
 }
+
+func validateReleaseName(name string) (string, error) {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return "", ErrReleaseNameRequired
+	}
+	if len([]rune(trimmed)) > 100 {
+		return "", errors.New("release name cannot exceed 100 characters")
+	}
+	return trimmed, nil
+}
+
+func validateReleaseVersion(version string) (string, error) {
+	trimmed := strings.TrimSpace(version)
+	if trimmed == "" {
+		return "", ErrInvalidReleaseVersion
+	}
+	if len([]rune(trimmed)) > 50 {
+		return "", errors.New("release version cannot exceed 50 characters")
+	}
+	// Verify version contains reasonable characters: alphanumeric, dots, dashes, plus, 'v' prefix
+	for _, r := range trimmed {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '.' || r == '-' || r == '+' || r == '_') {
+			return "", ErrInvalidReleaseVersion
+		}
+	}
+	return trimmed, nil
+}
+
+func validateReleaseCategory(cat string) (string, error) {
+	lower := strings.ToLower(strings.TrimSpace(cat))
+	if lower == "" {
+		return model.ReleaseCategoryFeature, nil
+	}
+	if !model.IsValidReleaseCategory(lower) {
+		return "", ErrInvalidReleaseCategory
+	}
+	return lower, nil
+}
+
+func validateReleaseStatusTransition(currentStatus, targetStatus string) error {
+	if currentStatus == targetStatus {
+		return nil
+	}
+	switch targetStatus {
+	case model.ReleaseStatusPlanning, model.ReleaseStatusActive, model.ReleaseStatusFreeze, model.ReleaseStatusReleased, model.ReleaseStatusArchived:
+		// Valid target status
+	default:
+		return ErrInvalidReleaseStatus
+	}
+
+	switch currentStatus {
+	case model.ReleaseStatusPlanning:
+		if targetStatus == model.ReleaseStatusActive || targetStatus == model.ReleaseStatusArchived {
+			return nil
+		}
+	case model.ReleaseStatusActive:
+		if targetStatus == model.ReleaseStatusFreeze || targetStatus == model.ReleaseStatusReleased || targetStatus == model.ReleaseStatusPlanning || targetStatus == model.ReleaseStatusArchived {
+			return nil
+		}
+	case model.ReleaseStatusFreeze:
+		if targetStatus == model.ReleaseStatusReleased || targetStatus == model.ReleaseStatusActive || targetStatus == model.ReleaseStatusArchived {
+			return nil
+		}
+	case model.ReleaseStatusReleased:
+		if targetStatus == model.ReleaseStatusArchived {
+			return nil
+		}
+	case model.ReleaseStatusArchived:
+		if targetStatus == model.ReleaseStatusPlanning || targetStatus == model.ReleaseStatusActive {
+			return nil
+		}
+	}
+
+	return ErrInvalidStatusTransition
+}
+
 
 func (s *releaseServiceImpl) CreateRelease(userID string, req model.CreateReleaseRequest) (*model.Release, error) {
 	return nil, nil
