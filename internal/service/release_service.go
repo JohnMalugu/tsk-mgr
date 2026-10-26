@@ -487,7 +487,86 @@ func (s *releaseServiceImpl) GenerateReleaseNotes(releaseID int64, opts model.Re
 }
 
 func (s *releaseServiceImpl) GetReleaseMetrics(releaseID int64) (*model.ReleaseMetrics, error) {
-	return nil, nil
+	rel, err := s.GetRelease(releaseID)
+	if err != nil {
+		return nil, err
+	}
+
+	items, err := s.repo.ListReleaseItems(releaseID, "")
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	totalTasks := len(items)
+	completedTasks := 0
+	inProgressTasks := 0
+	pendingTasks := 0
+	blockerCount := 0
+	categoryBreakdown := make(map[string]int)
+
+	for _, item := range items {
+		cat := item.Category
+		if cat == "" {
+			cat = model.ReleaseCategoryFeature
+		}
+		categoryBreakdown[cat]++
+
+		if item.TaskCompleted {
+			completedTasks++
+		} else if item.TaskStatus == model.TaskStatusInProgress {
+			inProgressTasks++
+			if strings.EqualFold(item.TaskPriority, "urgent") || strings.EqualFold(item.TaskPriority, "high") {
+				blockerCount++
+			}
+		} else {
+			pendingTasks++
+			if strings.EqualFold(item.TaskPriority, "urgent") || strings.EqualFold(item.TaskPriority, "high") {
+				blockerCount++
+			}
+		}
+	}
+
+	completionPct := 0.0
+	if totalTasks > 0 {
+		completionPct = float64(completedTasks) / float64(totalTasks) * 100.0
+	}
+
+	daysRemaining := 0
+	if rel.TargetDate != nil {
+		diff := rel.TargetDate.Sub(now)
+		daysRemaining = int(diff.Hours() / 24)
+		if diff < 0 && daysRemaining == 0 {
+			daysRemaining = -1
+		}
+	}
+
+	healthStatus := model.ReleaseHealthOnTrack
+	if rel.Status == model.ReleaseStatusReleased {
+		healthStatus = model.ReleaseHealthCompleted
+	} else if rel.TargetDate != nil && now.After(*rel.TargetDate) && completedTasks < totalTasks {
+		healthStatus = model.ReleaseHealthDelayed
+	} else if blockerCount > 0 || (rel.TargetDate != nil && daysRemaining <= 3 && completionPct < 70.0) {
+		healthStatus = model.ReleaseHealthAtRisk
+	}
+
+	return &model.ReleaseMetrics{
+		ReleaseID:            rel.ID,
+		Name:                 rel.Name,
+		Version:              rel.Version,
+		Status:               rel.Status,
+		TotalTasks:           totalTasks,
+		CompletedTasks:       completedTasks,
+		InProgressTasks:      inProgressTasks,
+		PendingTasks:         pendingTasks,
+		CompletionPercentage: completionPct,
+		CategoryBreakdown:    categoryBreakdown,
+		HasBlockers:          blockerCount > 0,
+		BlockerCount:         blockerCount,
+		DaysRemaining:        daysRemaining,
+		HealthStatus:         healthStatus,
+		CalculatedAt:         now,
+	}, nil
 }
 
 func (s *releaseServiceImpl) CloneRelease(userID string, sourceReleaseID int64, req model.CloneReleaseRequest) (*model.Release, error) {
