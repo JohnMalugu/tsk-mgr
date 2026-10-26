@@ -484,5 +484,42 @@ func (h *ReleaseHandler) HandleReleaseMetrics(w http.ResponseWriter, r *http.Req
 	writeReleaseJSON(w, http.StatusOK, metrics)
 }
 
+// HandleCloneRelease clones an existing release into a new version with optional incomplete task rollover
+func (h *ReleaseHandler) HandleCloneRelease(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeReleaseError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	id, err := extractReleaseID(r.URL.Path, "/v2/releases/")
+	if err != nil {
+		writeReleaseError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	userID := getReleaseUser(r)
+	var req model.CloneReleaseRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeReleaseError(w, http.StatusBadRequest, "Invalid request body: "+err.Error())
+		return
+	}
+
+	cloned, err := h.svc.CloneRelease(userID, id, req)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrReleaseNotFound):
+			writeReleaseError(w, http.StatusNotFound, "Release not found")
+		case errors.Is(err, service.ErrReleaseNameRequired), errors.Is(err, service.ErrInvalidReleaseVersion):
+			writeReleaseError(w, http.StatusBadRequest, err.Error())
+		default:
+			writeReleaseError(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+
+	writeReleaseJSON(w, http.StatusCreated, cloned)
+}
+
+
 
 
