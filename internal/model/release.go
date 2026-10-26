@@ -171,6 +171,41 @@ type ReleaseMetrics struct {
 	CalculatedAt         time.Time      `json:"calculated_at"`
 }
 
+// CloneReleaseRequest specifies target version and optional task rollover rules when cloning a release
+type CloneReleaseRequest struct {
+	NewName            string     `json:"new_name"`
+	NewVersion         string     `json:"new_version"`
+	TargetDate         *time.Time `json:"target_date,omitempty"`
+	RolloverIncomplete bool       `json:"rollover_incomplete"`
+}
+
+// ReleaseFilter defines query parameters for searching and listing releases
+type ReleaseFilter struct {
+	WorkspaceID int64  `json:"workspace_id"`
+	ProjectID   *int64 `json:"project_id,omitempty"`
+	Status      string `json:"status,omitempty"`
+	Query       string `json:"q,omitempty"`
+	Limit       int    `json:"limit,omitempty"`
+	Offset      int    `json:"offset,omitempty"`
+}
+
+// ReleaseSummary provides compact release overview for list catalogs and dashboards
+type ReleaseSummary struct {
+	ID                   int64      `json:"id"`
+	WorkspaceID          int64      `json:"workspace_id"`
+	ProjectID            *int64     `json:"project_id,omitempty"`
+	Name                 string     `json:"name"`
+	Version              string     `json:"version"`
+	Status               string     `json:"status"`
+	TaskCount            int        `json:"task_count"`
+	CompletedCount       int        `json:"completed_count"`
+	CompletionPercentage float64    `json:"completion_percentage"`
+	TargetDate           *time.Time `json:"target_date,omitempty"`
+	ReleasedAt           *time.Time `json:"released_at,omitempty"`
+	CreatedAt            time.Time  `json:"created_at"`
+}
+
+
 
 
 
