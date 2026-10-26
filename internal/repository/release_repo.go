@@ -326,7 +326,7 @@ func (r *releaseRepositoryImpl) GetReleaseItem(releaseID int64, taskID int) (*mo
 	row := r.db.QueryRow(query, releaseID, taskID)
 	var item model.ReleaseItem
 	var incChangelog int
-	var completed int
+	var completed bool
 
 	err := row.Scan(
 		&item.ID, &item.ReleaseID, &item.TaskID, &item.Category, &incChangelog, &item.CustomNotes, &item.AddedByUserID, &item.AddedAt,
@@ -339,7 +339,7 @@ func (r *releaseRepositoryImpl) GetReleaseItem(releaseID int64, taskID int) (*mo
 		return nil, err
 	}
 	item.IncludeInChangelog = (incChangelog == 1)
-	item.TaskCompleted = (completed == 1 || item.TaskStatus == model.TaskStatusCompleted)
+	item.TaskCompleted = (completed || item.TaskStatus == model.TaskStatusCompleted)
 	return &item, nil
 }
 
@@ -371,7 +371,7 @@ func (r *releaseRepositoryImpl) ListReleaseItems(releaseID int64, category strin
 	for rows.Next() {
 		var item model.ReleaseItem
 		var incChangelog int
-		var completed int
+		var completed bool
 
 		err := rows.Scan(
 			&item.ID, &item.ReleaseID, &item.TaskID, &item.Category, &incChangelog, &item.CustomNotes, &item.AddedByUserID, &item.AddedAt,
@@ -381,7 +381,7 @@ func (r *releaseRepositoryImpl) ListReleaseItems(releaseID int64, category strin
 			return nil, err
 		}
 		item.IncludeInChangelog = (incChangelog == 1)
-		item.TaskCompleted = (completed == 1 || item.TaskStatus == model.TaskStatusCompleted)
+		item.TaskCompleted = (completed || item.TaskStatus == model.TaskStatusCompleted)
 		items = append(items, &item)
 	}
 
@@ -408,7 +408,7 @@ func (r *releaseRepositoryImpl) GetIncompleteTasksForRelease(releaseID int64) ([
 	for rows.Next() {
 		var item model.ReleaseItem
 		var incChangelog int
-		var completed int
+		var completed bool
 
 		err := rows.Scan(
 			&item.ID, &item.ReleaseID, &item.TaskID, &item.Category, &incChangelog, &item.CustomNotes, &item.AddedByUserID, &item.AddedAt,
@@ -418,7 +418,7 @@ func (r *releaseRepositoryImpl) GetIncompleteTasksForRelease(releaseID int64) ([
 			return nil, err
 		}
 		item.IncludeInChangelog = (incChangelog == 1)
-		item.TaskCompleted = (completed == 1 || item.TaskStatus == model.TaskStatusCompleted)
+		item.TaskCompleted = (completed || item.TaskStatus == model.TaskStatusCompleted)
 		items = append(items, &item)
 	}
 
