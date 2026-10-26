@@ -276,3 +276,141 @@ func (h *ReleaseHandler) HandleUpdateReleaseStatus(w http.ResponseWriter, r *htt
 	writeReleaseJSON(w, http.StatusOK, updated)
 }
 
+func extractReleaseAndTaskIDs(path string) (int64, int, error) {
+	trimmed := strings.TrimPrefix(path, "/v2/releases/")
+	parts := strings.Split(strings.Trim(trimmed, "/"), "/")
+	if len(parts) < 3 || parts[1] != "tasks" {
+		return 0, 0, errors.New("invalid path format, expected /v2/releases/{id}/tasks/{taskId}")
+	}
+	relID, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return 0, 0, errors.New("invalid release ID")
+	}
+	taskID, err := strconv.Atoi(parts[2])
+	if err != nil {
+		return 0, 0, errors.New("invalid task ID")
+	}
+	return relID, taskID, nil
+}
+
+// HandleReleaseTasks routes GET (list tasks) and POST (attach tasks) for /v2/releases/{id}/tasks
+func (h *ReleaseHandler) HandleReleaseTasks(w http.ResponseWriter, r *http.Request) {
+	id, err := extractReleaseID(r.URL.Path, "/v2/releases/")
+	if err != nil {
+		writeReleaseError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		cat := r.URL.Query().Get("category")
+		items, err := h.svc.ListReleaseItems(id, cat)
+		if err != nil {
+			if errors.Is(err, service.ErrReleaseNotFound) {
+				writeReleaseError(w, http.StatusNotFound, "Release not found")
+				return
+			}
+			writeReleaseError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if items == nil {
+			items = []*model.ReleaseItem{}
+		}
+		writeReleaseJSON(w, http.StatusOK, map[string]interface{}{
+			"release_id": id,
+			"tasks":      items,
+			"count":      len(items),
+		})
+
+	case http.MethodPost:
+		userID := getReleaseUser(r)
+		var req model.AddReleaseTasksRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeReleaseError(w, http.StatusBadRequest, "Invalid request body: "+err.Error())
+			return
+		}
+
+		items, err := h.svc.AddTasksToRelease(userID, id, req)
+		if err != nil {
+			switch {
+			case errors.Is(err, service.ErrReleaseNotFound):
+				writeReleaseError(w, http.StatusNotFound, "Release not found")
+			case errors.Is(err, service.ErrReleaseCodeFrozen),
+				errors.Is(err, service.ErrReleaseAlreadyReleased),
+				errors.Is(err, service.ErrInvalidReleaseCategory),
+				errors.Is(err, service.ErrNoTasksSpecified):
+				writeReleaseError(w, http.StatusBadRequest, err.Error())
+			default:
+				writeReleaseError(w, http.StatusInternalServerError, err.Error())
+			}
+			return
+		}
+
+		writeReleaseJSON(w, http.StatusOK, map[string]interface{}{
+			"message": "Tasks attached to release successfully",
+			"tasks":   items,
+			"count":   len(items),
+		})
+
+	default:
+		writeReleaseError(w, http.StatusMethodNotAllowed, "Method not allowed")
+	}
+}
+
+// HandleReleaseTaskDetail routes PUT/PATCH (update) and DELETE (detach) for /v2/releases/{id}/tasks/{taskId}
+func (h *ReleaseHandler) HandleReleaseTaskDetail(w http.ResponseWriter, r *http.Request) {
+	relID, taskID, err := extractReleaseAndTaskIDs(r.URL.Path)
+	if err != nil {
+		writeReleaseError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	switch r.Method {
+	case http.MethodPut, http.MethodPatch:
+		var req model.UpdateReleaseItemRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeReleaseError(w, http.StatusBadRequest, "Invalid request body: "+err.Error())
+			return
+		}
+
+		updated, err := h.svc.UpdateReleaseItem(relID, taskID, req)
+		if err != nil {
+			switch {
+			case errors.Is(err, service.ErrReleaseNotFound), errors.Is(err, service.ErrReleaseItemNotFound):
+				writeReleaseError(w, http.StatusNotFound, err.Error())
+			case errors.Is(err, service.ErrReleaseAlreadyReleased), errors.Is(err, service.ErrInvalidReleaseCategory):
+				writeReleaseError(w, http.StatusBadRequest, err.Error())
+			default:
+				writeReleaseError(w, http.StatusInternalServerError, err.Error())
+			}
+			return
+		}
+
+		writeReleaseJSON(w, http.StatusOK, updated)
+
+	case http.MethodDelete:
+		err := h.svc.RemoveTaskFromRelease(relID, taskID)
+		if err != nil {
+			switch {
+			case errors.Is(err, service.ErrReleaseNotFound), errors.Is(err, service.ErrReleaseItemNotFound):
+				writeReleaseError(w, http.StatusNotFound, err.Error())
+			case errors.Is(err, service.ErrReleaseCodeFrozen), errors.Is(err, service.ErrReleaseAlreadyReleased):
+				writeReleaseError(w, http.StatusBadRequest, err.Error())
+			default:
+				writeReleaseError(w, http.StatusInternalServerError, err.Error())
+			}
+			return
+		}
+
+		writeReleaseJSON(w, http.StatusOK, map[string]interface{}{
+			"message":    "Task detached from release successfully",
+			"release_id": relID,
+			"task_id":    taskID,
+		})
+
+	default:
+		writeReleaseError(w, http.StatusMethodNotAllowed, "Method not allowed")
+	}
+}
+
+
