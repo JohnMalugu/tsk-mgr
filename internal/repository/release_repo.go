@@ -40,11 +40,65 @@ func NewReleaseRepository(db *sql.DB) ReleaseRepository {
 }
 
 func (r *releaseRepositoryImpl) CreateRelease(rel *model.Release) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	rel.CreatedAt = now
+	rel.UpdatedAt = now
+	if rel.Status == "" {
+		rel.Status = model.ReleaseStatusPlanning
+	}
+
+	query := `
+	INSERT INTO releases (workspace_id, project_id, name, version, description, status, target_date, released_at, created_by_user_id, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query,
+		rel.WorkspaceID, rel.ProjectID, rel.Name, rel.Version, rel.Description,
+		rel.Status, rel.TargetDate, rel.ReleasedAt, rel.CreatedByUserID,
+		rel.CreatedAt, rel.UpdatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	rel.ID = id
+	return id, nil
 }
 
 func (r *releaseRepositoryImpl) GetReleaseByID(id int64) (*model.Release, error) {
-	return nil, nil
+	query := `
+	SELECT id, workspace_id, project_id, name, version, description, status, target_date, released_at, created_by_user_id, created_at, updated_at
+	FROM releases
+	WHERE id = ?`
+
+	row := r.db.QueryRow(query, id)
+	var rel model.Release
+	var targetDate, releasedAt sql.NullTime
+	var projectID sql.NullInt64
+
+	err := row.Scan(
+		&rel.ID, &rel.WorkspaceID, &projectID, &rel.Name, &rel.Version,
+		&rel.Description, &rel.Status, &targetDate, &releasedAt,
+		&rel.CreatedByUserID, &rel.CreatedAt, &rel.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrReleaseNotFound
+		}
+		return nil, err
+	}
+	if projectID.Valid {
+		rel.ProjectID = &projectID.Int64
+	}
+	if targetDate.Valid {
+		rel.TargetDate = &targetDate.Time
+	}
+	if releasedAt.Valid {
+		rel.ReleasedAt = &releasedAt.Time
+	}
+	return &rel, nil
 }
 
 func (r *releaseRepositoryImpl) ListReleases(filter model.ReleaseFilter) ([]*model.ReleaseSummary, error) {
