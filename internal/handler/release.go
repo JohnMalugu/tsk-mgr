@@ -239,3 +239,40 @@ func (h *ReleaseHandler) HandleDeleteRelease(w http.ResponseWriter, r *http.Requ
 		"id":      id,
 	})
 }
+
+// HandleUpdateReleaseStatus transitions release lifecycle status (e.g. code_freeze, released)
+func (h *ReleaseHandler) HandleUpdateReleaseStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPatch {
+		writeReleaseError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	id, err := extractReleaseID(r.URL.Path, "/v2/releases/")
+	if err != nil {
+		writeReleaseError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	var req model.UpdateReleaseStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeReleaseError(w, http.StatusBadRequest, "Invalid request body: "+err.Error())
+		return
+	}
+
+	updated, err := h.svc.UpdateReleaseStatus(id, req)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrReleaseNotFound):
+			writeReleaseError(w, http.StatusNotFound, "Release not found")
+		case errors.Is(err, service.ErrInvalidReleaseStatus),
+			errors.Is(err, service.ErrInvalidStatusTransition):
+			writeReleaseError(w, http.StatusBadRequest, err.Error())
+		default:
+			writeReleaseError(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+
+	writeReleaseJSON(w, http.StatusOK, updated)
+}
+
