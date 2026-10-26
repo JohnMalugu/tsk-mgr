@@ -131,15 +131,53 @@ func validateReleaseStatusTransition(currentStatus, targetStatus string) error {
 
 
 func (s *releaseServiceImpl) CreateRelease(userID string, req model.CreateReleaseRequest) (*model.Release, error) {
-	return nil, nil
+	if req.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	validatedName, err := validateReleaseName(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	validatedVersion, err := validateReleaseVersion(req.Version)
+	if err != nil {
+		return nil, err
+	}
+
+	rel := &model.Release{
+		WorkspaceID:     req.WorkspaceID,
+		ProjectID:       req.ProjectID,
+		Name:            validatedName,
+		Version:         validatedVersion,
+		Description:     strings.TrimSpace(req.Description),
+		Status:          model.ReleaseStatusPlanning,
+		TargetDate:      req.TargetDate,
+		CreatedByUserID: userID,
+	}
+
+	id, err := s.repo.CreateRelease(rel)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetReleaseByID(id)
 }
 
 func (s *releaseServiceImpl) GetRelease(id int64) (*model.Release, error) {
-	return nil, nil
+	rel, err := s.repo.GetReleaseByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrReleaseNotFound) {
+			return nil, ErrReleaseNotFound
+		}
+		return nil, err
+	}
+	return rel, nil
 }
 
 func (s *releaseServiceImpl) ListReleases(filter model.ReleaseFilter) ([]*model.ReleaseSummary, error) {
-	return nil, nil
+	if filter.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	return s.repo.ListReleases(filter)
 }
 
 func (s *releaseServiceImpl) UpdateRelease(id int64, req model.UpdateReleaseRequest) (*model.Release, error) {
