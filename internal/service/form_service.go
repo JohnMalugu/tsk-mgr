@@ -152,24 +152,144 @@ func validateFieldDefinitions(defs []model.FormFieldDefinition) ([]model.FormFie
 }
 
 func (s *formServiceImpl) CreateForm(userID string, req model.CreateFormRequest) (*model.IntakeForm, error) {
-	return nil, nil
+	if req.WorkspaceID <= 0 {
+		return nil, ErrFormWorkspaceRequired
+	}
+
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		return nil, ErrFormTitleRequired
+	}
+
+	slug := ""
+	if req.Slug != "" {
+		slug = normalizeSlug(req.Slug)
+		if slug == "" {
+			return nil, ErrFormInvalidSlug
+		}
+	} else {
+		slug = deriveSlug(title)
+	}
+
+	allowAnon := true
+	if req.AllowAnonymous != nil {
+		allowAnon = *req.AllowAnonymous
+	}
+
+	btnText := strings.TrimSpace(req.SubmitButtonText)
+	if btnText == "" {
+		btnText = "Submit"
+	}
+
+	successMsg := strings.TrimSpace(req.SuccessMessage)
+	if successMsg == "" {
+		successMsg = "Thank you! Your submission has been received."
+	}
+
+	priority := strings.TrimSpace(req.DefaultPriority)
+	if priority == "" {
+		priority = "medium"
+	}
+
+	var fields []model.FormField
+	if len(req.Fields) > 0 {
+		var err error
+		fields, err = validateFieldDefinitions(req.Fields)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	form := &model.IntakeForm{
+		WorkspaceID:       req.WorkspaceID,
+		ProjectID:         req.ProjectID,
+		Title:             title,
+		Description:       strings.TrimSpace(req.Description),
+		Slug:              slug,
+		Status:            model.FormStatusDraft,
+		IsPublished:       false,
+		AllowAnonymous:    allowAnon,
+		SubmitButtonText:  btnText,
+		SuccessMessage:    successMsg,
+		RedirectURL:       strings.TrimSpace(req.RedirectURL),
+		DefaultPriority:   priority,
+		DefaultTags:       req.DefaultTags,
+		DefaultAssigneeID: strings.TrimSpace(req.DefaultAssigneeID),
+		CreatedByUserID:   userID,
+	}
+
+	id, err := s.formRepo.CreateForm(form)
+	if err != nil {
+		if errors.Is(err, repository.ErrDuplicateFormSlug) {
+			return nil, ErrFormSlugAlreadyExists
+		}
+		return nil, err
+	}
+
+	if len(fields) > 0 {
+		if err := s.formRepo.SetFormFields(id, fields); err != nil {
+			return nil, err
+		}
+	}
+
+	return s.formRepo.GetFormByID(id)
 }
 
 func (s *formServiceImpl) GetForm(id int64) (*model.IntakeForm, error) {
-	return nil, nil
+	form, err := s.formRepo.GetFormByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrFormNotFound) {
+			return nil, ErrFormNotFound
+		}
+		return nil, err
+	}
+	return form, nil
 }
 
 func (s *formServiceImpl) GetFormBySlug(slug string) (*model.IntakeForm, error) {
-	return nil, nil
+	norm := normalizeSlug(slug)
+	if norm == "" {
+		return nil, ErrFormInvalidSlug
+	}
+	form, err := s.formRepo.GetFormBySlug(norm)
+	if err != nil {
+		if errors.Is(err, repository.ErrFormNotFound) {
+			return nil, ErrFormNotFound
+		}
+		return nil, err
+	}
+	return form, nil
 }
 
 func (s *formServiceImpl) GetPublicFormView(slug string) (*model.PublicFormView, error) {
-	return nil, nil
+	form, err := s.GetFormBySlug(slug)
+	if err != nil {
+		return nil, err
+	}
+
+	if !form.IsPublished || form.Status != model.FormStatusPublished {
+		return nil, ErrFormNotPublished
+	}
+
+	fields, err := s.formRepo.GetFormFields(form.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.PublicFormView{
+		Title:            form.Title,
+		Description:      form.Description,
+		Slug:             form.Slug,
+		SubmitButtonText: form.SubmitButtonText,
+		AllowAnonymous:   form.AllowAnonymous,
+		Fields:           fields,
+	}, nil
 }
 
 func (s *formServiceImpl) ListForms(filter model.FormFilter) ([]*model.FormSummary, error) {
-	return nil, nil
+	return s.formRepo.ListForms(filter)
 }
+
 
 func (s *formServiceImpl) UpdateForm(id int64, req model.UpdateFormRequest) (*model.IntakeForm, error) {
 	return nil, nil
