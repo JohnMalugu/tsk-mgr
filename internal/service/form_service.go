@@ -292,16 +292,108 @@ func (s *formServiceImpl) ListForms(filter model.FormFilter) ([]*model.FormSumma
 
 
 func (s *formServiceImpl) UpdateForm(id int64, req model.UpdateFormRequest) (*model.IntakeForm, error) {
-	return nil, nil
+	form, err := s.GetForm(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Title != nil {
+		t := strings.TrimSpace(*req.Title)
+		if t == "" {
+			return nil, ErrFormTitleRequired
+		}
+		form.Title = t
+	}
+	if req.Description != nil {
+		form.Description = strings.TrimSpace(*req.Description)
+	}
+	if req.Slug != nil {
+		sl := normalizeSlug(*req.Slug)
+		if sl == "" {
+			return nil, ErrFormInvalidSlug
+		}
+		form.Slug = sl
+	}
+	if req.AllowAnonymous != nil {
+		form.AllowAnonymous = *req.AllowAnonymous
+	}
+	if req.SubmitButtonText != nil {
+		btn := strings.TrimSpace(*req.SubmitButtonText)
+		if btn != "" {
+			form.SubmitButtonText = btn
+		}
+	}
+	if req.SuccessMessage != nil {
+		msg := strings.TrimSpace(*req.SuccessMessage)
+		if msg != "" {
+			form.SuccessMessage = msg
+		}
+	}
+	if req.RedirectURL != nil {
+		form.RedirectURL = strings.TrimSpace(*req.RedirectURL)
+	}
+	if req.DefaultPriority != nil {
+		p := strings.TrimSpace(*req.DefaultPriority)
+		if p != "" {
+			form.DefaultPriority = p
+		}
+	}
+	if req.DefaultTags != nil {
+		form.DefaultTags = *req.DefaultTags
+	}
+	if req.DefaultAssigneeID != nil {
+		form.DefaultAssigneeID = strings.TrimSpace(*req.DefaultAssigneeID)
+	}
+	if req.ProjectID != nil {
+		form.ProjectID = req.ProjectID
+	}
+
+	err = s.formRepo.UpdateForm(form)
+	if err != nil {
+		if errors.Is(err, repository.ErrDuplicateFormSlug) {
+			return nil, ErrFormSlugAlreadyExists
+		}
+		if errors.Is(err, repository.ErrFormNotFound) {
+			return nil, ErrFormNotFound
+		}
+		return nil, err
+	}
+
+	return s.formRepo.GetFormByID(id)
 }
 
 func (s *formServiceImpl) DeleteForm(id int64) error {
+	err := s.formRepo.DeleteForm(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrFormNotFound) {
+			return ErrFormNotFound
+		}
+		return err
+	}
 	return nil
 }
 
 func (s *formServiceImpl) PublishForm(id int64, publish bool) (*model.IntakeForm, error) {
-	return nil, nil
+	_, err := s.GetForm(id)
+	if err != nil {
+		return nil, err
+	}
+
+	status := model.FormStatusPublished
+	if !publish {
+		status = model.FormStatusDraft
+	}
+
+	if err := s.formRepo.ToggleFormPublished(id, publish, status); err != nil {
+		if errors.Is(err, repository.ErrFormNotFound) {
+			return nil, ErrFormNotFound
+		}
+		return nil, err
+	}
+
+	return s.formRepo.GetFormByID(id)
 }
+
 
 func (s *formServiceImpl) SetFormFields(formID int64, req model.SetFormFieldsRequest) ([]model.FormField, error) {
 	return nil, nil
