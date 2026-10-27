@@ -100,4 +100,51 @@ type PublicFormView struct {
 	Fields           []FormField `json:"fields"`
 }
 
+// FormFieldDefinition defines an input field configuration when creating or updating a form
+type FormFieldDefinition struct {
+	FieldKey     string   `json:"field_key"`
+	FieldType    string   `json:"field_type"`   // text, paragraph, dropdown, date, priority, number, email
+	TargetField  string   `json:"target_field"` // task_title, task_description, task_priority, task_due_date, custom_field
+	Label        string   `json:"label"`
+	Placeholder  string   `json:"placeholder,omitempty"`
+	HelpText     string   `json:"help_text,omitempty"`
+	IsRequired   bool     `json:"is_required"`
+	Position     int      `json:"position"`
+	Options      []string `json:"options,omitempty"`
+	DefaultValue string   `json:"default_value,omitempty"`
+}
+
+// CreateFormRequest represents payload for creating a new intake form
+type CreateFormRequest struct {
+	WorkspaceID       int64                 `json:"workspace_id"`
+	ProjectID         *int64                `json:"project_id,omitempty"`
+	Title             string                `json:"title"`
+	Description       string                `json:"description,omitempty"`
+	Slug              string                `json:"slug,omitempty"` // auto-derived from title if omitted
+	AllowAnonymous    *bool                 `json:"allow_anonymous,omitempty"`
+	SubmitButtonText  string                `json:"submit_button_text,omitempty"`
+	SuccessMessage    string                `json:"success_message,omitempty"`
+	RedirectURL       string                `json:"redirect_url,omitempty"`
+	DefaultPriority   string                `json:"default_priority,omitempty"`
+	DefaultTags       []string              `json:"default_tags,omitempty"`
+	DefaultAssigneeID string                `json:"default_assignee_id,omitempty"`
+	Fields            []FormFieldDefinition `json:"fields,omitempty"`
+}
+
+// UpdateFormRequest represents payload for modifying form settings and default task properties
+type UpdateFormRequest struct {
+	Title             *string   `json:"title,omitempty"`
+	Description       *string   `json:"description,omitempty"`
+	Slug              *string   `json:"slug,omitempty"`
+	AllowAnonymous    *bool     `json:"allow_anonymous,omitempty"`
+	SubmitButtonText  *string   `json:"submit_button_text,omitempty"`
+	SuccessMessage    *string   `json:"success_message,omitempty"`
+	RedirectURL       *string   `json:"redirect_url,omitempty"`
+	DefaultPriority   *string   `json:"default_priority,omitempty"`
+	DefaultTags       *[]string `json:"default_tags,omitempty"`
+	DefaultAssigneeID *string   `json:"default_assignee_id,omitempty"`
+	ProjectID         *int64    `json:"project_id,omitempty"`
+}
+
+
 
