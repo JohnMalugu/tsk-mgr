@@ -396,12 +396,35 @@ func (s *formServiceImpl) PublishForm(id int64, publish bool) (*model.IntakeForm
 
 
 func (s *formServiceImpl) SetFormFields(formID int64, req model.SetFormFieldsRequest) ([]model.FormField, error) {
-	return nil, nil
+	_, err := s.GetForm(formID)
+	if err != nil {
+		return nil, err
+	}
+
+	fields, err := validateFieldDefinitions(req.Fields)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.formRepo.SetFormFields(formID, fields); err != nil {
+		if errors.Is(err, repository.ErrFormNotFound) {
+			return nil, ErrFormNotFound
+		}
+		return nil, err
+	}
+
+	return s.formRepo.GetFormFields(formID)
 }
 
 func (s *formServiceImpl) GetFormFields(formID int64) ([]model.FormField, error) {
-	return nil, nil
+	_, err := s.GetForm(formID)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.formRepo.GetFormFields(formID)
 }
+
 
 func (s *formServiceImpl) SubmitForm(slug string, clientIP, userAgent string, req model.SubmitFormRequest) (*model.SubmissionResult, error) {
 	return nil, nil
