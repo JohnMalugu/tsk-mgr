@@ -103,6 +103,10 @@ func main() {
 	releaseSvc := service.NewReleaseService(releaseRepo, taskRepo)
 	handler.InitReleaseHandler(releaseSvc)
 
+	formRepo := repository.NewFormRepository(sqliteDB)
+	formSvc := service.NewFormService(formRepo, taskRepo)
+	handler.InitFormHandler(formSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 

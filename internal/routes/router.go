@@ -1061,6 +1061,55 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Public Forms & Task Request Intake Engine (/v2/forms)
+	if r.URL.Path == "/v2/forms" {
+		handler.GlobalFormHandler.HandleFormsRoot(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/v2/forms/public/") {
+		if strings.HasSuffix(r.URL.Path, "/submit") {
+			handler.GlobalFormHandler.HandlePublicFormSubmit(w, r)
+			return
+		}
+		handler.GlobalFormHandler.HandlePublicFormView(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/v2/forms/") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/forms/")
+		parts := strings.Split(trimmed, "/")
+		id, err := strconv.ParseInt(parts[0], 10, 64)
+		if err == nil {
+			if len(parts) == 1 {
+				switch r.Method {
+				case http.MethodGet:
+					handler.GlobalFormHandler.HandleGetForm(w, r, id)
+					return
+				case http.MethodPut, http.MethodPatch:
+					handler.GlobalFormHandler.HandleUpdateForm(w, r, id)
+					return
+				case http.MethodDelete:
+					handler.GlobalFormHandler.HandleDeleteForm(w, r, id)
+					return
+				}
+			} else if len(parts) == 2 {
+				switch parts[1] {
+				case "publish":
+					handler.GlobalFormHandler.HandlePublishForm(w, r)
+					return
+				case "fields":
+					handler.GlobalFormHandler.HandleFormFields(w, r)
+					return
+				case "submissions":
+					handler.GlobalFormHandler.HandleFormSubmissions(w, r)
+					return
+				case "analytics":
+					handler.GlobalFormHandler.HandleFormAnalytics(w, r)
+					return
+				}
+			}
+		}
+	}
+
 	if r.URL.Path == "/tasks/summary" {
 
 		handler.HandleTaskSummary(w, r)
