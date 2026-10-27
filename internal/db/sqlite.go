@@ -714,6 +714,12 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_release_items_release ON release_items(release_id);
 	CREATE INDEX IF NOT EXISTS idx_release_items_task ON release_items(task_id);
 	CREATE INDEX IF NOT EXISTS idx_release_items_cat ON release_items(release_id, category);
+	CREATE INDEX IF NOT EXISTS idx_intake_forms_ws ON intake_forms(workspace_id);
+	CREATE INDEX IF NOT EXISTS idx_intake_forms_slug ON intake_forms(slug);
+	CREATE INDEX IF NOT EXISTS idx_intake_forms_status ON intake_forms(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_intake_form_fields_form ON intake_form_fields(form_id, position);
+	CREATE INDEX IF NOT EXISTS idx_intake_form_submissions_form ON intake_form_submissions(form_id, submitted_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_intake_form_submissions_task ON intake_form_submissions(task_id);
 	`
 
 	_, err = db.Exec(indexQuery)
