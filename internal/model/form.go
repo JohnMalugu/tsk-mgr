@@ -16,7 +16,7 @@ type IntakeForm struct {
 	ProjectID         *int64    `json:"project_id,omitempty"`
 	Title             string    `json:"title"`
 	Description       string    `json:"description,omitempty"`
-	Slug              string    `json:"slug"` // unique vanity URL slug
+	Slug              string    `json:"slug"`   // unique vanity URL slug
 	Status            string    `json:"status"` // draft, published, archived
 	IsPublished       bool      `json:"is_published"`
 	AllowAnonymous    bool      `json:"allow_anonymous"`

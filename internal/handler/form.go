@@ -433,4 +433,3 @@ func (h *FormHandler) HandleFormAnalytics(w http.ResponseWriter, r *http.Request
 
 	writeFormJSON(w, http.StatusOK, analytics)
 }
-

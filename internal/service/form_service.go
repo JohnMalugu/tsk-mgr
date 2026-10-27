@@ -290,7 +290,6 @@ func (s *formServiceImpl) ListForms(filter model.FormFilter) ([]*model.FormSumma
 	return s.formRepo.ListForms(filter)
 }
 
-
 func (s *formServiceImpl) UpdateForm(id int64, req model.UpdateFormRequest) (*model.IntakeForm, error) {
 	form, err := s.GetForm(id)
 	if err != nil {
@@ -394,7 +393,6 @@ func (s *formServiceImpl) PublishForm(id int64, publish bool) (*model.IntakeForm
 	return s.formRepo.GetFormByID(id)
 }
 
-
 func (s *formServiceImpl) SetFormFields(formID int64, req model.SetFormFieldsRequest) ([]model.FormField, error) {
 	_, err := s.GetForm(formID)
 	if err != nil {
@@ -424,7 +422,6 @@ func (s *formServiceImpl) GetFormFields(formID int64) ([]model.FormField, error)
 
 	return s.formRepo.GetFormFields(formID)
 }
-
 
 func (s *formServiceImpl) SubmitForm(slug string, clientIP, userAgent string, req model.SubmitFormRequest) (*model.SubmissionResult, error) {
 	form, err := s.GetFormBySlug(slug)
@@ -583,7 +580,6 @@ func (s *formServiceImpl) SubmitForm(slug string, clientIP, userAgent string, re
 	}, nil
 }
 
-
 func (s *formServiceImpl) GetFormSubmissions(formID int64, limit, offset int) ([]*model.FormSubmission, error) {
 	_, err := s.GetForm(formID)
 	if err != nil {
@@ -601,4 +597,3 @@ func (s *formServiceImpl) GetFormAnalytics(formID int64) (*model.FormAnalytics, 
 
 	return s.formRepo.GetFormAnalytics(formID)
 }
-

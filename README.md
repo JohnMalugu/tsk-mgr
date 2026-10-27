@@ -145,6 +145,14 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET|POST /v2/releases/{id}/changelog` to generate automated markdown or JSON release notes grouped by category
 - `GET /v2/releases/{id}/metrics` to compute release burndown, completion rate, category breakdown, blockers, and health status (`on_track`, `at_risk`, `delayed`, `completed`)
 - `POST /v2/releases/{id}/clone` to clone a release milestone into a new version with optional incomplete task rollover
+- `GET|POST /v2/forms` to list workspace forms or provision a new task intake portal with custom vanity slug, default tags, priority, and assignees
+- `GET|PUT|DELETE /v2/forms/{id}` to fetch form details, update form settings and task blueprints, or delete an intake form
+- `POST /v2/forms/{id}/publish` to toggle public availability (`publish: true|false`) of an intake form
+- `GET|PUT|POST /v2/forms/{id}/fields` to inspect field schema or batch update custom input fields with task attribute targets
+- `GET /v2/forms/public/{slug}` for unauthenticated rendering of public forms and active input schemas
+- `POST /v2/forms/public/{slug}/submit` to submit public responses with automatic validation and background task provisioning
+- `GET /v2/forms/{id}/submissions?limit={limit}&offset={offset}` to inspect chronological submission logs and response payloads
+- `GET /v2/forms/{id}/analytics` for form submission analytics, 7-day/30-day velocity, and daily intake volume breakdown
 
 ## Current limitations
 

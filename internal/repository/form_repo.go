@@ -44,7 +44,9 @@ func NewFormRepository(db *sql.DB) FormRepository {
 	return &formRepositoryImpl{db: db}
 }
 
-func scanForm(scanner interface{ Scan(dest ...interface{}) error }) (*model.IntakeForm, error) {
+func scanForm(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.IntakeForm, error) {
 	var (
 		form            model.IntakeForm
 		projectID       sql.NullInt64
@@ -196,7 +198,6 @@ func (r *formRepositoryImpl) GetFormBySlug(slug string) (*model.IntakeForm, erro
 
 	return scanForm(r.db.QueryRow(query, slug))
 }
-
 
 func (r *formRepositoryImpl) ListForms(filter model.FormFilter) ([]*model.FormSummary, error) {
 	query := `
@@ -386,7 +387,6 @@ func (r *formRepositoryImpl) DeleteForm(id int64) error {
 	return nil
 }
 
-
 func (r *formRepositoryImpl) SetFormFields(formID int64, fields []model.FormField) error {
 	tx, err := r.db.Begin()
 	if err != nil {
@@ -519,7 +519,6 @@ func (r *formRepositoryImpl) DeleteFormField(formID int64, fieldKey string) erro
 
 	return nil
 }
-
 
 func (r *formRepositoryImpl) RecordSubmission(sub *model.FormSubmission) (int64, error) {
 	if sub.SubmittedAt.IsZero() {
@@ -674,20 +673,16 @@ func (r *formRepositoryImpl) GetFormAnalytics(formID int64) (*model.FormAnalytic
 
 	// First and last submitted at
 	var (
-		firstSub sql.NullTime
-		lastSub  sql.NullTime
+		firstSub interface{}
+		lastSub  interface{}
 	)
 	_ = r.db.QueryRow(`
 		SELECT MIN(submitted_at), MAX(submitted_at) 
 		FROM intake_form_submissions 
 		WHERE form_id = ?`, formID).Scan(&firstSub, &lastSub)
 
-	if firstSub.Valid {
-		analytics.FirstSubmittedAt = &firstSub.Time
-	}
-	if lastSub.Valid {
-		analytics.LastSubmittedAt = &lastSub.Time
-	}
+	analytics.FirstSubmittedAt = parseSQLiteTime(firstSub)
+	analytics.LastSubmittedAt = parseSQLiteTime(lastSub)
 
 	// Daily counts for last 30 days
 	dailyRows, err := r.db.Query(`
@@ -710,3 +705,33 @@ func (r *formRepositoryImpl) GetFormAnalytics(formID int64) (*model.FormAnalytic
 	return analytics, nil
 }
 
+func parseSQLiteTime(v interface{}) *time.Time {
+	if v == nil {
+		return nil
+	}
+	switch val := v.(type) {
+	case time.Time:
+		return &val
+	case string:
+		if val == "" {
+			return nil
+		}
+		layouts := []string{
+			time.RFC3339Nano,
+			time.RFC3339,
+			"2006-01-02 15:04:05.999999999-07:00",
+			"2006-01-02 15:04:05-07:00",
+			"2006-01-02 15:04:05",
+			"2006-01-02T15:04:05",
+			"2006-01-02",
+		}
+		for _, layout := range layouts {
+			if t, err := time.Parse(layout, val); err == nil {
+				return &t
+			}
+		}
+	case []byte:
+		return parseSQLiteTime(string(val))
+	}
+	return nil
+}
