@@ -590,6 +590,38 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	intakeFormsQuery := `
+	CREATE TABLE IF NOT EXISTS intake_forms (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		project_id INTEGER,
+		title TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		slug TEXT UNIQUE NOT NULL,
+		status TEXT NOT NULL DEFAULT 'draft',
+		is_published INTEGER NOT NULL DEFAULT 0,
+		allow_anonymous INTEGER NOT NULL DEFAULT 1,
+		submit_button_text TEXT NOT NULL DEFAULT 'Submit',
+		success_message TEXT NOT NULL DEFAULT 'Thank you! Your submission has been received.',
+		redirect_url TEXT NOT NULL DEFAULT '',
+		default_priority TEXT NOT NULL DEFAULT 'medium',
+		default_tags TEXT NOT NULL DEFAULT '[]',
+		default_assignee_id TEXT,
+		submission_count INTEGER NOT NULL DEFAULT 0,
+		created_by_user_id TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+		FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE,
+		FOREIGN KEY (default_assignee_id) REFERENCES users(id) ON DELETE SET NULL
+	);`
+
+	_, err = db.Exec(intakeFormsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
