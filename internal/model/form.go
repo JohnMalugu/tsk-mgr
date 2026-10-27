@@ -78,3 +78,26 @@ type FormField struct {
 	DefaultValue string   `json:"default_value,omitempty"`
 }
 
+// FormSubmission records each response submitted via public or internal forms
+type FormSubmission struct {
+	ID             int64                  `json:"id"`
+	FormID         int64                  `json:"form_id"`
+	TaskID         *int                   `json:"task_id,omitempty"`
+	SubmitterEmail string                 `json:"submitter_email,omitempty"`
+	SubmitterIP    string                 `json:"submitter_ip,omitempty"`
+	UserAgent      string                 `json:"user_agent,omitempty"`
+	Responses      map[string]interface{} `json:"responses"`
+	SubmittedAt    time.Time              `json:"submitted_at"`
+}
+
+// PublicFormView provides public, unauthenticated metadata for rendering a web form
+type PublicFormView struct {
+	Title            string      `json:"title"`
+	Description      string      `json:"description,omitempty"`
+	Slug             string      `json:"slug"`
+	SubmitButtonText string      `json:"submit_button_text"`
+	AllowAnonymous   bool        `json:"allow_anonymous"`
+	Fields           []FormField `json:"fields"`
+}
+
+
