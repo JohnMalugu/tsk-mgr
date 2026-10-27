@@ -388,16 +388,138 @@ func (r *formRepositoryImpl) DeleteForm(id int64) error {
 
 
 func (r *formRepositoryImpl) SetFormFields(formID int64, fields []model.FormField) error {
-	return nil
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var exists int
+	err = tx.QueryRow("SELECT 1 FROM intake_forms WHERE id = ?", formID).Scan(&exists)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrFormNotFound
+		}
+		return err
+	}
+
+	_, err = tx.Exec("DELETE FROM intake_form_fields WHERE form_id = ?", formID)
+	if err != nil {
+		return err
+	}
+
+	insertQuery := `
+	INSERT INTO intake_form_fields (
+		form_id, field_key, field_type, target_field, label,
+		placeholder, help_text, is_required, position, options, default_value
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	for i, f := range fields {
+		pos := f.Position
+		if pos == 0 {
+			pos = i + 1
+		}
+		if f.Options == nil {
+			f.Options = []string{}
+		}
+		optsJSON, err := json.Marshal(f.Options)
+		if err != nil {
+			return err
+		}
+
+		reqVal := 0
+		if f.IsRequired {
+			reqVal = 1
+		}
+
+		_, err = tx.Exec(insertQuery,
+			formID, f.FieldKey, f.FieldType, f.TargetField, f.Label,
+			f.Placeholder, f.HelpText, reqVal, pos, string(optsJSON), f.DefaultValue,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 func (r *formRepositoryImpl) GetFormFields(formID int64) ([]model.FormField, error) {
-	return nil, nil
+	query := `
+	SELECT id, form_id, field_key, field_type, target_field, label,
+		placeholder, help_text, is_required, position, options, default_value
+	FROM intake_form_fields
+	WHERE form_id = ?
+	ORDER BY position ASC, id ASC`
+
+	rows, err := r.db.Query(query, formID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	fields := make([]model.FormField, 0)
+	for rows.Next() {
+		var (
+			f        model.FormField
+			reqVal   int
+			optsJSON string
+		)
+
+		err := rows.Scan(
+			&f.ID,
+			&f.FormID,
+			&f.FieldKey,
+			&f.FieldType,
+			&f.TargetField,
+			&f.Label,
+			&f.Placeholder,
+			&f.HelpText,
+			&reqVal,
+			&f.Position,
+			&optsJSON,
+			&f.DefaultValue,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		f.IsRequired = reqVal == 1
+		if optsJSON != "" {
+			_ = json.Unmarshal([]byte(optsJSON), &f.Options)
+		}
+		if f.Options == nil {
+			f.Options = []string{}
+		}
+
+		fields = append(fields, f)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return fields, nil
 }
 
 func (r *formRepositoryImpl) DeleteFormField(formID int64, fieldKey string) error {
+	query := `DELETE FROM intake_form_fields WHERE form_id = ? AND field_key = ?`
+	res, err := r.db.Exec(query, formID, fieldKey)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrFormFieldNotFound
+	}
+
 	return nil
 }
+
 
 func (r *formRepositoryImpl) RecordSubmission(sub *model.FormSubmission) (int64, error) {
 	return 0, nil
