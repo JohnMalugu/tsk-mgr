@@ -645,6 +645,25 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	intakeFormSubmissionsQuery := `
+	CREATE TABLE IF NOT EXISTS intake_form_submissions (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		form_id INTEGER NOT NULL,
+		task_id INTEGER,
+		submitter_email TEXT NOT NULL DEFAULT '',
+		submitter_ip TEXT NOT NULL DEFAULT '',
+		user_agent TEXT NOT NULL DEFAULT '',
+		responses TEXT NOT NULL DEFAULT '{}',
+		submitted_at DATETIME NOT NULL,
+		FOREIGN KEY (form_id) REFERENCES intake_forms(id) ON DELETE CASCADE,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL
+	);`
+
+	_, err = db.Exec(intakeFormSubmissionsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
