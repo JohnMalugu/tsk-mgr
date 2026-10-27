@@ -199,7 +199,87 @@ func (r *formRepositoryImpl) GetFormBySlug(slug string) (*model.IntakeForm, erro
 
 
 func (r *formRepositoryImpl) ListForms(filter model.FormFilter) ([]*model.FormSummary, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		f.id, f.workspace_id, f.project_id, f.title, f.slug, f.status, f.is_published,
+		COALESCE((SELECT COUNT(*) FROM intake_form_fields iff WHERE iff.form_id = f.id), 0) AS field_count,
+		f.submission_count, f.created_at, f.updated_at
+	FROM intake_forms f
+	WHERE 1=1`
+
+	var args []interface{}
+
+	if filter.WorkspaceID != nil {
+		query += " AND f.workspace_id = ?"
+		args = append(args, *filter.WorkspaceID)
+	}
+	if filter.ProjectID != nil {
+		query += " AND f.project_id = ?"
+		args = append(args, *filter.ProjectID)
+	}
+	if filter.Status != nil && *filter.Status != "" {
+		query += " AND f.status = ?"
+		args = append(args, *filter.Status)
+	}
+	if filter.IsPublished != nil {
+		pubVal := 0
+		if *filter.IsPublished {
+			pubVal = 1
+		}
+		query += " AND f.is_published = ?"
+		args = append(args, pubVal)
+	}
+	if filter.Search != "" {
+		query += " AND (f.title LIKE ? OR f.slug LIKE ? OR f.description LIKE ?)"
+		pattern := "%" + filter.Search + "%"
+		args = append(args, pattern, pattern, pattern)
+	}
+
+	query += " ORDER BY f.created_at DESC"
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	summaries := make([]*model.FormSummary, 0)
+	for rows.Next() {
+		var (
+			s           model.FormSummary
+			projectID   sql.NullInt64
+			isPublished int
+		)
+
+		err := rows.Scan(
+			&s.ID,
+			&s.WorkspaceID,
+			&projectID,
+			&s.Title,
+			&s.Slug,
+			&s.Status,
+			&isPublished,
+			&s.FieldCount,
+			&s.SubmissionCount,
+			&s.CreatedAt,
+			&s.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		if projectID.Valid {
+			s.ProjectID = &projectID.Int64
+		}
+		s.IsPublished = isPublished == 1
+		summaries = append(summaries, &s)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return summaries, nil
 }
 
 func (r *formRepositoryImpl) UpdateForm(form *model.IntakeForm) error {
