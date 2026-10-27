@@ -283,16 +283,109 @@ func (r *formRepositoryImpl) ListForms(filter model.FormFilter) ([]*model.FormSu
 }
 
 func (r *formRepositoryImpl) UpdateForm(form *model.IntakeForm) error {
+	form.UpdatedAt = time.Now()
+
+	tagsJSON, err := json.Marshal(form.DefaultTags)
+	if err != nil {
+		return err
+	}
+
+	isPublished := 0
+	if form.IsPublished {
+		isPublished = 1
+	}
+	allowAnon := 1
+	if !form.AllowAnonymous {
+		allowAnon = 0
+	}
+
+	var projectID sql.NullInt64
+	if form.ProjectID != nil {
+		projectID = sql.NullInt64{Int64: *form.ProjectID, Valid: true}
+	}
+	var assigneeID sql.NullString
+	if form.DefaultAssigneeID != "" {
+		assigneeID = sql.NullString{String: form.DefaultAssigneeID, Valid: true}
+	}
+
+	query := `
+	UPDATE intake_forms
+	SET title = ?, description = ?, slug = ?, status = ?,
+		is_published = ?, allow_anonymous = ?, submit_button_text = ?,
+		success_message = ?, redirect_url = ?, default_priority = ?,
+		default_tags = ?, default_assignee_id = ?, project_id = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query,
+		form.Title, form.Description, form.Slug, form.Status,
+		isPublished, allowAnon, form.SubmitButtonText,
+		form.SuccessMessage, form.RedirectURL, form.DefaultPriority,
+		string(tagsJSON), assigneeID, projectID, form.UpdatedAt,
+		form.ID,
+	)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed: intake_forms.slug") {
+			return ErrDuplicateFormSlug
+		}
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrFormNotFound
+	}
+
 	return nil
 }
 
 func (r *formRepositoryImpl) ToggleFormPublished(id int64, isPublished bool, status string) error {
+	pubVal := 0
+	if isPublished {
+		pubVal = 1
+	}
+
+	query := `
+	UPDATE intake_forms
+	SET is_published = ?, status = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query, pubVal, status, time.Now(), id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrFormNotFound
+	}
+
 	return nil
 }
 
 func (r *formRepositoryImpl) DeleteForm(id int64) error {
+	query := `DELETE FROM intake_forms WHERE id = ?`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrFormNotFound
+	}
+
 	return nil
 }
+
 
 func (r *formRepositoryImpl) SetFormFields(formID int64, fields []model.FormField) error {
 	return nil
