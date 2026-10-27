@@ -622,6 +622,29 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	intakeFormFieldsQuery := `
+	CREATE TABLE IF NOT EXISTS intake_form_fields (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		form_id INTEGER NOT NULL,
+		field_key TEXT NOT NULL,
+		field_type TEXT NOT NULL,
+		target_field TEXT NOT NULL,
+		label TEXT NOT NULL,
+		placeholder TEXT NOT NULL DEFAULT '',
+		help_text TEXT NOT NULL DEFAULT '',
+		is_required INTEGER NOT NULL DEFAULT 0,
+		position INTEGER NOT NULL DEFAULT 0,
+		options TEXT NOT NULL DEFAULT '[]',
+		default_value TEXT NOT NULL DEFAULT '',
+		UNIQUE(form_id, field_key),
+		FOREIGN KEY (form_id) REFERENCES intake_forms(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(intakeFormFieldsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
