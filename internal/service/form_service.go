@@ -2,6 +2,9 @@ package service
 
 import (
 	"errors"
+	"fmt"
+	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -52,6 +55,100 @@ func NewFormService(formRepo repository.FormRepository, taskRepo repository.Task
 		formRepo: formRepo,
 		taskRepo: taskRepo,
 	}
+}
+
+func normalizeSlug(raw string) string {
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	if raw == "" {
+		return ""
+	}
+
+	var sb strings.Builder
+	lastDash := false
+	for _, r := range raw {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			sb.WriteRune(r)
+			lastDash = false
+		} else if r == '-' || r == '_' || r == ' ' || r == '.' {
+			if !lastDash && sb.Len() > 0 {
+				sb.WriteRune('-')
+				lastDash = true
+			}
+		}
+	}
+	return strings.Trim(sb.String(), "-")
+}
+
+func deriveSlug(title string) string {
+	slug := normalizeSlug(title)
+	if slug == "" {
+		return fmt.Sprintf("intake-%d", time.Now().UnixNano()%100000)
+	}
+	return slug
+}
+
+func validateFieldDefinitions(defs []model.FormFieldDefinition) ([]model.FormField, error) {
+	if len(defs) == 0 {
+		return []model.FormField{}, nil
+	}
+
+	seenKeys := make(map[string]bool)
+	fields := make([]model.FormField, 0, len(defs))
+
+	for i, def := range defs {
+		key := strings.ToLower(strings.TrimSpace(def.FieldKey))
+		if key == "" {
+			return nil, fmt.Errorf("%w: field key cannot be empty", ErrFormRequiredField)
+		}
+		if seenKeys[key] {
+			return nil, fmt.Errorf("duplicate field key '%s'", key)
+		}
+		seenKeys[key] = true
+
+		if !model.IsValidFormFieldType(def.FieldType) {
+			return nil, fmt.Errorf("%w: %s", ErrFormInvalidFieldType, def.FieldType)
+		}
+
+		target := strings.TrimSpace(def.TargetField)
+		if target == "" {
+			target = model.FieldTargetCustom
+		}
+		switch target {
+		case model.FieldTargetTitle, model.FieldTargetDescription, model.FieldTargetPriority, model.FieldTargetDueDate, model.FieldTargetCustom:
+			// valid
+		default:
+			return nil, fmt.Errorf("%w: %s", ErrFormInvalidTargetField, target)
+		}
+
+		label := strings.TrimSpace(def.Label)
+		if label == "" {
+			return nil, fmt.Errorf("%w: field label cannot be empty for key %s", ErrFormRequiredField, key)
+		}
+
+		if def.FieldType == model.FormFieldTypeDropdown && len(def.Options) == 0 {
+			return nil, fmt.Errorf("dropdown field '%s' must have at least one option", key)
+		}
+
+		pos := def.Position
+		if pos == 0 {
+			pos = i + 1
+		}
+
+		fields = append(fields, model.FormField{
+			FieldKey:     key,
+			FieldType:    def.FieldType,
+			TargetField:  target,
+			Label:        label,
+			Placeholder:  def.Placeholder,
+			HelpText:     def.HelpText,
+			IsRequired:   def.IsRequired,
+			Position:     pos,
+			Options:      def.Options,
+			DefaultValue: def.DefaultValue,
+		})
+	}
+
+	return fields, nil
 }
 
 func (s *formServiceImpl) CreateForm(userID string, req model.CreateFormRequest) (*model.IntakeForm, error) {
