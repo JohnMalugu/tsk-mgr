@@ -585,9 +585,20 @@ func (s *formServiceImpl) SubmitForm(slug string, clientIP, userAgent string, re
 
 
 func (s *formServiceImpl) GetFormSubmissions(formID int64, limit, offset int) ([]*model.FormSubmission, error) {
-	return nil, nil
+	_, err := s.GetForm(formID)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.formRepo.ListSubmissions(formID, limit, offset)
 }
 
 func (s *formServiceImpl) GetFormAnalytics(formID int64) (*model.FormAnalytics, error) {
-	return nil, nil
+	_, err := s.GetForm(formID)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.formRepo.GetFormAnalytics(formID)
 }
+
