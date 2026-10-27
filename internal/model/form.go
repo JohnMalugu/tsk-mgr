@@ -146,5 +146,19 @@ type UpdateFormRequest struct {
 	ProjectID         *int64    `json:"project_id,omitempty"`
 }
 
+// SetFormFieldsRequest represents payload for replacing or batch updating a form's field schema
+type SetFormFieldsRequest struct {
+	Fields []FormFieldDefinition `json:"fields"`
+}
 
-
+// UpdateFormFieldRequest represents payload for modifying an existing form field
+type UpdateFormFieldRequest struct {
+	Label        *string   `json:"label,omitempty"`
+	Placeholder  *string   `json:"placeholder,omitempty"`
+	HelpText     *string   `json:"help_text,omitempty"`
+	IsRequired   *bool     `json:"is_required,omitempty"`
+	Position     *int      `json:"position,omitempty"`
+	Options      *[]string `json:"options,omitempty"`
+	DefaultValue *string   `json:"default_value,omitempty"`
+	TargetField  *string   `json:"target_field,omitempty"`
+}
