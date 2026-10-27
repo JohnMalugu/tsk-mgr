@@ -31,3 +31,50 @@ type IntakeForm struct {
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
 }
+
+// Form field type constants
+const (
+	FormFieldTypeText      = "text"
+	FormFieldTypeParagraph = "paragraph"
+	FormFieldTypeDropdown  = "dropdown"
+	FormFieldTypeDate      = "date"
+	FormFieldTypePriority  = "priority"
+	FormFieldTypeNumber    = "number"
+	FormFieldTypeEmail     = "email"
+)
+
+// Form field target mapping constants
+const (
+	FieldTargetTitle       = "task_title"
+	FieldTargetDescription = "task_description"
+	FieldTargetPriority    = "task_priority"
+	FieldTargetDueDate     = "task_due_date"
+	FieldTargetCustom      = "custom_field"
+)
+
+// IsValidFormFieldType checks if a field type is supported by the form renderer
+func IsValidFormFieldType(fieldType string) bool {
+	switch fieldType {
+	case FormFieldTypeText, FormFieldTypeParagraph, FormFieldTypeDropdown, FormFieldTypeDate, FormFieldTypePriority, FormFieldTypeNumber, FormFieldTypeEmail:
+		return true
+	default:
+		return false
+	}
+}
+
+// FormField defines an individual input field on an intake form
+type FormField struct {
+	ID           int64    `json:"id"`
+	FormID       int64    `json:"form_id"`
+	FieldKey     string   `json:"field_key"`
+	FieldType    string   `json:"field_type"`   // text, paragraph, dropdown, date, priority, number, email
+	TargetField  string   `json:"target_field"` // task_title, task_description, task_priority, task_due_date, custom_field
+	Label        string   `json:"label"`
+	Placeholder  string   `json:"placeholder,omitempty"`
+	HelpText     string   `json:"help_text,omitempty"`
+	IsRequired   bool     `json:"is_required"`
+	Position     int      `json:"position"`
+	Options      []string `json:"options,omitempty"` // choices for dropdown
+	DefaultValue string   `json:"default_value,omitempty"`
+}
+
