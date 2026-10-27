@@ -178,3 +178,39 @@ type SubmissionResult struct {
 	SuccessMessage string `json:"success_message"`
 	RedirectURL    string `json:"redirect_url,omitempty"`
 }
+
+// FormAnalytics aggregates form submission counts, completion timelines, and conversion metrics
+type FormAnalytics struct {
+	FormID             int64          `json:"form_id"`
+	FormTitle          string         `json:"form_title"`
+	TotalSubmissions   int            `json:"total_submissions"`
+	SubmissionsLast7d  int            `json:"submissions_last_7d"`
+	SubmissionsLast30d int            `json:"submissions_last_30d"`
+	FirstSubmittedAt   *time.Time     `json:"first_submitted_at,omitempty"`
+	LastSubmittedAt    *time.Time     `json:"last_submitted_at,omitempty"`
+	DailySubmissions   map[string]int `json:"daily_submissions"`
+}
+
+// FormSummary provides a lightweight summary of an intake form for listing views
+type FormSummary struct {
+	ID              int64     `json:"id"`
+	WorkspaceID     int64     `json:"workspace_id"`
+	ProjectID       *int64    `json:"project_id,omitempty"`
+	Title           string    `json:"title"`
+	Slug            string    `json:"slug"`
+	Status          string    `json:"status"`
+	IsPublished     bool      `json:"is_published"`
+	FieldCount      int       `json:"field_count"`
+	SubmissionCount int       `json:"submission_count"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// FormFilter specifies query criteria for listing forms
+type FormFilter struct {
+	WorkspaceID *int64  `json:"workspace_id,omitempty"`
+	ProjectID   *int64  `json:"project_id,omitempty"`
+	Status      *string `json:"status,omitempty"`
+	IsPublished *bool   `json:"is_published,omitempty"`
+	Search      string  `json:"search,omitempty"`
+}
