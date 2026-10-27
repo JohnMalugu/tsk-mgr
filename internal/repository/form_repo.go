@@ -522,13 +522,191 @@ func (r *formRepositoryImpl) DeleteFormField(formID int64, fieldKey string) erro
 
 
 func (r *formRepositoryImpl) RecordSubmission(sub *model.FormSubmission) (int64, error) {
-	return 0, nil
+	if sub.SubmittedAt.IsZero() {
+		sub.SubmittedAt = time.Now()
+	}
+
+	if sub.Responses == nil {
+		sub.Responses = make(map[string]interface{})
+	}
+	respJSON, err := json.Marshal(sub.Responses)
+	if err != nil {
+		return 0, err
+	}
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	var taskIDVal sql.NullInt64
+	if sub.TaskID != nil {
+		taskIDVal = sql.NullInt64{Int64: int64(*sub.TaskID), Valid: true}
+	}
+
+	insertQuery := `
+	INSERT INTO intake_form_submissions (
+		form_id, task_id, submitter_email, submitter_ip, user_agent, responses, submitted_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?)`
+
+	res, err := tx.Exec(insertQuery,
+		sub.FormID, taskIDVal, sub.SubmitterEmail, sub.SubmitterIP, sub.UserAgent,
+		string(respJSON), sub.SubmittedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	subID, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	sub.ID = subID
+
+	_, err = tx.Exec("UPDATE intake_forms SET submission_count = submission_count + 1 WHERE id = ?", sub.FormID)
+	if err != nil {
+		return 0, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+
+	return subID, nil
 }
 
 func (r *formRepositoryImpl) ListSubmissions(formID int64, limit, offset int) ([]*model.FormSubmission, error) {
-	return nil, nil
+	if limit <= 0 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := `
+	SELECT id, form_id, task_id, submitter_email, submitter_ip, user_agent, responses, submitted_at
+	FROM intake_form_submissions
+	WHERE form_id = ?
+	ORDER BY submitted_at DESC
+	LIMIT ? OFFSET ?`
+
+	rows, err := r.db.Query(query, formID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	submissions := make([]*model.FormSubmission, 0)
+	for rows.Next() {
+		var (
+			sub      model.FormSubmission
+			taskID   sql.NullInt64
+			respJSON string
+		)
+
+		err := rows.Scan(
+			&sub.ID,
+			&sub.FormID,
+			&taskID,
+			&sub.SubmitterEmail,
+			&sub.SubmitterIP,
+			&sub.UserAgent,
+			&respJSON,
+			&sub.SubmittedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		if taskID.Valid {
+			tid := int(taskID.Int64)
+			sub.TaskID = &tid
+		}
+		if respJSON != "" {
+			_ = json.Unmarshal([]byte(respJSON), &sub.Responses)
+		}
+		if sub.Responses == nil {
+			sub.Responses = make(map[string]interface{})
+		}
+
+		submissions = append(submissions, &sub)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return submissions, nil
 }
 
 func (r *formRepositoryImpl) GetFormAnalytics(formID int64) (*model.FormAnalytics, error) {
-	return nil, nil
+	var (
+		title     string
+		totalSubs int
+	)
+	err := r.db.QueryRow("SELECT title, submission_count FROM intake_forms WHERE id = ?", formID).Scan(&title, &totalSubs)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrFormNotFound
+		}
+		return nil, err
+	}
+
+	analytics := &model.FormAnalytics{
+		FormID:           formID,
+		FormTitle:        title,
+		TotalSubmissions: totalSubs,
+		DailySubmissions: make(map[string]int),
+	}
+
+	// Submissions in last 7 days
+	_ = r.db.QueryRow(`
+		SELECT COUNT(*) 
+		FROM intake_form_submissions 
+		WHERE form_id = ? AND submitted_at >= datetime('now', '-7 days')`, formID).Scan(&analytics.SubmissionsLast7d)
+
+	// Submissions in last 30 days
+	_ = r.db.QueryRow(`
+		SELECT COUNT(*) 
+		FROM intake_form_submissions 
+		WHERE form_id = ? AND submitted_at >= datetime('now', '-30 days')`, formID).Scan(&analytics.SubmissionsLast30d)
+
+	// First and last submitted at
+	var (
+		firstSub sql.NullTime
+		lastSub  sql.NullTime
+	)
+	_ = r.db.QueryRow(`
+		SELECT MIN(submitted_at), MAX(submitted_at) 
+		FROM intake_form_submissions 
+		WHERE form_id = ?`, formID).Scan(&firstSub, &lastSub)
+
+	if firstSub.Valid {
+		analytics.FirstSubmittedAt = &firstSub.Time
+	}
+	if lastSub.Valid {
+		analytics.LastSubmittedAt = &lastSub.Time
+	}
+
+	// Daily counts for last 30 days
+	dailyRows, err := r.db.Query(`
+		SELECT strftime('%Y-%m-%d', submitted_at) AS day, COUNT(*) 
+		FROM intake_form_submissions 
+		WHERE form_id = ? AND submitted_at >= datetime('now', '-30 days')
+		GROUP BY day 
+		ORDER BY day ASC`, formID)
+	if err == nil {
+		defer dailyRows.Close()
+		for dailyRows.Next() {
+			var day string
+			var count int
+			if err := dailyRows.Scan(&day, &count); err == nil {
+				analytics.DailySubmissions[day] = count
+			}
+		}
+	}
+
+	return analytics, nil
 }
+
