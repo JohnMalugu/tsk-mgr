@@ -427,8 +427,162 @@ func (s *formServiceImpl) GetFormFields(formID int64) ([]model.FormField, error)
 
 
 func (s *formServiceImpl) SubmitForm(slug string, clientIP, userAgent string, req model.SubmitFormRequest) (*model.SubmissionResult, error) {
-	return nil, nil
+	form, err := s.GetFormBySlug(slug)
+	if err != nil {
+		return nil, err
+	}
+
+	if !form.IsPublished || form.Status != model.FormStatusPublished {
+		return nil, ErrFormNotPublished
+	}
+
+	submitterEmail := strings.TrimSpace(req.SubmitterEmail)
+	if !form.AllowAnonymous && submitterEmail == "" {
+		return nil, ErrFormAnonymousForbidden
+	}
+
+	fields, err := s.formRepo.GetFormFields(form.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Responses == nil {
+		req.Responses = make(map[string]interface{})
+	}
+
+	taskTitle := ""
+	taskDescription := ""
+	taskPriority := form.DefaultPriority
+	if taskPriority == "" {
+		taskPriority = "medium"
+	}
+	taskDueDate := time.Now().AddDate(0, 0, 7)
+
+	for _, field := range fields {
+		val, exists := req.Responses[field.FieldKey]
+		if field.IsRequired {
+			if !exists || val == nil || strings.TrimSpace(fmt.Sprintf("%v", val)) == "" {
+				return nil, fmt.Errorf("%w: %s (%s)", ErrFormRequiredField, field.Label, field.FieldKey)
+			}
+		}
+
+		if exists && val != nil {
+			strVal := strings.TrimSpace(fmt.Sprintf("%v", val))
+
+			if field.FieldType == model.FormFieldTypeDropdown && strVal != "" {
+				validOpt := false
+				for _, opt := range field.Options {
+					if strings.EqualFold(opt, strVal) {
+						validOpt = true
+						strVal = opt
+						break
+					}
+				}
+				if !validOpt {
+					return nil, fmt.Errorf("%w: %s for field %s", ErrFormInvalidOption, strVal, field.FieldKey)
+				}
+			}
+
+			switch field.TargetField {
+			case model.FieldTargetTitle:
+				if strVal != "" {
+					taskTitle = strVal
+				}
+			case model.FieldTargetDescription:
+				if strVal != "" {
+					taskDescription = strVal
+				}
+			case model.FieldTargetPriority:
+				if strVal != "" {
+					taskPriority = strings.ToLower(strVal)
+				}
+			case model.FieldTargetDueDate:
+				if strVal != "" {
+					if parsed, err := time.Parse(time.RFC3339, strVal); err == nil {
+						taskDueDate = parsed
+					} else if parsed, err := time.Parse("2006-01-02", strVal); err == nil {
+						taskDueDate = parsed
+					}
+				}
+			}
+		}
+	}
+
+	if taskTitle == "" {
+		taskTitle = fmt.Sprintf("Form Submission: %s (#%d)", form.Title, form.SubmissionCount+1)
+	}
+
+	var descBuilder strings.Builder
+	if taskDescription != "" {
+		descBuilder.WriteString(taskDescription)
+		descBuilder.WriteString("\n\n---\n")
+	}
+	descBuilder.WriteString("### Form Intake Details\n")
+	descBuilder.WriteString(fmt.Sprintf("- **Form**: %s\n", form.Title))
+	if submitterEmail != "" {
+		descBuilder.WriteString(fmt.Sprintf("- **Submitted by**: %s\n", submitterEmail))
+	}
+	for _, field := range fields {
+		if field.TargetField == model.FieldTargetCustom {
+			if v, ok := req.Responses[field.FieldKey]; ok && v != nil {
+				descBuilder.WriteString(fmt.Sprintf("- **%s**: %v\n", field.Label, v))
+			}
+		}
+	}
+	taskDescription = descBuilder.String()
+
+	taskUserID := form.CreatedByUserID
+	if form.DefaultAssigneeID != "" {
+		taskUserID = form.DefaultAssigneeID
+	}
+
+	now := time.Now()
+	task := &model.Task{
+		UserID:      taskUserID,
+		Title:       taskTitle,
+		Description: taskDescription,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		DueDate:     taskDueDate,
+		Completed:   false,
+		Status:      model.TaskStatusTodo,
+		Priority:    taskPriority,
+		Tags:        form.DefaultTags,
+	}
+	if form.ProjectID != nil {
+		pid := int(*form.ProjectID)
+		task.ProjectID = &pid
+	}
+
+	if err := s.taskRepo.Create(task); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrFormSubmissionFailed, err)
+	}
+
+	sub := &model.FormSubmission{
+		FormID:         form.ID,
+		TaskID:         &task.ID,
+		SubmitterEmail: submitterEmail,
+		SubmitterIP:    clientIP,
+		UserAgent:      userAgent,
+		Responses:      req.Responses,
+		SubmittedAt:    now,
+	}
+
+	subID, err := s.formRepo.RecordSubmission(sub)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.SubmissionResult{
+		SubmissionID:   subID,
+		FormID:         form.ID,
+		TaskID:         task.ID,
+		TaskTitle:      task.Title,
+		SuccessMessage: form.SuccessMessage,
+		RedirectURL:    form.RedirectURL,
+	}, nil
 }
+
 
 func (s *formServiceImpl) GetFormSubmissions(formID int64, limit, offset int) ([]*model.FormSubmission, error) {
 	return nil, nil
