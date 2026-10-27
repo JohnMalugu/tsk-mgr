@@ -162,3 +162,19 @@ type UpdateFormFieldRequest struct {
 	DefaultValue *string   `json:"default_value,omitempty"`
 	TargetField  *string   `json:"target_field,omitempty"`
 }
+
+// SubmitFormRequest represents payload when submitting answers to an intake form
+type SubmitFormRequest struct {
+	SubmitterEmail string                 `json:"submitter_email,omitempty"`
+	Responses      map[string]interface{} `json:"responses"`
+}
+
+// SubmissionResult returns the submission acknowledgment and generated task details
+type SubmissionResult struct {
+	SubmissionID   int64  `json:"submission_id"`
+	FormID         int64  `json:"form_id"`
+	TaskID         int    `json:"task_id"`
+	TaskTitle      string `json:"task_title"`
+	SuccessMessage string `json:"success_message"`
+	RedirectURL    string `json:"redirect_url,omitempty"`
+}
