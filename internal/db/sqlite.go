@@ -664,6 +664,30 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	slaPoliciesQuery := `
+	CREATE TABLE IF NOT EXISTS sla_policies (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		name TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		priority_tiers TEXT NOT NULL DEFAULT '[]',
+		target_response_minutes INTEGER NOT NULL DEFAULT 60,
+		target_resolution_minutes INTEGER NOT NULL DEFAULT 1440,
+		business_hours_only INTEGER NOT NULL DEFAULT 0,
+		is_default INTEGER NOT NULL DEFAULT 0,
+		is_active INTEGER NOT NULL DEFAULT 1,
+		created_by_user_id TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(slaPoliciesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
