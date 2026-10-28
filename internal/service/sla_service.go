@@ -2,10 +2,67 @@ package service
 
 import (
 	"errors"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
 )
+
+// Helper methods for business hours, deadline calculations, and rule validations
+
+func isBusinessHour(t time.Time) bool {
+	weekday := t.Weekday()
+	if weekday == time.Saturday || weekday == time.Sunday {
+		return false
+	}
+	hour := t.Hour()
+	return hour >= 9 && hour < 17
+}
+
+func addMinutes(startTime time.Time, minutes int, businessOnly bool) time.Time {
+	if minutes <= 0 {
+		return startTime
+	}
+	if !businessOnly {
+		return startTime.Add(time.Duration(minutes) * time.Minute)
+	}
+
+	curr := startTime
+	remaining := minutes
+	for remaining > 0 {
+		curr = curr.Add(time.Minute)
+		if isBusinessHour(curr) {
+			remaining--
+		}
+	}
+	return curr
+}
+
+func calculateDeadlines(policy *model.SlaPolicy, createdAt time.Time) (time.Time, time.Time) {
+	if policy == nil {
+		return createdAt, createdAt
+	}
+	respDeadline := addMinutes(createdAt, policy.TargetResponseMinutes, policy.BusinessHoursOnly)
+	resDeadline := addMinutes(createdAt, policy.TargetResolutionMinutes, policy.BusinessHoursOnly)
+	return respDeadline, resDeadline
+}
+
+func validateEscalationRules(rules []model.EscalationRuleDefinition) error {
+	for _, r := range rules {
+		if r.TriggerEvent != model.SlaTriggerAtRisk && r.TriggerEvent != model.SlaTriggerBreached {
+			return ErrInvalidTriggerEvent
+		}
+		if r.ActionType != model.SlaActionEscalatePriority &&
+			r.ActionType != model.SlaActionReassign &&
+			r.ActionType != model.SlaActionNotify {
+			return ErrInvalidSlaActionType
+		}
+		if r.ThresholdPercentage < 0 || r.ThresholdPercentage > 100 {
+			return ErrInvalidEscalationRule
+		}
+	}
+	return nil
+}
 
 var (
 	ErrSlaPolicyNotFound      = errors.New("sla policy not found")
