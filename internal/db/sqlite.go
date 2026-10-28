@@ -688,6 +688,24 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	slaEscalationRulesQuery := `
+	CREATE TABLE IF NOT EXISTS sla_escalation_rules (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		policy_id INTEGER NOT NULL,
+		trigger_event TEXT NOT NULL,
+		threshold_percentage INTEGER NOT NULL DEFAULT 0,
+		action_type TEXT NOT NULL,
+		target_user_id TEXT NOT NULL DEFAULT '',
+		target_priority TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (policy_id) REFERENCES sla_policies(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(slaEscalationRulesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
