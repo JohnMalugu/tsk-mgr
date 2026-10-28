@@ -76,3 +76,23 @@ type TaskSlaRecord struct {
 	CreatedAt          time.Time  `json:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at"`
 }
+
+// Breach type constants
+const (
+	BreachTypeResponse   = "response"
+	BreachTypeResolution = "resolution"
+)
+
+// SlaBreachLog records historical breach events and automated escalation actions taken
+type SlaBreachLog struct {
+	ID                  int64     `json:"id"`
+	TaskID              int       `json:"task_id"`
+	PolicyID            int64     `json:"policy_id"`
+	WorkspaceID         int64     `json:"workspace_id"`
+	BreachType          string    `json:"breach_type"` // response, resolution
+	BreachedAt          time.Time `json:"breached_at"`
+	MinutesOverdue      int       `json:"minutes_overdue"`
+	EscalationTriggered bool      `json:"escalation_triggered"`
+	EscalationAction    string    `json:"escalation_action,omitempty"`
+	Details             string    `json:"details,omitempty"`
+}
