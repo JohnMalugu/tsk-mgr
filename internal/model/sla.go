@@ -130,3 +130,19 @@ type UpdateSlaPolicyRequest struct {
 	IsDefault               *bool     `json:"is_default,omitempty"`
 	IsActive                *bool     `json:"is_active,omitempty"`
 }
+
+// SetEscalationRulesRequest represents payload for replacing escalation rules of a policy
+type SetEscalationRulesRequest struct {
+	Rules []EscalationRuleDefinition `json:"rules"`
+}
+
+// ApplySlaRequest represents payload for attaching or calculating SLA targets on a task
+type ApplySlaRequest struct {
+	TaskID   int    `json:"task_id"`
+	PolicyID *int64 `json:"policy_id,omitempty"` // if nil, uses default policy for priority
+}
+
+// PauseSlaRequest represents payload for pausing an active SLA countdown
+type PauseSlaRequest struct {
+	Reason string `json:"reason,omitempty"`
+}
