@@ -24,3 +24,28 @@ type SlaPolicy struct {
 	CreatedAt              time.Time `json:"created_at"`
 	UpdatedAt              time.Time `json:"updated_at"`
 }
+
+// Escalation trigger event constants
+const (
+	SlaTriggerAtRisk   = "at_risk"   // deadline threshold reached
+	SlaTriggerBreached = "breached"  // deadline exceeded
+)
+
+// Escalation action type constants
+const (
+	SlaActionEscalatePriority = "escalate_priority"
+	SlaActionReassign         = "reassign"
+	SlaActionNotify           = "notify"
+)
+
+// EscalationRule defines automated mitigation when an SLA target is endangered or missed
+type EscalationRule struct {
+	ID                  int64     `json:"id"`
+	PolicyID            int64     `json:"policy_id"`
+	TriggerEvent        string    `json:"trigger_event"`        // at_risk, breached
+	ThresholdPercentage int       `json:"threshold_percentage"` // e.g. 75, 90 (0 for breached)
+	ActionType          string    `json:"action_type"`          // escalate_priority, reassign, notify
+	TargetUserID        string    `json:"target_user_id,omitempty"`
+	TargetPriority      string    `json:"target_priority,omitempty"`
+	CreatedAt           time.Time `json:"created_at"`
+}
