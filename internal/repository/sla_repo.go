@@ -332,16 +332,109 @@ func (r *slaRepositoryImpl) ListPolicies(filter model.SlaFilter) ([]*model.SlaSu
 
 
 func (r *slaRepositoryImpl) UpdatePolicy(policy *model.SlaPolicy) error {
-	return nil
+	policy.UpdatedAt = time.Now()
+	if policy.PriorityTiers == nil {
+		policy.PriorityTiers = []string{}
+	}
+
+	tiersJSON, err := json.Marshal(policy.PriorityTiers)
+	if err != nil {
+		return err
+	}
+
+	bizVal := 0
+	if policy.BusinessHoursOnly {
+		bizVal = 1
+	}
+	defVal := 0
+	if policy.IsDefault {
+		defVal = 1
+	}
+	actVal := 0
+	if policy.IsActive {
+		actVal = 1
+	}
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if policy.IsDefault {
+		_, _ = tx.Exec("UPDATE sla_policies SET is_default = 0 WHERE workspace_id = ? AND id != ?", policy.WorkspaceID, policy.ID)
+	}
+
+	query := `
+	UPDATE sla_policies
+	SET name = ?, description = ?, priority_tiers = ?,
+		target_response_minutes = ?, target_resolution_minutes = ?,
+		business_hours_only = ?, is_default = ?, is_active = ?,
+		updated_at = ?
+	WHERE id = ?`
+
+	res, err := tx.Exec(query,
+		policy.Name, policy.Description, string(tiersJSON),
+		policy.TargetResponseMinutes, policy.TargetResolutionMinutes,
+		bizVal, defVal, actVal, policy.UpdatedAt,
+		policy.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrSlaPolicyNotFound
+	}
+
+	return tx.Commit()
 }
 
 func (r *slaRepositoryImpl) TogglePolicyActive(id int64, isActive bool) error {
+	actVal := 0
+	if isActive {
+		actVal = 1
+	}
+
+	query := `UPDATE sla_policies SET is_active = ?, updated_at = ? WHERE id = ?`
+	res, err := r.db.Exec(query, actVal, time.Now(), id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrSlaPolicyNotFound
+	}
+
 	return nil
 }
 
 func (r *slaRepositoryImpl) DeletePolicy(id int64) error {
+	query := `DELETE FROM sla_policies WHERE id = ?`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrSlaPolicyNotFound
+	}
+
 	return nil
 }
+
 
 func (r *slaRepositoryImpl) SetEscalationRules(policyID int64, rules []model.EscalationRule) error {
 	return nil
