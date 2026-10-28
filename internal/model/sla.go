@@ -96,3 +96,37 @@ type SlaBreachLog struct {
 	EscalationAction    string    `json:"escalation_action,omitempty"`
 	Details             string    `json:"details,omitempty"`
 }
+
+// EscalationRuleDefinition defines an escalation rule blueprint when configuring policies
+type EscalationRuleDefinition struct {
+	TriggerEvent        string `json:"trigger_event"`        // at_risk, breached
+	ThresholdPercentage int    `json:"threshold_percentage"` // e.g. 75, 90 (0 for breached)
+	ActionType          string `json:"action_type"`          // escalate_priority, reassign, notify
+	TargetUserID        string `json:"target_user_id,omitempty"`
+	TargetPriority      string `json:"target_priority,omitempty"`
+}
+
+// CreateSlaPolicyRequest represents payload for creating a new SLA policy
+type CreateSlaPolicyRequest struct {
+	WorkspaceID             int64                      `json:"workspace_id"`
+	Name                    string                     `json:"name"`
+	Description             string                     `json:"description,omitempty"`
+	PriorityTiers           []string                   `json:"priority_tiers,omitempty"`
+	TargetResponseMinutes   int                        `json:"target_response_minutes"`
+	TargetResolutionMinutes int                        `json:"target_resolution_minutes"`
+	BusinessHoursOnly       *bool                      `json:"business_hours_only,omitempty"`
+	IsDefault               *bool                      `json:"is_default,omitempty"`
+	EscalationRules         []EscalationRuleDefinition `json:"escalation_rules,omitempty"`
+}
+
+// UpdateSlaPolicyRequest represents payload for modifying an existing SLA policy
+type UpdateSlaPolicyRequest struct {
+	Name                    *string   `json:"name,omitempty"`
+	Description             *string   `json:"description,omitempty"`
+	PriorityTiers           *[]string `json:"priority_tiers,omitempty"`
+	TargetResponseMinutes   *int      `json:"target_response_minutes,omitempty"`
+	TargetResolutionMinutes *int      `json:"target_resolution_minutes,omitempty"`
+	BusinessHoursOnly       *bool     `json:"business_hours_only,omitempty"`
+	IsDefault               *bool     `json:"is_default,omitempty"`
+	IsActive                *bool     `json:"is_active,omitempty"`
+}
