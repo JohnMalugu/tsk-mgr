@@ -446,13 +446,150 @@ func (s *slaServiceImpl) ResumeSla(taskID int) (*model.TaskSlaRecord, error) {
 }
 
 func (s *slaServiceImpl) EvaluateTaskSla(taskID int) (*model.TaskSlaRecord, error) {
-	return nil, nil
+	rec, err := s.repo.GetTaskSlaRecordByTaskID(taskID)
+	if err != nil {
+		if errors.Is(err, repository.ErrTaskSlaNotFound) {
+			return nil, ErrTaskSlaNotFound
+		}
+		return nil, err
+	}
+
+	if rec.IsPaused {
+		return rec, nil
+	}
+
+	task, err := s.taskRepo.GetByID(taskID)
+	if err != nil {
+		return nil, err
+	}
+	if task == nil {
+		return nil, ErrTaskNotFound
+	}
+
+	now := time.Now()
+	var newBreachLog *model.SlaBreachLog
+
+	// Evaluate Response Stage
+	if rec.ResponseStatus == model.SlaStagePending {
+		if task.Status != model.TaskStatusTodo {
+			rec.RespondedAt = &now
+			if now.Before(rec.ResponseDeadline) || now.Equal(rec.ResponseDeadline) {
+				rec.ResponseStatus = model.SlaStageMet
+			} else {
+				rec.ResponseStatus = model.SlaStageBreached
+				overdue := int(now.Sub(rec.ResponseDeadline).Minutes())
+				newBreachLog = &model.SlaBreachLog{
+					TaskID:         taskID,
+					PolicyID:       rec.PolicyID,
+					WorkspaceID:    rec.WorkspaceID,
+					BreachType:     model.BreachTypeResponse,
+					BreachedAt:     now,
+					MinutesOverdue: overdue,
+				}
+			}
+		} else if now.After(rec.ResponseDeadline) {
+			rec.ResponseStatus = model.SlaStageBreached
+			overdue := int(now.Sub(rec.ResponseDeadline).Minutes())
+			newBreachLog = &model.SlaBreachLog{
+				TaskID:         taskID,
+				PolicyID:       rec.PolicyID,
+				WorkspaceID:    rec.WorkspaceID,
+				BreachType:     model.BreachTypeResponse,
+				BreachedAt:     now,
+				MinutesOverdue: overdue,
+			}
+		}
+	}
+
+	// Evaluate Resolution Stage
+	if rec.ResolutionStatus == model.SlaStagePending {
+		if task.Completed || task.Status == model.TaskStatusCompleted {
+			rec.ResolvedAt = &now
+			if now.Before(rec.ResolutionDeadline) || now.Equal(rec.ResolutionDeadline) {
+				rec.ResolutionStatus = model.SlaStageMet
+			} else {
+				rec.ResolutionStatus = model.SlaStageBreached
+				overdue := int(now.Sub(rec.ResolutionDeadline).Minutes())
+				newBreachLog = &model.SlaBreachLog{
+					TaskID:         taskID,
+					PolicyID:       rec.PolicyID,
+					WorkspaceID:    rec.WorkspaceID,
+					BreachType:     model.BreachTypeResolution,
+					BreachedAt:     now,
+					MinutesOverdue: overdue,
+				}
+			}
+		} else if now.After(rec.ResolutionDeadline) {
+			rec.ResolutionStatus = model.SlaStageBreached
+			overdue := int(now.Sub(rec.ResolutionDeadline).Minutes())
+			newBreachLog = &model.SlaBreachLog{
+				TaskID:         taskID,
+				PolicyID:       rec.PolicyID,
+				WorkspaceID:    rec.WorkspaceID,
+				BreachType:     model.BreachTypeResolution,
+				BreachedAt:     now,
+				MinutesOverdue: overdue,
+			}
+		}
+	}
+
+	// Process Escalation Rules
+	rules, _ := s.repo.GetEscalationRules(rec.PolicyID)
+	totalDur := rec.ResolutionDeadline.Sub(rec.CreatedAt)
+	elapsedDur := now.Sub(rec.CreatedAt)
+
+	for _, rule := range rules {
+		triggered := false
+		if rule.TriggerEvent == model.SlaTriggerBreached {
+			if rec.ResponseStatus == model.SlaStageBreached || rec.ResolutionStatus == model.SlaStageBreached {
+				triggered = true
+			}
+		} else if rule.TriggerEvent == model.SlaTriggerAtRisk && totalDur > 0 {
+			pct := int((float64(elapsedDur) / float64(totalDur)) * 100)
+			if pct >= rule.ThresholdPercentage {
+				triggered = true
+			}
+		}
+
+		if triggered {
+			switch rule.ActionType {
+			case model.SlaActionEscalatePriority:
+				targetPri := rule.TargetPriority
+				if targetPri == "" {
+					targetPri = "urgent"
+				}
+				if task.Priority != targetPri {
+					task.Priority = targetPri
+					_ = s.taskRepo.Update(task)
+				}
+			case model.SlaActionReassign:
+				if rule.TargetUserID != "" && task.UserID != rule.TargetUserID {
+					task.UserID = rule.TargetUserID
+					_ = s.taskRepo.Update(task)
+				}
+			}
+
+			if newBreachLog != nil {
+				newBreachLog.EscalationTriggered = true
+				newBreachLog.EscalationAction = rule.ActionType
+			}
+		}
+	}
+
+	if newBreachLog != nil {
+		_, _ = s.repo.LogBreach(newBreachLog)
+	}
+
+	if err := s.repo.UpdateTaskSlaRecord(rec); err != nil {
+		return nil, err
+	}
+	return rec, nil
 }
 
 func (s *slaServiceImpl) ListBreaches(filter model.BreachFilter) ([]*model.SlaBreachLog, error) {
-	return nil, nil
+	return s.repo.ListBreaches(filter)
 }
 
 func (s *slaServiceImpl) GetSlaMetrics(workspaceID int64) (*model.SlaMetrics, error) {
-	return nil, nil
+	return s.repo.GetSlaMetrics(workspaceID)
 }
