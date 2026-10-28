@@ -107,6 +107,10 @@ func main() {
 	formSvc := service.NewFormService(formRepo, taskRepo)
 	handler.InitFormHandler(formSvc)
 
+	slaRepo := repository.NewSlaRepository(sqliteDB)
+	slaSvc := service.NewSlaService(slaRepo, taskRepo)
+	handler.InitSlaHandler(slaSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
