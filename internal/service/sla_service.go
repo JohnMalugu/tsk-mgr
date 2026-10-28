@@ -390,11 +390,59 @@ func (s *slaServiceImpl) GetTaskSla(taskID int) (*model.TaskSlaRecord, error) {
 }
 
 func (s *slaServiceImpl) PauseSla(taskID int, req model.PauseSlaRequest) (*model.TaskSlaRecord, error) {
-	return nil, nil
+	rec, err := s.repo.GetTaskSlaRecordByTaskID(taskID)
+	if err != nil {
+		if errors.Is(err, repository.ErrTaskSlaNotFound) {
+			return nil, ErrTaskSlaNotFound
+		}
+		return nil, err
+	}
+	if rec.IsPaused {
+		return nil, ErrSlaAlreadyPaused
+	}
+
+	now := time.Now()
+	rec.IsPaused = true
+	rec.PausedAt = &now
+
+	if err := s.repo.UpdateTaskSlaRecord(rec); err != nil {
+		return nil, err
+	}
+	return rec, nil
 }
 
 func (s *slaServiceImpl) ResumeSla(taskID int) (*model.TaskSlaRecord, error) {
-	return nil, nil
+	rec, err := s.repo.GetTaskSlaRecordByTaskID(taskID)
+	if err != nil {
+		if errors.Is(err, repository.ErrTaskSlaNotFound) {
+			return nil, ErrTaskSlaNotFound
+		}
+		return nil, err
+	}
+	if !rec.IsPaused {
+		return nil, ErrSlaNotPaused
+	}
+
+	now := time.Now()
+	pausedDuration := time.Duration(0)
+	if rec.PausedAt != nil {
+		pausedDuration = now.Sub(*rec.PausedAt)
+		if pausedDuration < 0 {
+			pausedDuration = 0
+		}
+	}
+
+	mins := int(pausedDuration.Minutes())
+	rec.TotalPausedMinutes += mins
+	rec.ResponseDeadline = rec.ResponseDeadline.Add(pausedDuration)
+	rec.ResolutionDeadline = rec.ResolutionDeadline.Add(pausedDuration)
+	rec.IsPaused = false
+	rec.PausedAt = nil
+
+	if err := s.repo.UpdateTaskSlaRecord(rec); err != nil {
+		return nil, err
+	}
+	return rec, nil
 }
 
 func (s *slaServiceImpl) EvaluateTaskSla(taskID int) (*model.TaskSlaRecord, error) {
