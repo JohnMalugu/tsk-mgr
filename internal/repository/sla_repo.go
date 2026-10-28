@@ -228,8 +228,108 @@ func (r *slaRepositoryImpl) GetDefaultPolicy(workspaceID int64, priority string)
 
 
 func (r *slaRepositoryImpl) ListPolicies(filter model.SlaFilter) ([]*model.SlaSummary, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		p.id, p.workspace_id, p.name, p.priority_tiers,
+		p.target_response_minutes, p.target_resolution_minutes,
+		p.business_hours_only, p.is_default, p.is_active,
+		COALESCE((SELECT COUNT(*) FROM sla_escalation_rules er WHERE er.policy_id = p.id), 0) AS rule_count,
+		COALESCE((SELECT COUNT(*) FROM task_sla_records tsr WHERE tsr.policy_id = p.id), 0) AS tracked_task_count,
+		p.created_at, p.updated_at
+	FROM sla_policies p
+	WHERE 1=1`
+
+	var args []interface{}
+
+	if filter.WorkspaceID != nil {
+		query += " AND p.workspace_id = ?"
+		args = append(args, *filter.WorkspaceID)
+	}
+	if filter.IsActive != nil {
+		actVal := 0
+		if *filter.IsActive {
+			actVal = 1
+		}
+		query += " AND p.is_active = ?"
+		args = append(args, actVal)
+	}
+	if filter.Search != "" {
+		pattern := "%" + filter.Search + "%"
+		query += " AND (p.name LIKE ? OR p.description LIKE ?)"
+		args = append(args, pattern, pattern)
+	}
+
+	query += " ORDER BY p.is_default DESC, p.created_at ASC"
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	summaries := make([]*model.SlaSummary, 0)
+	for rows.Next() {
+		var (
+			s         model.SlaSummary
+			tiersJSON string
+			bizVal    int
+			defVal    int
+			actVal    int
+		)
+
+		err := rows.Scan(
+			&s.ID,
+			&s.WorkspaceID,
+			&s.Name,
+			&tiersJSON,
+			&s.TargetResponseMinutes,
+			&s.TargetResolutionMinutes,
+			&bizVal,
+			&defVal,
+			&actVal,
+			&s.RuleCount,
+			&s.TrackedTaskCount,
+			&s.CreatedAt,
+			&s.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		s.BusinessHoursOnly = bizVal == 1
+		s.IsDefault = defVal == 1
+		s.IsActive = actVal == 1
+
+		if tiersJSON != "" {
+			_ = json.Unmarshal([]byte(tiersJSON), &s.PriorityTiers)
+		}
+		if s.PriorityTiers == nil {
+			s.PriorityTiers = []string{}
+		}
+
+		if filter.Priority != "" {
+			match := false
+			for _, t := range s.PriorityTiers {
+				if strings.EqualFold(t, filter.Priority) {
+					match = true
+					break
+				}
+			}
+			if !match {
+				continue
+			}
+		}
+
+		summaries = append(summaries, &s)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return summaries, nil
 }
+
 
 func (r *slaRepositoryImpl) UpdatePolicy(policy *model.SlaPolicy) error {
 	return nil
