@@ -723,13 +723,191 @@ func (r *slaRepositoryImpl) UpdateTaskSlaRecord(record *model.TaskSlaRecord) err
 
 
 func (r *slaRepositoryImpl) LogBreach(breach *model.SlaBreachLog) (int64, error) {
-	return 0, nil
+	if breach.BreachedAt.IsZero() {
+		breach.BreachedAt = time.Now()
+	}
+
+	escVal := 0
+	if breach.EscalationTriggered {
+		escVal = 1
+	}
+
+	query := `
+	INSERT INTO sla_breach_logs (
+		task_id, policy_id, workspace_id,
+		breach_type, breached_at, minutes_overdue,
+		escalation_triggered, escalation_action, details
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query,
+		breach.TaskID, breach.PolicyID, breach.WorkspaceID,
+		breach.BreachType, breach.BreachedAt, breach.MinutesOverdue,
+		escVal, breach.EscalationAction, breach.Details,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	breach.ID = id
+	return id, nil
 }
 
 func (r *slaRepositoryImpl) ListBreaches(filter model.BreachFilter) ([]*model.SlaBreachLog, error) {
-	return nil, nil
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	query := `
+	SELECT id, task_id, policy_id, workspace_id,
+		breach_type, breached_at, minutes_overdue,
+		escalation_triggered, escalation_action, details
+	FROM sla_breach_logs
+	WHERE 1=1`
+
+	var args []interface{}
+
+	if filter.WorkspaceID != nil {
+		query += " AND workspace_id = ?"
+		args = append(args, *filter.WorkspaceID)
+	}
+	if filter.PolicyID != nil {
+		query += " AND policy_id = ?"
+		args = append(args, *filter.PolicyID)
+	}
+	if filter.TaskID != nil {
+		query += " AND task_id = ?"
+		args = append(args, *filter.TaskID)
+	}
+	if filter.BreachType != "" {
+		query += " AND breach_type = ?"
+		args = append(args, filter.BreachType)
+	}
+
+	query += " ORDER BY breached_at DESC LIMIT ? OFFSET ?"
+	args = append(args, filter.Limit, filter.Offset)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	breaches := make([]*model.SlaBreachLog, 0)
+	for rows.Next() {
+		var (
+			b      model.SlaBreachLog
+			escVal int
+		)
+
+		err := rows.Scan(
+			&b.ID,
+			&b.TaskID,
+			&b.PolicyID,
+			&b.WorkspaceID,
+			&b.BreachType,
+			&b.BreachedAt,
+			&b.MinutesOverdue,
+			&escVal,
+			&b.EscalationAction,
+			&b.Details,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		b.EscalationTriggered = escVal == 1
+		breaches = append(breaches, &b)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return breaches, nil
 }
 
 func (r *slaRepositoryImpl) GetSlaMetrics(workspaceID int64) (*model.SlaMetrics, error) {
-	return nil, nil
+	metrics := &model.SlaMetrics{
+		WorkspaceID:        workspaceID,
+		BreachesByPriority: make(map[string]int),
+	}
+
+	// Total tracked tasks
+	_ = r.db.QueryRow("SELECT COUNT(*) FROM task_sla_records WHERE workspace_id = ?", workspaceID).Scan(&metrics.TotalTrackedTasks)
+
+	// Active SLA count
+	_ = r.db.QueryRow("SELECT COUNT(*) FROM task_sla_records WHERE workspace_id = ? AND resolution_status = 'pending'", workspaceID).Scan(&metrics.ActiveSlaCount)
+
+	// Response counts
+	_ = r.db.QueryRow("SELECT COUNT(*) FROM task_sla_records WHERE workspace_id = ? AND response_status = 'met'", workspaceID).Scan(&metrics.MetResponseCount)
+	_ = r.db.QueryRow("SELECT COUNT(*) FROM task_sla_records WHERE workspace_id = ? AND response_status = 'breached'", workspaceID).Scan(&metrics.BreachedResponseCount)
+
+	// Resolution counts
+	_ = r.db.QueryRow("SELECT COUNT(*) FROM task_sla_records WHERE workspace_id = ? AND resolution_status = 'met'", workspaceID).Scan(&metrics.MetResolutionCount)
+	_ = r.db.QueryRow("SELECT COUNT(*) FROM task_sla_records WHERE workspace_id = ? AND resolution_status = 'breached'", workspaceID).Scan(&metrics.BreachedResolutionCount)
+
+	// Compliance rate %
+	totalDecided := metrics.MetResolutionCount + metrics.BreachedResolutionCount
+	if totalDecided > 0 {
+		metrics.ComplianceRate = (float64(metrics.MetResolutionCount) / float64(totalDecided)) * 100.0
+	} else if metrics.TotalTrackedTasks > 0 {
+		if metrics.BreachedResponseCount == 0 {
+			metrics.ComplianceRate = 100.0
+		} else {
+			totalResp := metrics.MetResponseCount + metrics.BreachedResponseCount
+			if totalResp > 0 {
+				metrics.ComplianceRate = (float64(metrics.MetResponseCount) / float64(totalResp)) * 100.0
+			}
+		}
+	} else {
+		metrics.ComplianceRate = 100.0
+	}
+
+	// Average response minutes
+	var avgResp sql.NullFloat64
+	_ = r.db.QueryRow(`
+		SELECT AVG((julianday(responded_at) - julianday(created_at)) * 1440.0)
+		FROM task_sla_records
+		WHERE workspace_id = ? AND responded_at IS NOT NULL`, workspaceID).Scan(&avgResp)
+	if avgResp.Valid {
+		metrics.AverageResponseMin = avgResp.Float64
+	}
+
+	// Average resolution minutes
+	var avgRes sql.NullFloat64
+	_ = r.db.QueryRow(`
+		SELECT AVG((julianday(resolved_at) - julianday(created_at)) * 1440.0)
+		FROM task_sla_records
+		WHERE workspace_id = ? AND resolved_at IS NOT NULL`, workspaceID).Scan(&avgRes)
+	if avgRes.Valid {
+		metrics.AverageResolutionMin = avgRes.Float64
+	}
+
+	// Breaches grouped by task priority
+	rows, err := r.db.Query(`
+		SELECT t.priority, COUNT(*)
+		FROM sla_breach_logs b
+		JOIN tasks t ON t.id = b.task_id
+		WHERE b.workspace_id = ?
+		GROUP BY t.priority`, workspaceID)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var priority string
+			var count int
+			if err := rows.Scan(&priority, &count); err == nil {
+				metrics.BreachesByPriority[priority] = count
+			}
+		}
+	}
+
+	return metrics, nil
 }
+
