@@ -393,6 +393,9 @@ func (h *SlaHandler) HandleTaskSla(w http.ResponseWriter, r *http.Request) {
 		case "resume":
 			h.HandleResumeSla(w, r, taskID)
 			return
+		case "evaluate":
+			h.HandleEvaluateSla(w, r, taskID)
+			return
 		}
 	}
 
@@ -461,4 +464,97 @@ func (h *SlaHandler) HandleResumeSla(w http.ResponseWriter, r *http.Request, tas
 	}
 
 	writeSlaJSON(w, http.StatusOK, rec)
+}
+
+// HandleEvaluateSla triggers on-demand evaluation of SLA stage and escalations via POST /v2/slas/tasks/{taskId}/evaluate
+func (h *SlaHandler) HandleEvaluateSla(w http.ResponseWriter, r *http.Request, taskID int) {
+	if r.Method != http.MethodPost {
+		writeSlaError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	rec, err := h.svc.EvaluateTaskSla(taskID)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrTaskNotFound):
+			writeSlaError(w, http.StatusNotFound, "Task not found")
+		case errors.Is(err, service.ErrTaskSlaNotFound):
+			writeSlaError(w, http.StatusNotFound, "Task SLA record not found")
+		default:
+			writeSlaError(w, http.StatusInternalServerError, "Failed to evaluate SLA: "+err.Error())
+		}
+		return
+	}
+
+	writeSlaJSON(w, http.StatusOK, rec)
+}
+
+// HandleListBreaches retrieves historical breach records via GET /v2/slas/breaches
+func (h *SlaHandler) HandleListBreaches(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeSlaError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	q := r.URL.Query()
+	filter := model.BreachFilter{}
+
+	if wsStr := q.Get("workspace_id"); wsStr != "" {
+		if wsID, err := strconv.ParseInt(wsStr, 10, 64); err == nil {
+			filter.WorkspaceID = &wsID
+		}
+	}
+	if taskStr := q.Get("task_id"); taskStr != "" {
+		if tID, err := strconv.Atoi(taskStr); err == nil {
+			filter.TaskID = &tID
+		}
+	}
+	if bt := q.Get("breach_type"); bt != "" {
+		filter.BreachType = bt
+	}
+	if limStr := q.Get("limit"); limStr != "" {
+		if lim, err := strconv.Atoi(limStr); err == nil {
+			filter.Limit = lim
+		}
+	}
+	if offStr := q.Get("offset"); offStr != "" {
+		if off, err := strconv.Atoi(offStr); err == nil {
+			filter.Offset = off
+		}
+	}
+
+	breaches, err := h.svc.ListBreaches(filter)
+	if err != nil {
+		writeSlaError(w, http.StatusInternalServerError, "Failed to list SLA breaches: "+err.Error())
+		return
+	}
+
+	if breaches == nil {
+		breaches = []*model.SlaBreachLog{}
+	}
+
+	writeSlaJSON(w, http.StatusOK, breaches)
+}
+
+// HandleSlaMetrics aggregates SLA metrics for a workspace via GET /v2/slas/metrics
+func (h *SlaHandler) HandleSlaMetrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeSlaError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	var workspaceID int64 = 1
+	if wsStr := r.URL.Query().Get("workspace_id"); wsStr != "" {
+		if wsID, err := strconv.ParseInt(wsStr, 10, 64); err == nil && wsID > 0 {
+			workspaceID = wsID
+		}
+	}
+
+	metrics, err := h.svc.GetSlaMetrics(workspaceID)
+	if err != nil {
+		writeSlaError(w, http.StatusInternalServerError, "Failed to retrieve SLA metrics: "+err.Error())
+		return
+	}
+
+	writeSlaJSON(w, http.StatusOK, metrics)
 }
