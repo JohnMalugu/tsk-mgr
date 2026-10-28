@@ -811,6 +811,13 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_intake_form_fields_form ON intake_form_fields(form_id, position);
 	CREATE INDEX IF NOT EXISTS idx_intake_form_submissions_form ON intake_form_submissions(form_id, submitted_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_intake_form_submissions_task ON intake_form_submissions(task_id);
+	CREATE INDEX IF NOT EXISTS idx_sla_policies_ws ON sla_policies(workspace_id, is_active);
+	CREATE INDEX IF NOT EXISTS idx_sla_escalation_rules_policy ON sla_escalation_rules(policy_id, trigger_event);
+	CREATE INDEX IF NOT EXISTS idx_task_sla_records_task ON task_sla_records(task_id);
+	CREATE INDEX IF NOT EXISTS idx_task_sla_records_ws_status ON task_sla_records(workspace_id, resolution_status);
+	CREATE INDEX IF NOT EXISTS idx_task_sla_records_deadlines ON task_sla_records(response_deadline, resolution_deadline);
+	CREATE INDEX IF NOT EXISTS idx_sla_breach_logs_ws ON sla_breach_logs(workspace_id, breached_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_sla_breach_logs_task ON sla_breach_logs(task_id, breach_type);
 	`
 
 	_, err = db.Exec(indexQuery)
