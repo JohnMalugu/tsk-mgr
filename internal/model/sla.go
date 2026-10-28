@@ -49,3 +49,30 @@ type EscalationRule struct {
 	TargetPriority      string    `json:"target_priority,omitempty"`
 	CreatedAt           time.Time `json:"created_at"`
 }
+
+// SLA deadline status lifecycle constants
+const (
+	SlaStagePending  = "pending"
+	SlaStageMet      = "met"
+	SlaStageBreached = "breached"
+	SlaStagePaused   = "paused"
+)
+
+// TaskSlaRecord tracks live SLA targets, elapsed durations, and fulfillment status for a task
+type TaskSlaRecord struct {
+	ID                 int64      `json:"id"`
+	TaskID             int        `json:"task_id"`
+	PolicyID           int64      `json:"policy_id"`
+	WorkspaceID        int64      `json:"workspace_id"`
+	ResponseDeadline   time.Time  `json:"response_deadline"`
+	ResolutionDeadline time.Time  `json:"resolution_deadline"`
+	RespondedAt        *time.Time `json:"responded_at,omitempty"`
+	ResolvedAt         *time.Time `json:"resolved_at,omitempty"`
+	ResponseStatus     string     `json:"response_status"`   // pending, met, breached
+	ResolutionStatus   string     `json:"resolution_status"` // pending, met, breached
+	IsPaused           bool       `json:"is_paused"`
+	PausedAt           *time.Time `json:"paused_at,omitempty"`
+	TotalPausedMinutes int        `json:"total_paused_minutes"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+}
