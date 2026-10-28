@@ -545,21 +545,182 @@ func (r *slaRepositoryImpl) DeleteEscalationRule(ruleID int64) error {
 }
 
 
+func scanTaskSla(scanner interface{ Scan(dest ...interface{}) error }) (*model.TaskSlaRecord, error) {
+	var (
+		rec         model.TaskSlaRecord
+		respondedAt sql.NullTime
+		resolvedAt  sql.NullTime
+		pausedAt    sql.NullTime
+		isPausedVal int
+	)
+
+	err := scanner.Scan(
+		&rec.ID,
+		&rec.TaskID,
+		&rec.PolicyID,
+		&rec.WorkspaceID,
+		&rec.ResponseDeadline,
+		&rec.ResolutionDeadline,
+		&respondedAt,
+		&resolvedAt,
+		&rec.ResponseStatus,
+		&rec.ResolutionStatus,
+		&isPausedVal,
+		&pausedAt,
+		&rec.TotalPausedMinutes,
+		&rec.CreatedAt,
+		&rec.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTaskSlaNotFound
+		}
+		return nil, err
+	}
+
+	if respondedAt.Valid {
+		rec.RespondedAt = &respondedAt.Time
+	}
+	if resolvedAt.Valid {
+		rec.ResolvedAt = &resolvedAt.Time
+	}
+	if pausedAt.Valid {
+		rec.PausedAt = &pausedAt.Time
+	}
+	rec.IsPaused = isPausedVal == 1
+
+	return &rec, nil
+}
+
 func (r *slaRepositoryImpl) CreateTaskSlaRecord(record *model.TaskSlaRecord) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if record.CreatedAt.IsZero() {
+		record.CreatedAt = now
+	}
+	if record.UpdatedAt.IsZero() {
+		record.UpdatedAt = now
+	}
+	if record.ResponseStatus == "" {
+		record.ResponseStatus = model.SlaStagePending
+	}
+	if record.ResolutionStatus == "" {
+		record.ResolutionStatus = model.SlaStagePending
+	}
+
+	pausedVal := 0
+	if record.IsPaused {
+		pausedVal = 1
+	}
+
+	query := `
+	INSERT INTO task_sla_records (
+		task_id, policy_id, workspace_id,
+		response_deadline, resolution_deadline,
+		responded_at, resolved_at,
+		response_status, resolution_status,
+		is_paused, paused_at, total_paused_minutes,
+		created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(task_id) DO UPDATE SET
+		policy_id = excluded.policy_id,
+		workspace_id = excluded.workspace_id,
+		response_deadline = excluded.response_deadline,
+		resolution_deadline = excluded.resolution_deadline,
+		responded_at = excluded.responded_at,
+		resolved_at = excluded.resolved_at,
+		response_status = excluded.response_status,
+		resolution_status = excluded.resolution_status,
+		is_paused = excluded.is_paused,
+		paused_at = excluded.paused_at,
+		total_paused_minutes = excluded.total_paused_minutes,
+		updated_at = excluded.updated_at`
+
+	res, err := r.db.Exec(query,
+		record.TaskID, record.PolicyID, record.WorkspaceID,
+		record.ResponseDeadline, record.ResolutionDeadline,
+		record.RespondedAt, record.ResolvedAt,
+		record.ResponseStatus, record.ResolutionStatus,
+		pausedVal, record.PausedAt, record.TotalPausedMinutes,
+		record.CreatedAt, record.UpdatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	record.ID = id
+	return id, nil
 }
 
 func (r *slaRepositoryImpl) GetTaskSlaRecord(id int64) (*model.TaskSlaRecord, error) {
-	return nil, nil
+	query := `
+	SELECT id, task_id, policy_id, workspace_id,
+		response_deadline, resolution_deadline,
+		responded_at, resolved_at,
+		response_status, resolution_status,
+		is_paused, paused_at, total_paused_minutes,
+		created_at, updated_at
+	FROM task_sla_records
+	WHERE id = ?`
+
+	return scanTaskSla(r.db.QueryRow(query, id))
 }
 
 func (r *slaRepositoryImpl) GetTaskSlaRecordByTaskID(taskID int) (*model.TaskSlaRecord, error) {
-	return nil, nil
+	query := `
+	SELECT id, task_id, policy_id, workspace_id,
+		response_deadline, resolution_deadline,
+		responded_at, resolved_at,
+		response_status, resolution_status,
+		is_paused, paused_at, total_paused_minutes,
+		created_at, updated_at
+	FROM task_sla_records
+	WHERE task_id = ?`
+
+	return scanTaskSla(r.db.QueryRow(query, taskID))
 }
 
 func (r *slaRepositoryImpl) UpdateTaskSlaRecord(record *model.TaskSlaRecord) error {
+	record.UpdatedAt = time.Now()
+	pausedVal := 0
+	if record.IsPaused {
+		pausedVal = 1
+	}
+
+	query := `
+	UPDATE task_sla_records
+	SET response_deadline = ?, resolution_deadline = ?,
+		responded_at = ?, resolved_at = ?,
+		response_status = ?, resolution_status = ?,
+		is_paused = ?, paused_at = ?, total_paused_minutes = ?,
+		updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query,
+		record.ResponseDeadline, record.ResolutionDeadline,
+		record.RespondedAt, record.ResolvedAt,
+		record.ResponseStatus, record.ResolutionStatus,
+		pausedVal, record.PausedAt, record.TotalPausedMinutes,
+		record.UpdatedAt, record.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrTaskSlaNotFound
+	}
+
 	return nil
 }
+
 
 func (r *slaRepositoryImpl) LogBreach(breach *model.SlaBreachLog) (int64, error) {
 	return 0, nil
