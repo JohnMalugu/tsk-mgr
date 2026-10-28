@@ -249,3 +249,216 @@ func (h *SlaHandler) HandleTogglePolicy(w http.ResponseWriter, r *http.Request) 
 
 	writeSlaJSON(w, http.StatusOK, policy)
 }
+
+// HandlePolicyEscalations handles GET and POST for /v2/slas/{id}/escalations
+func (h *SlaHandler) HandlePolicyEscalations(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/slas/")
+	path = strings.TrimSuffix(path, "/escalations")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) == 0 || parts[0] == "" {
+		writeSlaError(w, http.StatusBadRequest, "Missing policy ID in path")
+		return
+	}
+
+	id, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		writeSlaError(w, http.StatusBadRequest, "Invalid policy ID format")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		rules, err := h.svc.GetEscalationRules(id)
+		if err != nil {
+			if errors.Is(err, service.ErrSlaPolicyNotFound) {
+				writeSlaError(w, http.StatusNotFound, "SLA policy not found")
+				return
+			}
+			writeSlaError(w, http.StatusInternalServerError, "Failed to get escalation rules: "+err.Error())
+			return
+		}
+		if rules == nil {
+			rules = []model.EscalationRule{}
+		}
+		writeSlaJSON(w, http.StatusOK, rules)
+
+	case http.MethodPost, http.MethodPut:
+		var req model.SetEscalationRulesRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeSlaError(w, http.StatusBadRequest, "Invalid request body: "+err.Error())
+			return
+		}
+
+		rules, err := h.svc.SetEscalationRules(id, req)
+		if err != nil {
+			switch {
+			case errors.Is(err, service.ErrSlaPolicyNotFound):
+				writeSlaError(w, http.StatusNotFound, "SLA policy not found")
+			case errors.Is(err, service.ErrInvalidTriggerEvent),
+				errors.Is(err, service.ErrInvalidSlaActionType),
+				errors.Is(err, service.ErrInvalidEscalationRule):
+				writeSlaError(w, http.StatusBadRequest, err.Error())
+			default:
+				writeSlaError(w, http.StatusInternalServerError, "Failed to set escalation rules: "+err.Error())
+			}
+			return
+		}
+		writeSlaJSON(w, http.StatusOK, rules)
+
+	default:
+		writeSlaError(w, http.StatusMethodNotAllowed, "Method not allowed")
+	}
+}
+
+// HandleDeleteEscalationRule deletes a specific escalation rule via DELETE /v2/slas/escalations/{ruleId}
+func (h *SlaHandler) HandleDeleteEscalationRule(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		writeSlaError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/v2/slas/escalations/")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) == 0 || parts[0] == "" {
+		writeSlaError(w, http.StatusBadRequest, "Missing rule ID in path")
+		return
+	}
+
+	ruleID, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		writeSlaError(w, http.StatusBadRequest, "Invalid rule ID format")
+		return
+	}
+
+	if err := h.svc.DeleteEscalationRule(ruleID); err != nil {
+		writeSlaError(w, http.StatusInternalServerError, "Failed to delete escalation rule: "+err.Error())
+		return
+	}
+
+	writeSlaJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Escalation rule deleted successfully",
+	})
+}
+
+// HandleApplySla attaches or computes an SLA target for a task via POST /v2/slas/tasks/apply
+func (h *SlaHandler) HandleApplySla(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeSlaError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	var req model.ApplySlaRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeSlaError(w, http.StatusBadRequest, "Invalid request body: "+err.Error())
+		return
+	}
+
+	rec, err := h.svc.ApplySlaToTask(req)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrTaskNotFound):
+			writeSlaError(w, http.StatusNotFound, "Task not found")
+		case errors.Is(err, service.ErrSlaPolicyNotFound):
+			writeSlaError(w, http.StatusNotFound, "SLA policy not found for task")
+		default:
+			writeSlaError(w, http.StatusInternalServerError, "Failed to apply SLA to task: "+err.Error())
+		}
+		return
+	}
+
+	writeSlaJSON(w, http.StatusCreated, rec)
+}
+
+// HandleTaskSla fetches SLA status for a task via GET /v2/slas/tasks/{taskId}
+func (h *SlaHandler) HandleTaskSla(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/slas/tasks/")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) == 0 || parts[0] == "" {
+		writeSlaError(w, http.StatusBadRequest, "Missing task ID in path")
+		return
+	}
+
+	taskID, err := strconv.Atoi(parts[0])
+	if err != nil {
+		writeSlaError(w, http.StatusBadRequest, "Invalid task ID format")
+		return
+	}
+
+	if len(parts) > 1 {
+		switch parts[1] {
+		case "pause":
+			h.HandlePauseSla(w, r, taskID)
+			return
+		case "resume":
+			h.HandleResumeSla(w, r, taskID)
+			return
+		}
+	}
+
+	if r.Method != http.MethodGet {
+		writeSlaError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	rec, err := h.svc.GetTaskSla(taskID)
+	if err != nil {
+		if errors.Is(err, service.ErrTaskSlaNotFound) {
+			writeSlaError(w, http.StatusNotFound, "Task SLA record not found")
+			return
+		}
+		writeSlaError(w, http.StatusInternalServerError, "Failed to get task SLA record: "+err.Error())
+		return
+	}
+
+	writeSlaJSON(w, http.StatusOK, rec)
+}
+
+// HandlePauseSla pauses an active SLA countdown via POST /v2/slas/tasks/{taskId}/pause
+func (h *SlaHandler) HandlePauseSla(w http.ResponseWriter, r *http.Request, taskID int) {
+	if r.Method != http.MethodPost {
+		writeSlaError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	var req model.PauseSlaRequest
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	rec, err := h.svc.PauseSla(taskID, req)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrTaskSlaNotFound):
+			writeSlaError(w, http.StatusNotFound, "Task SLA record not found")
+		case errors.Is(err, service.ErrSlaAlreadyPaused):
+			writeSlaError(w, http.StatusBadRequest, err.Error())
+		default:
+			writeSlaError(w, http.StatusInternalServerError, "Failed to pause SLA: "+err.Error())
+		}
+		return
+	}
+
+	writeSlaJSON(w, http.StatusOK, rec)
+}
+
+// HandleResumeSla resumes a paused SLA countdown via POST /v2/slas/tasks/{taskId}/resume
+func (h *SlaHandler) HandleResumeSla(w http.ResponseWriter, r *http.Request, taskID int) {
+	if r.Method != http.MethodPost {
+		writeSlaError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	rec, err := h.svc.ResumeSla(taskID)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrTaskSlaNotFound):
+			writeSlaError(w, http.StatusNotFound, "Task SLA record not found")
+		case errors.Is(err, service.ErrSlaNotPaused):
+			writeSlaError(w, http.StatusBadRequest, err.Error())
+		default:
+			writeSlaError(w, http.StatusInternalServerError, "Failed to resume SLA: "+err.Error())
+		}
+		return
+	}
+
+	writeSlaJSON(w, http.StatusOK, rec)
+}
