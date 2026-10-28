@@ -706,6 +706,33 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	taskSlaRecordsQuery := `
+	CREATE TABLE IF NOT EXISTS task_sla_records (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		task_id INTEGER UNIQUE NOT NULL,
+		policy_id INTEGER NOT NULL,
+		workspace_id INTEGER NOT NULL,
+		response_deadline DATETIME NOT NULL,
+		resolution_deadline DATETIME NOT NULL,
+		responded_at DATETIME,
+		resolved_at DATETIME,
+		response_status TEXT NOT NULL DEFAULT 'pending',
+		resolution_status TEXT NOT NULL DEFAULT 'pending',
+		is_paused INTEGER NOT NULL DEFAULT 0,
+		paused_at DATETIME,
+		total_paused_minutes INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+		FOREIGN KEY (policy_id) REFERENCES sla_policies(id) ON DELETE CASCADE,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(taskSlaRecordsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
