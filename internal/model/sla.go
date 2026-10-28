@@ -146,3 +146,54 @@ type ApplySlaRequest struct {
 type PauseSlaRequest struct {
 	Reason string `json:"reason,omitempty"`
 }
+
+// SlaMetrics aggregates SLA compliance, breach statistics, and speed metrics
+type SlaMetrics struct {
+	WorkspaceID             int64          `json:"workspace_id"`
+	TotalTrackedTasks       int            `json:"total_tracked_tasks"`
+	MetResponseCount        int            `json:"met_response_count"`
+	BreachedResponseCount   int            `json:"breached_response_count"`
+	MetResolutionCount      int            `json:"met_resolution_count"`
+	BreachedResolutionCount int            `json:"breached_resolution_count"`
+	ActiveSlaCount          int            `json:"active_sla_count"`
+	ComplianceRate          float64        `json:"compliance_rate"` // percentage (0.0 to 100.0)
+	AverageResponseMin      float64        `json:"average_response_min"`
+	AverageResolutionMin    float64        `json:"average_resolution_min"`
+	BreachesByPriority      map[string]int `json:"breaches_by_priority"`
+}
+
+// SlaSummary provides lightweight policy details with rule count and attached task count
+type SlaSummary struct {
+	ID                      int64     `json:"id"`
+	WorkspaceID             int64     `json:"workspace_id"`
+	Name                    string    `json:"name"`
+	PriorityTiers           []string  `json:"priority_tiers"`
+	TargetResponseMinutes   int       `json:"target_response_minutes"`
+	TargetResolutionMinutes int       `json:"target_resolution_minutes"`
+	BusinessHoursOnly       bool      `json:"business_hours_only"`
+	IsDefault               bool      `json:"is_default"`
+	IsActive                bool      `json:"is_active"`
+	RuleCount               int       `json:"rule_count"`
+	TrackedTaskCount        int       `json:"tracked_task_count"`
+	CreatedAt               time.Time `json:"created_at"`
+	UpdatedAt               time.Time `json:"updated_at"`
+}
+
+// SlaFilter defines search and filter options when querying SLA policies
+type SlaFilter struct {
+	WorkspaceID *int64 `json:"workspace_id,omitempty"`
+	IsActive    *bool  `json:"is_active,omitempty"`
+	Priority    string `json:"priority,omitempty"`
+	Search      string `json:"search,omitempty"`
+}
+
+// BreachFilter defines search and filter options when inspecting SLA breaches
+type BreachFilter struct {
+	WorkspaceID *int64 `json:"workspace_id,omitempty"`
+	PolicyID    *int64 `json:"policy_id,omitempty"`
+	TaskID      *int   `json:"task_id,omitempty"`
+	BreachType  string `json:"breach_type,omitempty"` // response, resolution
+	Limit       int    `json:"limit,omitempty"`
+	Offset      int    `json:"offset,omitempty"`
+}
+
