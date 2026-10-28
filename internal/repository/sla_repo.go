@@ -437,16 +437,113 @@ func (r *slaRepositoryImpl) DeletePolicy(id int64) error {
 
 
 func (r *slaRepositoryImpl) SetEscalationRules(policyID int64, rules []model.EscalationRule) error {
-	return nil
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var exists int
+	err = tx.QueryRow("SELECT 1 FROM sla_policies WHERE id = ?", policyID).Scan(&exists)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrSlaPolicyNotFound
+		}
+		return err
+	}
+
+	_, err = tx.Exec("DELETE FROM sla_escalation_rules WHERE policy_id = ?", policyID)
+	if err != nil {
+		return err
+	}
+
+	insertQuery := `
+	INSERT INTO sla_escalation_rules (
+		policy_id, trigger_event, threshold_percentage, action_type,
+		target_user_id, target_priority, created_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?)`
+
+	now := time.Now()
+	for _, rule := range rules {
+		_, err = tx.Exec(insertQuery,
+			policyID, rule.TriggerEvent, rule.ThresholdPercentage, rule.ActionType,
+			rule.TargetUserID, rule.TargetPriority, now,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 func (r *slaRepositoryImpl) GetEscalationRules(policyID int64) ([]model.EscalationRule, error) {
-	return nil, nil
+	var exists int
+	err := r.db.QueryRow("SELECT 1 FROM sla_policies WHERE id = ?", policyID).Scan(&exists)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrSlaPolicyNotFound
+		}
+		return nil, err
+	}
+
+	query := `
+	SELECT id, policy_id, trigger_event, threshold_percentage, action_type,
+		target_user_id, target_priority, created_at
+	FROM sla_escalation_rules
+	WHERE policy_id = ?
+	ORDER BY threshold_percentage ASC, id ASC`
+
+	rows, err := r.db.Query(query, policyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	rules := make([]model.EscalationRule, 0)
+	for rows.Next() {
+		var rule model.EscalationRule
+		err := rows.Scan(
+			&rule.ID,
+			&rule.PolicyID,
+			&rule.TriggerEvent,
+			&rule.ThresholdPercentage,
+			&rule.ActionType,
+			&rule.TargetUserID,
+			&rule.TargetPriority,
+			&rule.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		rules = append(rules, rule)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return rules, nil
 }
 
 func (r *slaRepositoryImpl) DeleteEscalationRule(ruleID int64) error {
+	query := `DELETE FROM sla_escalation_rules WHERE id = ?`
+	res, err := r.db.Exec(query, ruleID)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrEscalationRuleNotFound
+	}
+
 	return nil
 }
+
 
 func (r *slaRepositoryImpl) CreateTaskSlaRecord(record *model.TaskSlaRecord) (int64, error) {
 	return 0, nil
