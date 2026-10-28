@@ -197,15 +197,70 @@ func (s *slaServiceImpl) ListPolicies(filter model.SlaFilter) ([]*model.SlaSumma
 }
 
 func (s *slaServiceImpl) UpdatePolicy(id int64, req model.UpdateSlaPolicyRequest) (*model.SlaPolicy, error) {
-	return nil, nil
+	policy, err := s.repo.GetPolicyByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrSlaPolicyNotFound) {
+			return nil, ErrSlaPolicyNotFound
+		}
+		return nil, err
+	}
+
+	if req.Name != nil {
+		if *req.Name == "" {
+			return nil, ErrSlaPolicyNameRequired
+		}
+		policy.Name = *req.Name
+	}
+	if req.Description != nil {
+		policy.Description = *req.Description
+	}
+	if req.PriorityTiers != nil {
+		policy.PriorityTiers = *req.PriorityTiers
+	}
+	if req.TargetResponseMinutes != nil {
+		if *req.TargetResponseMinutes <= 0 {
+			return nil, ErrInvalidTargetMinutes
+		}
+		policy.TargetResponseMinutes = *req.TargetResponseMinutes
+	}
+	if req.TargetResolutionMinutes != nil {
+		if *req.TargetResolutionMinutes <= 0 {
+			return nil, ErrInvalidTargetMinutes
+		}
+		policy.TargetResolutionMinutes = *req.TargetResolutionMinutes
+	}
+	if req.BusinessHoursOnly != nil {
+		policy.BusinessHoursOnly = *req.BusinessHoursOnly
+	}
+	if req.IsDefault != nil {
+		policy.IsDefault = *req.IsDefault
+	}
+	if req.IsActive != nil {
+		policy.IsActive = *req.IsActive
+	}
+
+	if err := s.repo.UpdatePolicy(policy); err != nil {
+		return nil, err
+	}
+	return policy, nil
 }
 
 func (s *slaServiceImpl) TogglePolicy(id int64, isActive bool) (*model.SlaPolicy, error) {
-	return nil, nil
+	if err := s.repo.TogglePolicyActive(id, isActive); err != nil {
+		if errors.Is(err, repository.ErrSlaPolicyNotFound) {
+			return nil, ErrSlaPolicyNotFound
+		}
+		return nil, err
+	}
+	return s.GetPolicy(id)
 }
 
 func (s *slaServiceImpl) DeletePolicy(id int64) error {
-	return nil
+	err := s.repo.DeletePolicy(id)
+	if err != nil && errors.Is(err, repository.ErrSlaPolicyNotFound) {
+		return ErrSlaPolicyNotFound
+	}
+	return err
 }
 
 func (s *slaServiceImpl) SetEscalationRules(policyID int64, req model.SetEscalationRulesRequest) ([]model.EscalationRule, error) {
