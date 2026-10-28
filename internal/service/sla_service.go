@@ -65,16 +65,16 @@ func validateEscalationRules(rules []model.EscalationRuleDefinition) error {
 }
 
 var (
-	ErrSlaPolicyNotFound      = errors.New("sla policy not found")
-	ErrSlaPolicyNameRequired  = errors.New("sla policy name is required")
-	ErrSlaWorkspaceRequired   = errors.New("workspace ID is required")
-	ErrInvalidTargetMinutes   = errors.New("target response and resolution minutes must be positive")
-	ErrTaskSlaNotFound        = errors.New("task sla record not found")
-	ErrSlaAlreadyPaused       = errors.New("sla timer is already paused")
-	ErrSlaNotPaused           = errors.New("sla timer is not paused")
-	ErrInvalidEscalationRule  = errors.New("invalid escalation rule configuration")
-	ErrInvalidTriggerEvent    = errors.New("invalid escalation trigger event")
-	ErrInvalidSlaActionType   = errors.New("invalid escalation action type")
+	ErrSlaPolicyNotFound     = errors.New("sla policy not found")
+	ErrSlaPolicyNameRequired = errors.New("sla policy name is required")
+	ErrSlaWorkspaceRequired  = errors.New("workspace ID is required")
+	ErrInvalidTargetMinutes  = errors.New("target response and resolution minutes must be positive")
+	ErrTaskSlaNotFound       = errors.New("task sla record not found")
+	ErrSlaAlreadyPaused      = errors.New("sla timer is already paused")
+	ErrSlaNotPaused          = errors.New("sla timer is not paused")
+	ErrInvalidEscalationRule = errors.New("invalid escalation rule configuration")
+	ErrInvalidTriggerEvent   = errors.New("invalid escalation trigger event")
+	ErrInvalidSlaActionType  = errors.New("invalid escalation action type")
 )
 
 // SlaService orchestrates SLA policy definitions, target deadlines, automated escalations, and compliance metrics

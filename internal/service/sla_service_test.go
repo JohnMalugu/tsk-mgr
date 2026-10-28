@@ -201,9 +201,9 @@ func TestSlaService_EscalationRules(t *testing.T) {
 				TargetPriority:      "urgent",
 			},
 			{
-				TriggerEvent:   model.SlaTriggerBreached,
-				ActionType:     model.SlaActionReassign,
-				TargetUserID:   "user_lead",
+				TriggerEvent: model.SlaTriggerBreached,
+				ActionType:   model.SlaActionReassign,
+				TargetUserID: "user_lead",
 			},
 		},
 	})

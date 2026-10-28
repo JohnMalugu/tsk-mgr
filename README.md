@@ -153,6 +153,18 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `POST /v2/forms/public/{slug}/submit` to submit public responses with automatic validation and background task provisioning
 - `GET /v2/forms/{id}/submissions?limit={limit}&offset={offset}` to inspect chronological submission logs and response payloads
 - `GET /v2/forms/{id}/analytics` for form submission analytics, 7-day/30-day velocity, and daily intake volume breakdown
+- `GET|POST /v2/slas` to list SLA policies with workspace and status filters or configure new service level agreements with priority tiers, target response/resolution minutes, and business hour constraints
+- `GET|PUT|PATCH|DELETE /v2/slas/{id}` to fetch policy specifications, modify target response and resolution durations, or delete an SLA policy
+- `POST /v2/slas/{id}/toggle` to activate or deactivate an SLA policy
+- `GET|POST /v2/slas/{id}/escalations` to inspect or replace automated escalation rules (`at_risk` threshold percentage or `breached` triggers with priority escalation, task reassignment, or notification actions)
+- `DELETE /v2/slas/escalations/{ruleId}` to remove a specific escalation rule
+- `POST /v2/slas/tasks/apply` to attach an SLA policy to a task and compute response/resolution deadlines with business hours calculation
+- `GET /v2/slas/tasks/{taskId}` to view live SLA target countdowns, pause state, and fulfillment stages (`pending`, `met`, `breached`)
+- `POST /v2/slas/tasks/{taskId}/pause` to pause active SLA countdown timers during customer or external dependency holds
+- `POST /v2/slas/tasks/{taskId}/resume` to resume paused SLA timers and forward-adjust response and resolution deadlines
+- `POST /v2/slas/tasks/{taskId}/evaluate` to trigger on-demand SLA evaluation, transition stage fulfillment, execute escalation mitigations, and record breach events
+- `GET /v2/slas/breaches?workspace_id={id}&task_id={id}&breach_type={response|resolution}` to query chronological breach audit trail logs
+- `GET /v2/slas/metrics?workspace_id={id}` for workspace compliance rates, met vs. breached distribution, and response time analytics
 
 ## Current limitations
 

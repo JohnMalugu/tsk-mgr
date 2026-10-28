@@ -50,7 +50,9 @@ func NewSlaRepository(db *sql.DB) SlaRepository {
 	return &slaRepositoryImpl{db: db}
 }
 
-func scanPolicy(scanner interface{ Scan(dest ...interface{}) error }) (*model.SlaPolicy, error) {
+func scanPolicy(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.SlaPolicy, error) {
 	var (
 		p         model.SlaPolicy
 		tiersJSON string
@@ -226,7 +228,6 @@ func (r *slaRepositoryImpl) GetDefaultPolicy(workspaceID int64, priority string)
 	return scanPolicy(r.db.QueryRow(queryFallback, workspaceID))
 }
 
-
 func (r *slaRepositoryImpl) ListPolicies(filter model.SlaFilter) ([]*model.SlaSummary, error) {
 	query := `
 	SELECT 
@@ -329,7 +330,6 @@ func (r *slaRepositoryImpl) ListPolicies(filter model.SlaFilter) ([]*model.SlaSu
 
 	return summaries, nil
 }
-
 
 func (r *slaRepositoryImpl) UpdatePolicy(policy *model.SlaPolicy) error {
 	policy.UpdatedAt = time.Now()
@@ -434,7 +434,6 @@ func (r *slaRepositoryImpl) DeletePolicy(id int64) error {
 
 	return nil
 }
-
 
 func (r *slaRepositoryImpl) SetEscalationRules(policyID int64, rules []model.EscalationRule) error {
 	tx, err := r.db.Begin()
@@ -544,8 +543,9 @@ func (r *slaRepositoryImpl) DeleteEscalationRule(ruleID int64) error {
 	return nil
 }
 
-
-func scanTaskSla(scanner interface{ Scan(dest ...interface{}) error }) (*model.TaskSlaRecord, error) {
+func scanTaskSla(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.TaskSlaRecord, error) {
 	var (
 		rec         model.TaskSlaRecord
 		respondedAt sql.NullTime
@@ -720,7 +720,6 @@ func (r *slaRepositoryImpl) UpdateTaskSlaRecord(record *model.TaskSlaRecord) err
 
 	return nil
 }
-
 
 func (r *slaRepositoryImpl) LogBreach(breach *model.SlaBreachLog) (int64, error) {
 	if breach.BreachedAt.IsZero() {
@@ -910,4 +909,3 @@ func (r *slaRepositoryImpl) GetSlaMetrics(workspaceID int64) (*model.SlaMetrics,
 
 	return metrics, nil
 }
-
