@@ -114,15 +114,86 @@ func NewSlaService(repo repository.SlaRepository, taskRepo repository.TaskReposi
 }
 
 func (s *slaServiceImpl) CreatePolicy(userID string, req model.CreateSlaPolicyRequest) (*model.SlaPolicy, error) {
-	return nil, nil
+	if req.Name == "" {
+		return nil, ErrSlaPolicyNameRequired
+	}
+	if req.WorkspaceID <= 0 {
+		return nil, ErrSlaWorkspaceRequired
+	}
+	if req.TargetResponseMinutes <= 0 || req.TargetResolutionMinutes <= 0 {
+		return nil, ErrInvalidTargetMinutes
+	}
+	if len(req.EscalationRules) > 0 {
+		if err := validateEscalationRules(req.EscalationRules); err != nil {
+			return nil, err
+		}
+	}
+
+	tiers := req.PriorityTiers
+	if len(tiers) == 0 {
+		tiers = []string{"urgent", "high", "medium", "low"}
+	}
+	bizHours := false
+	if req.BusinessHoursOnly != nil {
+		bizHours = *req.BusinessHoursOnly
+	}
+	isDef := false
+	if req.IsDefault != nil {
+		isDef = *req.IsDefault
+	}
+
+	policy := &model.SlaPolicy{
+		WorkspaceID:             req.WorkspaceID,
+		Name:                    req.Name,
+		Description:             req.Description,
+		PriorityTiers:           tiers,
+		TargetResponseMinutes:   req.TargetResponseMinutes,
+		TargetResolutionMinutes: req.TargetResolutionMinutes,
+		BusinessHoursOnly:       bizHours,
+		IsDefault:               isDef,
+		IsActive:                true,
+		CreatedByUserID:         userID,
+	}
+
+	id, err := s.repo.CreatePolicy(policy)
+	if err != nil {
+		return nil, err
+	}
+	policy.ID = id
+
+	if len(req.EscalationRules) > 0 {
+		rules := make([]model.EscalationRule, len(req.EscalationRules))
+		for i, def := range req.EscalationRules {
+			rules[i] = model.EscalationRule{
+				PolicyID:            policy.ID,
+				TriggerEvent:        def.TriggerEvent,
+				ThresholdPercentage: def.ThresholdPercentage,
+				ActionType:          def.ActionType,
+				TargetUserID:        def.TargetUserID,
+				TargetPriority:      def.TargetPriority,
+			}
+		}
+		if err := s.repo.SetEscalationRules(policy.ID, rules); err != nil {
+			return nil, err
+		}
+	}
+
+	return policy, nil
 }
 
 func (s *slaServiceImpl) GetPolicy(id int64) (*model.SlaPolicy, error) {
-	return nil, nil
+	p, err := s.repo.GetPolicyByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrSlaPolicyNotFound) {
+			return nil, ErrSlaPolicyNotFound
+		}
+		return nil, err
+	}
+	return p, nil
 }
 
 func (s *slaServiceImpl) ListPolicies(filter model.SlaFilter) ([]*model.SlaSummary, error) {
-	return nil, nil
+	return s.repo.ListPolicies(filter)
 }
 
 func (s *slaServiceImpl) UpdatePolicy(id int64, req model.UpdateSlaPolicyRequest) (*model.SlaPolicy, error) {
