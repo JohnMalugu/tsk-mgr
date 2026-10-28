@@ -307,11 +307,86 @@ func (s *slaServiceImpl) DeleteEscalationRule(ruleID int64) error {
 }
 
 func (s *slaServiceImpl) ApplySlaToTask(req model.ApplySlaRequest) (*model.TaskSlaRecord, error) {
-	return nil, nil
+	task, err := s.taskRepo.GetByID(req.TaskID)
+	if err != nil {
+		return nil, err
+	}
+	if task == nil {
+		return nil, ErrTaskNotFound
+	}
+
+	var policy *model.SlaPolicy
+	if req.PolicyID != nil && *req.PolicyID > 0 {
+		policy, err = s.repo.GetPolicyByID(*req.PolicyID)
+		if err != nil {
+			if errors.Is(err, repository.ErrSlaPolicyNotFound) {
+				return nil, ErrSlaPolicyNotFound
+			}
+			return nil, err
+		}
+	} else {
+		// Default to workspace 1 if not specified
+		var wsID int64 = 1
+		policy, err = s.repo.GetDefaultPolicy(wsID, task.Priority)
+		if err != nil || policy == nil {
+			return nil, ErrSlaPolicyNotFound
+		}
+	}
+
+	now := time.Now()
+	createdAt := task.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = now
+	}
+	respDeadline, resDeadline := calculateDeadlines(policy, createdAt)
+
+	rec := &model.TaskSlaRecord{
+		TaskID:             task.ID,
+		PolicyID:           policy.ID,
+		WorkspaceID:        policy.WorkspaceID,
+		ResponseDeadline:   respDeadline,
+		ResolutionDeadline: resDeadline,
+		ResponseStatus:     model.SlaStagePending,
+		ResolutionStatus:   model.SlaStagePending,
+		IsPaused:           false,
+		TotalPausedMinutes: 0,
+		CreatedAt:          now,
+		UpdatedAt:          now,
+	}
+
+	if task.Completed || task.Status == model.TaskStatusCompleted {
+		resolvedAt := now
+		rec.ResolvedAt = &resolvedAt
+		if now.Before(resDeadline) || now.Equal(resDeadline) {
+			rec.ResolutionStatus = model.SlaStageMet
+		} else {
+			rec.ResolutionStatus = model.SlaStageBreached
+		}
+	}
+
+	if task.Status != model.TaskStatusTodo {
+		respondedAt := now
+		rec.RespondedAt = &respondedAt
+		rec.ResponseStatus = model.SlaStageMet
+	}
+
+	id, err := s.repo.CreateTaskSlaRecord(rec)
+	if err != nil {
+		return nil, err
+	}
+	rec.ID = id
+	return rec, nil
 }
 
 func (s *slaServiceImpl) GetTaskSla(taskID int) (*model.TaskSlaRecord, error) {
-	return nil, nil
+	rec, err := s.repo.GetTaskSlaRecordByTaskID(taskID)
+	if err != nil {
+		if errors.Is(err, repository.ErrTaskSlaNotFound) {
+			return nil, ErrTaskSlaNotFound
+		}
+		return nil, err
+	}
+	return rec, nil
 }
 
 func (s *slaServiceImpl) PauseSla(taskID int, req model.PauseSlaRequest) (*model.TaskSlaRecord, error) {
