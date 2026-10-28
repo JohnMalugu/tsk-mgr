@@ -264,15 +264,46 @@ func (s *slaServiceImpl) DeletePolicy(id int64) error {
 }
 
 func (s *slaServiceImpl) SetEscalationRules(policyID int64, req model.SetEscalationRulesRequest) ([]model.EscalationRule, error) {
-	return nil, nil
+	if _, err := s.repo.GetPolicyByID(policyID); err != nil {
+		if errors.Is(err, repository.ErrSlaPolicyNotFound) {
+			return nil, ErrSlaPolicyNotFound
+		}
+		return nil, err
+	}
+	if err := validateEscalationRules(req.Rules); err != nil {
+		return nil, err
+	}
+
+	rules := make([]model.EscalationRule, len(req.Rules))
+	for i, def := range req.Rules {
+		rules[i] = model.EscalationRule{
+			PolicyID:            policyID,
+			TriggerEvent:        def.TriggerEvent,
+			ThresholdPercentage: def.ThresholdPercentage,
+			ActionType:          def.ActionType,
+			TargetUserID:        def.TargetUserID,
+			TargetPriority:      def.TargetPriority,
+		}
+	}
+
+	if err := s.repo.SetEscalationRules(policyID, rules); err != nil {
+		return nil, err
+	}
+	return s.repo.GetEscalationRules(policyID)
 }
 
 func (s *slaServiceImpl) GetEscalationRules(policyID int64) ([]model.EscalationRule, error) {
-	return nil, nil
+	if _, err := s.repo.GetPolicyByID(policyID); err != nil {
+		if errors.Is(err, repository.ErrSlaPolicyNotFound) {
+			return nil, ErrSlaPolicyNotFound
+		}
+		return nil, err
+	}
+	return s.repo.GetEscalationRules(policyID)
 }
 
 func (s *slaServiceImpl) DeleteEscalationRule(ruleID int64) error {
-	return nil
+	return s.repo.DeleteEscalationRule(ruleID)
 }
 
 func (s *slaServiceImpl) ApplySlaToTask(req model.ApplySlaRequest) (*model.TaskSlaRecord, error) {
