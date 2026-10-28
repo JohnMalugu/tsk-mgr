@@ -1014,6 +1014,48 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Service Level Agreement (SLA) & Escalation Engine API (/v2/slas)
+	if r.URL.Path == "/v2/slas" {
+		handler.GlobalSlaHandler.HandleSlasRoot(w, r)
+		return
+	}
+	if r.URL.Path == "/v2/slas/breaches" {
+		handler.GlobalSlaHandler.HandleListBreaches(w, r)
+		return
+	}
+	if r.URL.Path == "/v2/slas/metrics" {
+		handler.GlobalSlaHandler.HandleSlaMetrics(w, r)
+		return
+	}
+	if r.URL.Path == "/v2/slas/tasks/apply" {
+		handler.GlobalSlaHandler.HandleApplySla(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/v2/slas/tasks/") {
+		handler.GlobalSlaHandler.HandleTaskSla(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/v2/slas/escalations/") {
+		handler.GlobalSlaHandler.HandleDeleteEscalationRule(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/v2/slas/") {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v2/slas/")
+		parts := strings.Split(trimmed, "/")
+		if len(parts) >= 2 {
+			switch parts[1] {
+			case "toggle":
+				handler.GlobalSlaHandler.HandleTogglePolicy(w, r)
+				return
+			case "escalations":
+				handler.GlobalSlaHandler.HandlePolicyEscalations(w, r)
+				return
+			}
+		}
+		handler.GlobalSlaHandler.HandlePolicyByID(w, r)
+		return
+	}
+
 	// Releases & Milestones Management API (/v2/releases)
 	if r.URL.Path == "/v2/releases" {
 		handler.GlobalReleaseHandler.HandleReleasesRoot(w, r)
