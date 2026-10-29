@@ -454,16 +454,90 @@ func (s *goalServiceImpl) DeleteKeyResult(id int64) error {
 	return nil
 }
 
+func (s *goalServiceImpl) syncKeyResultTaskProgress(keyResultID int64) error {
+	tasks, err := s.repo.ListLinkedTasks(keyResultID)
+	if err != nil {
+		return err
+	}
+	if len(tasks) == 0 {
+		return nil
+	}
+
+	completedCount := 0
+	for _, t := range tasks {
+		if t.Completed || t.Status == model.TaskStatusCompleted {
+			completedCount++
+		}
+	}
+
+	kr, err := s.repo.GetKeyResultByID(keyResultID)
+	if err != nil {
+		return err
+	}
+
+	kr.CurrentValue = float64(completedCount)
+	kr.TargetValue = float64(len(tasks))
+	kr.StartValue = 0.0
+	kr.Unit = "tasks"
+	kr.ProgressPercentage = math.Round((float64(completedCount)/float64(len(tasks)))*1000) / 10
+
+	if err := s.repo.UpdateKeyResult(kr); err != nil {
+		return err
+	}
+
+	return s.recalculateGoalProgress(kr.GoalID)
+}
+
 func (s *goalServiceImpl) LinkTask(keyResultID int64, taskID int) error {
+	kr, err := s.repo.GetKeyResultByID(keyResultID)
+	if err != nil {
+		if errors.Is(err, repository.ErrKeyResultNotFound) {
+			return ErrKeyResultNotFound
+		}
+		return err
+	}
+
+	task, err := s.taskRepo.GetByID(taskID)
+	if err != nil {
+		return err
+	}
+	if task == nil {
+		return ErrTaskNotFound
+	}
+
+	if err := s.repo.LinkTaskToKeyResult(keyResultID, taskID); err != nil {
+		return err
+	}
+
+	_ = s.syncKeyResultTaskProgress(kr.ID)
 	return nil
 }
 
 func (s *goalServiceImpl) UnlinkTask(keyResultID int64, taskID int) error {
+	kr, err := s.repo.GetKeyResultByID(keyResultID)
+	if err != nil {
+		if errors.Is(err, repository.ErrKeyResultNotFound) {
+			return ErrKeyResultNotFound
+		}
+		return err
+	}
+
+	if err := s.repo.UnlinkTask(keyResultID, taskID); err != nil {
+		return err
+	}
+
+	_ = s.syncKeyResultTaskProgress(kr.ID)
 	return nil
 }
 
 func (s *goalServiceImpl) ListLinkedTasks(keyResultID int64) ([]model.LinkedTaskInfo, error) {
-	return nil, nil
+	if _, err := s.repo.GetKeyResultByID(keyResultID); err != nil {
+		if errors.Is(err, repository.ErrKeyResultNotFound) {
+			return nil, ErrKeyResultNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListLinkedTasks(keyResultID)
 }
 
 func (s *goalServiceImpl) CreateCheckIn(userID string, goalID int64, req model.GoalCheckInRequest) (*model.GoalCheckIn, error) {
