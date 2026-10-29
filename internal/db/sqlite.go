@@ -780,6 +780,29 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	keyResultsQuery := `
+	CREATE TABLE IF NOT EXISTS key_results (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		goal_id INTEGER NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		metric_type TEXT NOT NULL DEFAULT 'numerical',
+		unit TEXT NOT NULL DEFAULT '',
+		start_value REAL NOT NULL DEFAULT 0.0,
+		target_value REAL NOT NULL DEFAULT 100.0,
+		current_value REAL NOT NULL DEFAULT 0.0,
+		weight REAL NOT NULL DEFAULT 1.0,
+		progress_percentage REAL NOT NULL DEFAULT 0.0,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(keyResultsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
