@@ -2,22 +2,95 @@ package service
 
 import (
 	"errors"
+	"math"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
 )
 
 var (
-	ErrGoalNotFound             = errors.New("goal not found")
-	ErrGoalTitleRequired        = errors.New("goal title is required")
-	ErrGoalWorkspaceRequired    = errors.New("workspace ID is required")
-	ErrGoalTimeframeRequired    = errors.New("timeframe is required")
-	ErrKeyResultNotFound        = errors.New("key result not found")
-	ErrKeyResultTitleRequired   = errors.New("key result title is required")
-	ErrInvalidMetricType        = errors.New("invalid key result metric type")
-	ErrInvalidTargetValue       = errors.New("target value cannot equal start value")
-	ErrInvalidConfidenceRating  = errors.New("invalid confidence rating")
+	ErrGoalNotFound            = errors.New("goal not found")
+	ErrGoalTitleRequired       = errors.New("goal title is required")
+	ErrGoalWorkspaceRequired   = errors.New("workspace ID is required")
+	ErrGoalTimeframeRequired   = errors.New("timeframe is required")
+	ErrKeyResultNotFound       = errors.New("key result not found")
+	ErrKeyResultTitleRequired  = errors.New("key result title is required")
+	ErrInvalidMetricType       = errors.New("invalid key result metric type")
+	ErrInvalidTargetValue      = errors.New("target value cannot equal start value")
+	ErrInvalidConfidenceRating = errors.New("invalid confidence rating")
 )
+
+// Helper methods for KeyResult and Goal progress computation
+
+func calculateKeyResultProgress(metricType string, startVal, targetVal, currentVal float64) float64 {
+	if metricType == model.KeyResultMetricBoolean {
+		if currentVal >= 1.0 {
+			return 100.0
+		}
+		return 0.0
+	}
+
+	delta := targetVal - startVal
+	if delta == 0 {
+		if currentVal >= targetVal {
+			return 100.0
+		}
+		return 0.0
+	}
+
+	progress := ((currentVal - startVal) / delta) * 100.0
+	if progress < 0.0 {
+		progress = 0.0
+	}
+	if progress > 100.0 {
+		progress = 100.0
+	}
+
+	return math.Round(progress*10) / 10
+}
+
+func calculateGoalAggregatedProgress(krs []model.KeyResult) float64 {
+	if len(krs) == 0 {
+		return 0.0
+	}
+
+	var totalWeight float64
+	var weightedProgress float64
+
+	for _, kr := range krs {
+		w := kr.Weight
+		if w <= 0 {
+			w = 1.0
+		}
+		totalWeight += w
+		weightedProgress += kr.ProgressPercentage * w
+	}
+
+	if totalWeight <= 0 {
+		return 0.0
+	}
+
+	return math.Round((weightedProgress/totalWeight)*10) / 10
+}
+
+func inferGoalStatus(progress float64, currentStatus string) string {
+	if progress >= 100.0 {
+		return model.GoalStatusAchieved
+	}
+	if currentStatus == model.GoalStatusCanceled {
+		return model.GoalStatusCanceled
+	}
+	if currentStatus == model.GoalStatusDraft {
+		return model.GoalStatusDraft
+	}
+	if progress >= 70.0 {
+		return model.GoalStatusOnTrack
+	}
+	if progress >= 40.0 {
+		return model.GoalStatusBehind
+	}
+	return model.GoalStatusAtRisk
+}
 
 // GoalService orchestrates goals, key results, task linkages, progress tracking, and check-ins
 type GoalService interface {
