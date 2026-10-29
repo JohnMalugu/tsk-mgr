@@ -131,15 +131,76 @@ func NewGoalService(repo repository.GoalRepository, taskRepo repository.TaskRepo
 }
 
 func (s *goalServiceImpl) CreateGoal(userID string, req model.CreateGoalRequest) (*model.Goal, error) {
-	return nil, nil
+	if req.Title == "" {
+		return nil, ErrGoalTitleRequired
+	}
+	if req.WorkspaceID <= 0 {
+		return nil, ErrGoalWorkspaceRequired
+	}
+	if req.Timeframe == "" {
+		return nil, ErrGoalTimeframeRequired
+	}
+
+	if req.ParentGoalID != nil && *req.ParentGoalID > 0 {
+		_, err := s.repo.GetGoalByID(*req.ParentGoalID)
+		if err != nil {
+			if errors.Is(err, repository.ErrGoalNotFound) {
+				return nil, ErrGoalNotFound
+			}
+			return nil, err
+		}
+	}
+
+	goal := &model.Goal{
+		WorkspaceID:        req.WorkspaceID,
+		OwnerUserID:        userID,
+		ParentGoalID:       req.ParentGoalID,
+		Title:              req.Title,
+		Description:        req.Description,
+		Timeframe:          req.Timeframe,
+		StartDate:          req.StartDate,
+		EndDate:            req.EndDate,
+		Status:             model.GoalStatusDraft,
+		ProgressPercentage: 0.0,
+	}
+
+	id, err := s.repo.CreateGoal(goal)
+	if err != nil {
+		return nil, err
+	}
+	goal.ID = id
+	return goal, nil
 }
 
 func (s *goalServiceImpl) GetGoal(id int64) (*model.GoalDetail, error) {
-	return nil, nil
+	g, err := s.repo.GetGoalByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrGoalNotFound) {
+			return nil, ErrGoalNotFound
+		}
+		return nil, err
+	}
+
+	krs, err := s.repo.ListKeyResults(id)
+	if err != nil {
+		return nil, err
+	}
+
+	checkIns, _ := s.repo.ListGoalCheckIns(id)
+	var latestCheckIn *model.GoalCheckIn
+	if len(checkIns) > 0 {
+		latestCheckIn = &checkIns[0]
+	}
+
+	return &model.GoalDetail{
+		Goal:          g,
+		KeyResults:    krs,
+		LatestCheckIn: latestCheckIn,
+	}, nil
 }
 
 func (s *goalServiceImpl) ListGoals(filter model.GoalFilter) ([]*model.GoalSummary, error) {
-	return nil, nil
+	return s.repo.ListGoals(filter)
 }
 
 func (s *goalServiceImpl) UpdateGoal(id int64, req model.UpdateGoalRequest) (*model.Goal, error) {
