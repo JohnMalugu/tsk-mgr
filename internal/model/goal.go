@@ -170,3 +170,35 @@ type GoalTree struct {
 	KeyResults []KeyResult `json:"key_results"`
 	SubGoals   []*GoalTree `json:"sub_goals,omitempty"`
 }
+
+// GoalDetail represents a goal with embedded key results and the latest check-in
+type GoalDetail struct {
+	Goal          *Goal        `json:"goal"`
+	KeyResults    []KeyResult  `json:"key_results"`
+	LatestCheckIn *GoalCheckIn `json:"latest_check_in,omitempty"`
+}
+
+// GoalSummary summarizes high-level goal progress and status count
+type GoalSummary struct {
+	ID                 int64   `json:"id"`
+	Title              string  `json:"title"`
+	Timeframe          string  `json:"timeframe"`
+	Status             string  `json:"status"`
+	ProgressPercentage float64 `json:"progress_percentage"`
+	KeyResultCount     int     `json:"key_result_count"`
+	OwnerUserID        string  `json:"owner_user_id"`
+}
+
+// GoalMetrics aggregates OKR compliance, status distribution, and average progress
+type GoalMetrics struct {
+	WorkspaceID        int64          `json:"workspace_id"`
+	TotalGoals         int            `json:"total_goals"`
+	AchievedGoals      int            `json:"achieved_goals"`
+	OnTrackGoals       int            `json:"on_track_goals"`
+	BehindGoals        int            `json:"behind_goals"`
+	AtRiskGoals        int            `json:"at_risk_goals"`
+	DraftGoals         int            `json:"draft_goals"`
+	AverageProgress    float64        `json:"average_progress"`
+	AchievementRate    float64        `json:"achievement_rate"` // percentage achieved
+	StatusDistribution map[string]int `json:"status_distribution"`
+}
