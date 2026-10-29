@@ -274,23 +274,183 @@ func (s *goalServiceImpl) DeleteGoal(id int64) error {
 	return err
 }
 
+func (s *goalServiceImpl) recalculateGoalProgress(goalID int64) error {
+	goal, err := s.repo.GetGoalByID(goalID)
+	if err != nil {
+		return err
+	}
+
+	krs, err := s.repo.ListKeyResults(goalID)
+	if err != nil {
+		return err
+	}
+
+	aggProgress := calculateGoalAggregatedProgress(krs)
+	goal.ProgressPercentage = aggProgress
+	goal.Status = inferGoalStatus(aggProgress, goal.Status)
+
+	return s.repo.UpdateGoal(goal)
+}
+
 func (s *goalServiceImpl) CreateKeyResult(goalID int64, req model.CreateKeyResultRequest) (*model.KeyResult, error) {
-	return nil, nil
+	if _, err := s.repo.GetGoalByID(goalID); err != nil {
+		if errors.Is(err, repository.ErrGoalNotFound) {
+			return nil, ErrGoalNotFound
+		}
+		return nil, err
+	}
+
+	if req.Title == "" {
+		return nil, ErrKeyResultTitleRequired
+	}
+
+	mType := req.MetricType
+	if mType == "" {
+		mType = model.KeyResultMetricNumerical
+	}
+	if mType != model.KeyResultMetricNumerical &&
+		mType != model.KeyResultMetricPercentage &&
+		mType != model.KeyResultMetricCurrency &&
+		mType != model.KeyResultMetricBoolean {
+		return nil, ErrInvalidMetricType
+	}
+
+	if mType != model.KeyResultMetricBoolean && req.StartValue == req.TargetValue {
+		return nil, ErrInvalidTargetValue
+	}
+
+	var curVal float64
+	if req.CurrentValue != nil {
+		curVal = *req.CurrentValue
+	} else {
+		curVal = req.StartValue
+	}
+
+	weight := 1.0
+	if req.Weight != nil && *req.Weight > 0 {
+		weight = *req.Weight
+	}
+
+	progress := calculateKeyResultProgress(mType, req.StartValue, req.TargetValue, curVal)
+
+	kr := &model.KeyResult{
+		GoalID:             goalID,
+		Title:              req.Title,
+		Description:        req.Description,
+		MetricType:         mType,
+		Unit:               req.Unit,
+		StartValue:         req.StartValue,
+		TargetValue:        req.TargetValue,
+		CurrentValue:       curVal,
+		Weight:             weight,
+		ProgressPercentage: progress,
+	}
+
+	id, err := s.repo.CreateKeyResult(kr)
+	if err != nil {
+		return nil, err
+	}
+	kr.ID = id
+
+	_ = s.recalculateGoalProgress(goalID)
+
+	return kr, nil
 }
 
 func (s *goalServiceImpl) GetKeyResult(id int64) (*model.KeyResult, error) {
-	return nil, nil
+	kr, err := s.repo.GetKeyResultByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrKeyResultNotFound) {
+			return nil, ErrKeyResultNotFound
+		}
+		return nil, err
+	}
+	return kr, nil
 }
 
 func (s *goalServiceImpl) ListKeyResults(goalID int64) ([]model.KeyResult, error) {
-	return nil, nil
+	if _, err := s.repo.GetGoalByID(goalID); err != nil {
+		if errors.Is(err, repository.ErrGoalNotFound) {
+			return nil, ErrGoalNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListKeyResults(goalID)
 }
 
 func (s *goalServiceImpl) UpdateKeyResult(id int64, req model.UpdateKeyResultRequest) (*model.KeyResult, error) {
-	return nil, nil
+	kr, err := s.repo.GetKeyResultByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrKeyResultNotFound) {
+			return nil, ErrKeyResultNotFound
+		}
+		return nil, err
+	}
+
+	if req.Title != nil {
+		if *req.Title == "" {
+			return nil, ErrKeyResultTitleRequired
+		}
+		kr.Title = *req.Title
+	}
+	if req.Description != nil {
+		kr.Description = *req.Description
+	}
+	if req.MetricType != nil {
+		mType := *req.MetricType
+		if mType != model.KeyResultMetricNumerical &&
+			mType != model.KeyResultMetricPercentage &&
+			mType != model.KeyResultMetricCurrency &&
+			mType != model.KeyResultMetricBoolean {
+			return nil, ErrInvalidMetricType
+		}
+		kr.MetricType = mType
+	}
+	if req.Unit != nil {
+		kr.Unit = *req.Unit
+	}
+	if req.StartValue != nil {
+		kr.StartValue = *req.StartValue
+	}
+	if req.TargetValue != nil {
+		kr.TargetValue = *req.TargetValue
+	}
+	if req.CurrentValue != nil {
+		kr.CurrentValue = *req.CurrentValue
+	}
+	if req.Weight != nil && *req.Weight > 0 {
+		kr.Weight = *req.Weight
+	}
+
+	if kr.MetricType != model.KeyResultMetricBoolean && kr.StartValue == kr.TargetValue {
+		return nil, ErrInvalidTargetValue
+	}
+
+	kr.ProgressPercentage = calculateKeyResultProgress(kr.MetricType, kr.StartValue, kr.TargetValue, kr.CurrentValue)
+
+	if err := s.repo.UpdateKeyResult(kr); err != nil {
+		return nil, err
+	}
+
+	_ = s.recalculateGoalProgress(kr.GoalID)
+
+	return kr, nil
 }
 
 func (s *goalServiceImpl) DeleteKeyResult(id int64) error {
+	kr, err := s.repo.GetKeyResultByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrKeyResultNotFound) {
+			return ErrKeyResultNotFound
+		}
+		return err
+	}
+
+	if err := s.repo.DeleteKeyResult(id); err != nil {
+		return err
+	}
+
+	_ = s.recalculateGoalProgress(kr.GoalID)
 	return nil
 }
 
