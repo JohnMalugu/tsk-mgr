@@ -819,6 +819,25 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	goalCheckInsQuery := `
+	CREATE TABLE IF NOT EXISTS goal_check_ins (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		goal_id INTEGER NOT NULL,
+		user_id TEXT NOT NULL,
+		confidence_rating TEXT NOT NULL DEFAULT 'medium',
+		status TEXT NOT NULL DEFAULT 'on_track',
+		progress_percentage REAL NOT NULL DEFAULT 0.0,
+		note TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(goalCheckInsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
