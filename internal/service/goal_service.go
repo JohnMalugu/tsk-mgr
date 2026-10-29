@@ -204,11 +204,74 @@ func (s *goalServiceImpl) ListGoals(filter model.GoalFilter) ([]*model.GoalSumma
 }
 
 func (s *goalServiceImpl) UpdateGoal(id int64, req model.UpdateGoalRequest) (*model.Goal, error) {
-	return nil, nil
+	goal, err := s.repo.GetGoalByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrGoalNotFound) {
+			return nil, ErrGoalNotFound
+		}
+		return nil, err
+	}
+
+	if req.Title != nil {
+		if *req.Title == "" {
+			return nil, ErrGoalTitleRequired
+		}
+		goal.Title = *req.Title
+	}
+	if req.Description != nil {
+		goal.Description = *req.Description
+	}
+	if req.Timeframe != nil {
+		if *req.Timeframe == "" {
+			return nil, ErrGoalTimeframeRequired
+		}
+		goal.Timeframe = *req.Timeframe
+	}
+	if req.OwnerUserID != nil && *req.OwnerUserID != "" {
+		goal.OwnerUserID = *req.OwnerUserID
+	}
+	if req.ParentGoalID != nil {
+		if *req.ParentGoalID > 0 && *req.ParentGoalID != id {
+			if _, err := s.repo.GetGoalByID(*req.ParentGoalID); err != nil {
+				return nil, ErrGoalNotFound
+			}
+			goal.ParentGoalID = req.ParentGoalID
+		} else if *req.ParentGoalID <= 0 {
+			goal.ParentGoalID = nil
+		}
+	}
+	if req.StartDate != nil {
+		goal.StartDate = req.StartDate
+	}
+	if req.EndDate != nil {
+		goal.EndDate = req.EndDate
+	}
+	if req.Status != nil && *req.Status != "" {
+		goal.Status = *req.Status
+	}
+	if req.ProgressPercentage != nil {
+		prog := *req.ProgressPercentage
+		if prog < 0 {
+			prog = 0
+		}
+		if prog > 100 {
+			prog = 100
+		}
+		goal.ProgressPercentage = prog
+	}
+
+	if err := s.repo.UpdateGoal(goal); err != nil {
+		return nil, err
+	}
+	return goal, nil
 }
 
 func (s *goalServiceImpl) DeleteGoal(id int64) error {
-	return nil
+	err := s.repo.DeleteGoal(id)
+	if err != nil && errors.Is(err, repository.ErrGoalNotFound) {
+		return ErrGoalNotFound
+	}
+	return err
 }
 
 func (s *goalServiceImpl) CreateKeyResult(goalID int64, req model.CreateKeyResultRequest) (*model.KeyResult, error) {
