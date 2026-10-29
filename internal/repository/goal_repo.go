@@ -139,7 +139,74 @@ func (r *goalRepositoryImpl) GetGoalByID(id int64) (*model.Goal, error) {
 }
 
 func (r *goalRepositoryImpl) ListGoals(filter model.GoalFilter) ([]*model.GoalSummary, error) {
-	return nil, nil
+	query := `
+	SELECT g.id, g.title, g.timeframe, g.status, g.progress_percentage,
+		COUNT(kr.id) as key_result_count, g.owner_user_id
+	FROM goals g
+	LEFT JOIN key_results kr ON g.id = kr.goal_id
+	WHERE 1=1`
+
+	var args []interface{}
+
+	if filter.WorkspaceID != nil && *filter.WorkspaceID > 0 {
+		query += " AND g.workspace_id = ?"
+		args = append(args, *filter.WorkspaceID)
+	}
+	if filter.OwnerUserID != "" {
+		query += " AND g.owner_user_id = ?"
+		args = append(args, filter.OwnerUserID)
+	}
+	if filter.Status != "" {
+		query += " AND g.status = ?"
+		args = append(args, filter.Status)
+	}
+	if filter.Timeframe != "" {
+		query += " AND g.timeframe = ?"
+		args = append(args, filter.Timeframe)
+	}
+	if filter.ParentGoalID != nil {
+		query += " AND g.parent_goal_id = ?"
+		args = append(args, *filter.ParentGoalID)
+	}
+
+	query += " GROUP BY g.id ORDER BY g.created_at DESC"
+
+	if filter.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, filter.Limit)
+		if filter.Offset > 0 {
+			query += " OFFSET ?"
+			args = append(args, filter.Offset)
+		}
+	}
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var summaries []*model.GoalSummary
+	for rows.Next() {
+		var s model.GoalSummary
+		if err := rows.Scan(
+			&s.ID, &s.Title, &s.Timeframe, &s.Status,
+			&s.ProgressPercentage, &s.KeyResultCount, &s.OwnerUserID,
+		); err != nil {
+			return nil, err
+		}
+		summaries = append(summaries, &s)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if summaries == nil {
+		summaries = []*model.GoalSummary{}
+	}
+
+	return summaries, nil
 }
 
 func (r *goalRepositoryImpl) UpdateGoal(goal *model.Goal) error {
