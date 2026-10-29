@@ -54,3 +54,21 @@ type KeyResult struct {
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
 }
+
+// KeyResultTaskLink represents a bidirectional connection between a key result and a task
+type KeyResultTaskLink struct {
+	ID          int64     `json:"id"`
+	KeyResultID int64     `json:"key_result_id"`
+	TaskID      int       `json:"task_id"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// LinkedTaskInfo provides enriched task summary inside key result views
+type LinkedTaskInfo struct {
+	TaskID    int       `json:"task_id"`
+	Title     string    `json:"title"`
+	Status    string    `json:"status"`
+	Priority  string    `json:"priority"`
+	Completed bool      `json:"completed"`
+	LinkedAt  time.Time `json:"linked_at"`
+}
