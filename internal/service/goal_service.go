@@ -541,17 +541,82 @@ func (s *goalServiceImpl) ListLinkedTasks(keyResultID int64) ([]model.LinkedTask
 }
 
 func (s *goalServiceImpl) CreateCheckIn(userID string, goalID int64, req model.GoalCheckInRequest) (*model.GoalCheckIn, error) {
-	return nil, nil
+	goal, err := s.repo.GetGoalByID(goalID)
+	if err != nil {
+		if errors.Is(err, repository.ErrGoalNotFound) {
+			return nil, ErrGoalNotFound
+		}
+		return nil, err
+	}
+
+	conf := req.ConfidenceRating
+	if conf == "" {
+		conf = model.GoalConfidenceMedium
+	} else if conf != model.GoalConfidenceHigh && conf != model.GoalConfidenceMedium && conf != model.GoalConfidenceLow {
+		return nil, ErrInvalidConfidenceRating
+	}
+
+	status := req.Status
+	if status == "" {
+		status = model.GoalStatusOnTrack
+	}
+
+	prog := goal.ProgressPercentage
+	if req.ProgressPercentage != nil {
+		p := *req.ProgressPercentage
+		if p < 0 {
+			p = 0
+		}
+		if p > 100 {
+			p = 100
+		}
+		prog = p
+	}
+
+	checkIn := &model.GoalCheckIn{
+		GoalID:             goalID,
+		UserID:             userID,
+		ConfidenceRating:   conf,
+		Status:             status,
+		ProgressPercentage: prog,
+		Note:               req.Note,
+	}
+
+	id, err := s.repo.CreateGoalCheckIn(checkIn)
+	if err != nil {
+		return nil, err
+	}
+	checkIn.ID = id
+
+	// Update goal status and progress from check-in
+	goal.Status = status
+	goal.ProgressPercentage = prog
+	_ = s.repo.UpdateGoal(goal)
+
+	return checkIn, nil
 }
 
 func (s *goalServiceImpl) ListCheckIns(goalID int64) ([]model.GoalCheckIn, error) {
-	return nil, nil
+	if _, err := s.repo.GetGoalByID(goalID); err != nil {
+		if errors.Is(err, repository.ErrGoalNotFound) {
+			return nil, ErrGoalNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListGoalCheckIns(goalID)
 }
 
 func (s *goalServiceImpl) GetGoalTree(goalID int64) (*model.GoalTree, error) {
-	return nil, nil
+	tree, err := s.repo.GetGoalTree(goalID)
+	if err != nil {
+		if errors.Is(err, repository.ErrGoalNotFound) {
+			return nil, ErrGoalNotFound
+		}
+		return nil, err
+	}
+	return tree, nil
 }
 
 func (s *goalServiceImpl) GetGoalMetrics(workspaceID int64) (*model.GoalMetrics, error) {
-	return nil, nil
+	return s.repo.GetGoalMetrics(workspaceID)
 }
