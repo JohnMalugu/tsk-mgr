@@ -210,10 +210,54 @@ func (r *goalRepositoryImpl) ListGoals(filter model.GoalFilter) ([]*model.GoalSu
 }
 
 func (r *goalRepositoryImpl) UpdateGoal(goal *model.Goal) error {
+	goal.UpdatedAt = time.Now()
+
+	query := `
+	UPDATE goals
+	SET owner_user_id = ?, parent_goal_id = ?,
+		title = ?, description = ?, timeframe = ?,
+		start_date = ?, end_date = ?,
+		status = ?, progress_percentage = ?,
+		updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query,
+		goal.OwnerUserID, goal.ParentGoalID,
+		goal.Title, goal.Description, goal.Timeframe,
+		goal.StartDate, goal.EndDate,
+		goal.Status, goal.ProgressPercentage,
+		goal.UpdatedAt, goal.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrGoalNotFound
+	}
+
 	return nil
 }
 
 func (r *goalRepositoryImpl) DeleteGoal(id int64) error {
+	query := `DELETE FROM goals WHERE id = ?`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrGoalNotFound
+	}
+
 	return nil
 }
 
