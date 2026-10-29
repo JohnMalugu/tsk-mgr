@@ -29,3 +29,28 @@ type Goal struct {
 	CreatedAt          time.Time  `json:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at"`
 }
+
+// Key result metric type constants
+const (
+	KeyResultMetricNumerical  = "numerical"
+	KeyResultMetricPercentage = "percentage"
+	KeyResultMetricCurrency   = "currency"
+	KeyResultMetricBoolean    = "boolean"
+)
+
+// KeyResult represents a measurable outcome contributing to a Goal
+type KeyResult struct {
+	ID                 int64     `json:"id"`
+	GoalID             int64     `json:"goal_id"`
+	Title              string    `json:"title"`
+	Description        string    `json:"description,omitempty"`
+	MetricType         string    `json:"metric_type"`    // numerical, percentage, currency, boolean
+	Unit               string    `json:"unit,omitempty"` // e.g. "%", "$", "users", "ms"
+	StartValue         float64   `json:"start_value"`
+	TargetValue        float64   `json:"target_value"`
+	CurrentValue       float64   `json:"current_value"`
+	Weight             float64   `json:"weight"` // default 1.0
+	ProgressPercentage float64   `json:"progress_percentage"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
