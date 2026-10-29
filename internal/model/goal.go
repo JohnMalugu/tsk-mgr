@@ -72,3 +72,22 @@ type LinkedTaskInfo struct {
 	Completed bool      `json:"completed"`
 	LinkedAt  time.Time `json:"linked_at"`
 }
+
+// Goal check-in confidence ratings
+const (
+	GoalConfidenceHigh   = "high"
+	GoalConfidenceMedium = "medium"
+	GoalConfidenceLow    = "low"
+)
+
+// GoalCheckIn records a periodic status update, confidence level, and progress note
+type GoalCheckIn struct {
+	ID                 int64     `json:"id"`
+	GoalID             int64     `json:"goal_id"`
+	UserID             string    `json:"user_id"`
+	ConfidenceRating   string    `json:"confidence_rating"` // high, medium, low
+	Status             string    `json:"status"`            // on_track, behind, at_risk
+	ProgressPercentage float64   `json:"progress_percentage"`
+	Note               string    `json:"note"`
+	CreatedAt          time.Time `json:"created_at"`
+}
