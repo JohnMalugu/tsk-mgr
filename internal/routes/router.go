@@ -1152,6 +1152,24 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Goals & Key Results (OKR) Engine (/v2/goals)
+	if r.URL.Path == "/v2/goals" {
+		handler.GlobalGoalHandler.HandleGoalsRoot(w, r)
+		return
+	}
+	if r.URL.Path == "/v2/goals/metrics" {
+		handler.GlobalGoalHandler.HandleGoalMetrics(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/v2/goals/key-results/") {
+		handler.GlobalGoalHandler.HandleKeyResultsRoot(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/v2/goals/") {
+		handler.GlobalGoalHandler.HandleGoalByID(w, r)
+		return
+	}
+
 	if r.URL.Path == "/tasks/summary" {
 
 		handler.HandleTaskSummary(w, r)

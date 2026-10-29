@@ -111,6 +111,10 @@ func main() {
 	slaSvc := service.NewSlaService(slaRepo, taskRepo)
 	handler.InitSlaHandler(slaSvc)
 
+	goalRepo := repository.NewGoalRepository(sqliteDB)
+	goalSvc := service.NewGoalService(goalRepo, taskRepo)
+	handler.InitGoalHandler(goalSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
