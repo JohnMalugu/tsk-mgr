@@ -496,11 +496,74 @@ func (r *goalRepositoryImpl) ListLinkedTasks(keyResultID int64) ([]model.LinkedT
 }
 
 func (r *goalRepositoryImpl) CreateGoalCheckIn(checkIn *model.GoalCheckIn) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if checkIn.CreatedAt.IsZero() {
+		checkIn.CreatedAt = now
+	}
+	if checkIn.ConfidenceRating == "" {
+		checkIn.ConfidenceRating = model.GoalConfidenceMedium
+	}
+	if checkIn.Status == "" {
+		checkIn.Status = model.GoalStatusOnTrack
+	}
+
+	query := `
+	INSERT INTO goal_check_ins (
+		goal_id, user_id, confidence_rating, status,
+		progress_percentage, note, created_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query,
+		checkIn.GoalID, checkIn.UserID, checkIn.ConfidenceRating, checkIn.Status,
+		checkIn.ProgressPercentage, checkIn.Note, checkIn.CreatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	checkIn.ID = id
+	return id, nil
 }
 
 func (r *goalRepositoryImpl) ListGoalCheckIns(goalID int64) ([]model.GoalCheckIn, error) {
-	return nil, nil
+	query := `
+	SELECT id, goal_id, user_id, confidence_rating, status,
+		progress_percentage, note, created_at
+	FROM goal_check_ins
+	WHERE goal_id = ?
+	ORDER BY created_at DESC, id DESC`
+
+	rows, err := r.db.Query(query, goalID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var checkIns []model.GoalCheckIn
+	for rows.Next() {
+		var ci model.GoalCheckIn
+		if err := rows.Scan(
+			&ci.ID, &ci.GoalID, &ci.UserID, &ci.ConfidenceRating, &ci.Status,
+			&ci.ProgressPercentage, &ci.Note, &ci.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		checkIns = append(checkIns, ci)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if checkIns == nil {
+		checkIns = []model.GoalCheckIn{}
+	}
+
+	return checkIns, nil
 }
 
 func (r *goalRepositoryImpl) GetGoalTree(goalID int64) (*model.GoalTree, error) {
