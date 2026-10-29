@@ -425,15 +425,74 @@ func (r *goalRepositoryImpl) DeleteKeyResult(id int64) error {
 }
 
 func (r *goalRepositoryImpl) LinkTaskToKeyResult(keyResultID int64, taskID int) error {
-	return nil
+	var count int
+	err := r.db.QueryRow("SELECT COUNT(*) FROM key_result_tasks WHERE key_result_id = ? AND task_id = ?", keyResultID, taskID).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return ErrTaskAlreadyLinked
+	}
+
+	query := `INSERT INTO key_result_tasks (key_result_id, task_id, created_at) VALUES (?, ?, ?)`
+	_, err = r.db.Exec(query, keyResultID, taskID, time.Now())
+	return err
 }
 
 func (r *goalRepositoryImpl) UnlinkTask(keyResultID int64, taskID int) error {
+	query := `DELETE FROM key_result_tasks WHERE key_result_id = ? AND task_id = ?`
+	res, err := r.db.Exec(query, keyResultID, taskID)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrKeyResultTaskLinkNF
+	}
+
 	return nil
 }
 
 func (r *goalRepositoryImpl) ListLinkedTasks(keyResultID int64) ([]model.LinkedTaskInfo, error) {
-	return nil, nil
+	query := `
+	SELECT t.id, t.title, t.status, t.priority, t.completed, krt.created_at
+	FROM key_result_tasks krt
+	JOIN tasks t ON krt.task_id = t.id
+	WHERE krt.key_result_id = ?
+	ORDER BY krt.created_at ASC`
+
+	rows, err := r.db.Query(query, keyResultID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []model.LinkedTaskInfo
+	for rows.Next() {
+		var (
+			info      model.LinkedTaskInfo
+			completed int
+		)
+		if err := rows.Scan(&info.TaskID, &info.Title, &info.Status, &info.Priority, &completed, &info.LinkedAt); err != nil {
+			return nil, err
+		}
+		info.Completed = (completed == 1)
+		tasks = append(tasks, info)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if tasks == nil {
+		tasks = []model.LinkedTaskInfo{}
+	}
+
+	return tasks, nil
 }
 
 func (r *goalRepositoryImpl) CreateGoalCheckIn(checkIn *model.GoalCheckIn) (int64, error) {
