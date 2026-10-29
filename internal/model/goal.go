@@ -115,3 +115,27 @@ type UpdateGoalRequest struct {
 	Status             *string    `json:"status,omitempty"`
 	ProgressPercentage *float64   `json:"progress_percentage,omitempty"`
 }
+
+// CreateKeyResultRequest represents payload for adding a measurable key result to a goal
+type CreateKeyResultRequest struct {
+	Title        string   `json:"title"`
+	Description  string   `json:"description,omitempty"`
+	MetricType   string   `json:"metric_type"` // numerical, percentage, currency, boolean
+	Unit         string   `json:"unit,omitempty"`
+	StartValue   float64  `json:"start_value"`
+	TargetValue  float64  `json:"target_value"`
+	CurrentValue *float64 `json:"current_value,omitempty"`
+	Weight       *float64 `json:"weight,omitempty"`
+}
+
+// UpdateKeyResultRequest represents payload for updating key result metrics and values
+type UpdateKeyResultRequest struct {
+	Title        *string  `json:"title,omitempty"`
+	Description  *string  `json:"description,omitempty"`
+	MetricType   *string  `json:"metric_type,omitempty"`
+	Unit         *string  `json:"unit,omitempty"`
+	StartValue   *float64 `json:"start_value,omitempty"`
+	TargetValue  *float64 `json:"target_value,omitempty"`
+	CurrentValue *float64 `json:"current_value,omitempty"`
+	Weight       *float64 `json:"weight,omitempty"`
+}
