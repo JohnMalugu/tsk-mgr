@@ -91,3 +91,27 @@ type GoalCheckIn struct {
 	Note               string    `json:"note"`
 	CreatedAt          time.Time `json:"created_at"`
 }
+
+// CreateGoalRequest represents payload for provisioning a new goal
+type CreateGoalRequest struct {
+	WorkspaceID  int64      `json:"workspace_id"`
+	ParentGoalID *int64     `json:"parent_goal_id,omitempty"`
+	Title        string     `json:"title"`
+	Description  string     `json:"description,omitempty"`
+	Timeframe    string     `json:"timeframe"` // e.g. "Q1 2026"
+	StartDate    *time.Time `json:"start_date,omitempty"`
+	EndDate      *time.Time `json:"end_date,omitempty"`
+}
+
+// UpdateGoalRequest represents payload for modifying goal attributes
+type UpdateGoalRequest struct {
+	ParentGoalID       *int64     `json:"parent_goal_id,omitempty"`
+	OwnerUserID        *string    `json:"owner_user_id,omitempty"`
+	Title              *string    `json:"title,omitempty"`
+	Description        *string    `json:"description,omitempty"`
+	Timeframe          *string    `json:"timeframe,omitempty"`
+	StartDate          *time.Time `json:"start_date,omitempty"`
+	EndDate            *time.Time `json:"end_date,omitempty"`
+	Status             *string    `json:"status,omitempty"`
+	ProgressPercentage *float64   `json:"progress_percentage,omitempty"`
+}
