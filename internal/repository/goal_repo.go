@@ -373,10 +373,54 @@ func (r *goalRepositoryImpl) ListKeyResults(goalID int64) ([]model.KeyResult, er
 }
 
 func (r *goalRepositoryImpl) UpdateKeyResult(kr *model.KeyResult) error {
+	kr.UpdatedAt = time.Now()
+
+	query := `
+	UPDATE key_results
+	SET title = ?, description = ?,
+		metric_type = ?, unit = ?,
+		start_value = ?, target_value = ?, current_value = ?,
+		weight = ?, progress_percentage = ?,
+		updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query,
+		kr.Title, kr.Description,
+		kr.MetricType, kr.Unit,
+		kr.StartValue, kr.TargetValue, kr.CurrentValue,
+		kr.Weight, kr.ProgressPercentage,
+		kr.UpdatedAt, kr.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrKeyResultNotFound
+	}
+
 	return nil
 }
 
 func (r *goalRepositoryImpl) DeleteKeyResult(id int64) error {
+	query := `DELETE FROM key_results WHERE id = ?`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrKeyResultNotFound
+	}
+
 	return nil
 }
 
