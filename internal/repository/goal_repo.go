@@ -567,9 +567,111 @@ func (r *goalRepositoryImpl) ListGoalCheckIns(goalID int64) ([]model.GoalCheckIn
 }
 
 func (r *goalRepositoryImpl) GetGoalTree(goalID int64) (*model.GoalTree, error) {
-	return nil, nil
+	root, err := r.GetGoalByID(goalID)
+	if err != nil {
+		return nil, err
+	}
+
+	krs, err := r.ListKeyResults(goalID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := `
+	SELECT id
+	FROM goals
+	WHERE parent_goal_id = ?
+	ORDER BY created_at ASC`
+
+	rows, err := r.db.Query(query, goalID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var subGoalIDs []int64
+	for rows.Next() {
+		var subID int64
+		if err := rows.Scan(&subID); err != nil {
+			return nil, err
+		}
+		subGoalIDs = append(subGoalIDs, subID)
+	}
+
+	var subTrees []*model.GoalTree
+	for _, subID := range subGoalIDs {
+		subTree, err := r.GetGoalTree(subID)
+		if err == nil && subTree != nil {
+			subTrees = append(subTrees, subTree)
+		}
+	}
+
+	if subTrees == nil {
+		subTrees = []*model.GoalTree{}
+	}
+
+	return &model.GoalTree{
+		Goal:       root,
+		KeyResults: krs,
+		SubGoals:   subTrees,
+	}, nil
 }
 
 func (r *goalRepositoryImpl) GetGoalMetrics(workspaceID int64) (*model.GoalMetrics, error) {
-	return nil, nil
+	query := `
+	SELECT id, status, progress_percentage
+	FROM goals
+	WHERE workspace_id = ?`
+
+	rows, err := r.db.Query(query, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	metrics := &model.GoalMetrics{
+		WorkspaceID:        workspaceID,
+		StatusDistribution: make(map[string]int),
+	}
+
+	var totalProgress float64
+
+	for rows.Next() {
+		var (
+			id       int64
+			status   string
+			progress float64
+		)
+		if err := rows.Scan(&id, &status, &progress); err != nil {
+			return nil, err
+		}
+
+		metrics.TotalGoals++
+		metrics.StatusDistribution[status]++
+		totalProgress += progress
+
+		switch status {
+		case model.GoalStatusAchieved:
+			metrics.AchievedGoals++
+		case model.GoalStatusOnTrack:
+			metrics.OnTrackGoals++
+		case model.GoalStatusBehind:
+			metrics.BehindGoals++
+		case model.GoalStatusAtRisk:
+			metrics.AtRiskGoals++
+		case model.GoalStatusDraft:
+			metrics.DraftGoals++
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if metrics.TotalGoals > 0 {
+		metrics.AverageProgress = totalProgress / float64(metrics.TotalGoals)
+		metrics.AchievementRate = (float64(metrics.AchievedGoals) / float64(metrics.TotalGoals)) * 100.0
+	}
+
+	return metrics, nil
 }
