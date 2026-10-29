@@ -261,16 +261,115 @@ func (r *goalRepositoryImpl) DeleteGoal(id int64) error {
 	return nil
 }
 
+func scanKeyResult(scanner interface{ Scan(dest ...interface{}) error }) (*model.KeyResult, error) {
+	var kr model.KeyResult
+	err := scanner.Scan(
+		&kr.ID, &kr.GoalID, &kr.Title, &kr.Description,
+		&kr.MetricType, &kr.Unit,
+		&kr.StartValue, &kr.TargetValue, &kr.CurrentValue,
+		&kr.Weight, &kr.ProgressPercentage,
+		&kr.CreatedAt, &kr.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrKeyResultNotFound
+		}
+		return nil, err
+	}
+	return &kr, nil
+}
+
 func (r *goalRepositoryImpl) CreateKeyResult(kr *model.KeyResult) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if kr.CreatedAt.IsZero() {
+		kr.CreatedAt = now
+	}
+	if kr.UpdatedAt.IsZero() {
+		kr.UpdatedAt = now
+	}
+	if kr.Weight <= 0 {
+		kr.Weight = 1.0
+	}
+	if kr.MetricType == "" {
+		kr.MetricType = model.KeyResultMetricNumerical
+	}
+
+	query := `
+	INSERT INTO key_results (
+		goal_id, title, description,
+		metric_type, unit,
+		start_value, target_value, current_value,
+		weight, progress_percentage,
+		created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query,
+		kr.GoalID, kr.Title, kr.Description,
+		kr.MetricType, kr.Unit,
+		kr.StartValue, kr.TargetValue, kr.CurrentValue,
+		kr.Weight, kr.ProgressPercentage,
+		kr.CreatedAt, kr.UpdatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	kr.ID = id
+	return id, nil
 }
 
 func (r *goalRepositoryImpl) GetKeyResultByID(id int64) (*model.KeyResult, error) {
-	return nil, nil
+	query := `
+	SELECT id, goal_id, title, description,
+		metric_type, unit,
+		start_value, target_value, current_value,
+		weight, progress_percentage,
+		created_at, updated_at
+	FROM key_results
+	WHERE id = ?`
+
+	return scanKeyResult(r.db.QueryRow(query, id))
 }
 
 func (r *goalRepositoryImpl) ListKeyResults(goalID int64) ([]model.KeyResult, error) {
-	return nil, nil
+	query := `
+	SELECT id, goal_id, title, description,
+		metric_type, unit,
+		start_value, target_value, current_value,
+		weight, progress_percentage,
+		created_at, updated_at
+	FROM key_results
+	WHERE goal_id = ?
+	ORDER BY id ASC`
+
+	rows, err := r.db.Query(query, goalID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []model.KeyResult
+	for rows.Next() {
+		kr, err := scanKeyResult(rows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, *kr)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if results == nil {
+		results = []model.KeyResult{}
+	}
+
+	return results, nil
 }
 
 func (r *goalRepositoryImpl) UpdateKeyResult(kr *model.KeyResult) error {
