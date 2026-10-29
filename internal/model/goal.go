@@ -139,3 +139,34 @@ type UpdateKeyResultRequest struct {
 	CurrentValue *float64 `json:"current_value,omitempty"`
 	Weight       *float64 `json:"weight,omitempty"`
 }
+
+// GoalCheckInRequest represents payload for submitting a progress check-in update
+type GoalCheckInRequest struct {
+	ConfidenceRating   string   `json:"confidence_rating"` // high, medium, low
+	Status             string   `json:"status"`            // on_track, behind, at_risk
+	ProgressPercentage *float64 `json:"progress_percentage,omitempty"`
+	Note               string   `json:"note"`
+}
+
+// LinkTaskToKeyResultRequest represents payload for linking a task to a key result
+type LinkTaskToKeyResultRequest struct {
+	TaskID int `json:"task_id"`
+}
+
+// GoalFilter specifies search and listing criteria for goals
+type GoalFilter struct {
+	WorkspaceID  *int64 `json:"workspace_id,omitempty"`
+	OwnerUserID  string `json:"owner_user_id,omitempty"`
+	Status       string `json:"status,omitempty"`
+	Timeframe    string `json:"timeframe,omitempty"`
+	ParentGoalID *int64 `json:"parent_goal_id,omitempty"`
+	Limit        int    `json:"limit,omitempty"`
+	Offset       int    `json:"offset,omitempty"`
+}
+
+// GoalTree provides hierarchical representation of an objective and its sub-goals
+type GoalTree struct {
+	Goal       *Goal       `json:"goal"`
+	KeyResults []KeyResult `json:"key_results"`
+	SubGoals   []*GoalTree `json:"sub_goals,omitempty"`
+}
