@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
@@ -48,12 +49,93 @@ func NewGoalRepository(db *sql.DB) GoalRepository {
 	return &goalRepositoryImpl{db: db}
 }
 
+func scanGoal(scanner interface{ Scan(dest ...interface{}) error }) (*model.Goal, error) {
+	var (
+		g            model.Goal
+		parentGoalID sql.NullInt64
+		startDate    sql.NullTime
+		endDate      sql.NullTime
+	)
+
+	err := scanner.Scan(
+		&g.ID, &g.WorkspaceID, &g.OwnerUserID, &parentGoalID,
+		&g.Title, &g.Description, &g.Timeframe,
+		&startDate, &endDate,
+		&g.Status, &g.ProgressPercentage,
+		&g.CreatedAt, &g.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrGoalNotFound
+		}
+		return nil, err
+	}
+
+	if parentGoalID.Valid {
+		pID := parentGoalID.Int64
+		g.ParentGoalID = &pID
+	}
+	if startDate.Valid {
+		g.StartDate = &startDate.Time
+	}
+	if endDate.Valid {
+		g.EndDate = &endDate.Time
+	}
+
+	return &g, nil
+}
+
 func (r *goalRepositoryImpl) CreateGoal(goal *model.Goal) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if goal.CreatedAt.IsZero() {
+		goal.CreatedAt = now
+	}
+	if goal.UpdatedAt.IsZero() {
+		goal.UpdatedAt = now
+	}
+	if goal.Status == "" {
+		goal.Status = model.GoalStatusDraft
+	}
+
+	query := `
+	INSERT INTO goals (
+		workspace_id, owner_user_id, parent_goal_id,
+		title, description, timeframe,
+		start_date, end_date,
+		status, progress_percentage,
+		created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query,
+		goal.WorkspaceID, goal.OwnerUserID, goal.ParentGoalID,
+		goal.Title, goal.Description, goal.Timeframe,
+		goal.StartDate, goal.EndDate,
+		goal.Status, goal.ProgressPercentage,
+		goal.CreatedAt, goal.UpdatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	goal.ID = id
+	return id, nil
 }
 
 func (r *goalRepositoryImpl) GetGoalByID(id int64) (*model.Goal, error) {
-	return nil, nil
+	query := `
+	SELECT id, workspace_id, owner_user_id, parent_goal_id,
+		title, description, timeframe,
+		start_date, end_date,
+		status, progress_percentage,
+		created_at, updated_at
+	FROM goals
+	WHERE id = ?`
+
+	return scanGoal(r.db.QueryRow(query, id))
 }
 
 func (r *goalRepositoryImpl) ListGoals(filter model.GoalFilter) ([]*model.GoalSummary, error) {
