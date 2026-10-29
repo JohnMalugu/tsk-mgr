@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
+	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
 )
 
@@ -163,6 +164,12 @@ func (h *GoalHandler) HandleGoalByID(w http.ResponseWriter, r *http.Request) {
 			}
 			writeGoalError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
+		case "key-results":
+			h.HandleGoalKeyResults(w, r, id)
+			return
+		case "check-ins":
+			h.HandleGoalCheckIns(w, r, id)
+			return
 		}
 	}
 
@@ -248,4 +255,284 @@ func (h *GoalHandler) HandleGetGoalTree(w http.ResponseWriter, r *http.Request, 
 	}
 
 	writeGoalJSON(w, http.StatusOK, tree)
+}
+
+// HandleGoalKeyResults handles GET and POST for /v2/goals/{id}/key-results
+func (h *GoalHandler) HandleGoalKeyResults(w http.ResponseWriter, r *http.Request, goalID int64) {
+	switch r.Method {
+	case http.MethodGet:
+		krs, err := h.svc.ListKeyResults(goalID)
+		if err != nil {
+			if errors.Is(err, service.ErrGoalNotFound) {
+				writeGoalError(w, http.StatusNotFound, "Goal not found")
+				return
+			}
+			writeGoalError(w, http.StatusInternalServerError, "Failed to list key results: "+err.Error())
+			return
+		}
+		if krs == nil {
+			krs = []model.KeyResult{}
+		}
+		writeGoalJSON(w, http.StatusOK, krs)
+
+	case http.MethodPost:
+		var req model.CreateKeyResultRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeGoalError(w, http.StatusBadRequest, "Invalid request body: "+err.Error())
+			return
+		}
+
+		kr, err := h.svc.CreateKeyResult(goalID, req)
+		if err != nil {
+			switch {
+			case errors.Is(err, service.ErrGoalNotFound):
+				writeGoalError(w, http.StatusNotFound, "Goal not found")
+			case errors.Is(err, service.ErrKeyResultTitleRequired),
+				errors.Is(err, service.ErrInvalidMetricType),
+				errors.Is(err, service.ErrInvalidTargetValue):
+				writeGoalError(w, http.StatusBadRequest, err.Error())
+			default:
+				writeGoalError(w, http.StatusInternalServerError, "Failed to create key result: "+err.Error())
+			}
+			return
+		}
+		writeGoalJSON(w, http.StatusCreated, kr)
+
+	default:
+		writeGoalError(w, http.StatusMethodNotAllowed, "Method not allowed")
+	}
+}
+
+// HandleKeyResultsRoot routes /v2/goals/key-results/...
+func (h *GoalHandler) HandleKeyResultsRoot(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/goals/key-results/")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) == 0 || parts[0] == "" {
+		writeGoalError(w, http.StatusBadRequest, "Missing key result ID in path")
+		return
+	}
+
+	krID, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		writeGoalError(w, http.StatusBadRequest, "Invalid key result ID format")
+		return
+	}
+
+	if len(parts) == 1 {
+		h.HandleKeyResultByID(w, r, krID)
+		return
+	}
+
+	if parts[1] == "tasks" {
+		if len(parts) == 2 {
+			h.HandleKeyResultTasks(w, r, krID)
+			return
+		}
+		if len(parts) == 3 && r.Method == http.MethodDelete {
+			taskID, err := strconv.Atoi(parts[2])
+			if err != nil {
+				writeGoalError(w, http.StatusBadRequest, "Invalid task ID format")
+				return
+			}
+			h.HandleUnlinkTask(w, r, krID, taskID)
+			return
+		}
+	}
+
+	writeGoalError(w, http.StatusNotFound, "Resource not found")
+}
+
+// HandleKeyResultByID handles GET, PUT/PATCH, and DELETE for /v2/goals/key-results/{id}
+func (h *GoalHandler) HandleKeyResultByID(w http.ResponseWriter, r *http.Request, krID int64) {
+	switch r.Method {
+	case http.MethodGet:
+		kr, err := h.svc.GetKeyResult(krID)
+		if err != nil {
+			if errors.Is(err, service.ErrKeyResultNotFound) {
+				writeGoalError(w, http.StatusNotFound, "Key result not found")
+				return
+			}
+			writeGoalError(w, http.StatusInternalServerError, "Failed to retrieve key result: "+err.Error())
+			return
+		}
+		writeGoalJSON(w, http.StatusOK, kr)
+
+	case http.MethodPut, http.MethodPatch:
+		var req model.UpdateKeyResultRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeGoalError(w, http.StatusBadRequest, "Invalid request body: "+err.Error())
+			return
+		}
+
+		kr, err := h.svc.UpdateKeyResult(krID, req)
+		if err != nil {
+			switch {
+			case errors.Is(err, service.ErrKeyResultNotFound):
+				writeGoalError(w, http.StatusNotFound, "Key result not found")
+			case errors.Is(err, service.ErrKeyResultTitleRequired),
+				errors.Is(err, service.ErrInvalidMetricType),
+				errors.Is(err, service.ErrInvalidTargetValue):
+				writeGoalError(w, http.StatusBadRequest, err.Error())
+			default:
+				writeGoalError(w, http.StatusInternalServerError, "Failed to update key result: "+err.Error())
+			}
+			return
+		}
+		writeGoalJSON(w, http.StatusOK, kr)
+
+	case http.MethodDelete:
+		if err := h.svc.DeleteKeyResult(krID); err != nil {
+			if errors.Is(err, service.ErrKeyResultNotFound) {
+				writeGoalError(w, http.StatusNotFound, "Key result not found")
+				return
+			}
+			writeGoalError(w, http.StatusInternalServerError, "Failed to delete key result: "+err.Error())
+			return
+		}
+		writeGoalJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"message": "Key result deleted successfully",
+		})
+
+	default:
+		writeGoalError(w, http.StatusMethodNotAllowed, "Method not allowed")
+	}
+}
+
+// HandleKeyResultTasks handles GET and POST for /v2/goals/key-results/{id}/tasks
+func (h *GoalHandler) HandleKeyResultTasks(w http.ResponseWriter, r *http.Request, krID int64) {
+	switch r.Method {
+	case http.MethodGet:
+		tasks, err := h.svc.ListLinkedTasks(krID)
+		if err != nil {
+			if errors.Is(err, service.ErrKeyResultNotFound) {
+				writeGoalError(w, http.StatusNotFound, "Key result not found")
+				return
+			}
+			writeGoalError(w, http.StatusInternalServerError, "Failed to list linked tasks: "+err.Error())
+			return
+		}
+		if tasks == nil {
+			tasks = []model.LinkedTaskInfo{}
+		}
+		writeGoalJSON(w, http.StatusOK, tasks)
+
+	case http.MethodPost:
+		var req model.LinkTaskToKeyResultRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeGoalError(w, http.StatusBadRequest, "Invalid request body: "+err.Error())
+			return
+		}
+
+		if err := h.svc.LinkTask(krID, req.TaskID); err != nil {
+			switch {
+			case errors.Is(err, service.ErrKeyResultNotFound):
+				writeGoalError(w, http.StatusNotFound, "Key result not found")
+			case errors.Is(err, service.ErrTaskNotFound):
+				writeGoalError(w, http.StatusNotFound, "Task not found")
+			case errors.Is(err, repository.ErrTaskAlreadyLinked):
+				writeGoalError(w, http.StatusBadRequest, err.Error())
+			default:
+				writeGoalError(w, http.StatusInternalServerError, "Failed to link task: "+err.Error())
+			}
+			return
+		}
+
+		writeGoalJSON(w, http.StatusCreated, map[string]interface{}{
+			"success": true,
+			"message": "Task linked successfully",
+		})
+
+	default:
+		writeGoalError(w, http.StatusMethodNotAllowed, "Method not allowed")
+	}
+}
+
+// HandleUnlinkTask handles DELETE /v2/goals/key-results/{id}/tasks/{taskId}
+func (h *GoalHandler) HandleUnlinkTask(w http.ResponseWriter, r *http.Request, krID int64, taskID int) {
+	if err := h.svc.UnlinkTask(krID, taskID); err != nil {
+		switch {
+		case errors.Is(err, service.ErrKeyResultNotFound):
+			writeGoalError(w, http.StatusNotFound, "Key result not found")
+		case errors.Is(err, repository.ErrKeyResultTaskLinkNF):
+			writeGoalError(w, http.StatusNotFound, "Task link not found")
+		default:
+			writeGoalError(w, http.StatusInternalServerError, "Failed to unlink task: "+err.Error())
+		}
+		return
+	}
+
+	writeGoalJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Task unlinked successfully",
+	})
+}
+
+// HandleGoalCheckIns handles GET and POST for /v2/goals/{id}/check-ins
+func (h *GoalHandler) HandleGoalCheckIns(w http.ResponseWriter, r *http.Request, goalID int64) {
+	switch r.Method {
+	case http.MethodGet:
+		checkIns, err := h.svc.ListCheckIns(goalID)
+		if err != nil {
+			if errors.Is(err, service.ErrGoalNotFound) {
+				writeGoalError(w, http.StatusNotFound, "Goal not found")
+				return
+			}
+			writeGoalError(w, http.StatusInternalServerError, "Failed to list check-ins: "+err.Error())
+			return
+		}
+		if checkIns == nil {
+			checkIns = []model.GoalCheckIn{}
+		}
+		writeGoalJSON(w, http.StatusOK, checkIns)
+
+	case http.MethodPost:
+		userID := getGoalUser(r)
+
+		var req model.GoalCheckInRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeGoalError(w, http.StatusBadRequest, "Invalid request body: "+err.Error())
+			return
+		}
+
+		checkIn, err := h.svc.CreateCheckIn(userID, goalID, req)
+		if err != nil {
+			switch {
+			case errors.Is(err, service.ErrGoalNotFound):
+				writeGoalError(w, http.StatusNotFound, "Goal not found")
+			case errors.Is(err, service.ErrInvalidConfidenceRating):
+				writeGoalError(w, http.StatusBadRequest, err.Error())
+			default:
+				writeGoalError(w, http.StatusInternalServerError, "Failed to record check-in: "+err.Error())
+			}
+			return
+		}
+		writeGoalJSON(w, http.StatusCreated, checkIn)
+
+	default:
+		writeGoalError(w, http.StatusMethodNotAllowed, "Method not allowed")
+	}
+}
+
+// HandleGoalMetrics handles GET /v2/goals/metrics
+func (h *GoalHandler) HandleGoalMetrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeGoalError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	var workspaceID int64 = 1
+	if wsStr := r.URL.Query().Get("workspace_id"); wsStr != "" {
+		if wsID, err := strconv.ParseInt(wsStr, 10, 64); err == nil && wsID > 0 {
+			workspaceID = wsID
+		}
+	}
+
+	metrics, err := h.svc.GetGoalMetrics(workspaceID)
+	if err != nil {
+		writeGoalError(w, http.StatusInternalServerError, "Failed to retrieve goal metrics: "+err.Error())
+		return
+	}
+
+	writeGoalJSON(w, http.StatusOK, metrics)
 }
