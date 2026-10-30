@@ -475,12 +475,12 @@ func (r *goalRepositoryImpl) ListLinkedTasks(keyResultID int64) ([]model.LinkedT
 	for rows.Next() {
 		var (
 			info      model.LinkedTaskInfo
-			completed int
+			completed bool
 		)
 		if err := rows.Scan(&info.TaskID, &info.Title, &info.Status, &info.Priority, &completed, &info.LinkedAt); err != nil {
 			return nil, err
 		}
-		info.Completed = (completed == 1)
+		info.Completed = completed
 		tasks = append(tasks, info)
 	}
 
