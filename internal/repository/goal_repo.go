@@ -49,7 +49,9 @@ func NewGoalRepository(db *sql.DB) GoalRepository {
 	return &goalRepositoryImpl{db: db}
 }
 
-func scanGoal(scanner interface{ Scan(dest ...interface{}) error }) (*model.Goal, error) {
+func scanGoal(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.Goal, error) {
 	var (
 		g            model.Goal
 		parentGoalID sql.NullInt64
@@ -261,7 +263,9 @@ func (r *goalRepositoryImpl) DeleteGoal(id int64) error {
 	return nil
 }
 
-func scanKeyResult(scanner interface{ Scan(dest ...interface{}) error }) (*model.KeyResult, error) {
+func scanKeyResult(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.KeyResult, error) {
 	var kr model.KeyResult
 	err := scanner.Scan(
 		&kr.ID, &kr.GoalID, &kr.Title, &kr.Description,

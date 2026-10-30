@@ -165,6 +165,15 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `POST /v2/slas/tasks/{taskId}/evaluate` to trigger on-demand SLA evaluation, transition stage fulfillment, execute escalation mitigations, and record breach events
 - `GET /v2/slas/breaches?workspace_id={id}&task_id={id}&breach_type={response|resolution}` to query chronological breach audit trail logs
 - `GET /v2/slas/metrics?workspace_id={id}` for workspace compliance rates, met vs. breached distribution, and response time analytics
+- `GET|POST /v2/goals` to list goals with multi-criteria filters (`workspace_id`, `owner_user_id`, `status`, `timeframe`, `parent_goal_id`) or provision a new strategic objective
+- `GET|PUT|PATCH|DELETE /v2/goals/{id}` to fetch goal details (with embedded key results and latest check-in), update goal parameters, or delete a goal
+- `GET /v2/goals/{id}/tree` to retrieve the complete cascading hierarchical goal tree with nested sub-goals and child key results
+- `GET|POST /v2/goals/{id}/key-results` to list key results or define a new measurable key result with typed metrics (`numerical`, `percentage`, `currency`, `boolean`), start/target/current values, and weights
+- `GET|PUT|PATCH|DELETE /v2/goals/key-results/{id}` to inspect key result details, update values/metrics (triggering dynamic goal progress recalculation), or delete a key result
+- `GET|POST /v2/goals/key-results/{id}/tasks` to view linked tasks or link a task to a key result with automatic task completion progress synchronization
+- `DELETE /v2/goals/key-results/{id}/tasks/{taskId}` to unlink a task from a key result and re-sync progress
+- `GET|POST /v2/goals/{id}/check-ins` to list chronological progress check-ins or submit a new status update with confidence ratings (`high`, `medium`, `low`), notes, and progress percentage
+- `GET /v2/goals/metrics?workspace_id={id}` for workspace OKR health analytics, achievement rates, status distribution (`draft`, `active`, `on_track`, `behind`, `at_risk`, `achieved`, `canceled`), and average progress
 
 ## Current limitations
 
