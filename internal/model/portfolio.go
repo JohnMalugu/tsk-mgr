@@ -28,3 +28,32 @@ type Portfolio struct {
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
+
+// Portfolio project priority constants
+const (
+	PortfolioProjectPriorityLow      = "low"
+	PortfolioProjectPriorityMedium   = "medium"
+	PortfolioProjectPriorityHigh     = "high"
+	PortfolioProjectPriorityCritical = "critical"
+)
+
+// PortfolioProject represents a project mapped into a portfolio
+type PortfolioProject struct {
+	ID              int64     `json:"id"`
+	PortfolioID     int64     `json:"portfolio_id"`
+	ProjectID       int       `json:"project_id"`
+	Priority        string    `json:"priority"`        // low, medium, high, critical
+	StatusOverride  string    `json:"status_override"` // on_track, at_risk, off_track, completed
+	AllocatedBudget float64   `json:"allocated_budget"`
+	SpentAmount     float64   `json:"spent_amount"`
+	OrderIndex      int       `json:"order_index"`
+	CreatedAt       time.Time `json:"created_at"`
+
+	// Enriched fields from projects & tasks
+	ProjectName        string  `json:"project_name,omitempty"`
+	ProjectColor       string  `json:"project_color,omitempty"`
+	TaskCount          int     `json:"task_count,omitempty"`
+	CompletedTaskCount int     `json:"completed_task_count,omitempty"`
+	ProgressPercentage float64 `json:"progress_percentage,omitempty"`
+}
+
