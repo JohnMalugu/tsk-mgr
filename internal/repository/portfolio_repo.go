@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"errors"
+	"math"
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -161,7 +162,115 @@ func (r *portfolioRepositoryImpl) GetPortfolioByID(id int64) (*model.Portfolio, 
 }
 
 func (r *portfolioRepositoryImpl) ListPortfolios(filter model.PortfolioFilter) ([]*model.PortfolioSummary, error) {
-	return nil, nil
+	baseQuery := `
+	SELECT 
+		p.id, p.workspace_id, p.name, p.color, p.owner_user_id, p.status, p.target_date,
+		p.budget_currency, p.budget_amount, p.actual_cost, p.created_at, p.updated_at,
+		COUNT(DISTINCT pp.id) AS project_count,
+		COUNT(DISTINCT pm.id) AS milestone_count,
+		COUNT(DISTINCT CASE WHEN pm.status = 'completed' THEN pm.id END) AS completed_milestones
+	FROM portfolios p
+	LEFT JOIN portfolio_projects pp ON p.id = pp.portfolio_id
+	LEFT JOIN portfolio_milestones pm ON p.id = pm.portfolio_id
+	WHERE 1=1`
+
+	var args []interface{}
+
+	if filter.WorkspaceID != nil && *filter.WorkspaceID > 0 {
+		baseQuery += ` AND p.workspace_id = ?`
+		args = append(args, *filter.WorkspaceID)
+	}
+	if filter.OwnerUserID != "" {
+		baseQuery += ` AND p.owner_user_id = ?`
+		args = append(args, filter.OwnerUserID)
+	}
+	if filter.Status != "" {
+		baseQuery += ` AND p.status = ?`
+		args = append(args, filter.Status)
+	}
+	if filter.Search != "" {
+		baseQuery += ` AND (p.name LIKE ? OR p.description LIKE ?)`
+		searchTerm := "%" + filter.Search + "%"
+		args = append(args, searchTerm, searchTerm)
+	}
+
+	baseQuery += ` GROUP BY p.id ORDER BY p.updated_at DESC`
+
+	limit := filter.Limit
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	baseQuery += ` LIMIT ?`
+	args = append(args, limit)
+
+	if filter.Offset > 0 {
+		baseQuery += ` OFFSET ?`
+		args = append(args, filter.Offset)
+	}
+
+	rows, err := r.db.Query(baseQuery, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var summaries []*model.PortfolioSummary
+	for rows.Next() {
+		var (
+			s          model.PortfolioSummary
+			targetDate sql.NullTime
+		)
+		err := rows.Scan(
+			&s.ID,
+			&s.WorkspaceID,
+			&s.Name,
+			&s.Color,
+			&s.OwnerUserID,
+			&s.Status,
+			&targetDate,
+			&s.BudgetCurrency,
+			&s.BudgetAmount,
+			&s.ActualCost,
+			&s.CreatedAt,
+			&s.UpdatedAt,
+			&s.ProjectCount,
+			&s.MilestoneCount,
+			&s.CompletedMilestones,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if targetDate.Valid {
+			s.TargetDate = &targetDate.Time
+		}
+
+		var totalTasks, completedTasks int
+		taskQuery := `
+		SELECT 
+			COUNT(t.id),
+			COALESCE(SUM(CASE WHEN t.status = 'completed' OR t.completed = 1 THEN 1 ELSE 0 END), 0)
+		FROM tasks t
+		JOIN portfolio_projects pp ON t.project_id = pp.project_id
+		WHERE pp.portfolio_id = ?`
+		_ = r.db.QueryRow(taskQuery, s.ID).Scan(&totalTasks, &completedTasks)
+		s.TotalTasks = totalTasks
+		s.CompletedTasks = completedTasks
+		if totalTasks > 0 {
+			s.ProgressPercentage = math.Round((float64(completedTasks)/float64(totalTasks))*1000) / 10
+		}
+
+		summaries = append(summaries, &s)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if summaries == nil {
+		summaries = []*model.PortfolioSummary{}
+	}
+
+	return summaries, nil
 }
 
 func (r *portfolioRepositoryImpl) UpdatePortfolio(portfolio *model.Portfolio) error {
