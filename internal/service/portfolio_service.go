@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -345,19 +346,97 @@ func (s *portfolioServiceImpl) ListProjects(portfolioID int64) ([]model.Portfoli
 }
 
 func (s *portfolioServiceImpl) CreateMilestone(portfolioID int64, req model.CreatePortfolioMilestoneRequest) (*model.PortfolioMilestone, error) {
-	return nil, nil
+	if _, err := s.repo.GetPortfolioByID(portfolioID); err != nil {
+		if errors.Is(err, repository.ErrPortfolioNotFound) {
+			return nil, ErrPortfolioNotFound
+		}
+		return nil, err
+	}
+
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		return nil, ErrMilestoneTitleRequired
+	}
+	if req.TargetDate.IsZero() {
+		return nil, ErrMilestoneDateRequired
+	}
+
+	milestone := &model.PortfolioMilestone{
+		PortfolioID: portfolioID,
+		Title:       title,
+		Description: req.Description,
+		TargetDate:  req.TargetDate,
+		Status:      model.MilestoneStatusPending,
+	}
+
+	id, err := s.repo.CreateMilestone(milestone)
+	if err != nil {
+		return nil, err
+	}
+	milestone.ID = id
+	return milestone, nil
 }
 
 func (s *portfolioServiceImpl) UpdateMilestone(milestoneID int64, req model.UpdatePortfolioMilestoneRequest) (*model.PortfolioMilestone, error) {
-	return nil, nil
+	milestone, err := s.repo.GetMilestoneByID(milestoneID)
+	if err != nil {
+		if errors.Is(err, repository.ErrMilestoneNotFound) {
+			return nil, ErrMilestoneNotFound
+		}
+		return nil, err
+	}
+
+	if req.Title != nil {
+		trimmed := strings.TrimSpace(*req.Title)
+		if trimmed == "" {
+			return nil, ErrMilestoneTitleRequired
+		}
+		milestone.Title = trimmed
+	}
+	if req.Description != nil {
+		milestone.Description = *req.Description
+	}
+	if req.TargetDate != nil {
+		milestone.TargetDate = *req.TargetDate
+	}
+	if req.Status != nil {
+		st := strings.TrimSpace(*req.Status)
+		if st == model.MilestoneStatusPending ||
+			st == model.MilestoneStatusInProgress ||
+			st == model.MilestoneStatusCompleted ||
+			st == model.MilestoneStatusMissed {
+			milestone.Status = st
+			if st == model.MilestoneStatusCompleted {
+				now := time.Now()
+				milestone.CompletedAt = &now
+			} else {
+				milestone.CompletedAt = nil
+			}
+		}
+	}
+
+	if err := s.repo.UpdateMilestone(milestone); err != nil {
+		return nil, err
+	}
+	return milestone, nil
 }
 
 func (s *portfolioServiceImpl) DeleteMilestone(milestoneID int64) error {
-	return nil
+	err := s.repo.DeleteMilestone(milestoneID)
+	if err != nil && errors.Is(err, repository.ErrMilestoneNotFound) {
+		return ErrMilestoneNotFound
+	}
+	return err
 }
 
 func (s *portfolioServiceImpl) ListMilestones(portfolioID int64) ([]model.PortfolioMilestone, error) {
-	return nil, nil
+	if _, err := s.repo.GetPortfolioByID(portfolioID); err != nil {
+		if errors.Is(err, repository.ErrPortfolioNotFound) {
+			return nil, ErrPortfolioNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListMilestones(portfolioID)
 }
 
 func (s *portfolioServiceImpl) CreateUpdate(authorUserID string, portfolioID int64, req model.CreatePortfolioUpdateRequest) (*model.PortfolioUpdate, error) {
