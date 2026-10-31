@@ -440,17 +440,70 @@ func (s *portfolioServiceImpl) ListMilestones(portfolioID int64) ([]model.Portfo
 }
 
 func (s *portfolioServiceImpl) CreateUpdate(authorUserID string, portfolioID int64, req model.CreatePortfolioUpdateRequest) (*model.PortfolioUpdate, error) {
-	return nil, nil
+	if _, err := s.repo.GetPortfolioByID(portfolioID); err != nil {
+		if errors.Is(err, repository.ErrPortfolioNotFound) {
+			return nil, ErrPortfolioNotFound
+		}
+		return nil, err
+	}
+
+	summary := strings.TrimSpace(req.Summary)
+	if summary == "" {
+		return nil, ErrUpdateSummaryRequired
+	}
+
+	hs := strings.TrimSpace(req.HealthStatus)
+	if hs == "" {
+		hs = model.PortfolioStatusOnTrack
+	} else if hs != model.PortfolioStatusOnTrack &&
+		hs != model.PortfolioStatusAtRisk &&
+		hs != model.PortfolioStatusOffTrack &&
+		hs != model.PortfolioStatusOnHold &&
+		hs != model.PortfolioStatusCompleted {
+		return nil, ErrInvalidHealthStatus
+	}
+
+	update := &model.PortfolioUpdate{
+		PortfolioID:     portfolioID,
+		AuthorUserID:    authorUserID,
+		HealthStatus:    hs,
+		Summary:         summary,
+		Accomplishments: req.Accomplishments,
+		Blockers:        req.Blockers,
+		NextSteps:       req.NextSteps,
+	}
+
+	id, err := s.repo.CreateUpdate(update)
+	if err != nil {
+		return nil, err
+	}
+	update.ID = id
+	return update, nil
 }
 
 func (s *portfolioServiceImpl) ListUpdates(portfolioID int64) ([]model.PortfolioUpdate, error) {
-	return nil, nil
+	if _, err := s.repo.GetPortfolioByID(portfolioID); err != nil {
+		if errors.Is(err, repository.ErrPortfolioNotFound) {
+			return nil, ErrPortfolioNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListUpdates(portfolioID)
 }
 
 func (s *portfolioServiceImpl) GetPortfolioMetrics(portfolioID int64) (*model.PortfolioMetrics, error) {
-	return nil, nil
+	if _, err := s.repo.GetPortfolioByID(portfolioID); err != nil {
+		if errors.Is(err, repository.ErrPortfolioNotFound) {
+			return nil, ErrPortfolioNotFound
+		}
+		return nil, err
+	}
+	return s.repo.GetPortfolioMetrics(portfolioID)
 }
 
 func (s *portfolioServiceImpl) GetWorkspaceMetrics(workspaceID int64) (*model.WorkspacePortfolioMetrics, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	return s.repo.GetWorkspacePortfolioMetrics(workspaceID)
 }
