@@ -90,5 +90,32 @@ type PortfolioUpdate struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
+// CreatePortfolioRequest defines the payload for provisioning a new portfolio
+type CreatePortfolioRequest struct {
+	WorkspaceID    int64      `json:"workspace_id"`
+	Name           string     `json:"name"`
+	Description    string     `json:"description,omitempty"`
+	Color          string     `json:"color,omitempty"`
+	StartDate      *time.Time `json:"start_date,omitempty"`
+	TargetDate     *time.Time `json:"target_date,omitempty"`
+	BudgetCurrency string     `json:"budget_currency,omitempty"`
+	BudgetAmount   *float64   `json:"budget_amount,omitempty"`
+}
+
+// UpdatePortfolioRequest defines the payload for updating portfolio attributes
+type UpdatePortfolioRequest struct {
+	Name           *string    `json:"name,omitempty"`
+	Description    *string    `json:"description,omitempty"`
+	Color          *string    `json:"color,omitempty"`
+	OwnerUserID    *string    `json:"owner_user_id,omitempty"`
+	Status         *string    `json:"status,omitempty"`
+	StartDate      *time.Time `json:"start_date,omitempty"`
+	TargetDate     *time.Time `json:"target_date,omitempty"`
+	BudgetCurrency *string    `json:"budget_currency,omitempty"`
+	BudgetAmount   *float64   `json:"budget_amount,omitempty"`
+	ActualCost     *float64   `json:"actual_cost,omitempty"`
+}
+
+
 
 
