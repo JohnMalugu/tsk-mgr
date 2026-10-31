@@ -160,11 +160,69 @@ func (s *portfolioServiceImpl) ListPortfolios(filter model.PortfolioFilter) ([]*
 }
 
 func (s *portfolioServiceImpl) UpdatePortfolio(id int64, req model.UpdatePortfolioRequest) (*model.Portfolio, error) {
-	return nil, nil
+	portfolio, err := s.repo.GetPortfolioByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrPortfolioNotFound) {
+			return nil, ErrPortfolioNotFound
+		}
+		return nil, err
+	}
+
+	if req.Name != nil {
+		trimmed := strings.TrimSpace(*req.Name)
+		if trimmed == "" {
+			return nil, ErrPortfolioNameRequired
+		}
+		portfolio.Name = trimmed
+	}
+	if req.Description != nil {
+		portfolio.Description = *req.Description
+	}
+	if req.Color != nil {
+		portfolio.Color = strings.TrimSpace(*req.Color)
+	}
+	if req.OwnerUserID != nil && strings.TrimSpace(*req.OwnerUserID) != "" {
+		portfolio.OwnerUserID = strings.TrimSpace(*req.OwnerUserID)
+	}
+	if req.Status != nil {
+		st := strings.TrimSpace(*req.Status)
+		if st != model.PortfolioStatusOnTrack &&
+			st != model.PortfolioStatusAtRisk &&
+			st != model.PortfolioStatusOffTrack &&
+			st != model.PortfolioStatusOnHold &&
+			st != model.PortfolioStatusCompleted {
+			return nil, ErrInvalidPortfolioStatus
+		}
+		portfolio.Status = st
+	}
+	if req.StartDate != nil {
+		portfolio.StartDate = req.StartDate
+	}
+	if req.TargetDate != nil {
+		portfolio.TargetDate = req.TargetDate
+	}
+	if req.BudgetCurrency != nil && strings.TrimSpace(*req.BudgetCurrency) != "" {
+		portfolio.BudgetCurrency = strings.TrimSpace(*req.BudgetCurrency)
+	}
+	if req.BudgetAmount != nil && *req.BudgetAmount >= 0 {
+		portfolio.BudgetAmount = *req.BudgetAmount
+	}
+	if req.ActualCost != nil && *req.ActualCost >= 0 {
+		portfolio.ActualCost = *req.ActualCost
+	}
+
+	if err := s.repo.UpdatePortfolio(portfolio); err != nil {
+		return nil, err
+	}
+	return portfolio, nil
 }
 
 func (s *portfolioServiceImpl) DeletePortfolio(id int64) error {
-	return nil
+	err := s.repo.DeletePortfolio(id)
+	if err != nil && errors.Is(err, repository.ErrPortfolioNotFound) {
+		return ErrPortfolioNotFound
+	}
+	return err
 }
 
 func (s *portfolioServiceImpl) AddProject(portfolioID int64, req model.AddPortfolioProjectRequest) (*model.PortfolioProject, error) {
