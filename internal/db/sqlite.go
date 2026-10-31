@@ -838,6 +838,31 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	portfoliosQuery := `
+	CREATE TABLE IF NOT EXISTS portfolios (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		name TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		color TEXT NOT NULL DEFAULT '#4f46e5',
+		owner_user_id TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'on_track',
+		start_date DATETIME,
+		target_date DATETIME,
+		budget_currency TEXT NOT NULL DEFAULT 'USD',
+		budget_amount REAL NOT NULL DEFAULT 0.0,
+		actual_cost REAL NOT NULL DEFAULT 0.0,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(portfoliosQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
