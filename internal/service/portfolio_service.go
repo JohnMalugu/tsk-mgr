@@ -226,19 +226,122 @@ func (s *portfolioServiceImpl) DeletePortfolio(id int64) error {
 }
 
 func (s *portfolioServiceImpl) AddProject(portfolioID int64, req model.AddPortfolioProjectRequest) (*model.PortfolioProject, error) {
-	return nil, nil
+	if _, err := s.repo.GetPortfolioByID(portfolioID); err != nil {
+		if errors.Is(err, repository.ErrPortfolioNotFound) {
+			return nil, ErrPortfolioNotFound
+		}
+		return nil, err
+	}
+
+	if req.ProjectID <= 0 {
+		return nil, ErrProjectNotFound
+	}
+
+	if s.projectRepo != nil {
+		p, err := s.projectRepo.GetByID(req.ProjectID)
+		if err != nil || p == nil {
+			return nil, ErrProjectNotFound
+		}
+	}
+
+	priority := req.Priority
+	if priority == "" {
+		priority = model.PortfolioProjectPriorityMedium
+	}
+	if priority != model.PortfolioProjectPriorityLow &&
+		priority != model.PortfolioProjectPriorityMedium &&
+		priority != model.PortfolioProjectPriorityHigh &&
+		priority != model.PortfolioProjectPriorityCritical {
+		priority = model.PortfolioProjectPriorityMedium
+	}
+
+	var allocBudget, spentAmount float64
+	if req.AllocatedBudget != nil && *req.AllocatedBudget >= 0 {
+		allocBudget = *req.AllocatedBudget
+	}
+	if req.SpentAmount != nil && *req.SpentAmount >= 0 {
+		spentAmount = *req.SpentAmount
+	}
+
+	orderIdx := 0
+	if req.OrderIndex != nil {
+		orderIdx = *req.OrderIndex
+	}
+
+	item := &model.PortfolioProject{
+		PortfolioID:     portfolioID,
+		ProjectID:       req.ProjectID,
+		Priority:        priority,
+		StatusOverride:  req.StatusOverride,
+		AllocatedBudget: allocBudget,
+		SpentAmount:     spentAmount,
+		OrderIndex:      orderIdx,
+	}
+
+	if _, err := s.repo.AddProjectToPortfolio(item); err != nil {
+		if errors.Is(err, repository.ErrPortfolioProjectExists) {
+			return nil, ErrPortfolioProjectExists
+		}
+		return nil, err
+	}
+
+	return s.repo.GetPortfolioProject(portfolioID, req.ProjectID)
 }
 
 func (s *portfolioServiceImpl) UpdateProject(portfolioID int64, projectID int, req model.UpdatePortfolioProjectRequest) (*model.PortfolioProject, error) {
-	return nil, nil
+	item, err := s.repo.GetPortfolioProject(portfolioID, projectID)
+	if err != nil {
+		if errors.Is(err, repository.ErrPortfolioProjectNF) {
+			return nil, ErrPortfolioProjectNF
+		}
+		return nil, err
+	}
+
+	if req.Priority != nil {
+		pr := *req.Priority
+		if pr == model.PortfolioProjectPriorityLow ||
+			pr == model.PortfolioProjectPriorityMedium ||
+			pr == model.PortfolioProjectPriorityHigh ||
+			pr == model.PortfolioProjectPriorityCritical {
+			item.Priority = pr
+		}
+	}
+	if req.StatusOverride != nil {
+		item.StatusOverride = *req.StatusOverride
+	}
+	if req.AllocatedBudget != nil && *req.AllocatedBudget >= 0 {
+		item.AllocatedBudget = *req.AllocatedBudget
+	}
+	if req.SpentAmount != nil && *req.SpentAmount >= 0 {
+		item.SpentAmount = *req.SpentAmount
+	}
+	if req.OrderIndex != nil {
+		item.OrderIndex = *req.OrderIndex
+	}
+
+	if err := s.repo.UpdatePortfolioProject(item); err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetPortfolioProject(portfolioID, projectID)
 }
 
 func (s *portfolioServiceImpl) RemoveProject(portfolioID int64, projectID int) error {
-	return nil
+	err := s.repo.RemoveProjectFromPortfolio(portfolioID, projectID)
+	if err != nil && errors.Is(err, repository.ErrPortfolioProjectNF) {
+		return ErrPortfolioProjectNF
+	}
+	return err
 }
 
 func (s *portfolioServiceImpl) ListProjects(portfolioID int64) ([]model.PortfolioProject, error) {
-	return nil, nil
+	if _, err := s.repo.GetPortfolioByID(portfolioID); err != nil {
+		if errors.Is(err, repository.ErrPortfolioNotFound) {
+			return nil, ErrPortfolioNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListPortfolioProjects(portfolioID)
 }
 
 func (s *portfolioServiceImpl) CreateMilestone(portfolioID int64, req model.CreatePortfolioMilestoneRequest) (*model.PortfolioMilestone, error) {
