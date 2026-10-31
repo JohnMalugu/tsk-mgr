@@ -230,9 +230,3 @@ type WorkspacePortfolioMetrics struct {
 	AverageProgress    float64        `json:"average_progress"`
 	StatusDistribution map[string]int `json:"status_distribution"`
 }
-
-
-
-
-
-

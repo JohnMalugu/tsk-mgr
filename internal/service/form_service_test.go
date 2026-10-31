@@ -494,7 +494,7 @@ func TestFormService_SubmissionsAndAnalytics(t *testing.T) {
 	if analytics.FirstSubmittedAt == nil || analytics.LastSubmittedAt == nil {
 		t.Fatalf("expected non-nil timestamps in analytics")
 	}
-	today := time.Now().Format("2006-01-02")
+	today := time.Now().UTC().Format("2006-01-02")
 	if count, ok := analytics.DailySubmissions[today]; !ok || count != 3 {
 		t.Fatalf("expected daily count of 3 for %s, got: %d", today, count)
 	}

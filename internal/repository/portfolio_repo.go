@@ -52,7 +52,9 @@ func NewPortfolioRepository(db *sql.DB) PortfolioRepository {
 	return &portfolioRepositoryImpl{db: db}
 }
 
-func scanPortfolio(scanner interface{ Scan(dest ...interface{}) error }) (*model.Portfolio, error) {
+func scanPortfolio(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.Portfolio, error) {
 	var (
 		p          model.Portfolio
 		desc       sql.NullString
@@ -243,7 +245,11 @@ func (r *portfolioRepositoryImpl) ListPortfolios(filter model.PortfolioFilter) (
 		if targetDate.Valid {
 			s.TargetDate = &targetDate.Time
 		}
+		summaries = append(summaries, &s)
+	}
+	_ = rows.Close()
 
+	for _, s := range summaries {
 		var totalTasks, completedTasks int
 		taskQuery := `
 		SELECT 
@@ -258,8 +264,6 @@ func (r *portfolioRepositoryImpl) ListPortfolios(filter model.PortfolioFilter) (
 		if totalTasks > 0 {
 			s.ProgressPercentage = math.Round((float64(completedTasks)/float64(totalTasks))*1000) / 10
 		}
-
-		summaries = append(summaries, &s)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -387,9 +391,18 @@ func (r *portfolioRepositoryImpl) GetPortfolioProject(portfolioID int64, project
 	SELECT 
 		pp.id, pp.portfolio_id, pp.project_id, pp.priority, pp.status_override,
 		pp.allocated_budget, pp.spent_amount, pp.order_index, pp.created_at,
-		pr.name, pr.color
+		pr.name, pr.color,
+		COALESCE(tc.task_count, 0),
+		COALESCE(tc.completed_task_count, 0)
 	FROM portfolio_projects pp
 	JOIN projects pr ON pp.project_id = pr.id
+	LEFT JOIN (
+		SELECT project_id,
+			COUNT(id) AS task_count,
+			COALESCE(SUM(CASE WHEN status = 'completed' OR completed = 1 THEN 1 ELSE 0 END), 0) AS completed_task_count
+		FROM tasks
+		GROUP BY project_id
+	) tc ON pp.project_id = tc.project_id
 	WHERE pp.portfolio_id = ? AND pp.project_id = ?`
 
 	var (
@@ -408,6 +421,8 @@ func (r *portfolioRepositoryImpl) GetPortfolioProject(portfolioID int64, project
 		&item.CreatedAt,
 		&projName,
 		&projColor,
+		&item.TaskCount,
+		&item.CompletedTaskCount,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -418,14 +433,6 @@ func (r *portfolioRepositoryImpl) GetPortfolioProject(portfolioID int64, project
 
 	item.ProjectName = projName
 	item.ProjectColor = projColor
-
-	taskQuery := `
-	SELECT 
-		COUNT(id),
-		COALESCE(SUM(CASE WHEN status = 'completed' OR completed = 1 THEN 1 ELSE 0 END), 0)
-	FROM tasks
-	WHERE project_id = ?`
-	_ = r.db.QueryRow(taskQuery, projectID).Scan(&item.TaskCount, &item.CompletedTaskCount)
 	if item.TaskCount > 0 {
 		item.ProgressPercentage = math.Round((float64(item.CompletedTaskCount)/float64(item.TaskCount))*1000) / 10
 	}
@@ -438,9 +445,18 @@ func (r *portfolioRepositoryImpl) ListPortfolioProjects(portfolioID int64) ([]mo
 	SELECT 
 		pp.id, pp.portfolio_id, pp.project_id, pp.priority, pp.status_override,
 		pp.allocated_budget, pp.spent_amount, pp.order_index, pp.created_at,
-		pr.name, pr.color
+		pr.name, pr.color,
+		COALESCE(tc.task_count, 0),
+		COALESCE(tc.completed_task_count, 0)
 	FROM portfolio_projects pp
 	JOIN projects pr ON pp.project_id = pr.id
+	LEFT JOIN (
+		SELECT project_id,
+			COUNT(id) AS task_count,
+			COALESCE(SUM(CASE WHEN status = 'completed' OR completed = 1 THEN 1 ELSE 0 END), 0) AS completed_task_count
+		FROM tasks
+		GROUP BY project_id
+	) tc ON pp.project_id = tc.project_id
 	WHERE pp.portfolio_id = ?
 	ORDER BY pp.order_index ASC, pp.created_at ASC`
 
@@ -468,20 +484,14 @@ func (r *portfolioRepositoryImpl) ListPortfolioProjects(portfolioID int64) ([]mo
 			&item.CreatedAt,
 			&projName,
 			&projColor,
+			&item.TaskCount,
+			&item.CompletedTaskCount,
 		)
 		if err != nil {
 			return nil, err
 		}
 		item.ProjectName = projName
 		item.ProjectColor = projColor
-
-		taskQuery := `
-		SELECT 
-			COUNT(id),
-			COALESCE(SUM(CASE WHEN status = 'completed' OR completed = 1 THEN 1 ELSE 0 END), 0)
-		FROM tasks
-		WHERE project_id = ?`
-		_ = r.db.QueryRow(taskQuery, item.ProjectID).Scan(&item.TaskCount, &item.CompletedTaskCount)
 		if item.TaskCount > 0 {
 			item.ProgressPercentage = math.Round((float64(item.CompletedTaskCount)/float64(item.TaskCount))*1000) / 10
 		}
@@ -548,7 +558,9 @@ func (r *portfolioRepositoryImpl) RemoveProjectFromPortfolio(portfolioID int64, 
 	return nil
 }
 
-func scanMilestone(scanner interface{ Scan(dest ...interface{}) error }) (*model.PortfolioMilestone, error) {
+func scanMilestone(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.PortfolioMilestone, error) {
 	var (
 		m           model.PortfolioMilestone
 		desc        sql.NullString
@@ -833,7 +845,7 @@ func (r *portfolioRepositoryImpl) GetPortfolioMetrics(portfolioID int64) (*model
 	SELECT 
 		COUNT(t.id),
 		COALESCE(SUM(CASE WHEN t.status = 'completed' OR t.completed = 1 THEN 1 ELSE 0 END), 0),
-		COALESCE(SUM(CASE WHEN (t.status != 'completed' AND t.completed = 0) AND t.due_date < datetime('now') THEN 1 ELSE 0 END), 0)
+		COALESCE(SUM(CASE WHEN (t.status != 'completed' AND t.completed = 0) AND datetime(t.due_date) < datetime('now') THEN 1 ELSE 0 END), 0)
 	FROM tasks t
 	JOIN portfolio_projects pp ON t.project_id = pp.project_id
 	WHERE pp.portfolio_id = ?`
@@ -946,4 +958,3 @@ func (r *portfolioRepositoryImpl) GetWorkspacePortfolioMetrics(workspaceID int64
 
 	return metrics, nil
 }
-

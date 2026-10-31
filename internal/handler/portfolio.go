@@ -526,4 +526,3 @@ func (h *PortfolioHandler) HandleWorkspacePortfolioMetrics(w http.ResponseWriter
 
 	writePortfolioJSON(w, http.StatusOK, metrics)
 }
-

@@ -174,6 +174,15 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `DELETE /v2/goals/key-results/{id}/tasks/{taskId}` to unlink a task from a key result and re-sync progress
 - `GET|POST /v2/goals/{id}/check-ins` to list chronological progress check-ins or submit a new status update with confidence ratings (`high`, `medium`, `low`), notes, and progress percentage
 - `GET /v2/goals/metrics?workspace_id={id}` for workspace OKR health analytics, achievement rates, status distribution (`draft`, `active`, `on_track`, `behind`, `at_risk`, `achieved`, `canceled`), and average progress
+- `GET|POST /v2/portfolios` to list strategic portfolios with workspace, owner, and status filtering or provision a new portfolio with color, dates, and budget
+- `GET|PUT|DELETE /v2/portfolios/{id}` to fetch portfolio details (including embedded projects, milestones, latest executive update, and overall progress rollup), update parameters, or delete a portfolio
+- `GET|POST /v2/portfolios/{id}/projects` to list linked projects with dynamic task rollup metrics or link a project with priority and budget allocation
+- `PUT|PATCH|DELETE /v2/portfolios/{id}/projects/{projectId}` to update project allocation and priority or unlink a project from the portfolio
+- `GET|POST /v2/portfolios/{id}/milestones` to list strategic milestones or create a milestone with target date
+- `PUT|PATCH|DELETE /v2/portfolios/milestones/{milestoneId}` to update milestone status (automatically tracking completion timestamps) or delete a milestone
+- `GET|POST /v2/portfolios/{id}/updates` to list executive status updates or submit an executive progress report (synchronizing portfolio health status)
+- `GET /v2/portfolios/{id}/metrics` to compute portfolio health analytics, project rollups, task progress, budget utilization, and milestone completion rates
+- `GET /v2/portfolios/metrics?workspace_id={id}` for workspace portfolio analytics, health status breakdown (`on_track`, `at_risk`, `off_track`, `on_hold`, `completed`), total budgets and costs, and aggregate progress
 
 ## Current limitations
 
