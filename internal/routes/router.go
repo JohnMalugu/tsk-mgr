@@ -1170,6 +1170,20 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Project Portfolios & Strategic Initiatives Engine (/v2/portfolios)
+	if r.URL.Path == "/v2/portfolios" {
+		handler.GlobalPortfolioHandler.HandlePortfoliosRoot(w, r)
+		return
+	}
+	if r.URL.Path == "/v2/portfolios/metrics" {
+		handler.GlobalPortfolioHandler.HandleWorkspacePortfolioMetrics(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/v2/portfolios/") {
+		handler.GlobalPortfolioHandler.HandlePortfolioSubroutes(w, r)
+		return
+	}
+
 	if r.URL.Path == "/tasks/summary" {
 
 		handler.HandleTaskSummary(w, r)

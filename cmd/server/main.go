@@ -115,6 +115,10 @@ func main() {
 	goalSvc := service.NewGoalService(goalRepo, taskRepo)
 	handler.InitGoalHandler(goalSvc)
 
+	portfolioRepo := repository.NewPortfolioRepository(sqliteDB)
+	portfolioSvc := service.NewPortfolioService(portfolioRepo, projectRepo)
+	handler.InitPortfolioHandler(portfolioSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
