@@ -159,6 +159,79 @@ type CreatePortfolioUpdateRequest struct {
 	NextSteps       string `json:"next_steps,omitempty"`
 }
 
+// PortfolioFilter specifies query filters for listing portfolios
+type PortfolioFilter struct {
+	WorkspaceID *int64 `json:"workspace_id,omitempty"`
+	OwnerUserID string `json:"owner_user_id,omitempty"`
+	Status      string `json:"status,omitempty"`
+	Search      string `json:"search,omitempty"`
+	Limit       int    `json:"limit,omitempty"`
+	Offset      int    `json:"offset,omitempty"`
+}
+
+// PortfolioDetail provides full portfolio view with linked projects, milestones, and latest update
+type PortfolioDetail struct {
+	Portfolio       *Portfolio           `json:"portfolio"`
+	Projects        []PortfolioProject   `json:"projects"`
+	Milestones      []PortfolioMilestone `json:"milestones"`
+	LatestUpdate    *PortfolioUpdate     `json:"latest_update,omitempty"`
+	OverallProgress float64              `json:"overall_progress"`
+}
+
+// PortfolioSummary represents a lightweight portfolio overview item
+type PortfolioSummary struct {
+	ID                  int64      `json:"id"`
+	WorkspaceID         int64      `json:"workspace_id"`
+	Name                string     `json:"name"`
+	Color               string     `json:"color"`
+	OwnerUserID         string     `json:"owner_user_id"`
+	Status              string     `json:"status"`
+	TargetDate          *time.Time `json:"target_date,omitempty"`
+	BudgetCurrency      string     `json:"budget_currency"`
+	BudgetAmount        float64    `json:"budget_amount"`
+	ActualCost          float64    `json:"actual_cost"`
+	ProjectCount        int        `json:"project_count"`
+	MilestoneCount      int        `json:"milestone_count"`
+	CompletedMilestones int        `json:"completed_milestones"`
+	TotalTasks          int        `json:"total_tasks"`
+	CompletedTasks      int        `json:"completed_tasks"`
+	ProgressPercentage  float64    `json:"progress_percentage"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
+}
+
+// PortfolioMetrics summarizes metrics for an individual portfolio
+type PortfolioMetrics struct {
+	PortfolioID             int64   `json:"portfolio_id"`
+	TotalProjects           int     `json:"total_projects"`
+	TotalTasks              int     `json:"total_tasks"`
+	CompletedTasks          int     `json:"completed_tasks"`
+	OverdueTasks            int     `json:"overdue_tasks"`
+	ProgressPercentage      float64 `json:"progress_percentage"`
+	TotalAllocatedBudget    float64 `json:"total_allocated_budget"`
+	TotalSpentAmount        float64 `json:"total_spent_amount"`
+	BudgetUtilizationRate   float64 `json:"budget_utilization_rate"` // percentage
+	TotalMilestones         int     `json:"total_milestones"`
+	CompletedMilestones     int     `json:"completed_milestones"`
+	MilestoneCompletionRate float64 `json:"milestone_completion_rate"`
+}
+
+// WorkspacePortfolioMetrics aggregates portfolio health and financials across a workspace
+type WorkspacePortfolioMetrics struct {
+	WorkspaceID        int64          `json:"workspace_id"`
+	TotalPortfolios    int            `json:"total_portfolios"`
+	OnTrackCount       int            `json:"on_track_count"`
+	AtRiskCount        int            `json:"at_risk_count"`
+	OffTrackCount      int            `json:"off_track_count"`
+	OnHoldCount        int            `json:"on_hold_count"`
+	CompletedCount     int            `json:"completed_count"`
+	TotalBudgetAmount  float64        `json:"total_budget_amount"`
+	TotalActualCost    float64        `json:"total_actual_cost"`
+	AverageProgress    float64        `json:"average_progress"`
+	StatusDistribution map[string]int `json:"status_distribution"`
+}
+
+
 
 
 
