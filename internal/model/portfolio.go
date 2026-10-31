@@ -116,6 +116,50 @@ type UpdatePortfolioRequest struct {
 	ActualCost     *float64   `json:"actual_cost,omitempty"`
 }
 
+// AddPortfolioProjectRequest defines the payload for mapping a project into a portfolio
+type AddPortfolioProjectRequest struct {
+	ProjectID       int      `json:"project_id"`
+	Priority        string   `json:"priority,omitempty"` // low, medium, high, critical
+	StatusOverride  string   `json:"status_override,omitempty"`
+	AllocatedBudget *float64 `json:"allocated_budget,omitempty"`
+	SpentAmount     *float64 `json:"spent_amount,omitempty"`
+	OrderIndex      *int     `json:"order_index,omitempty"`
+}
+
+// UpdatePortfolioProjectRequest defines the payload for updating a mapped project's settings
+type UpdatePortfolioProjectRequest struct {
+	Priority        *string  `json:"priority,omitempty"`
+	StatusOverride  *string  `json:"status_override,omitempty"`
+	AllocatedBudget *float64 `json:"allocated_budget,omitempty"`
+	SpentAmount     *float64 `json:"spent_amount,omitempty"`
+	OrderIndex      *int     `json:"order_index,omitempty"`
+}
+
+// CreatePortfolioMilestoneRequest defines the payload for creating a milestone
+type CreatePortfolioMilestoneRequest struct {
+	Title       string    `json:"title"`
+	Description string    `json:"description,omitempty"`
+	TargetDate  time.Time `json:"target_date"`
+}
+
+// UpdatePortfolioMilestoneRequest defines the payload for modifying a milestone
+type UpdatePortfolioMilestoneRequest struct {
+	Title       *string    `json:"title,omitempty"`
+	Description *string    `json:"description,omitempty"`
+	TargetDate  *time.Time `json:"target_date,omitempty"`
+	Status      *string    `json:"status,omitempty"` // pending, in_progress, completed, missed
+}
+
+// CreatePortfolioUpdateRequest defines the payload for logging an executive update
+type CreatePortfolioUpdateRequest struct {
+	HealthStatus    string `json:"health_status"` // on_track, at_risk, off_track, on_hold, completed
+	Summary         string `json:"summary"`
+	Accomplishments string `json:"accomplishments,omitempty"`
+	Blockers        string `json:"blockers,omitempty"`
+	NextSteps       string `json:"next_steps,omitempty"`
+}
+
+
 
 
 
