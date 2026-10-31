@@ -57,3 +57,24 @@ type PortfolioProject struct {
 	ProgressPercentage float64 `json:"progress_percentage,omitempty"`
 }
 
+// Portfolio milestone status constants
+const (
+	MilestoneStatusPending    = "pending"
+	MilestoneStatusInProgress = "in_progress"
+	MilestoneStatusCompleted  = "completed"
+	MilestoneStatusMissed     = "missed"
+)
+
+// PortfolioMilestone represents a key milestone within a portfolio
+type PortfolioMilestone struct {
+	ID          int64      `json:"id"`
+	PortfolioID int64      `json:"portfolio_id"`
+	Title       string     `json:"title"`
+	Description string     `json:"description,omitempty"`
+	TargetDate  time.Time  `json:"target_date"`
+	Status      string     `json:"status"` // pending, in_progress, completed, missed
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+}
+
+
