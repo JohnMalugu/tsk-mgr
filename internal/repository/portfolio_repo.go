@@ -705,11 +705,100 @@ func (r *portfolioRepositoryImpl) DeleteMilestone(id int64) error {
 }
 
 func (r *portfolioRepositoryImpl) CreateUpdate(update *model.PortfolioUpdate) (int64, error) {
-	return 0, nil
+	query := `
+	INSERT INTO portfolio_updates (
+		portfolio_id, author_user_id, health_status, summary,
+		accomplishments, blockers, next_steps, created_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+
+	now := time.Now()
+	if update.CreatedAt.IsZero() {
+		update.CreatedAt = now
+	}
+	if update.HealthStatus == "" {
+		update.HealthStatus = model.PortfolioStatusOnTrack
+	}
+
+	res, err := r.db.Exec(query,
+		update.PortfolioID,
+		update.AuthorUserID,
+		update.HealthStatus,
+		update.Summary,
+		update.Accomplishments,
+		update.Blockers,
+		update.NextSteps,
+		update.CreatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	update.ID = id
+
+	// Automatically sync portfolio health status with latest update
+	_, _ = r.db.Exec(`UPDATE portfolios SET status = ?, updated_at = ? WHERE id = ?`,
+		update.HealthStatus, now, update.PortfolioID)
+
+	return id, nil
 }
 
 func (r *portfolioRepositoryImpl) ListUpdates(portfolioID int64) ([]model.PortfolioUpdate, error) {
-	return nil, nil
+	query := `
+	SELECT id, portfolio_id, author_user_id, health_status, summary,
+		accomplishments, blockers, next_steps, created_at
+	FROM portfolio_updates
+	WHERE portfolio_id = ?
+	ORDER BY created_at DESC`
+
+	rows, err := r.db.Query(query, portfolioID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var updates []model.PortfolioUpdate
+	for rows.Next() {
+		var (
+			u             model.PortfolioUpdate
+			acc, blk, nxt sql.NullString
+		)
+		err := rows.Scan(
+			&u.ID,
+			&u.PortfolioID,
+			&u.AuthorUserID,
+			&u.HealthStatus,
+			&u.Summary,
+			&acc,
+			&blk,
+			&nxt,
+			&u.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if acc.Valid {
+			u.Accomplishments = acc.String
+		}
+		if blk.Valid {
+			u.Blockers = blk.String
+		}
+		if nxt.Valid {
+			u.NextSteps = nxt.String
+		}
+		updates = append(updates, u)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if updates == nil {
+		updates = []model.PortfolioUpdate{}
+	}
+	return updates, nil
 }
 
 func (r *portfolioRepositoryImpl) GetPortfolioMetrics(portfolioID int64) (*model.PortfolioMetrics, error) {
