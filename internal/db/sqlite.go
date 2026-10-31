@@ -992,6 +992,12 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_key_result_tasks_kr ON key_result_tasks(key_result_id);
 	CREATE INDEX IF NOT EXISTS idx_key_result_tasks_task ON key_result_tasks(task_id);
 	CREATE INDEX IF NOT EXISTS idx_goal_check_ins_goal ON goal_check_ins(goal_id, created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_portfolios_ws ON portfolios(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_portfolios_owner ON portfolios(owner_user_id);
+	CREATE INDEX IF NOT EXISTS idx_portfolio_projects_pf ON portfolio_projects(portfolio_id);
+	CREATE INDEX IF NOT EXISTS idx_portfolio_projects_proj ON portfolio_projects(project_id);
+	CREATE INDEX IF NOT EXISTS idx_portfolio_milestones_pf ON portfolio_milestones(portfolio_id, target_date);
+	CREATE INDEX IF NOT EXISTS idx_portfolio_updates_pf ON portfolio_updates(portfolio_id, created_at DESC);
 	`
 
 	_, err = db.Exec(indexQuery)
