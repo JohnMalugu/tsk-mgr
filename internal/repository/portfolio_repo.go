@@ -802,10 +802,148 @@ func (r *portfolioRepositoryImpl) ListUpdates(portfolioID int64) ([]model.Portfo
 }
 
 func (r *portfolioRepositoryImpl) GetPortfolioMetrics(portfolioID int64) (*model.PortfolioMetrics, error) {
-	return nil, nil
+	if _, err := r.GetPortfolioByID(portfolioID); err != nil {
+		return nil, err
+	}
+
+	metrics := &model.PortfolioMetrics{PortfolioID: portfolioID}
+
+	// 1. Project count & financials
+	projQuery := `
+	SELECT 
+		COUNT(id),
+		COALESCE(SUM(allocated_budget), 0.0),
+		COALESCE(SUM(spent_amount), 0.0)
+	FROM portfolio_projects
+	WHERE portfolio_id = ?`
+	err := r.db.QueryRow(projQuery, portfolioID).Scan(
+		&metrics.TotalProjects,
+		&metrics.TotalAllocatedBudget,
+		&metrics.TotalSpentAmount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if metrics.TotalAllocatedBudget > 0 {
+		metrics.BudgetUtilizationRate = math.Round((metrics.TotalSpentAmount/metrics.TotalAllocatedBudget)*1000) / 10
+	}
+
+	// 2. Tasks count, completed, overdue across portfolio projects
+	taskQuery := `
+	SELECT 
+		COUNT(t.id),
+		COALESCE(SUM(CASE WHEN t.status = 'completed' OR t.completed = 1 THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN (t.status != 'completed' AND t.completed = 0) AND t.due_date < datetime('now') THEN 1 ELSE 0 END), 0)
+	FROM tasks t
+	JOIN portfolio_projects pp ON t.project_id = pp.project_id
+	WHERE pp.portfolio_id = ?`
+	err = r.db.QueryRow(taskQuery, portfolioID).Scan(
+		&metrics.TotalTasks,
+		&metrics.CompletedTasks,
+		&metrics.OverdueTasks,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if metrics.TotalTasks > 0 {
+		metrics.ProgressPercentage = math.Round((float64(metrics.CompletedTasks)/float64(metrics.TotalTasks))*1000) / 10
+	}
+
+	// 3. Milestones count & completed
+	msQuery := `
+	SELECT 
+		COUNT(id),
+		COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0)
+	FROM portfolio_milestones
+	WHERE portfolio_id = ?`
+	err = r.db.QueryRow(msQuery, portfolioID).Scan(
+		&metrics.TotalMilestones,
+		&metrics.CompletedMilestones,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if metrics.TotalMilestones > 0 {
+		metrics.MilestoneCompletionRate = math.Round((float64(metrics.CompletedMilestones)/float64(metrics.TotalMilestones))*1000) / 10
+	}
+
+	return metrics, nil
 }
 
 func (r *portfolioRepositoryImpl) GetWorkspacePortfolioMetrics(workspaceID int64) (*model.WorkspacePortfolioMetrics, error) {
-	return nil, nil
+	metrics := &model.WorkspacePortfolioMetrics{
+		WorkspaceID: workspaceID,
+		StatusDistribution: map[string]int{
+			model.PortfolioStatusOnTrack:   0,
+			model.PortfolioStatusAtRisk:    0,
+			model.PortfolioStatusOffTrack:  0,
+			model.PortfolioStatusOnHold:    0,
+			model.PortfolioStatusCompleted: 0,
+		},
+	}
+
+	query := `
+	SELECT 
+		id, status, budget_amount, actual_cost
+	FROM portfolios
+	WHERE workspace_id = ?`
+
+	rows, err := r.db.Query(query, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var totalProgressSum float64
+	for rows.Next() {
+		var (
+			pID          int64
+			status       string
+			budget, cost float64
+		)
+		if err := rows.Scan(&pID, &status, &budget, &cost); err != nil {
+			return nil, err
+		}
+		metrics.TotalPortfolios++
+		metrics.TotalBudgetAmount += budget
+		metrics.TotalActualCost += cost
+
+		switch status {
+		case model.PortfolioStatusOnTrack:
+			metrics.OnTrackCount++
+		case model.PortfolioStatusAtRisk:
+			metrics.AtRiskCount++
+		case model.PortfolioStatusOffTrack:
+			metrics.OffTrackCount++
+		case model.PortfolioStatusOnHold:
+			metrics.OnHoldCount++
+		case model.PortfolioStatusCompleted:
+			metrics.CompletedCount++
+		}
+		metrics.StatusDistribution[status]++
+
+		var totTasks, compTasks int
+		taskQuery := `
+		SELECT 
+			COUNT(t.id),
+			COALESCE(SUM(CASE WHEN t.status = 'completed' OR t.completed = 1 THEN 1 ELSE 0 END), 0)
+		FROM tasks t
+		JOIN portfolio_projects pp ON t.project_id = pp.project_id
+		WHERE pp.portfolio_id = ?`
+		_ = r.db.QueryRow(taskQuery, pID).Scan(&totTasks, &compTasks)
+		if totTasks > 0 {
+			totalProgressSum += (float64(compTasks) / float64(totTasks)) * 100.0
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if metrics.TotalPortfolios > 0 {
+		metrics.AverageProgress = math.Round((totalProgressSum/float64(metrics.TotalPortfolios))*10) / 10
+	}
+
+	return metrics, nil
 }
 
