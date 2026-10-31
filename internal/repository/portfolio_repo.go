@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
@@ -50,12 +51,113 @@ func NewPortfolioRepository(db *sql.DB) PortfolioRepository {
 	return &portfolioRepositoryImpl{db: db}
 }
 
+func scanPortfolio(scanner interface{ Scan(dest ...interface{}) error }) (*model.Portfolio, error) {
+	var (
+		p          model.Portfolio
+		desc       sql.NullString
+		startDate  sql.NullTime
+		targetDate sql.NullTime
+	)
+
+	err := scanner.Scan(
+		&p.ID,
+		&p.WorkspaceID,
+		&p.Name,
+		&desc,
+		&p.Color,
+		&p.OwnerUserID,
+		&p.Status,
+		&startDate,
+		&targetDate,
+		&p.BudgetCurrency,
+		&p.BudgetAmount,
+		&p.ActualCost,
+		&p.CreatedAt,
+		&p.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrPortfolioNotFound
+		}
+		return nil, err
+	}
+
+	if desc.Valid {
+		p.Description = desc.String
+	}
+	if startDate.Valid {
+		p.StartDate = &startDate.Time
+	}
+	if targetDate.Valid {
+		p.TargetDate = &targetDate.Time
+	}
+
+	return &p, nil
+}
+
 func (r *portfolioRepositoryImpl) CreatePortfolio(portfolio *model.Portfolio) (int64, error) {
-	return 0, nil
+	query := `
+	INSERT INTO portfolios (
+		workspace_id, name, description, color,
+		owner_user_id, status, start_date, target_date,
+		budget_currency, budget_amount, actual_cost,
+		created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	now := time.Now()
+	if portfolio.CreatedAt.IsZero() {
+		portfolio.CreatedAt = now
+	}
+	if portfolio.UpdatedAt.IsZero() {
+		portfolio.UpdatedAt = now
+	}
+	if portfolio.Color == "" {
+		portfolio.Color = "#4f46e5"
+	}
+	if portfolio.Status == "" {
+		portfolio.Status = model.PortfolioStatusOnTrack
+	}
+	if portfolio.BudgetCurrency == "" {
+		portfolio.BudgetCurrency = "USD"
+	}
+
+	res, err := r.db.Exec(query,
+		portfolio.WorkspaceID,
+		portfolio.Name,
+		portfolio.Description,
+		portfolio.Color,
+		portfolio.OwnerUserID,
+		portfolio.Status,
+		portfolio.StartDate,
+		portfolio.TargetDate,
+		portfolio.BudgetCurrency,
+		portfolio.BudgetAmount,
+		portfolio.ActualCost,
+		portfolio.CreatedAt,
+		portfolio.UpdatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	portfolio.ID = id
+	return id, nil
 }
 
 func (r *portfolioRepositoryImpl) GetPortfolioByID(id int64) (*model.Portfolio, error) {
-	return nil, nil
+	query := `
+	SELECT id, workspace_id, name, description, color,
+		owner_user_id, status, start_date, target_date,
+		budget_currency, budget_amount, actual_cost,
+		created_at, updated_at
+	FROM portfolios
+	WHERE id = ?`
+
+	return scanPortfolio(r.db.QueryRow(query, id))
 }
 
 func (r *portfolioRepositoryImpl) ListPortfolios(filter model.PortfolioFilter) ([]*model.PortfolioSummary, error) {
