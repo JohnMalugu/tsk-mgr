@@ -499,6 +499,35 @@ func (r *portfolioRepositoryImpl) ListPortfolioProjects(portfolioID int64) ([]mo
 }
 
 func (r *portfolioRepositoryImpl) UpdatePortfolioProject(item *model.PortfolioProject) error {
+	query := `
+	UPDATE portfolio_projects SET
+		priority = ?,
+		status_override = ?,
+		allocated_budget = ?,
+		spent_amount = ?,
+		order_index = ?
+	WHERE portfolio_id = ? AND project_id = ?`
+
+	res, err := r.db.Exec(query,
+		item.Priority,
+		item.StatusOverride,
+		item.AllocatedBudget,
+		item.SpentAmount,
+		item.OrderIndex,
+		item.PortfolioID,
+		item.ProjectID,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrPortfolioProjectNF
+	}
 	return nil
 }
 
