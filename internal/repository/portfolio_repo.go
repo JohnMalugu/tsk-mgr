@@ -274,10 +274,64 @@ func (r *portfolioRepositoryImpl) ListPortfolios(filter model.PortfolioFilter) (
 }
 
 func (r *portfolioRepositoryImpl) UpdatePortfolio(portfolio *model.Portfolio) error {
+	query := `
+	UPDATE portfolios SET
+		name = ?,
+		description = ?,
+		color = ?,
+		owner_user_id = ?,
+		status = ?,
+		start_date = ?,
+		target_date = ?,
+		budget_currency = ?,
+		budget_amount = ?,
+		actual_cost = ?,
+		updated_at = ?
+	WHERE id = ?`
+
+	portfolio.UpdatedAt = time.Now()
+	res, err := r.db.Exec(query,
+		portfolio.Name,
+		portfolio.Description,
+		portfolio.Color,
+		portfolio.OwnerUserID,
+		portfolio.Status,
+		portfolio.StartDate,
+		portfolio.TargetDate,
+		portfolio.BudgetCurrency,
+		portfolio.BudgetAmount,
+		portfolio.ActualCost,
+		portfolio.UpdatedAt,
+		portfolio.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrPortfolioNotFound
+	}
 	return nil
 }
 
 func (r *portfolioRepositoryImpl) DeletePortfolio(id int64) error {
+	query := `DELETE FROM portfolios WHERE id = ?`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrPortfolioNotFound
+	}
 	return nil
 }
 
