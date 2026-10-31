@@ -863,6 +863,27 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	portfolioProjectsQuery := `
+	CREATE TABLE IF NOT EXISTS portfolio_projects (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		portfolio_id INTEGER NOT NULL,
+		project_id INTEGER NOT NULL,
+		priority TEXT NOT NULL DEFAULT 'medium',
+		status_override TEXT NOT NULL DEFAULT '',
+		allocated_budget REAL NOT NULL DEFAULT 0.0,
+		spent_amount REAL NOT NULL DEFAULT 0.0,
+		order_index INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME NOT NULL,
+		UNIQUE(portfolio_id, project_id),
+		FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE CASCADE,
+		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(portfolioProjectsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
