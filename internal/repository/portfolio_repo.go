@@ -548,23 +548,159 @@ func (r *portfolioRepositoryImpl) RemoveProjectFromPortfolio(portfolioID int64, 
 	return nil
 }
 
+func scanMilestone(scanner interface{ Scan(dest ...interface{}) error }) (*model.PortfolioMilestone, error) {
+	var (
+		m           model.PortfolioMilestone
+		desc        sql.NullString
+		completedAt sql.NullTime
+	)
+
+	err := scanner.Scan(
+		&m.ID,
+		&m.PortfolioID,
+		&m.Title,
+		&desc,
+		&m.TargetDate,
+		&m.Status,
+		&completedAt,
+		&m.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrMilestoneNotFound
+		}
+		return nil, err
+	}
+	if desc.Valid {
+		m.Description = desc.String
+	}
+	if completedAt.Valid {
+		m.CompletedAt = &completedAt.Time
+	}
+	return &m, nil
+}
+
 func (r *portfolioRepositoryImpl) CreateMilestone(milestone *model.PortfolioMilestone) (int64, error) {
-	return 0, nil
+	query := `
+	INSERT INTO portfolio_milestones (
+		portfolio_id, title, description, target_date, status, completed_at, created_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?)`
+
+	now := time.Now()
+	if milestone.CreatedAt.IsZero() {
+		milestone.CreatedAt = now
+	}
+	if milestone.Status == "" {
+		milestone.Status = model.MilestoneStatusPending
+	}
+
+	res, err := r.db.Exec(query,
+		milestone.PortfolioID,
+		milestone.Title,
+		milestone.Description,
+		milestone.TargetDate,
+		milestone.Status,
+		milestone.CompletedAt,
+		milestone.CreatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	milestone.ID = id
+	return id, nil
 }
 
 func (r *portfolioRepositoryImpl) GetMilestoneByID(id int64) (*model.PortfolioMilestone, error) {
-	return nil, nil
+	query := `
+	SELECT id, portfolio_id, title, description, target_date, status, completed_at, created_at
+	FROM portfolio_milestones
+	WHERE id = ?`
+
+	return scanMilestone(r.db.QueryRow(query, id))
 }
 
 func (r *portfolioRepositoryImpl) ListMilestones(portfolioID int64) ([]model.PortfolioMilestone, error) {
-	return nil, nil
+	query := `
+	SELECT id, portfolio_id, title, description, target_date, status, completed_at, created_at
+	FROM portfolio_milestones
+	WHERE portfolio_id = ?
+	ORDER BY target_date ASC, created_at ASC`
+
+	rows, err := r.db.Query(query, portfolioID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []model.PortfolioMilestone
+	for rows.Next() {
+		m, err := scanMilestone(rows)
+		if err != nil {
+			return nil, err
+		}
+		list = append(list, *m)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if list == nil {
+		list = []model.PortfolioMilestone{}
+	}
+	return list, nil
 }
 
 func (r *portfolioRepositoryImpl) UpdateMilestone(milestone *model.PortfolioMilestone) error {
+	query := `
+	UPDATE portfolio_milestones SET
+		title = ?,
+		description = ?,
+		target_date = ?,
+		status = ?,
+		completed_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query,
+		milestone.Title,
+		milestone.Description,
+		milestone.TargetDate,
+		milestone.Status,
+		milestone.CompletedAt,
+		milestone.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrMilestoneNotFound
+	}
 	return nil
 }
 
 func (r *portfolioRepositoryImpl) DeleteMilestone(id int64) error {
+	query := `DELETE FROM portfolio_milestones WHERE id = ?`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrMilestoneNotFound
+	}
 	return nil
 }
 
