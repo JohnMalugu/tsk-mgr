@@ -77,4 +77,18 @@ type PortfolioMilestone struct {
 	CreatedAt   time.Time  `json:"created_at"`
 }
 
+// PortfolioUpdate represents an executive progress report for a portfolio
+type PortfolioUpdate struct {
+	ID              int64     `json:"id"`
+	PortfolioID     int64     `json:"portfolio_id"`
+	AuthorUserID    string    `json:"author_user_id"`
+	HealthStatus    string    `json:"health_status"` // on_track, at_risk, off_track, on_hold, completed
+	Summary         string    `json:"summary"`
+	Accomplishments string    `json:"accomplishments,omitempty"`
+	Blockers        string    `json:"blockers,omitempty"`
+	NextSteps       string    `json:"next_steps,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+
 
