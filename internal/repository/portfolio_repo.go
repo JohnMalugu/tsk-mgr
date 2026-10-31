@@ -336,15 +336,166 @@ func (r *portfolioRepositoryImpl) DeletePortfolio(id int64) error {
 }
 
 func (r *portfolioRepositoryImpl) AddProjectToPortfolio(item *model.PortfolioProject) (int64, error) {
-	return 0, nil
+	var count int
+	checkQuery := `SELECT COUNT(*) FROM portfolio_projects WHERE portfolio_id = ? AND project_id = ?`
+	err := r.db.QueryRow(checkQuery, item.PortfolioID, item.ProjectID).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	if count > 0 {
+		return 0, ErrPortfolioProjectExists
+	}
+
+	query := `
+	INSERT INTO portfolio_projects (
+		portfolio_id, project_id, priority, status_override,
+		allocated_budget, spent_amount, order_index, created_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+
+	now := time.Now()
+	if item.CreatedAt.IsZero() {
+		item.CreatedAt = now
+	}
+	if item.Priority == "" {
+		item.Priority = model.PortfolioProjectPriorityMedium
+	}
+
+	res, err := r.db.Exec(query,
+		item.PortfolioID,
+		item.ProjectID,
+		item.Priority,
+		item.StatusOverride,
+		item.AllocatedBudget,
+		item.SpentAmount,
+		item.OrderIndex,
+		item.CreatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	item.ID = id
+	return id, nil
 }
 
 func (r *portfolioRepositoryImpl) GetPortfolioProject(portfolioID int64, projectID int) (*model.PortfolioProject, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		pp.id, pp.portfolio_id, pp.project_id, pp.priority, pp.status_override,
+		pp.allocated_budget, pp.spent_amount, pp.order_index, pp.created_at,
+		pr.name, pr.color
+	FROM portfolio_projects pp
+	JOIN projects pr ON pp.project_id = pr.id
+	WHERE pp.portfolio_id = ? AND pp.project_id = ?`
+
+	var (
+		item                model.PortfolioProject
+		projName, projColor string
+	)
+	err := r.db.QueryRow(query, portfolioID, projectID).Scan(
+		&item.ID,
+		&item.PortfolioID,
+		&item.ProjectID,
+		&item.Priority,
+		&item.StatusOverride,
+		&item.AllocatedBudget,
+		&item.SpentAmount,
+		&item.OrderIndex,
+		&item.CreatedAt,
+		&projName,
+		&projColor,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrPortfolioProjectNF
+		}
+		return nil, err
+	}
+
+	item.ProjectName = projName
+	item.ProjectColor = projColor
+
+	taskQuery := `
+	SELECT 
+		COUNT(id),
+		COALESCE(SUM(CASE WHEN status = 'completed' OR completed = 1 THEN 1 ELSE 0 END), 0)
+	FROM tasks
+	WHERE project_id = ?`
+	_ = r.db.QueryRow(taskQuery, projectID).Scan(&item.TaskCount, &item.CompletedTaskCount)
+	if item.TaskCount > 0 {
+		item.ProgressPercentage = math.Round((float64(item.CompletedTaskCount)/float64(item.TaskCount))*1000) / 10
+	}
+
+	return &item, nil
 }
 
 func (r *portfolioRepositoryImpl) ListPortfolioProjects(portfolioID int64) ([]model.PortfolioProject, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		pp.id, pp.portfolio_id, pp.project_id, pp.priority, pp.status_override,
+		pp.allocated_budget, pp.spent_amount, pp.order_index, pp.created_at,
+		pr.name, pr.color
+	FROM portfolio_projects pp
+	JOIN projects pr ON pp.project_id = pr.id
+	WHERE pp.portfolio_id = ?
+	ORDER BY pp.order_index ASC, pp.created_at ASC`
+
+	rows, err := r.db.Query(query, portfolioID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []model.PortfolioProject
+	for rows.Next() {
+		var (
+			item                model.PortfolioProject
+			projName, projColor string
+		)
+		err := rows.Scan(
+			&item.ID,
+			&item.PortfolioID,
+			&item.ProjectID,
+			&item.Priority,
+			&item.StatusOverride,
+			&item.AllocatedBudget,
+			&item.SpentAmount,
+			&item.OrderIndex,
+			&item.CreatedAt,
+			&projName,
+			&projColor,
+		)
+		if err != nil {
+			return nil, err
+		}
+		item.ProjectName = projName
+		item.ProjectColor = projColor
+
+		taskQuery := `
+		SELECT 
+			COUNT(id),
+			COALESCE(SUM(CASE WHEN status = 'completed' OR completed = 1 THEN 1 ELSE 0 END), 0)
+		FROM tasks
+		WHERE project_id = ?`
+		_ = r.db.QueryRow(taskQuery, item.ProjectID).Scan(&item.TaskCount, &item.CompletedTaskCount)
+		if item.TaskCount > 0 {
+			item.ProgressPercentage = math.Round((float64(item.CompletedTaskCount)/float64(item.TaskCount))*1000) / 10
+		}
+
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []model.PortfolioProject{}
+	}
+	return items, nil
 }
 
 func (r *portfolioRepositoryImpl) UpdatePortfolioProject(item *model.PortfolioProject) error {
@@ -352,6 +503,19 @@ func (r *portfolioRepositoryImpl) UpdatePortfolioProject(item *model.PortfolioPr
 }
 
 func (r *portfolioRepositoryImpl) RemoveProjectFromPortfolio(portfolioID int64, projectID int) error {
+	query := `DELETE FROM portfolio_projects WHERE portfolio_id = ? AND project_id = ?`
+	res, err := r.db.Exec(query, portfolioID, projectID)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrPortfolioProjectNF
+	}
 	return nil
 }
 
