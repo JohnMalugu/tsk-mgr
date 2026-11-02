@@ -184,6 +184,55 @@ type UpdateResourceAllocationRequest struct {
 	Notes                 *string    `json:"notes,omitempty"`
 }
 
+// WorkloadFilter specifies filtering criteria for team workload and capacity queries
+type WorkloadFilter struct {
+	WorkspaceID int64      `json:"workspace_id"`
+	UserID      string     `json:"user_id,omitempty"`
+	Skill       string     `json:"skill,omitempty"`
+	From        *time.Time `json:"from,omitempty"`
+	To          *time.Time `json:"to,omitempty"`
+}
+
+// TeamWorkloadHeatmap aggregates team capacity heatmap matrix across multiple days
+type TeamWorkloadHeatmap struct {
+	WorkspaceID            int64                 `json:"workspace_id"`
+	StartDate              time.Time             `json:"start_date"`
+	EndDate                time.Time             `json:"end_date"`
+	Days                   []string              `json:"days"` // YYYY-MM-DD
+	Users                  []UserWorkloadSummary `json:"users"`
+	OverallUtilizationRate float64               `json:"overall_utilization_rate"`
+	OverallocatedUserCount int                   `json:"overallocated_user_count"`
+}
+
+// OverallocatedAlert highlights a resource exceeding daily or weekly capacity limits
+type OverallocatedAlert struct {
+	UserID          string  `json:"user_id"`
+	Username        string  `json:"username"`
+	Date            string  `json:"date"` // YYYY-MM-DD
+	CapacityHours   float64 `json:"capacity_hours"`
+	DemandHours     float64 `json:"demand_hours"`
+	OverHours       float64 `json:"over_hours"`
+	UtilizationRate float64 `json:"utilization_rate"`
+	ActiveTaskCount int     `json:"active_task_count"`
+}
+
+// WorkloadMetrics aggregates high-level capacity, demand, and utilization metrics for a workspace
+type WorkloadMetrics struct {
+	WorkspaceID                 int64   `json:"workspace_id"`
+	TotalProfiles               int     `json:"total_profiles"`
+	ActiveProfiles              int     `json:"active_profiles"`
+	TotalWeeklyCapacityHours    float64 `json:"total_weekly_capacity_hours"`
+	TotalAssignedTaskHours      float64 `json:"total_assigned_task_hours"`
+	TotalAllocatedProjectHours  float64 `json:"total_allocated_project_hours"`
+	AverageUtilizationRate      float64 `json:"average_utilization_rate"`
+	UnderutilizedCount          int     `json:"underutilized_count"`
+	OptimalCount                int     `json:"optimal_count"`
+	AtCapacityCount             int     `json:"at_capacity_count"`
+	OverallocatedCount          int     `json:"overallocated_count"`
+	TotalScheduledTimeOffDays   int     `json:"total_scheduled_time_off_days"`
+}
+
+
 
 
 
