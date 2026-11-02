@@ -340,19 +340,116 @@ func (s *workloadServiceImpl) DeleteTimeOff(id int64) error {
 }
 
 func (s *workloadServiceImpl) CreateAllocation(req model.CreateResourceAllocationRequest) (*model.ProjectResourceAllocation, error) {
-	return nil, nil
+	if req.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	if req.UserID == "" {
+		return nil, ErrUserIDRequired
+	}
+	if req.ProjectID <= 0 {
+		return nil, ErrProjectNotFound
+	}
+	if s.projectRepo != nil {
+		p, err := s.projectRepo.GetByID(req.ProjectID)
+		if err != nil || p == nil {
+			return nil, ErrProjectNotFound
+		}
+	}
+	if req.EndDate.Before(req.StartDate) {
+		return nil, ErrInvalidDateRange
+	}
+	if req.AllocatedHoursPerWeek <= 0 || req.AllocatedHoursPerWeek > model.MaxWeeklyCapacityHours {
+		return nil, ErrInvalidCapacity
+	}
+
+	alloc := &model.ProjectResourceAllocation{
+		WorkspaceID:           req.WorkspaceID,
+		ProjectID:             req.ProjectID,
+		UserID:                req.UserID,
+		AllocatedHoursPerWeek: req.AllocatedHoursPerWeek,
+		StartDate:             req.StartDate,
+		EndDate:               req.EndDate,
+		Status:                model.AllocationStatusPlanned,
+		Notes:                 req.Notes,
+	}
+
+	id, err := s.repo.CreateAllocation(alloc)
+	if err != nil {
+		return nil, err
+	}
+	alloc.ID = id
+	return s.repo.GetAllocationByID(id)
 }
+
 func (s *workloadServiceImpl) GetAllocation(id int64) (*model.ProjectResourceAllocation, error) {
-	return nil, nil
+	a, err := s.repo.GetAllocationByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrAllocationNotFound) {
+			return nil, ErrAllocationNotFound
+		}
+		return nil, err
+	}
+	return a, nil
 }
+
 func (s *workloadServiceImpl) ListAllocations(workspaceID int64, projectID int, userID string, status string) ([]model.ProjectResourceAllocation, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	return s.repo.ListAllocations(workspaceID, projectID, userID, status)
 }
+
 func (s *workloadServiceImpl) UpdateAllocation(id int64, req model.UpdateResourceAllocationRequest) (*model.ProjectResourceAllocation, error) {
-	return nil, nil
+	alloc, err := s.repo.GetAllocationByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrAllocationNotFound) {
+			return nil, ErrAllocationNotFound
+		}
+		return nil, err
+	}
+
+	if req.AllocatedHoursPerWeek != nil {
+		if *req.AllocatedHoursPerWeek <= 0 || *req.AllocatedHoursPerWeek > model.MaxWeeklyCapacityHours {
+			return nil, ErrInvalidCapacity
+		}
+		alloc.AllocatedHoursPerWeek = *req.AllocatedHoursPerWeek
+	}
+	if req.StartDate != nil {
+		alloc.StartDate = *req.StartDate
+	}
+	if req.EndDate != nil {
+		alloc.EndDate = *req.EndDate
+	}
+	if alloc.EndDate.Before(alloc.StartDate) {
+		return nil, ErrInvalidDateRange
+	}
+
+	if req.Status != nil {
+		st := *req.Status
+		if st != model.AllocationStatusPlanned &&
+			st != model.AllocationStatusActive &&
+			st != model.AllocationStatusCompleted &&
+			st != model.AllocationStatusCanceled {
+			return nil, ErrInvalidAllocationStatus
+		}
+		alloc.Status = st
+	}
+	if req.Notes != nil {
+		alloc.Notes = *req.Notes
+	}
+
+	if err := s.repo.UpdateAllocation(alloc); err != nil {
+		return nil, err
+	}
+	return s.repo.GetAllocationByID(id)
 }
+
 func (s *workloadServiceImpl) DeleteAllocation(id int64) error {
-	return nil
+	err := s.repo.DeleteAllocation(id)
+	if err != nil && errors.Is(err, repository.ErrAllocationNotFound) {
+		return ErrAllocationNotFound
+	}
+	return err
 }
 
 func (s *workloadServiceImpl) GetUserWorkload(workspaceID int64, userID string, from, to time.Time) (*model.UserWorkloadSummary, error) {
