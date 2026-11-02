@@ -120,5 +120,30 @@ type UserWorkloadSummary struct {
 	DailyBreakdown         []WorkloadDailyBucket `json:"daily_breakdown"`
 }
 
+// CreateResourceProfileRequest defines parameters to register a team member's capacity profile
+type CreateResourceProfileRequest struct {
+	WorkspaceID         int64    `json:"workspace_id"`
+	UserID              string   `json:"user_id"`
+	JobTitle            string   `json:"job_title,omitempty"`
+	WeeklyCapacityHours *float64 `json:"weekly_capacity_hours,omitempty"`
+	DailyCapacityHours  *float64 `json:"daily_capacity_hours,omitempty"`
+	Skills              []string `json:"skills,omitempty"`
+	HourlyRate          *float64 `json:"hourly_rate,omitempty"`
+	Currency            string   `json:"currency,omitempty"`
+	IsActive            *bool    `json:"is_active,omitempty"`
+}
+
+// UpdateResourceProfileRequest defines parameters to update a resource capacity profile
+type UpdateResourceProfileRequest struct {
+	JobTitle            *string   `json:"job_title,omitempty"`
+	WeeklyCapacityHours *float64  `json:"weekly_capacity_hours,omitempty"`
+	DailyCapacityHours  *float64  `json:"daily_capacity_hours,omitempty"`
+	Skills              *[]string `json:"skills,omitempty"`
+	HourlyRate          *float64  `json:"hourly_rate,omitempty"`
+	Currency            *string   `json:"currency,omitempty"`
+	IsActive            *bool     `json:"is_active,omitempty"`
+}
+
+
 
 
