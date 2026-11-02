@@ -91,6 +91,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 Workload & Resource Capacity Planning
+	if strings.HasPrefix(r.URL.Path, "/v2/workload") {
+		if handler.GlobalWorkloadHandler == nil {
+			http.Error(w, "Workload handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalWorkloadHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return

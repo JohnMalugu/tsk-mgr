@@ -119,6 +119,10 @@ func main() {
 	portfolioSvc := service.NewPortfolioService(portfolioRepo, projectRepo)
 	handler.InitPortfolioHandler(portfolioSvc)
 
+	workloadRepo := repository.NewWorkloadRepository(sqliteDB)
+	workloadSvc := service.NewWorkloadService(workloadRepo, projectRepo)
+	handler.InitWorkloadHandler(workloadSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
