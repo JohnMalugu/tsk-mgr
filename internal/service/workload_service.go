@@ -621,10 +621,110 @@ func (s *workloadServiceImpl) GetUserWorkload(workspaceID int64, userID string, 
 	return summary, nil
 }
 func (s *workloadServiceImpl) GetTeamHeatmap(workspaceID int64, from, to time.Time) (*model.TeamWorkloadHeatmap, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	if !from.IsZero() && !to.IsZero() && to.Before(from) {
+		return nil, ErrInvalidDateRange
+	}
+
+	if from.IsZero() {
+		from = time.Now().Truncate(24 * time.Hour)
+	} else {
+		from = from.Truncate(24 * time.Hour)
+	}
+	if to.IsZero() {
+		to = from.Add(7 * 24 * time.Hour)
+	} else {
+		to = to.Truncate(24 * time.Hour)
+	}
+
+	var days []string
+	for d := from; !d.After(to); d = d.Add(24 * time.Hour) {
+		days = append(days, d.Format("2006-01-02"))
+	}
+
+	isActive := true
+	profiles, err := s.repo.ListProfiles(workspaceID, &isActive)
+	if err != nil {
+		return nil, err
+	}
+
+	heatmap := &model.TeamWorkloadHeatmap{
+		WorkspaceID: workspaceID,
+		StartDate:   from,
+		EndDate:     to,
+		Days:        days,
+		Users:       []model.UserWorkloadSummary{},
+	}
+
+	var totalTeamAvailable, totalTeamDemand float64
+	overallocatedUsers := make(map[string]bool)
+
+	for _, p := range profiles {
+		summary, err := s.GetUserWorkload(workspaceID, p.UserID, from, to)
+		if err != nil {
+			return nil, err
+		}
+		heatmap.Users = append(heatmap.Users, *summary)
+
+		totalTeamAvailable += summary.TotalAvailableHours
+		totalTeamDemand += (summary.TotalAssignedHours + summary.TotalAllocatedHours)
+
+		if summary.UtilizationStatus == model.UtilizationStatusOver {
+			overallocatedUsers[p.UserID] = true
+		} else {
+			for _, b := range summary.DailyBreakdown {
+				if b.IsOverCapacity {
+					overallocatedUsers[p.UserID] = true
+					break
+				}
+			}
+		}
+	}
+
+	if totalTeamAvailable > 0 {
+		heatmap.OverallUtilizationRate = math.Round((totalTeamDemand/totalTeamAvailable)*1000) / 10
+	} else if totalTeamDemand > 0 {
+		heatmap.OverallUtilizationRate = 100.0
+	}
+
+	heatmap.OverallocatedUserCount = len(overallocatedUsers)
+	return heatmap, nil
 }
+
 func (s *workloadServiceImpl) GetOverallocatedAlerts(workspaceID int64, from, to time.Time) ([]model.OverallocatedAlert, error) {
-	return nil, nil
+	heatmap, err := s.GetTeamHeatmap(workspaceID, from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	var alerts []model.OverallocatedAlert
+	for _, user := range heatmap.Users {
+		for _, b := range user.DailyBreakdown {
+			if b.IsOverCapacity {
+				overHrs := math.Round((b.TotalDemandHours-b.AvailableHours)*10) / 10
+				if overHrs < 0 {
+					overHrs = 0
+				}
+				alerts = append(alerts, model.OverallocatedAlert{
+					UserID:          user.UserID,
+					Username:        user.Username,
+					Date:            b.Date,
+					CapacityHours:   b.AvailableHours,
+					DemandHours:     b.TotalDemandHours,
+					OverHours:       overHrs,
+					UtilizationRate: b.UtilizationRate,
+					ActiveTaskCount: b.TaskCount,
+				})
+			}
+		}
+	}
+
+	if alerts == nil {
+		alerts = []model.OverallocatedAlert{}
+	}
+	return alerts, nil
 }
 func (s *workloadServiceImpl) GetWorkspaceMetrics(workspaceID int64) (*model.WorkloadMetrics, error) {
 	return nil, nil
