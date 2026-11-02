@@ -164,6 +164,27 @@ type UpdateTimeOffRequest struct {
 	Description *string    `json:"description,omitempty"`
 }
 
+// CreateResourceAllocationRequest defines parameters to book a team member's hours to a project
+type CreateResourceAllocationRequest struct {
+	WorkspaceID           int64     `json:"workspace_id"`
+	ProjectID             int       `json:"project_id"`
+	UserID                string    `json:"user_id"`
+	AllocatedHoursPerWeek float64   `json:"allocated_hours_per_week"`
+	StartDate             time.Time `json:"start_date"`
+	EndDate               time.Time `json:"end_date"`
+	Notes                 string    `json:"notes,omitempty"`
+}
+
+// UpdateResourceAllocationRequest defines parameters to adjust an active or planned project allocation
+type UpdateResourceAllocationRequest struct {
+	AllocatedHoursPerWeek *float64   `json:"allocated_hours_per_week,omitempty"`
+	StartDate             *time.Time `json:"start_date,omitempty"`
+	EndDate               *time.Time `json:"end_date,omitempty"`
+	Status                *string    `json:"status,omitempty"` // planned, active, completed, canceled
+	Notes                 *string    `json:"notes,omitempty"`
+}
+
+
 
 
 
