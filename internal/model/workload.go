@@ -56,3 +56,32 @@ type ResourceTimeOff struct {
 	Username string `json:"username,omitempty"`
 }
 
+// Allocation status constants
+const (
+	AllocationStatusPlanned   = "planned"
+	AllocationStatusActive    = "active"
+	AllocationStatusCompleted = "completed"
+	AllocationStatusCanceled  = "canceled"
+)
+
+// ProjectResourceAllocation represents planned commitment of a team member to a project
+type ProjectResourceAllocation struct {
+	ID                    int64     `json:"id"`
+	WorkspaceID           int64     `json:"workspace_id"`
+	ProjectID             int       `json:"project_id"`
+	UserID                string    `json:"user_id"`
+	AllocatedHoursPerWeek float64   `json:"allocated_hours_per_week"`
+	StartDate             time.Time `json:"start_date"`
+	EndDate               time.Time `json:"end_date"`
+	Status                string    `json:"status"` // planned, active, completed, canceled
+	Notes                 string    `json:"notes,omitempty"`
+	CreatedAt             time.Time `json:"created_at"`
+	UpdatedAt             time.Time `json:"updated_at"`
+
+	// Enriched fields
+	ProjectName  string `json:"project_name,omitempty"`
+	ProjectColor string `json:"project_color,omitempty"`
+	Username     string `json:"username,omitempty"`
+}
+
+
