@@ -216,19 +216,127 @@ func (s *workloadServiceImpl) DeleteProfile(id int64) error {
 }
 
 func (s *workloadServiceImpl) CreateTimeOff(req model.CreateTimeOffRequest) (*model.ResourceTimeOff, error) {
-	return nil, nil
+	if req.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	if req.UserID == "" {
+		return nil, ErrUserIDRequired
+	}
+	if req.EndDate.Before(req.StartDate) {
+		return nil, ErrInvalidDateRange
+	}
+
+	timeOffType := req.TimeOffType
+	if timeOffType == "" {
+		timeOffType = model.TimeOffTypeVacation
+	} else if timeOffType != model.TimeOffTypeVacation &&
+		timeOffType != model.TimeOffTypeSickLeave &&
+		timeOffType != model.TimeOffTypePublicHoliday &&
+		timeOffType != model.TimeOffTypeTraining &&
+		timeOffType != model.TimeOffTypePersonal {
+		return nil, ErrInvalidTimeOffType
+	}
+
+	hoursPerDay := model.DefaultDailyCapacityHours
+	if req.HoursPerDay != nil {
+		if *req.HoursPerDay <= 0 || *req.HoursPerDay > model.MaxDailyCapacityHours {
+			return nil, ErrInvalidCapacity
+		}
+		hoursPerDay = *req.HoursPerDay
+	}
+
+	timeOff := &model.ResourceTimeOff{
+		WorkspaceID: req.WorkspaceID,
+		UserID:      req.UserID,
+		StartDate:   req.StartDate,
+		EndDate:     req.EndDate,
+		HoursPerDay: hoursPerDay,
+		TimeOffType: timeOffType,
+		Description: req.Description,
+	}
+
+	id, err := s.repo.CreateTimeOff(timeOff)
+	if err != nil {
+		return nil, err
+	}
+	timeOff.ID = id
+	return s.repo.GetTimeOffByID(id)
 }
+
 func (s *workloadServiceImpl) GetTimeOff(id int64) (*model.ResourceTimeOff, error) {
-	return nil, nil
+	to, err := s.repo.GetTimeOffByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrTimeOffNotFound) {
+			return nil, ErrTimeOffNotFound
+		}
+		return nil, err
+	}
+	return to, nil
 }
+
 func (s *workloadServiceImpl) ListTimeOffs(workspaceID int64, userID string, from, to *time.Time) ([]model.ResourceTimeOff, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	if from != nil && to != nil && to.Before(*from) {
+		return nil, ErrInvalidDateRange
+	}
+	return s.repo.ListTimeOffs(workspaceID, userID, from, to)
 }
+
 func (s *workloadServiceImpl) UpdateTimeOff(id int64, req model.UpdateTimeOffRequest) (*model.ResourceTimeOff, error) {
-	return nil, nil
+	timeOff, err := s.repo.GetTimeOffByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrTimeOffNotFound) {
+			return nil, ErrTimeOffNotFound
+		}
+		return nil, err
+	}
+
+	if req.StartDate != nil {
+		timeOff.StartDate = *req.StartDate
+	}
+	if req.EndDate != nil {
+		timeOff.EndDate = *req.EndDate
+	}
+	if timeOff.EndDate.Before(timeOff.StartDate) {
+		return nil, ErrInvalidDateRange
+	}
+
+	if req.TimeOffType != nil {
+		tot := *req.TimeOffType
+		if tot != model.TimeOffTypeVacation &&
+			tot != model.TimeOffTypeSickLeave &&
+			tot != model.TimeOffTypePublicHoliday &&
+			tot != model.TimeOffTypeTraining &&
+			tot != model.TimeOffTypePersonal {
+			return nil, ErrInvalidTimeOffType
+		}
+		timeOff.TimeOffType = tot
+	}
+
+	if req.HoursPerDay != nil {
+		if *req.HoursPerDay <= 0 || *req.HoursPerDay > model.MaxDailyCapacityHours {
+			return nil, ErrInvalidCapacity
+		}
+		timeOff.HoursPerDay = *req.HoursPerDay
+	}
+	if req.Description != nil {
+		timeOff.Description = *req.Description
+	}
+
+	if err := s.repo.UpdateTimeOff(timeOff); err != nil {
+		return nil, err
+	}
+	return s.repo.GetTimeOffByID(id)
 }
+
 func (s *workloadServiceImpl) DeleteTimeOff(id int64) error {
-	return nil
+	err := s.repo.DeleteTimeOff(id)
+	if err != nil && errors.Is(err, repository.ErrTimeOffNotFound) {
+		return ErrTimeOffNotFound
+	}
+	return err
 }
 
 func (s *workloadServiceImpl) CreateAllocation(req model.CreateResourceAllocationRequest) (*model.ProjectResourceAllocation, error) {
