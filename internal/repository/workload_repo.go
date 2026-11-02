@@ -299,13 +299,135 @@ func (r *workloadRepositoryImpl) DeleteProfile(id int64) error {
 }
 
 func (r *workloadRepositoryImpl) CreateTimeOff(timeOff *model.ResourceTimeOff) (int64, error) {
-	return 0, nil
+	query := `
+	INSERT INTO resource_time_offs (
+		workspace_id, user_id, start_date, end_date, hours_per_day,
+		time_off_type, description, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	now := time.Now()
+	if timeOff.CreatedAt.IsZero() {
+		timeOff.CreatedAt = now
+	}
+	timeOff.UpdatedAt = now
+	if timeOff.HoursPerDay <= 0 {
+		timeOff.HoursPerDay = model.DefaultDailyCapacityHours
+	}
+	if timeOff.TimeOffType == "" {
+		timeOff.TimeOffType = model.TimeOffTypeVacation
+	}
+
+	res, err := r.db.Exec(query,
+		timeOff.WorkspaceID,
+		timeOff.UserID,
+		timeOff.StartDate,
+		timeOff.EndDate,
+		timeOff.HoursPerDay,
+		timeOff.TimeOffType,
+		timeOff.Description,
+		timeOff.CreatedAt,
+		timeOff.UpdatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	timeOff.ID = id
+	return id, nil
 }
+
 func (r *workloadRepositoryImpl) GetTimeOffByID(id int64) (*model.ResourceTimeOff, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		rto.id, rto.workspace_id, rto.user_id, rto.start_date, rto.end_date,
+		rto.hours_per_day, rto.time_off_type, rto.description, rto.created_at, rto.updated_at,
+		u.username
+	FROM resource_time_offs rto
+	JOIN users u ON rto.user_id = u.id
+	WHERE rto.id = ?`
+
+	row := r.db.QueryRow(query, id)
+	return r.scanTimeOff(row)
 }
+
 func (r *workloadRepositoryImpl) ListTimeOffs(workspaceID int64, userID string, from, to *time.Time) ([]model.ResourceTimeOff, error) {
-	return nil, nil
+	baseQuery := `
+	SELECT 
+		rto.id, rto.workspace_id, rto.user_id, rto.start_date, rto.end_date,
+		rto.hours_per_day, rto.time_off_type, rto.description, rto.created_at, rto.updated_at,
+		u.username
+	FROM resource_time_offs rto
+	JOIN users u ON rto.user_id = u.id
+	WHERE rto.workspace_id = ?`
+
+	var args []interface{}
+	args = append(args, workspaceID)
+
+	if userID != "" {
+		baseQuery += ` AND rto.user_id = ?`
+		args = append(args, userID)
+	}
+	if from != nil {
+		baseQuery += ` AND rto.end_date >= ?`
+		args = append(args, *from)
+	}
+	if to != nil {
+		baseQuery += ` AND rto.start_date <= ?`
+		args = append(args, *to)
+	}
+
+	baseQuery += ` ORDER BY rto.start_date ASC`
+
+	rows, err := r.db.Query(baseQuery, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []model.ResourceTimeOff
+	for rows.Next() {
+		to, err := r.scanTimeOff(rows)
+		if err != nil {
+			return nil, err
+		}
+		list = append(list, *to)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if list == nil {
+		list = []model.ResourceTimeOff{}
+	}
+	return list, nil
+}
+
+func (r *workloadRepositoryImpl) scanTimeOff(row rowScanner) (*model.ResourceTimeOff, error) {
+	var to model.ResourceTimeOff
+	err := row.Scan(
+		&to.ID,
+		&to.WorkspaceID,
+		&to.UserID,
+		&to.StartDate,
+		&to.EndDate,
+		&to.HoursPerDay,
+		&to.TimeOffType,
+		&to.Description,
+		&to.CreatedAt,
+		&to.UpdatedAt,
+		&to.Username,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTimeOffNotFound
+		}
+		return nil, err
+	}
+	return &to, nil
 }
 func (r *workloadRepositoryImpl) UpdateTimeOff(timeOff *model.ResourceTimeOff) error {
 	return nil
