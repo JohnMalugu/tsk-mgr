@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"math"
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -453,7 +454,171 @@ func (s *workloadServiceImpl) DeleteAllocation(id int64) error {
 }
 
 func (s *workloadServiceImpl) GetUserWorkload(workspaceID int64, userID string, from, to time.Time) (*model.UserWorkloadSummary, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	if userID == "" {
+		return nil, ErrUserIDRequired
+	}
+	if !from.IsZero() && !to.IsZero() && to.Before(from) {
+		return nil, ErrInvalidDateRange
+	}
+
+	if from.IsZero() {
+		from = time.Now().Truncate(24 * time.Hour)
+	} else {
+		from = from.Truncate(24 * time.Hour)
+	}
+	if to.IsZero() {
+		to = from.Add(7 * 24 * time.Hour)
+	} else {
+		to = to.Truncate(24 * time.Hour)
+	}
+
+	// 1. Fetch profile (fallback to defaults if not registered)
+	profile, err := s.repo.GetProfileByUserID(workspaceID, userID)
+	dailyCap := model.DefaultDailyCapacityHours
+	username := userID
+	email := ""
+	jobTitle := ""
+	if err == nil && profile != nil {
+		dailyCap = profile.DailyCapacityHours
+		username = profile.Username
+		email = profile.Email
+		jobTitle = profile.JobTitle
+	}
+
+	// 2. Fetch tasks
+	tasks, err := s.repo.GetUserTasksForWorkload(workspaceID, userID, from, to.Add(24*time.Hour))
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. Fetch time offs
+	timeOffs, err := s.repo.ListTimeOffs(workspaceID, userID, &from, &to)
+	if err != nil {
+		return nil, err
+	}
+
+	// 4. Fetch active allocations
+	allocs, err := s.repo.ListAllocations(workspaceID, 0, userID, model.AllocationStatusActive)
+	if err != nil {
+		return nil, err
+	}
+
+	summary := &model.UserWorkloadSummary{
+		UserID:         userID,
+		Username:       username,
+		Email:          email,
+		JobTitle:       jobTitle,
+		DailyBreakdown: []model.WorkloadDailyBucket{},
+	}
+
+	var totalAvailable, totalTaskHours, totalAllocHours, totalTimeOff float64
+
+	// Day-by-day iteration
+	for d := from; !d.After(to); d = d.Add(24 * time.Hour) {
+		dayStr := d.Format("2006-01-02")
+		weekday := d.Weekday()
+		isWeekend := weekday == time.Saturday || weekday == time.Sunday
+
+		avail := dailyCap
+		if isWeekend {
+			avail = 0.0
+		}
+
+		// Time off for this day
+		var dayTimeOff float64
+		for _, toItem := range timeOffs {
+			toStart := toItem.StartDate.Truncate(24 * time.Hour)
+			toEnd := toItem.EndDate.Truncate(24 * time.Hour)
+			if (!d.Before(toStart)) && (!d.After(toEnd)) && !isWeekend {
+				dayTimeOff += toItem.HoursPerDay
+			}
+		}
+		if dayTimeOff > avail {
+			dayTimeOff = avail
+		}
+		avail -= dayTimeOff
+
+		// Task demand for this day (tasks due on this day)
+		var dayTaskHours float64
+		var dayTaskCount int
+		for _, t := range tasks {
+			tDue := t.DueDate.Truncate(24 * time.Hour)
+			if tDue.Equal(d) && t.Status != "completed" && !t.Completed {
+				hrs := 1.0
+				if t.EstimateMinutes > 0 {
+					hrs = float64(t.EstimateMinutes) / 60.0
+				}
+				dayTaskHours += hrs
+				dayTaskCount++
+			}
+		}
+
+		// Allocation demand for this day
+		var dayAllocHours float64
+		for _, a := range allocs {
+			aStart := a.StartDate.Truncate(24 * time.Hour)
+			aEnd := a.EndDate.Truncate(24 * time.Hour)
+			if (!d.Before(aStart)) && (!d.After(aEnd)) && !isWeekend {
+				dayAllocHours += (a.AllocatedHoursPerWeek / 5.0)
+			}
+		}
+
+		totalDemand := dayTaskHours + dayAllocHours
+		var utilRate float64
+		if avail > 0 {
+			utilRate = math.Round((totalDemand/avail)*1000) / 10
+		} else if totalDemand > 0 {
+			utilRate = 100.0
+		}
+
+		isOver := totalDemand > avail && avail > 0
+
+		bucket := model.WorkloadDailyBucket{
+			Date:                  dayStr,
+			AvailableHours:        math.Round(avail*10) / 10,
+			AssignedTaskHours:     math.Round(dayTaskHours*10) / 10,
+			AllocatedProjectHours: math.Round(dayAllocHours*10) / 10,
+			TimeOffHours:          math.Round(dayTimeOff*10) / 10,
+			TotalDemandHours:      math.Round(totalDemand*10) / 10,
+			UtilizationRate:       utilRate,
+			IsOverCapacity:        isOver,
+			TaskCount:             dayTaskCount,
+		}
+
+		summary.DailyBreakdown = append(summary.DailyBreakdown, bucket)
+
+		totalAvailable += avail
+		totalTaskHours += dayTaskHours
+		totalAllocHours += dayAllocHours
+		totalTimeOff += dayTimeOff
+	}
+
+	summary.TotalAvailableHours = math.Round(totalAvailable*10) / 10
+	summary.TotalAssignedHours = math.Round(totalTaskHours*10) / 10
+	summary.TotalAllocatedHours = math.Round(totalAllocHours*10) / 10
+	summary.TotalTimeOffHours = math.Round(totalTimeOff*10) / 10
+
+	totDemand := summary.TotalAssignedHours + summary.TotalAllocatedHours
+	if summary.TotalAvailableHours > 0 {
+		summary.OverallUtilizationRate = math.Round((totDemand/summary.TotalAvailableHours)*1000) / 10
+	} else if totDemand > 0 {
+		summary.OverallUtilizationRate = 100.0
+	}
+
+	if summary.OverallUtilizationRate < 70.0 {
+		summary.UtilizationStatus = model.UtilizationStatusUnder
+	} else if summary.OverallUtilizationRate < 100.0 {
+		summary.UtilizationStatus = model.UtilizationStatusOptimal
+	} else if summary.OverallUtilizationRate == 100.0 {
+		summary.UtilizationStatus = model.UtilizationStatusCapacity
+	} else {
+		summary.UtilizationStatus = model.UtilizationStatusOver
+	}
+
+	return summary, nil
 }
 func (s *workloadServiceImpl) GetTeamHeatmap(workspaceID int64, from, to time.Time) (*model.TeamWorkloadHeatmap, error) {
 	return nil, nil
