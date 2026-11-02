@@ -84,4 +84,41 @@ type ProjectResourceAllocation struct {
 	Username     string `json:"username,omitempty"`
 }
 
+// Workload utilization status constants
+const (
+	UtilizationStatusUnder    = "underutilized"
+	UtilizationStatusOptimal  = "optimal"
+	UtilizationStatusCapacity = "at_capacity"
+	UtilizationStatusOver     = "overutilized"
+)
+
+// WorkloadDailyBucket aggregates daily capacity and demand metrics for a specific calendar day
+type WorkloadDailyBucket struct {
+	Date                  string  `json:"date"` // YYYY-MM-DD
+	AvailableHours        float64 `json:"available_hours"`
+	AssignedTaskHours     float64 `json:"assigned_task_hours"`
+	AllocatedProjectHours float64 `json:"allocated_project_hours"`
+	TimeOffHours          float64 `json:"time_off_hours"`
+	TotalDemandHours      float64 `json:"total_demand_hours"`
+	UtilizationRate       float64 `json:"utilization_rate"` // percentage e.g. 85.5%
+	IsOverCapacity        bool    `json:"is_over_capacity"`
+	TaskCount             int     `json:"task_count"`
+}
+
+// UserWorkloadSummary summarizes capacity, allocated demand, and workload health for a user over a date range
+type UserWorkloadSummary struct {
+	UserID                 string                `json:"user_id"`
+	Username               string                `json:"username"`
+	Email                  string                `json:"email,omitempty"`
+	JobTitle               string                `json:"job_title,omitempty"`
+	TotalAvailableHours    float64               `json:"total_available_hours"`
+	TotalAssignedHours     float64               `json:"total_assigned_hours"`
+	TotalAllocatedHours    float64               `json:"total_allocated_hours"`
+	TotalTimeOffHours      float64               `json:"total_time_off_hours"`
+	OverallUtilizationRate float64               `json:"overall_utilization_rate"`
+	UtilizationStatus      string                `json:"utilization_status"` // underutilized, optimal, at_capacity, overutilized
+	DailyBreakdown         []WorkloadDailyBucket `json:"daily_breakdown"`
+}
+
+
 
