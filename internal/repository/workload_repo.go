@@ -482,19 +482,190 @@ func (r *workloadRepositoryImpl) DeleteTimeOff(id int64) error {
 }
 
 func (r *workloadRepositoryImpl) CreateAllocation(alloc *model.ProjectResourceAllocation) (int64, error) {
-	return 0, nil
+	query := `
+	INSERT INTO project_resource_allocations (
+		workspace_id, project_id, user_id, allocated_hours_per_week,
+		start_date, end_date, status, notes, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	now := time.Now()
+	if alloc.CreatedAt.IsZero() {
+		alloc.CreatedAt = now
+	}
+	alloc.UpdatedAt = now
+	if alloc.Status == "" {
+		alloc.Status = model.AllocationStatusPlanned
+	}
+
+	res, err := r.db.Exec(query,
+		alloc.WorkspaceID,
+		alloc.ProjectID,
+		alloc.UserID,
+		alloc.AllocatedHoursPerWeek,
+		alloc.StartDate,
+		alloc.EndDate,
+		alloc.Status,
+		alloc.Notes,
+		alloc.CreatedAt,
+		alloc.UpdatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	alloc.ID = id
+	return id, nil
 }
+
 func (r *workloadRepositoryImpl) GetAllocationByID(id int64) (*model.ProjectResourceAllocation, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		pra.id, pra.workspace_id, pra.project_id, pra.user_id, pra.allocated_hours_per_week,
+		pra.start_date, pra.end_date, pra.status, pra.notes, pra.created_at, pra.updated_at,
+		pr.name, pr.color, u.username
+	FROM project_resource_allocations pra
+	JOIN projects pr ON pra.project_id = pr.id
+	JOIN users u ON pra.user_id = u.id
+	WHERE pra.id = ?`
+
+	row := r.db.QueryRow(query, id)
+	return r.scanAllocation(row)
 }
+
 func (r *workloadRepositoryImpl) ListAllocations(workspaceID int64, projectID int, userID string, status string) ([]model.ProjectResourceAllocation, error) {
-	return nil, nil
+	baseQuery := `
+	SELECT 
+		pra.id, pra.workspace_id, pra.project_id, pra.user_id, pra.allocated_hours_per_week,
+		pra.start_date, pra.end_date, pra.status, pra.notes, pra.created_at, pra.updated_at,
+		pr.name, pr.color, u.username
+	FROM project_resource_allocations pra
+	JOIN projects pr ON pra.project_id = pr.id
+	JOIN users u ON pra.user_id = u.id
+	WHERE pra.workspace_id = ?`
+
+	var args []interface{}
+	args = append(args, workspaceID)
+
+	if projectID > 0 {
+		baseQuery += ` AND pra.project_id = ?`
+		args = append(args, projectID)
+	}
+	if userID != "" {
+		baseQuery += ` AND pra.user_id = ?`
+		args = append(args, userID)
+	}
+	if status != "" {
+		baseQuery += ` AND pra.status = ?`
+		args = append(args, status)
+	}
+
+	baseQuery += ` ORDER BY pra.start_date ASC`
+
+	rows, err := r.db.Query(baseQuery, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []model.ProjectResourceAllocation
+	for rows.Next() {
+		alloc, err := r.scanAllocation(rows)
+		if err != nil {
+			return nil, err
+		}
+		list = append(list, *alloc)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if list == nil {
+		list = []model.ProjectResourceAllocation{}
+	}
+	return list, nil
 }
+
 func (r *workloadRepositoryImpl) UpdateAllocation(alloc *model.ProjectResourceAllocation) error {
+	query := `
+	UPDATE project_resource_allocations SET
+		allocated_hours_per_week = ?,
+		start_date = ?,
+		end_date = ?,
+		status = ?,
+		notes = ?,
+		updated_at = ?
+	WHERE id = ?`
+
+	alloc.UpdatedAt = time.Now()
+	res, err := r.db.Exec(query,
+		alloc.AllocatedHoursPerWeek,
+		alloc.StartDate,
+		alloc.EndDate,
+		alloc.Status,
+		alloc.Notes,
+		alloc.UpdatedAt,
+		alloc.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrAllocationNotFound
+	}
 	return nil
 }
+
 func (r *workloadRepositoryImpl) DeleteAllocation(id int64) error {
+	query := `DELETE FROM project_resource_allocations WHERE id = ?`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrAllocationNotFound
+	}
 	return nil
+}
+
+func (r *workloadRepositoryImpl) scanAllocation(row rowScanner) (*model.ProjectResourceAllocation, error) {
+	var a model.ProjectResourceAllocation
+	err := row.Scan(
+		&a.ID,
+		&a.WorkspaceID,
+		&a.ProjectID,
+		&a.UserID,
+		&a.AllocatedHoursPerWeek,
+		&a.StartDate,
+		&a.EndDate,
+		&a.Status,
+		&a.Notes,
+		&a.CreatedAt,
+		&a.UpdatedAt,
+		&a.ProjectName,
+		&a.ProjectColor,
+		&a.Username,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrAllocationNotFound
+		}
+		return nil, err
+	}
+	return &a, nil
 }
 
 func (r *workloadRepositoryImpl) GetUserTasksForWorkload(workspaceID int64, userID string, from, to time.Time) ([]model.Task, error) {
