@@ -323,5 +323,300 @@ func (h *WorkloadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if path == "allocations" || path == "allocations/" {
+		h.HandleAllocations(w, r)
+		return
+	}
+	if strings.HasPrefix(path, "allocations/") {
+		idStr := strings.TrimPrefix(path, "allocations/")
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil || id <= 0 {
+			writeWorkloadError(w, http.StatusBadRequest, "invalid allocation id")
+			return
+		}
+		h.HandleAllocationDetail(w, r, id)
+		return
+	}
+
+	if strings.HasPrefix(path, "users/") {
+		userID := strings.TrimPrefix(path, "users/")
+		h.HandleUserWorkload(w, r, userID)
+		return
+	}
+
+	if path == "heatmap" || path == "heatmap/" {
+		h.HandleHeatmap(w, r)
+		return
+	}
+
+	if path == "overallocated" || path == "overallocated/" {
+		h.HandleOverallocated(w, r)
+		return
+	}
+
+	if path == "metrics" || path == "metrics/" {
+		h.HandleMetrics(w, r)
+		return
+	}
+
 	writeWorkloadError(w, http.StatusNotFound, "endpoint not found")
+}
+
+// HandleAllocations handles GET and POST for /v2/workload/allocations
+func (h *WorkloadHandler) HandleAllocations(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		wsStr := r.URL.Query().Get("workspace_id")
+		if wsStr == "" {
+			writeWorkloadError(w, http.StatusBadRequest, "workspace_id query parameter is required")
+			return
+		}
+		wsID, err := strconv.ParseInt(wsStr, 10, 64)
+		if err != nil || wsID <= 0 {
+			writeWorkloadError(w, http.StatusBadRequest, "invalid workspace_id")
+			return
+		}
+
+		var projID int
+		if projStr := r.URL.Query().Get("project_id"); projStr != "" {
+			if id, err := strconv.Atoi(projStr); err == nil && id > 0 {
+				projID = id
+			}
+		}
+
+		userID := r.URL.Query().Get("user_id")
+		status := r.URL.Query().Get("status")
+
+		allocs, err := h.svc.ListAllocations(wsID, projID, userID, status)
+		if err != nil {
+			writeWorkloadError(w, http.StatusInternalServerError, "Failed to list allocations: "+err.Error())
+			return
+		}
+		writeWorkloadJSON(w, http.StatusOK, allocs)
+
+	case http.MethodPost:
+		var req model.CreateResourceAllocationRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeWorkloadError(w, http.StatusBadRequest, "Invalid request body: "+err.Error())
+			return
+		}
+		if req.UserID == "" {
+			req.UserID = getWorkloadUser(r)
+		}
+
+		alloc, err := h.svc.CreateAllocation(req)
+		if err != nil {
+			switch {
+			case errors.Is(err, service.ErrWorkspaceRequired), errors.Is(err, service.ErrUserIDRequired),
+				errors.Is(err, service.ErrProjectNotFound), errors.Is(err, service.ErrInvalidDateRange),
+				errors.Is(err, service.ErrInvalidCapacity):
+				writeWorkloadError(w, http.StatusBadRequest, err.Error())
+			default:
+				writeWorkloadError(w, http.StatusInternalServerError, "Failed to create allocation: "+err.Error())
+			}
+			return
+		}
+		writeWorkloadJSON(w, http.StatusCreated, alloc)
+
+	default:
+		writeWorkloadError(w, http.StatusMethodNotAllowed, "Method not allowed")
+	}
+}
+
+// HandleAllocationDetail handles GET, PUT, and DELETE for /v2/workload/allocations/{id}
+func (h *WorkloadHandler) HandleAllocationDetail(w http.ResponseWriter, r *http.Request, id int64) {
+	switch r.Method {
+	case http.MethodGet:
+		alloc, err := h.svc.GetAllocation(id)
+		if err != nil {
+			if errors.Is(err, service.ErrAllocationNotFound) {
+				writeWorkloadError(w, http.StatusNotFound, "Project resource allocation not found")
+				return
+			}
+			writeWorkloadError(w, http.StatusInternalServerError, "Failed to get allocation: "+err.Error())
+			return
+		}
+		writeWorkloadJSON(w, http.StatusOK, alloc)
+
+	case http.MethodPut, http.MethodPatch:
+		var req model.UpdateResourceAllocationRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeWorkloadError(w, http.StatusBadRequest, "Invalid request body: "+err.Error())
+			return
+		}
+
+		alloc, err := h.svc.UpdateAllocation(id, req)
+		if err != nil {
+			switch {
+			case errors.Is(err, service.ErrAllocationNotFound):
+				writeWorkloadError(w, http.StatusNotFound, "Project resource allocation not found")
+			case errors.Is(err, service.ErrInvalidCapacity), errors.Is(err, service.ErrInvalidDateRange), errors.Is(err, service.ErrInvalidAllocationStatus):
+				writeWorkloadError(w, http.StatusBadRequest, err.Error())
+			default:
+				writeWorkloadError(w, http.StatusInternalServerError, "Failed to update allocation: "+err.Error())
+			}
+			return
+		}
+		writeWorkloadJSON(w, http.StatusOK, alloc)
+
+	case http.MethodDelete:
+		err := h.svc.DeleteAllocation(id)
+		if err != nil {
+			if errors.Is(err, service.ErrAllocationNotFound) {
+				writeWorkloadError(w, http.StatusNotFound, "Project resource allocation not found")
+				return
+			}
+			writeWorkloadError(w, http.StatusInternalServerError, "Failed to delete allocation: "+err.Error())
+			return
+		}
+		writeWorkloadJSON(w, http.StatusOK, map[string]string{"message": "Project resource allocation deleted successfully"})
+
+	default:
+		writeWorkloadError(w, http.StatusMethodNotAllowed, "Method not allowed")
+	}
+}
+
+func parseDate(val string) time.Time {
+	if val == "" {
+		return time.Time{}
+	}
+	if t, err := time.Parse("2006-01-02", val); err == nil {
+		return t
+	}
+	if t, err := time.Parse(time.RFC3339, val); err == nil {
+		return t
+	}
+	return time.Time{}
+}
+
+// HandleUserWorkload handles GET /v2/workload/users/{userId}
+func (h *WorkloadHandler) HandleUserWorkload(w http.ResponseWriter, r *http.Request, userID string) {
+	if r.Method != http.MethodGet {
+		writeWorkloadError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	wsStr := r.URL.Query().Get("workspace_id")
+	if wsStr == "" {
+		writeWorkloadError(w, http.StatusBadRequest, "workspace_id query parameter is required")
+		return
+	}
+	wsID, err := strconv.ParseInt(wsStr, 10, 64)
+	if err != nil || wsID <= 0 {
+		writeWorkloadError(w, http.StatusBadRequest, "invalid workspace_id")
+		return
+	}
+
+	from := parseDate(r.URL.Query().Get("from"))
+	to := parseDate(r.URL.Query().Get("to"))
+
+	summary, err := h.svc.GetUserWorkload(wsID, userID, from, to)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrWorkspaceRequired), errors.Is(err, service.ErrUserIDRequired), errors.Is(err, service.ErrInvalidDateRange):
+			writeWorkloadError(w, http.StatusBadRequest, err.Error())
+		default:
+			writeWorkloadError(w, http.StatusInternalServerError, "Failed to calculate user workload: "+err.Error())
+		}
+		return
+	}
+	writeWorkloadJSON(w, http.StatusOK, summary)
+}
+
+// HandleHeatmap handles GET /v2/workload/heatmap
+func (h *WorkloadHandler) HandleHeatmap(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeWorkloadError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	wsStr := r.URL.Query().Get("workspace_id")
+	if wsStr == "" {
+		writeWorkloadError(w, http.StatusBadRequest, "workspace_id query parameter is required")
+		return
+	}
+	wsID, err := strconv.ParseInt(wsStr, 10, 64)
+	if err != nil || wsID <= 0 {
+		writeWorkloadError(w, http.StatusBadRequest, "invalid workspace_id")
+		return
+	}
+
+	from := parseDate(r.URL.Query().Get("from"))
+	to := parseDate(r.URL.Query().Get("to"))
+
+	heatmap, err := h.svc.GetTeamHeatmap(wsID, from, to)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrWorkspaceRequired), errors.Is(err, service.ErrInvalidDateRange):
+			writeWorkloadError(w, http.StatusBadRequest, err.Error())
+		default:
+			writeWorkloadError(w, http.StatusInternalServerError, "Failed to generate workload heatmap: "+err.Error())
+		}
+		return
+	}
+	writeWorkloadJSON(w, http.StatusOK, heatmap)
+}
+
+// HandleOverallocated handles GET /v2/workload/overallocated
+func (h *WorkloadHandler) HandleOverallocated(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeWorkloadError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	wsStr := r.URL.Query().Get("workspace_id")
+	if wsStr == "" {
+		writeWorkloadError(w, http.StatusBadRequest, "workspace_id query parameter is required")
+		return
+	}
+	wsID, err := strconv.ParseInt(wsStr, 10, 64)
+	if err != nil || wsID <= 0 {
+		writeWorkloadError(w, http.StatusBadRequest, "invalid workspace_id")
+		return
+	}
+
+	from := parseDate(r.URL.Query().Get("from"))
+	to := parseDate(r.URL.Query().Get("to"))
+
+	alerts, err := h.svc.GetOverallocatedAlerts(wsID, from, to)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrWorkspaceRequired), errors.Is(err, service.ErrInvalidDateRange):
+			writeWorkloadError(w, http.StatusBadRequest, err.Error())
+		default:
+			writeWorkloadError(w, http.StatusInternalServerError, "Failed to retrieve overallocated alerts: "+err.Error())
+		}
+		return
+	}
+	writeWorkloadJSON(w, http.StatusOK, alerts)
+}
+
+// HandleMetrics handles GET /v2/workload/metrics
+func (h *WorkloadHandler) HandleMetrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeWorkloadError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	wsStr := r.URL.Query().Get("workspace_id")
+	if wsStr == "" {
+		writeWorkloadError(w, http.StatusBadRequest, "workspace_id query parameter is required")
+		return
+	}
+	wsID, err := strconv.ParseInt(wsStr, 10, 64)
+	if err != nil || wsID <= 0 {
+		writeWorkloadError(w, http.StatusBadRequest, "invalid workspace_id")
+		return
+	}
+
+	metrics, err := h.svc.GetWorkspaceMetrics(wsID)
+	if err != nil {
+		if errors.Is(err, service.ErrWorkspaceRequired) {
+			writeWorkloadError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeWorkloadError(w, http.StatusInternalServerError, "Failed to get workspace workload metrics: "+err.Error())
+		return
+	}
+	writeWorkloadJSON(w, http.StatusOK, metrics)
 }
