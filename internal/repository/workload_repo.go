@@ -282,6 +282,19 @@ func (r *workloadRepositoryImpl) UpdateProfile(profile *model.ResourceProfile) e
 	return nil
 }
 func (r *workloadRepositoryImpl) DeleteProfile(id int64) error {
+	query := `DELETE FROM resource_profiles WHERE id = ?`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrProfileNotFound
+	}
 	return nil
 }
 
