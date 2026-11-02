@@ -704,5 +704,68 @@ func (r *workloadRepositoryImpl) GetUserTasksForWorkload(workspaceID int64, user
 	return tasks, nil
 }
 func (r *workloadRepositoryImpl) GetWorkspaceWorkloadMetrics(workspaceID int64) (*model.WorkloadMetrics, error) {
-	return nil, nil
+	metrics := &model.WorkloadMetrics{
+		WorkspaceID: workspaceID,
+	}
+
+	// 1. Profile capacity totals
+	profQuery := `
+	SELECT 
+		COUNT(id),
+		COALESCE(SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN is_active = 1 THEN weekly_capacity_hours ELSE 0 END), 0.0)
+	FROM resource_profiles
+	WHERE workspace_id = ?`
+
+	err := r.db.QueryRow(profQuery, workspaceID).Scan(
+		&metrics.TotalProfiles,
+		&metrics.ActiveProfiles,
+		&metrics.TotalWeeklyCapacityHours,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Active project allocation hours
+	allocQuery := `
+	SELECT COALESCE(SUM(allocated_hours_per_week), 0.0)
+	FROM project_resource_allocations
+	WHERE workspace_id = ? AND status IN ('planned', 'active')`
+
+	err = r.db.QueryRow(allocQuery, workspaceID).Scan(&metrics.TotalAllocatedProjectHours)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. Open task estimated hours assigned to active workspace resources
+	taskHoursQuery := `
+	SELECT COALESCE(SUM(t.estimate_minutes) / 60.0, 0.0)
+	FROM tasks t
+	JOIN resource_profiles rp ON t.user_id = rp.user_id
+	WHERE rp.workspace_id = ? AND rp.is_active = 1 AND (t.status != 'completed' AND t.completed = 0)`
+
+	err = r.db.QueryRow(taskHoursQuery, workspaceID).Scan(&metrics.TotalAssignedTaskHours)
+	if err != nil {
+		return nil, err
+	}
+
+	// 4. Scheduled future/active time-off entries
+	timeOffQuery := `
+	SELECT COUNT(id)
+	FROM resource_time_offs
+	WHERE workspace_id = ? AND end_date >= datetime('now')`
+
+	err = r.db.QueryRow(timeOffQuery, workspaceID).Scan(&metrics.TotalScheduledTimeOffDays)
+	if err != nil {
+		return nil, err
+	}
+
+	// 5. Utilization rate calculation
+	if metrics.TotalWeeklyCapacityHours > 0 {
+		totalDemand := metrics.TotalAssignedTaskHours + metrics.TotalAllocatedProjectHours
+		rate := (totalDemand / metrics.TotalWeeklyCapacityHours) * 100.0
+		metrics.AverageUtilizationRate = float64(int(rate*10)) / 10.0
+	}
+
+	return metrics, nil
 }
