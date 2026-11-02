@@ -1066,6 +1066,13 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_portfolio_projects_proj ON portfolio_projects(project_id);
 	CREATE INDEX IF NOT EXISTS idx_portfolio_milestones_pf ON portfolio_milestones(portfolio_id, target_date);
 	CREATE INDEX IF NOT EXISTS idx_portfolio_updates_pf ON portfolio_updates(portfolio_id, created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_resource_profiles_ws ON resource_profiles(workspace_id, is_active);
+	CREATE INDEX IF NOT EXISTS idx_resource_profiles_user ON resource_profiles(user_id);
+	CREATE INDEX IF NOT EXISTS idx_resource_time_offs_ws ON resource_time_offs(workspace_id, user_id);
+	CREATE INDEX IF NOT EXISTS idx_resource_time_offs_dates ON resource_time_offs(start_date, end_date);
+	CREATE INDEX IF NOT EXISTS idx_resource_allocations_ws ON project_resource_allocations(workspace_id, project_id);
+	CREATE INDEX IF NOT EXISTS idx_resource_allocations_user ON project_resource_allocations(user_id, status);
+	CREATE INDEX IF NOT EXISTS idx_resource_allocations_dates ON project_resource_allocations(start_date, end_date);
 	`
 
 	_, err = db.Exec(indexQuery)
