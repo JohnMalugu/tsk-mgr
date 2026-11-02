@@ -922,6 +922,30 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	resourceProfilesQuery := `
+	CREATE TABLE IF NOT EXISTS resource_profiles (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		user_id TEXT NOT NULL,
+		job_title TEXT NOT NULL DEFAULT '',
+		weekly_capacity_hours REAL NOT NULL DEFAULT 40.0,
+		daily_capacity_hours REAL NOT NULL DEFAULT 8.0,
+		skills TEXT NOT NULL DEFAULT '[]',
+		hourly_rate REAL NOT NULL DEFAULT 0.0,
+		currency TEXT NOT NULL DEFAULT 'USD',
+		is_active INTEGER NOT NULL DEFAULT 1,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		UNIQUE(workspace_id, user_id),
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(resourceProfilesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
