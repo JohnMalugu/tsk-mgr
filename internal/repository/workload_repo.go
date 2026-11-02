@@ -430,9 +430,54 @@ func (r *workloadRepositoryImpl) scanTimeOff(row rowScanner) (*model.ResourceTim
 	return &to, nil
 }
 func (r *workloadRepositoryImpl) UpdateTimeOff(timeOff *model.ResourceTimeOff) error {
+	query := `
+	UPDATE resource_time_offs SET
+		start_date = ?,
+		end_date = ?,
+		hours_per_day = ?,
+		time_off_type = ?,
+		description = ?,
+		updated_at = ?
+	WHERE id = ?`
+
+	timeOff.UpdatedAt = time.Now()
+	res, err := r.db.Exec(query,
+		timeOff.StartDate,
+		timeOff.EndDate,
+		timeOff.HoursPerDay,
+		timeOff.TimeOffType,
+		timeOff.Description,
+		timeOff.UpdatedAt,
+		timeOff.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrTimeOffNotFound
+	}
 	return nil
 }
+
 func (r *workloadRepositoryImpl) DeleteTimeOff(id int64) error {
+	query := `DELETE FROM resource_time_offs WHERE id = ?`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrTimeOffNotFound
+	}
 	return nil
 }
 
