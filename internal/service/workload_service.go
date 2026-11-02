@@ -62,22 +62,157 @@ func NewWorkloadService(repo repository.WorkloadRepository, projectRepo reposito
 
 // Stubs for incremental implementation
 func (s *workloadServiceImpl) CreateProfile(req model.CreateResourceProfileRequest) (*model.ResourceProfile, error) {
-	return nil, nil
+	if req.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	userID := req.UserID
+	if userID == "" {
+		return nil, ErrUserIDRequired
+	}
+
+	weeklyCapacity := model.DefaultWeeklyCapacityHours
+	if req.WeeklyCapacityHours != nil {
+		if *req.WeeklyCapacityHours <= 0 || *req.WeeklyCapacityHours > model.MaxWeeklyCapacityHours {
+			return nil, ErrInvalidCapacity
+		}
+		weeklyCapacity = *req.WeeklyCapacityHours
+	}
+
+	dailyCapacity := model.DefaultDailyCapacityHours
+	if req.DailyCapacityHours != nil {
+		if *req.DailyCapacityHours <= 0 || *req.DailyCapacityHours > model.MaxDailyCapacityHours {
+			return nil, ErrInvalidCapacity
+		}
+		dailyCapacity = *req.DailyCapacityHours
+	}
+
+	var rate float64
+	if req.HourlyRate != nil && *req.HourlyRate >= 0 {
+		rate = *req.HourlyRate
+	}
+
+	curr := req.Currency
+	if curr == "" {
+		curr = "USD"
+	}
+
+	isActive := true
+	if req.IsActive != nil {
+		isActive = *req.IsActive
+	}
+
+	skills := req.Skills
+	if skills == nil {
+		skills = []string{}
+	}
+
+	profile := &model.ResourceProfile{
+		WorkspaceID:         req.WorkspaceID,
+		UserID:              userID,
+		JobTitle:            req.JobTitle,
+		WeeklyCapacityHours: weeklyCapacity,
+		DailyCapacityHours:  dailyCapacity,
+		Skills:              skills,
+		HourlyRate:          rate,
+		Currency:            curr,
+		IsActive:            isActive,
+	}
+
+	id, err := s.repo.CreateProfile(profile)
+	if err != nil {
+		if errors.Is(err, repository.ErrProfileExists) {
+			return nil, ErrProfileExists
+		}
+		return nil, err
+	}
+	profile.ID = id
+	return s.repo.GetProfileByID(id)
 }
+
 func (s *workloadServiceImpl) GetProfile(id int64) (*model.ResourceProfile, error) {
-	return nil, nil
+	p, err := s.repo.GetProfileByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrProfileNotFound) {
+			return nil, ErrProfileNotFound
+		}
+		return nil, err
+	}
+	return p, nil
 }
+
 func (s *workloadServiceImpl) GetProfileByUser(workspaceID int64, userID string) (*model.ResourceProfile, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	if userID == "" {
+		return nil, ErrUserIDRequired
+	}
+	p, err := s.repo.GetProfileByUserID(workspaceID, userID)
+	if err != nil {
+		if errors.Is(err, repository.ErrProfileNotFound) {
+			return nil, ErrProfileNotFound
+		}
+		return nil, err
+	}
+	return p, nil
 }
+
 func (s *workloadServiceImpl) ListProfiles(workspaceID int64, isActive *bool) ([]*model.ResourceProfile, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	return s.repo.ListProfiles(workspaceID, isActive)
 }
+
 func (s *workloadServiceImpl) UpdateProfile(id int64, req model.UpdateResourceProfileRequest) (*model.ResourceProfile, error) {
-	return nil, nil
+	profile, err := s.repo.GetProfileByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrProfileNotFound) {
+			return nil, ErrProfileNotFound
+		}
+		return nil, err
+	}
+
+	if req.JobTitle != nil {
+		profile.JobTitle = *req.JobTitle
+	}
+	if req.WeeklyCapacityHours != nil {
+		if *req.WeeklyCapacityHours <= 0 || *req.WeeklyCapacityHours > model.MaxWeeklyCapacityHours {
+			return nil, ErrInvalidCapacity
+		}
+		profile.WeeklyCapacityHours = *req.WeeklyCapacityHours
+	}
+	if req.DailyCapacityHours != nil {
+		if *req.DailyCapacityHours <= 0 || *req.DailyCapacityHours > model.MaxDailyCapacityHours {
+			return nil, ErrInvalidCapacity
+		}
+		profile.DailyCapacityHours = *req.DailyCapacityHours
+	}
+	if req.Skills != nil {
+		profile.Skills = *req.Skills
+	}
+	if req.HourlyRate != nil && *req.HourlyRate >= 0 {
+		profile.HourlyRate = *req.HourlyRate
+	}
+	if req.Currency != nil && *req.Currency != "" {
+		profile.Currency = *req.Currency
+	}
+	if req.IsActive != nil {
+		profile.IsActive = *req.IsActive
+	}
+
+	if err := s.repo.UpdateProfile(profile); err != nil {
+		return nil, err
+	}
+	return s.repo.GetProfileByID(id)
 }
+
 func (s *workloadServiceImpl) DeleteProfile(id int64) error {
-	return nil
+	err := s.repo.DeleteProfile(id)
+	if err != nil && errors.Is(err, repository.ErrProfileNotFound) {
+		return ErrProfileNotFound
+	}
+	return err
 }
 
 func (s *workloadServiceImpl) CreateTimeOff(req model.CreateTimeOffRequest) (*model.ResourceTimeOff, error) {
