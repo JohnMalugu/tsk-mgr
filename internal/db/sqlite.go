@@ -946,6 +946,27 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	resourceTimeOffsQuery := `
+	CREATE TABLE IF NOT EXISTS resource_time_offs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		user_id TEXT NOT NULL,
+		start_date DATETIME NOT NULL,
+		end_date DATETIME NOT NULL,
+		hours_per_day REAL NOT NULL DEFAULT 8.0,
+		time_off_type TEXT NOT NULL DEFAULT 'vacation',
+		description TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(resourceTimeOffsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
