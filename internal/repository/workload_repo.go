@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -49,16 +50,140 @@ func NewWorkloadRepository(db *sql.DB) WorkloadRepository {
 	return &workloadRepositoryImpl{db: db}
 }
 
-// Stubs for incremental implementation
 func (r *workloadRepositoryImpl) CreateProfile(profile *model.ResourceProfile) (int64, error) {
-	return 0, nil
+	// Check if already exists for this workspace and user
+	var count int
+	checkQuery := `SELECT COUNT(*) FROM resource_profiles WHERE workspace_id = ? AND user_id = ?`
+	err := r.db.QueryRow(checkQuery, profile.WorkspaceID, profile.UserID).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	if count > 0 {
+		return 0, ErrProfileExists
+	}
+
+	query := `
+	INSERT INTO resource_profiles (
+		workspace_id, user_id, job_title, weekly_capacity_hours, daily_capacity_hours,
+		skills, hourly_rate, currency, is_active, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	now := time.Now()
+	if profile.CreatedAt.IsZero() {
+		profile.CreatedAt = now
+	}
+	profile.UpdatedAt = now
+
+	skillsJSON, err := json.Marshal(profile.Skills)
+	if err != nil {
+		skillsJSON = []byte("[]")
+	}
+
+	isActiveInt := 1
+	if !profile.IsActive {
+		isActiveInt = 0
+	}
+
+	res, err := r.db.Exec(query,
+		profile.WorkspaceID,
+		profile.UserID,
+		profile.JobTitle,
+		profile.WeeklyCapacityHours,
+		profile.DailyCapacityHours,
+		string(skillsJSON),
+		profile.HourlyRate,
+		profile.Currency,
+		isActiveInt,
+		profile.CreatedAt,
+		profile.UpdatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	profile.ID = id
+	return id, nil
 }
+
 func (r *workloadRepositoryImpl) GetProfileByID(id int64) (*model.ResourceProfile, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		rp.id, rp.workspace_id, rp.user_id, rp.job_title, rp.weekly_capacity_hours,
+		rp.daily_capacity_hours, rp.skills, rp.hourly_rate, rp.currency, rp.is_active,
+		rp.created_at, rp.updated_at,
+		u.username, u.email
+	FROM resource_profiles rp
+	JOIN users u ON rp.user_id = u.id
+	WHERE rp.id = ?`
+
+	row := r.db.QueryRow(query, id)
+	return r.scanProfile(row)
 }
+
 func (r *workloadRepositoryImpl) GetProfileByUserID(workspaceID int64, userID string) (*model.ResourceProfile, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		rp.id, rp.workspace_id, rp.user_id, rp.job_title, rp.weekly_capacity_hours,
+		rp.daily_capacity_hours, rp.skills, rp.hourly_rate, rp.currency, rp.is_active,
+		rp.created_at, rp.updated_at,
+		u.username, u.email
+	FROM resource_profiles rp
+	JOIN users u ON rp.user_id = u.id
+	WHERE rp.workspace_id = ? AND rp.user_id = ?`
+
+	row := r.db.QueryRow(query, workspaceID, userID)
+	return r.scanProfile(row)
 }
+
+type rowScanner interface {
+	Scan(dest ...interface{}) error
+}
+
+func (r *workloadRepositoryImpl) scanProfile(row rowScanner) (*model.ResourceProfile, error) {
+	var (
+		p           model.ResourceProfile
+		skillsJSON  string
+		isActiveInt int
+	)
+	err := row.Scan(
+		&p.ID,
+		&p.WorkspaceID,
+		&p.UserID,
+		&p.JobTitle,
+		&p.WeeklyCapacityHours,
+		&p.DailyCapacityHours,
+		&skillsJSON,
+		&p.HourlyRate,
+		&p.Currency,
+		&isActiveInt,
+		&p.CreatedAt,
+		&p.UpdatedAt,
+		&p.Username,
+		&p.Email,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrProfileNotFound
+		}
+		return nil, err
+	}
+
+	p.IsActive = isActiveInt == 1
+	var skills []string
+	if err := json.Unmarshal([]byte(skillsJSON), &skills); err == nil {
+		p.Skills = skills
+	}
+	if p.Skills == nil {
+		p.Skills = []string{}
+	}
+
+	return &p, nil
+}
+
 func (r *workloadRepositoryImpl) ListProfiles(workspaceID int64, isActive *bool) ([]*model.ResourceProfile, error) {
 	return nil, nil
 }
