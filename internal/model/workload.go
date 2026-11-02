@@ -144,6 +144,27 @@ type UpdateResourceProfileRequest struct {
 	IsActive            *bool     `json:"is_active,omitempty"`
 }
 
+// CreateTimeOffRequest defines parameters to schedule a planned absence or holiday
+type CreateTimeOffRequest struct {
+	WorkspaceID int64     `json:"workspace_id"`
+	UserID      string    `json:"user_id"`
+	StartDate   time.Time `json:"start_date"`
+	EndDate     time.Time `json:"end_date"`
+	HoursPerDay *float64  `json:"hours_per_day,omitempty"`
+	TimeOffType string    `json:"time_off_type"` // vacation, sick_leave, public_holiday, training, personal
+	Description string    `json:"description,omitempty"`
+}
+
+// UpdateTimeOffRequest defines parameters to update a scheduled absence
+type UpdateTimeOffRequest struct {
+	StartDate   *time.Time `json:"start_date,omitempty"`
+	EndDate     *time.Time `json:"end_date,omitempty"`
+	HoursPerDay *float64   `json:"hours_per_day,omitempty"`
+	TimeOffType *string    `json:"time_off_type,omitempty"`
+	Description *string    `json:"description,omitempty"`
+}
+
+
 
 
 
