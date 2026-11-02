@@ -185,9 +185,100 @@ func (r *workloadRepositoryImpl) scanProfile(row rowScanner) (*model.ResourcePro
 }
 
 func (r *workloadRepositoryImpl) ListProfiles(workspaceID int64, isActive *bool) ([]*model.ResourceProfile, error) {
-	return nil, nil
+	baseQuery := `
+	SELECT 
+		rp.id, rp.workspace_id, rp.user_id, rp.job_title, rp.weekly_capacity_hours,
+		rp.daily_capacity_hours, rp.skills, rp.hourly_rate, rp.currency, rp.is_active,
+		rp.created_at, rp.updated_at,
+		u.username, u.email
+	FROM resource_profiles rp
+	JOIN users u ON rp.user_id = u.id
+	WHERE rp.workspace_id = ?`
+
+	var args []interface{}
+	args = append(args, workspaceID)
+
+	if isActive != nil {
+		baseQuery += ` AND rp.is_active = ?`
+		activeInt := 0
+		if *isActive {
+			activeInt = 1
+		}
+		args = append(args, activeInt)
+	}
+
+	baseQuery += ` ORDER BY u.username ASC`
+
+	rows, err := r.db.Query(baseQuery, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var profiles []*model.ResourceProfile
+	for rows.Next() {
+		p, err := r.scanProfile(rows)
+		if err != nil {
+			return nil, err
+		}
+		profiles = append(profiles, p)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if profiles == nil {
+		profiles = []*model.ResourceProfile{}
+	}
+	return profiles, nil
 }
+
 func (r *workloadRepositoryImpl) UpdateProfile(profile *model.ResourceProfile) error {
+	query := `
+	UPDATE resource_profiles SET
+		job_title = ?,
+		weekly_capacity_hours = ?,
+		daily_capacity_hours = ?,
+		skills = ?,
+		hourly_rate = ?,
+		currency = ?,
+		is_active = ?,
+		updated_at = ?
+	WHERE id = ?`
+
+	profile.UpdatedAt = time.Now()
+	skillsJSON, err := json.Marshal(profile.Skills)
+	if err != nil {
+		skillsJSON = []byte("[]")
+	}
+
+	isActiveInt := 1
+	if !profile.IsActive {
+		isActiveInt = 0
+	}
+
+	res, err := r.db.Exec(query,
+		profile.JobTitle,
+		profile.WeeklyCapacityHours,
+		profile.DailyCapacityHours,
+		string(skillsJSON),
+		profile.HourlyRate,
+		profile.Currency,
+		isActiveInt,
+		profile.UpdatedAt,
+		profile.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrProfileNotFound
+	}
 	return nil
 }
 func (r *workloadRepositoryImpl) DeleteProfile(id int64) error {
