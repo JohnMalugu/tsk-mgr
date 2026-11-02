@@ -669,7 +669,39 @@ func (r *workloadRepositoryImpl) scanAllocation(row rowScanner) (*model.ProjectR
 }
 
 func (r *workloadRepositoryImpl) GetUserTasksForWorkload(workspaceID int64, userID string, from, to time.Time) ([]model.Task, error) {
-	return nil, nil
+	query := `
+	SELECT id, user_id, project_id, title, description, created_at, updated_at, due_date, estimate_minutes, completed, status, priority
+	FROM tasks
+	WHERE user_id = ? AND due_date >= ? AND due_date <= ?
+	ORDER BY due_date ASC`
+
+	rows, err := r.db.Query(query, userID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []model.Task
+	for rows.Next() {
+		var task model.Task
+		err := rows.Scan(
+			&task.ID, &task.UserID, &task.ProjectID, &task.Title, &task.Description,
+			&task.CreatedAt, &task.UpdatedAt, &task.DueDate,
+			&task.EstimateMinutes, &task.Completed, &task.Status, &task.Priority,
+		)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if tasks == nil {
+		tasks = []model.Task{}
+	}
+	return tasks, nil
 }
 func (r *workloadRepositoryImpl) GetWorkspaceWorkloadMetrics(workspaceID int64) (*model.WorkloadMetrics, error) {
 	return nil, nil
