@@ -29,3 +29,30 @@ type ResourceProfile struct {
 	Username string `json:"username,omitempty"`
 	Email    string `json:"email,omitempty"`
 }
+
+// Time-off type constants
+const (
+	TimeOffTypeVacation      = "vacation"
+	TimeOffTypeSickLeave     = "sick_leave"
+	TimeOffTypePublicHoliday = "public_holiday"
+	TimeOffTypeTraining      = "training"
+	TimeOffTypePersonal      = "personal"
+)
+
+// ResourceTimeOff records scheduled unavailability such as vacation, holidays, or leave
+type ResourceTimeOff struct {
+	ID          int64     `json:"id"`
+	WorkspaceID int64     `json:"workspace_id"`
+	UserID      string    `json:"user_id"`
+	StartDate   time.Time `json:"start_date"`
+	EndDate     time.Time `json:"end_date"`
+	HoursPerDay float64   `json:"hours_per_day"`
+	TimeOffType string    `json:"time_off_type"` // vacation, sick_leave, public_holiday, training, personal
+	Description string    `json:"description,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+
+	// Enriched user details
+	Username string `json:"username,omitempty"`
+}
+
