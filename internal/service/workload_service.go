@@ -727,5 +727,38 @@ func (s *workloadServiceImpl) GetOverallocatedAlerts(workspaceID int64, from, to
 	return alerts, nil
 }
 func (s *workloadServiceImpl) GetWorkspaceMetrics(workspaceID int64) (*model.WorkloadMetrics, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+
+	metrics, err := s.repo.GetWorkspaceWorkloadMetrics(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Breakdown profiles into utilization tiers over the next 7 days
+	now := time.Now().Truncate(24 * time.Hour)
+	nextWeek := now.Add(7 * 24 * time.Hour)
+
+	isActive := true
+	profiles, err := s.repo.ListProfiles(workspaceID, &isActive)
+	if err == nil {
+		for _, p := range profiles {
+			summary, err := s.GetUserWorkload(workspaceID, p.UserID, now, nextWeek)
+			if err == nil {
+				switch summary.UtilizationStatus {
+				case model.UtilizationStatusUnder:
+					metrics.UnderutilizedCount++
+				case model.UtilizationStatusOptimal:
+					metrics.OptimalCount++
+				case model.UtilizationStatusCapacity:
+					metrics.AtCapacityCount++
+				case model.UtilizationStatusOver:
+					metrics.OverallocatedCount++
+				}
+			}
+		}
+	}
+
+	return metrics, nil
 }
