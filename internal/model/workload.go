@@ -218,23 +218,16 @@ type OverallocatedAlert struct {
 
 // WorkloadMetrics aggregates high-level capacity, demand, and utilization metrics for a workspace
 type WorkloadMetrics struct {
-	WorkspaceID                 int64   `json:"workspace_id"`
-	TotalProfiles               int     `json:"total_profiles"`
-	ActiveProfiles              int     `json:"active_profiles"`
-	TotalWeeklyCapacityHours    float64 `json:"total_weekly_capacity_hours"`
-	TotalAssignedTaskHours      float64 `json:"total_assigned_task_hours"`
-	TotalAllocatedProjectHours  float64 `json:"total_allocated_project_hours"`
-	AverageUtilizationRate      float64 `json:"average_utilization_rate"`
-	UnderutilizedCount          int     `json:"underutilized_count"`
-	OptimalCount                int     `json:"optimal_count"`
-	AtCapacityCount             int     `json:"at_capacity_count"`
-	OverallocatedCount          int     `json:"overallocated_count"`
-	TotalScheduledTimeOffDays   int     `json:"total_scheduled_time_off_days"`
+	WorkspaceID                int64   `json:"workspace_id"`
+	TotalProfiles              int     `json:"total_profiles"`
+	ActiveProfiles             int     `json:"active_profiles"`
+	TotalWeeklyCapacityHours   float64 `json:"total_weekly_capacity_hours"`
+	TotalAssignedTaskHours     float64 `json:"total_assigned_task_hours"`
+	TotalAllocatedProjectHours float64 `json:"total_allocated_project_hours"`
+	AverageUtilizationRate     float64 `json:"average_utilization_rate"`
+	UnderutilizedCount         int     `json:"underutilized_count"`
+	OptimalCount               int     `json:"optimal_count"`
+	AtCapacityCount            int     `json:"at_capacity_count"`
+	OverallocatedCount         int     `json:"overallocated_count"`
+	TotalScheduledTimeOffDays  int     `json:"total_scheduled_time_off_days"`
 }
-
-
-
-
-
-
-

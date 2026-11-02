@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -10,15 +11,15 @@ import (
 )
 
 var (
-	ErrProfileNotFound          = errors.New("resource profile not found")
-	ErrProfileExists            = errors.New("resource profile already exists for user in workspace")
-	ErrTimeOffNotFound          = errors.New("resource time-off not found")
-	ErrAllocationNotFound       = errors.New("project resource allocation not found")
-	ErrUserIDRequired           = errors.New("user ID is required")
-	ErrInvalidCapacity          = errors.New("capacity hours must be positive and within valid limits")
-	ErrInvalidDateRange         = errors.New("start date must be before or equal to end date")
-	ErrInvalidTimeOffType       = errors.New("invalid time-off type")
-	ErrInvalidAllocationStatus  = errors.New("invalid allocation status")
+	ErrProfileNotFound         = errors.New("resource profile not found")
+	ErrProfileExists           = errors.New("resource profile already exists for user in workspace")
+	ErrTimeOffNotFound         = errors.New("resource time-off not found")
+	ErrAllocationNotFound      = errors.New("project resource allocation not found")
+	ErrUserIDRequired          = errors.New("user ID is required")
+	ErrInvalidCapacity         = errors.New("capacity hours must be positive and within valid limits")
+	ErrInvalidDateRange        = errors.New("start date must be before or equal to end date")
+	ErrInvalidTimeOffType      = errors.New("invalid time-off type")
+	ErrInvalidAllocationStatus = errors.New("invalid allocation status")
 )
 
 // WorkloadService orchestrates resource capacity, time-offs, project commitments, and team workload analytics
@@ -66,7 +67,7 @@ func (s *workloadServiceImpl) CreateProfile(req model.CreateResourceProfileReque
 	if req.WorkspaceID <= 0 {
 		return nil, ErrWorkspaceRequired
 	}
-	userID := req.UserID
+	userID := strings.TrimSpace(req.UserID)
 	if userID == "" {
 		return nil, ErrUserIDRequired
 	}
@@ -88,7 +89,10 @@ func (s *workloadServiceImpl) CreateProfile(req model.CreateResourceProfileReque
 	}
 
 	var rate float64
-	if req.HourlyRate != nil && *req.HourlyRate >= 0 {
+	if req.HourlyRate != nil {
+		if *req.HourlyRate < 0 {
+			return nil, ErrInvalidCapacity
+		}
 		rate = *req.HourlyRate
 	}
 
@@ -192,7 +196,10 @@ func (s *workloadServiceImpl) UpdateProfile(id int64, req model.UpdateResourcePr
 	if req.Skills != nil {
 		profile.Skills = *req.Skills
 	}
-	if req.HourlyRate != nil && *req.HourlyRate >= 0 {
+	if req.HourlyRate != nil {
+		if *req.HourlyRate < 0 {
+			return nil, ErrInvalidCapacity
+		}
 		profile.HourlyRate = *req.HourlyRate
 	}
 	if req.Currency != nil && *req.Currency != "" {
@@ -220,7 +227,7 @@ func (s *workloadServiceImpl) CreateTimeOff(req model.CreateTimeOffRequest) (*mo
 	if req.WorkspaceID <= 0 {
 		return nil, ErrWorkspaceRequired
 	}
-	if req.UserID == "" {
+	if strings.TrimSpace(req.UserID) == "" {
 		return nil, ErrUserIDRequired
 	}
 	if req.EndDate.Before(req.StartDate) {
@@ -344,7 +351,7 @@ func (s *workloadServiceImpl) CreateAllocation(req model.CreateResourceAllocatio
 	if req.WorkspaceID <= 0 {
 		return nil, ErrWorkspaceRequired
 	}
-	if req.UserID == "" {
+	if strings.TrimSpace(req.UserID) == "" {
 		return nil, ErrUserIDRequired
 	}
 	if req.ProjectID <= 0 {
@@ -500,8 +507,8 @@ func (s *workloadServiceImpl) GetUserWorkload(workspaceID int64, userID string, 
 		return nil, err
 	}
 
-	// 4. Fetch active allocations
-	allocs, err := s.repo.ListAllocations(workspaceID, 0, userID, model.AllocationStatusActive)
+	// 4. Fetch allocations
+	allocs, err := s.repo.ListAllocations(workspaceID, 0, userID, "")
 	if err != nil {
 		return nil, err
 	}
@@ -559,6 +566,9 @@ func (s *workloadServiceImpl) GetUserWorkload(workspaceID int64, userID string, 
 		// Allocation demand for this day
 		var dayAllocHours float64
 		for _, a := range allocs {
+			if a.Status == model.AllocationStatusCanceled || a.Status == model.AllocationStatusCompleted {
+				continue
+			}
 			aStart := a.StartDate.Truncate(24 * time.Hour)
 			aEnd := a.EndDate.Truncate(24 * time.Hour)
 			if (!d.Before(aStart)) && (!d.After(aEnd)) && !isWeekend {

@@ -183,6 +183,16 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET|POST /v2/portfolios/{id}/updates` to list executive status updates or submit an executive progress report (synchronizing portfolio health status)
 - `GET /v2/portfolios/{id}/metrics` to compute portfolio health analytics, project rollups, task progress, budget utilization, and milestone completion rates
 - `GET /v2/portfolios/metrics?workspace_id={id}` for workspace portfolio analytics, health status breakdown (`on_track`, `at_risk`, `off_track`, `on_hold`, `completed`), total budgets and costs, and aggregate progress
+- `GET|POST /v2/workload/profiles` to list team member capacity profiles with skill and active filters, or define a profile with daily/weekly hours, skills, and hourly rate
+- `GET|PUT|DELETE /v2/workload/profiles/{id}` to fetch profile details, modify capacity, skills, and rates, or remove a resource profile
+- `GET|POST /v2/workload/time-off` to list scheduled time-offs across date ranges and users, or submit time-off calendar entries (`vacation`, `sick_leave`, `public_holiday`, `training`, `other`)
+- `GET|PUT|DELETE /v2/workload/time-off/{id}` to inspect time-off details, update hours or reason, or cancel a time-off entry
+- `GET|POST /v2/workload/allocations` to list project hour allocations with workspace/project/user filters, or reserve dedicated project capacity with role and status (`tentative`, `confirmed`, `completed`, `canceled`)
+- `GET|PUT|DELETE /v2/workload/allocations/{id}` to fetch allocation details, update allocated hours or status, or delete an allocation
+- `GET /v2/workload/users/{userId}?workspace_id={id}&from={date}&to={date}` to compute detailed user workload with daily capacity/demand breakdown buckets, time-off subtractions, task estimate rollups, and utilization status tiers (`underutilized`, `optimal`, `at_capacity`, `overutilized`)
+- `GET /v2/workload/heatmap?workspace_id={id}&from={date}&to={date}` to generate a multi-user workload heatmap with aggregated capacity, demand, and team utilization percentages across date ranges
+- `GET /v2/workload/overallocated?workspace_id={id}&from={date}&to={date}` to identify overallocated team members with deficit hours, affected dates count, and severity indicators (`moderate`, `high`, `critical`)
+- `GET /v2/workload/metrics?workspace_id={id}` for workspace resource planning metrics, active profiles count, total capacity vs. allocated demand, scheduled time-off days, utilization tier distribution, and automated team balancing recommendations
 
 ## Current limitations
 
