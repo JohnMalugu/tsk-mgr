@@ -59,3 +59,27 @@ type DocumentRevision struct {
 	AuthorUsername string `json:"author_username,omitempty"`
 }
 
+// Document task link relationship constants
+const (
+	DocTaskRelRelated            = "related"
+	DocTaskRelSpecification      = "specification"
+	DocTaskRelMeetingActionItems = "meeting_action_items"
+	DocTaskRelPostmortemAction   = "postmortem_action"
+)
+
+// DocumentTaskLink establishes bidirectional cross-references between a document and a task
+type DocumentTaskLink struct {
+	ID           int64     `json:"id"`
+	DocumentID   int64     `json:"document_id"`
+	TaskID       int       `json:"task_id"`
+	Relationship string    `json:"relationship"` // related, specification, meeting_action_items, postmortem_action
+	CreatedBy    string    `json:"created_by"`
+	CreatedAt    time.Time `json:"created_at"`
+
+	// Enriched fields
+	TaskTitle    string `json:"task_title,omitempty"`
+	TaskStatus   string `json:"task_status,omitempty"`
+	TaskPriority string `json:"task_priority,omitempty"`
+}
+
+
