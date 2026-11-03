@@ -415,13 +415,90 @@ func (r *documentRepositoryImpl) ListRevisions(documentID int64) ([]model.Docume
 	return revs, rows.Err()
 }
 func (r *documentRepositoryImpl) LinkTask(link *model.DocumentTaskLink) (int64, error) {
-	return 0, nil
+	query := `
+		INSERT INTO document_task_links (
+			document_id, task_id, relationship, created_by, created_at
+		) VALUES (?, ?, ?, ?, datetime('now'))
+		ON CONFLICT(document_id, task_id) DO UPDATE SET
+			relationship = excluded.relationship
+	`
+	res, err := r.db.Exec(query,
+		link.DocumentID,
+		link.TaskID,
+		link.Relationship,
+		link.CreatedBy,
+	)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil || id == 0 {
+		var existingID int64
+		_ = r.db.QueryRow("SELECT id FROM document_task_links WHERE document_id = ? AND task_id = ?", link.DocumentID, link.TaskID).Scan(&existingID)
+		return existingID, nil
+	}
+	return id, nil
 }
+
 func (r *documentRepositoryImpl) UnlinkTask(documentID int64, taskID int) error {
+	query := `DELETE FROM document_task_links WHERE document_id = ? AND task_id = ?`
+	res, err := r.db.Exec(query, documentID, taskID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrDocumentTaskLinkNotFound
+	}
 	return nil
 }
+
 func (r *documentRepositoryImpl) ListDocumentTasks(documentID int64) ([]model.DocumentTaskLink, error) {
-	return nil, nil
+	query := `
+		SELECT 
+			l.id, l.document_id, l.task_id, l.relationship, l.created_by, l.created_at,
+			COALESCE(t.title, ''), COALESCE(t.status, ''), COALESCE(t.priority, '')
+		FROM document_task_links l
+		LEFT JOIN tasks t ON l.task_id = t.id
+		WHERE l.document_id = ?
+		ORDER BY l.created_at DESC
+	`
+	rows, err := r.db.Query(query, documentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var links []model.DocumentTaskLink
+	for rows.Next() {
+		var l model.DocumentTaskLink
+		var taskTitle, taskStatus, taskPriority string
+		err := rows.Scan(
+			&l.ID,
+			&l.DocumentID,
+			&l.TaskID,
+			&l.Relationship,
+			&l.CreatedBy,
+			&l.CreatedAt,
+			&taskTitle,
+			&taskStatus,
+			&taskPriority,
+		)
+		if err != nil {
+			return nil, err
+		}
+		l.TaskTitle = taskTitle
+		l.TaskStatus = taskStatus
+		l.TaskPriority = taskPriority
+		links = append(links, l)
+	}
+	if links == nil {
+		links = []model.DocumentTaskLink{}
+	}
+	return links, rows.Err()
 }
 func (r *documentRepositoryImpl) CreateComment(comment *model.DocumentComment) (int64, error) {
 	return 0, nil
