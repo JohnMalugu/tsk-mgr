@@ -125,6 +125,33 @@ type UpdateDocumentRequest struct {
 	ChangeSummary    string  `json:"change_summary,omitempty"`
 }
 
+// DocumentFilter specifies search and filtering criteria for document queries
+type DocumentFilter struct {
+	WorkspaceID      int64  `json:"workspace_id"`
+	ProjectID        *int   `json:"project_id,omitempty"`
+	AuthorID         string `json:"author_id,omitempty"`
+	ParentDocumentID *int64 `json:"parent_document_id,omitempty"`
+	DocType          string `json:"doc_type,omitempty"`
+	Status           string `json:"status,omitempty"`
+	Search           string `json:"search,omitempty"`
+	IsPinned         *bool  `json:"is_pinned,omitempty"`
+	Limit            int    `json:"limit,omitempty"`
+	Offset           int    `json:"offset,omitempty"`
+}
+
+// DocumentTreeNode represents a hierarchical tree node for nested wiki outlines
+type DocumentTreeNode struct {
+	ID        int64              `json:"id"`
+	Title     string             `json:"title"`
+	Slug      string             `json:"slug"`
+	DocType   string             `json:"doc_type"`
+	Status    string             `json:"status"`
+	IsPinned  bool               `json:"is_pinned"`
+	Children  []DocumentTreeNode `json:"children"`
+	UpdatedAt time.Time          `json:"updated_at"`
+}
+
+
 
 
 
