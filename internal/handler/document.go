@@ -233,3 +233,155 @@ func (h *DocumentHandler) HandleDocumentBySlug(w http.ResponseWriter, r *http.Re
 	}
 	writeDocJSON(w, http.StatusOK, doc)
 }
+
+// HandleDocumentTree handles GET /v2/docs/tree?workspace_id={id}&project_id={id}
+func (h *DocumentHandler) HandleDocumentTree(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeDocError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	wsStr := r.URL.Query().Get("workspace_id")
+	if wsStr == "" {
+		writeDocError(w, http.StatusBadRequest, "workspace_id query parameter is required")
+		return
+	}
+	wsID, err := strconv.ParseInt(wsStr, 10, 64)
+	if err != nil || wsID <= 0 {
+		writeDocError(w, http.StatusBadRequest, "invalid workspace_id")
+		return
+	}
+
+	var projectID *int
+	if projStr := r.URL.Query().Get("project_id"); projStr != "" {
+		if pid, err := strconv.Atoi(projStr); err == nil {
+			projectID = &pid
+		}
+	}
+
+	tree, err := h.svc.GetDocumentTree(wsID, projectID)
+	if err != nil {
+		if errors.Is(err, service.ErrWorkspaceRequired) {
+			writeDocError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeDocError(w, http.StatusInternalServerError, "Failed to load document tree: "+err.Error())
+		return
+	}
+	writeDocJSON(w, http.StatusOK, tree)
+}
+
+// HandlePublish handles POST /v2/docs/{id}/publish
+func (h *DocumentHandler) HandlePublish(w http.ResponseWriter, r *http.Request, id int64) {
+	if r.Method != http.MethodPost {
+		writeDocError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	var req struct {
+		Status string `json:"status"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	if req.Status == "" {
+		req.Status = model.DocStatusPublished
+	}
+
+	doc, err := h.svc.PublishDocument(id, req.Status)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidPublishStatus):
+			writeDocError(w, http.StatusBadRequest, err.Error())
+		case errors.Is(err, service.ErrDocumentNotFound):
+			writeDocError(w, http.StatusNotFound, err.Error())
+		default:
+			writeDocError(w, http.StatusInternalServerError, "Failed to publish document: "+err.Error())
+		}
+		return
+	}
+	writeDocJSON(w, http.StatusOK, doc)
+}
+
+// HandlePin handles POST or PATCH /v2/docs/{id}/pin
+func (h *DocumentHandler) HandlePin(w http.ResponseWriter, r *http.Request, id int64) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPatch {
+		writeDocError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	doc, err := h.svc.TogglePin(id)
+	if err != nil {
+		if errors.Is(err, service.ErrDocumentNotFound) {
+			writeDocError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		writeDocError(w, http.StatusInternalServerError, "Failed to toggle pin on document: "+err.Error())
+		return
+	}
+	writeDocJSON(w, http.StatusOK, doc)
+}
+
+// HandleRevisions handles GET /v2/docs/{id}/revisions
+func (h *DocumentHandler) HandleRevisions(w http.ResponseWriter, r *http.Request, id int64) {
+	if r.Method != http.MethodGet {
+		writeDocError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	revs, err := h.svc.ListRevisions(id)
+	if err != nil {
+		if errors.Is(err, service.ErrDocumentNotFound) {
+			writeDocError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		writeDocError(w, http.StatusInternalServerError, "Failed to list revisions: "+err.Error())
+		return
+	}
+	writeDocJSON(w, http.StatusOK, revs)
+}
+
+// HandleRevisionDetail handles GET /v2/docs/{id}/revisions/{version}
+func (h *DocumentHandler) HandleRevisionDetail(w http.ResponseWriter, r *http.Request, id int64, version int) {
+	if r.Method != http.MethodGet {
+		writeDocError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	rev, err := h.svc.GetRevision(id, version)
+	if err != nil {
+		if errors.Is(err, service.ErrDocumentNotFound) || errors.Is(err, service.ErrRevisionNotFound) {
+			writeDocError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		writeDocError(w, http.StatusInternalServerError, "Failed to get revision: "+err.Error())
+		return
+	}
+	writeDocJSON(w, http.StatusOK, rev)
+}
+
+// HandleRollback handles POST /v2/docs/{id}/rollback
+func (h *DocumentHandler) HandleRollback(w http.ResponseWriter, r *http.Request, id int64) {
+	if r.Method != http.MethodPost {
+		writeDocError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	var req model.RollbackRevisionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeDocError(w, http.StatusBadRequest, "Invalid request payload: "+err.Error())
+		return
+	}
+
+	authorID := getDocUser(r)
+	doc, err := h.svc.RollbackDocument(id, authorID, req)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrDocumentNotFound), errors.Is(err, service.ErrRevisionNotFound):
+			writeDocError(w, http.StatusNotFound, err.Error())
+		default:
+			writeDocError(w, http.StatusInternalServerError, "Failed to rollback document: "+err.Error())
+		}
+		return
+	}
+	writeDocJSON(w, http.StatusOK, doc)
+}
+
