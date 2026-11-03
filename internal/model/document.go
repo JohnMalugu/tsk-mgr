@@ -151,6 +151,18 @@ type DocumentTreeNode struct {
 	UpdatedAt time.Time          `json:"updated_at"`
 }
 
+// LinkDocumentTaskRequest defines parameters to associate a task with a document
+type LinkDocumentTaskRequest struct {
+	TaskID       int    `json:"task_id"`
+	Relationship string `json:"relationship,omitempty"` // default related
+}
+
+// CreateDocumentCommentRequest defines parameters to post a comment or review on a document
+type CreateDocumentCommentRequest struct {
+	Content string `json:"content"`
+}
+
+
 
 
 
