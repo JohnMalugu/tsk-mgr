@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
@@ -384,4 +385,257 @@ func (h *DocumentHandler) HandleRollback(w http.ResponseWriter, r *http.Request,
 	}
 	writeDocJSON(w, http.StatusOK, doc)
 }
+
+// HandleDocumentTasks handles GET and POST for /v2/docs/{id}/tasks
+func (h *DocumentHandler) HandleDocumentTasks(w http.ResponseWriter, r *http.Request, docID int64) {
+	switch r.Method {
+	case http.MethodGet:
+		tasks, err := h.svc.ListDocumentTasks(docID)
+		if err != nil {
+			if errors.Is(err, service.ErrDocumentNotFound) {
+				writeDocError(w, http.StatusNotFound, err.Error())
+				return
+			}
+			writeDocError(w, http.StatusInternalServerError, "Failed to list document tasks: "+err.Error())
+			return
+		}
+		writeDocJSON(w, http.StatusOK, tasks)
+
+	case http.MethodPost:
+		var req model.LinkDocumentTaskRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeDocError(w, http.StatusBadRequest, "Invalid request payload: "+err.Error())
+			return
+		}
+
+		createdBy := getDocUser(r)
+		link, err := h.svc.LinkTask(docID, createdBy, req)
+		if err != nil {
+			switch {
+			case errors.Is(err, service.ErrInvalidTaskRelationship):
+				writeDocError(w, http.StatusBadRequest, err.Error())
+			case errors.Is(err, service.ErrDocumentNotFound), errors.Is(err, service.ErrTaskNotFound):
+				writeDocError(w, http.StatusNotFound, err.Error())
+			default:
+				writeDocError(w, http.StatusInternalServerError, "Failed to link task: "+err.Error())
+			}
+			return
+		}
+		writeDocJSON(w, http.StatusCreated, link)
+
+	default:
+		writeDocError(w, http.StatusMethodNotAllowed, "Method not allowed")
+	}
+}
+
+// HandleDocumentTaskDetail handles DELETE /v2/docs/{id}/tasks/{taskId}
+func (h *DocumentHandler) HandleDocumentTaskDetail(w http.ResponseWriter, r *http.Request, docID int64, taskID int) {
+	if r.Method != http.MethodDelete {
+		writeDocError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	err := h.svc.UnlinkTask(docID, taskID)
+	if err != nil {
+		if errors.Is(err, service.ErrDocumentNotFound) {
+			writeDocError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		writeDocError(w, http.StatusInternalServerError, "Failed to unlink task: "+err.Error())
+		return
+	}
+	writeDocJSON(w, http.StatusOK, map[string]string{"message": "Task unlinked successfully"})
+}
+
+// HandleDocumentComments handles GET and POST for /v2/docs/{id}/comments
+func (h *DocumentHandler) HandleDocumentComments(w http.ResponseWriter, r *http.Request, docID int64) {
+	switch r.Method {
+	case http.MethodGet:
+		comments, err := h.svc.ListComments(docID)
+		if err != nil {
+			if errors.Is(err, service.ErrDocumentNotFound) {
+				writeDocError(w, http.StatusNotFound, err.Error())
+				return
+			}
+			writeDocError(w, http.StatusInternalServerError, "Failed to list document comments: "+err.Error())
+			return
+		}
+		writeDocJSON(w, http.StatusOK, comments)
+
+	case http.MethodPost:
+		var req model.CreateDocumentCommentRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeDocError(w, http.StatusBadRequest, "Invalid request payload: "+err.Error())
+			return
+		}
+
+		authorID := getDocUser(r)
+		comment, err := h.svc.CreateComment(docID, authorID, req)
+		if err != nil {
+			switch {
+			case errors.Is(err, service.ErrCommentContentRequired):
+				writeDocError(w, http.StatusBadRequest, err.Error())
+			case errors.Is(err, service.ErrDocumentNotFound):
+				writeDocError(w, http.StatusNotFound, err.Error())
+			default:
+				writeDocError(w, http.StatusInternalServerError, "Failed to create comment: "+err.Error())
+			}
+			return
+		}
+		writeDocJSON(w, http.StatusCreated, comment)
+
+	default:
+		writeDocError(w, http.StatusMethodNotAllowed, "Method not allowed")
+	}
+}
+
+// HandleResolveComment handles POST or PATCH /v2/docs/comments/{commentId}/resolve
+func (h *DocumentHandler) HandleResolveComment(w http.ResponseWriter, r *http.Request, commentID int64) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPatch {
+		writeDocError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	resolvedBy := getDocUser(r)
+	comment, err := h.svc.ResolveComment(commentID, resolvedBy)
+	if err != nil {
+		if errors.Is(err, service.ErrCommentNotFound) {
+			writeDocError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		writeDocError(w, http.StatusInternalServerError, "Failed to resolve comment: "+err.Error())
+		return
+	}
+	writeDocJSON(w, http.StatusOK, comment)
+}
+
+// HandleMetrics handles GET /v2/docs/metrics?workspace_id={id}
+func (h *DocumentHandler) HandleMetrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeDocError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	wsStr := r.URL.Query().Get("workspace_id")
+	if wsStr == "" {
+		writeDocError(w, http.StatusBadRequest, "workspace_id query parameter is required")
+		return
+	}
+	wsID, err := strconv.ParseInt(wsStr, 10, 64)
+	if err != nil || wsID <= 0 {
+		writeDocError(w, http.StatusBadRequest, "invalid workspace_id")
+		return
+	}
+
+	metrics, err := h.svc.GetDocumentMetrics(wsID)
+	if err != nil {
+		if errors.Is(err, service.ErrWorkspaceRequired) {
+			writeDocError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeDocError(w, http.StatusInternalServerError, "Failed to get document metrics: "+err.Error())
+		return
+	}
+	writeDocJSON(w, http.StatusOK, metrics)
+}
+
+// ServeHTTP dispatches requests under /v2/docs
+func (h *DocumentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/docs")
+	path = strings.TrimPrefix(path, "/")
+
+	if path == "" {
+		h.HandleDocuments(w, r)
+		return
+	}
+
+	if path == "tree" || path == "tree/" {
+		h.HandleDocumentTree(w, r)
+		return
+	}
+
+	if path == "metrics" || path == "metrics/" {
+		h.HandleMetrics(w, r)
+		return
+	}
+
+	if strings.HasPrefix(path, "slug/") {
+		slug := strings.TrimPrefix(path, "slug/")
+		h.HandleDocumentBySlug(w, r, slug)
+		return
+	}
+
+	if strings.HasPrefix(path, "comments/") {
+		sub := strings.TrimPrefix(path, "comments/")
+		parts := strings.Split(sub, "/")
+		if len(parts) == 2 && parts[1] == "resolve" {
+			commentID, err := strconv.ParseInt(parts[0], 10, 64)
+			if err != nil || commentID <= 0 {
+				writeDocError(w, http.StatusBadRequest, "invalid comment id")
+				return
+			}
+			h.HandleResolveComment(w, r, commentID)
+			return
+		}
+		writeDocError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	parts := strings.Split(path, "/")
+	id, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || id <= 0 {
+		writeDocError(w, http.StatusBadRequest, "invalid document id")
+		return
+	}
+
+	if len(parts) == 1 || (len(parts) == 2 && parts[1] == "") {
+		h.HandleDocumentDetail(w, r, id)
+		return
+	}
+
+	if len(parts) == 2 {
+		switch parts[1] {
+		case "publish":
+			h.HandlePublish(w, r, id)
+		case "pin":
+			h.HandlePin(w, r, id)
+		case "revisions":
+			h.HandleRevisions(w, r, id)
+		case "rollback":
+			h.HandleRollback(w, r, id)
+		case "tasks":
+			h.HandleDocumentTasks(w, r, id)
+		case "comments":
+			h.HandleDocumentComments(w, r, id)
+		default:
+			writeDocError(w, http.StatusNotFound, "not found")
+		}
+		return
+	}
+
+	if len(parts) == 3 {
+		switch parts[1] {
+		case "revisions":
+			version, err := strconv.Atoi(parts[2])
+			if err != nil || version <= 0 {
+				writeDocError(w, http.StatusBadRequest, "invalid revision version")
+				return
+			}
+			h.HandleRevisionDetail(w, r, id, version)
+		case "tasks":
+			taskID, err := strconv.Atoi(parts[2])
+			if err != nil || taskID <= 0 {
+				writeDocError(w, http.StatusBadRequest, "invalid task id")
+				return
+			}
+			h.HandleDocumentTaskDetail(w, r, id, taskID)
+		default:
+			writeDocError(w, http.StatusNotFound, "not found")
+		}
+		return
+	}
+
+	writeDocError(w, http.StatusNotFound, "not found")
+}
+
 

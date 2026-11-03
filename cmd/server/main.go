@@ -123,6 +123,10 @@ func main() {
 	workloadSvc := service.NewWorkloadService(workloadRepo, projectRepo)
 	handler.InitWorkloadHandler(workloadSvc)
 
+	docRepo := repository.NewDocumentRepository(sqliteDB)
+	docSvc := service.NewDocumentService(docRepo, projectRepo, taskRepo)
+	handler.InitDocumentHandler(docSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 

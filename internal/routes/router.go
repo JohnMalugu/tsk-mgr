@@ -101,6 +101,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 Knowledge Base & Wiki Document Engine
+	if strings.HasPrefix(r.URL.Path, "/v2/docs") {
+		if handler.GlobalDocumentHandler == nil {
+			http.Error(w, "Document handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalDocumentHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return
