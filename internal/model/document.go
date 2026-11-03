@@ -99,5 +99,32 @@ type DocumentComment struct {
 	ResolvedUsername string `json:"resolved_username,omitempty"`
 }
 
+// CreateDocumentRequest defines parameters to author a new wiki document
+type CreateDocumentRequest struct {
+	WorkspaceID      int64  `json:"workspace_id"`
+	ProjectID        *int   `json:"project_id,omitempty"`
+	ParentDocumentID *int64 `json:"parent_document_id,omitempty"`
+	Title            string `json:"title"`
+	Slug             string `json:"slug,omitempty"`
+	Content          string `json:"content"`
+	DocType          string `json:"doc_type,omitempty"` // default general
+	Status           string `json:"status,omitempty"`   // default draft
+	IsPinned         bool   `json:"is_pinned,omitempty"`
+}
+
+// UpdateDocumentRequest defines parameters to modify an existing document and record a new revision
+type UpdateDocumentRequest struct {
+	Title            *string `json:"title,omitempty"`
+	Slug             *string `json:"slug,omitempty"`
+	Content          *string `json:"content,omitempty"`
+	DocType          *string `json:"doc_type,omitempty"`
+	Status           *string `json:"status,omitempty"`
+	ParentDocumentID *int64  `json:"parent_document_id,omitempty"`
+	ProjectID        *int    `json:"project_id,omitempty"`
+	IsPinned         *bool   `json:"is_pinned,omitempty"`
+	ChangeSummary    string  `json:"change_summary,omitempty"`
+}
+
+
 
 
