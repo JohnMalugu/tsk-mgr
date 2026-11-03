@@ -1161,6 +1161,16 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_resource_allocations_ws ON project_resource_allocations(workspace_id, project_id);
 	CREATE INDEX IF NOT EXISTS idx_resource_allocations_user ON project_resource_allocations(user_id, status);
 	CREATE INDEX IF NOT EXISTS idx_resource_allocations_dates ON project_resource_allocations(start_date, end_date);
+	CREATE INDEX IF NOT EXISTS idx_documents_ws ON documents(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_documents_proj ON documents(workspace_id, project_id);
+	CREATE INDEX IF NOT EXISTS idx_documents_parent ON documents(parent_document_id);
+	CREATE INDEX IF NOT EXISTS idx_documents_slug ON documents(workspace_id, slug);
+	CREATE INDEX IF NOT EXISTS idx_documents_author ON documents(author_id);
+	CREATE INDEX IF NOT EXISTS idx_documents_pinned ON documents(workspace_id, is_pinned);
+	CREATE INDEX IF NOT EXISTS idx_doc_revisions_doc ON document_revisions(document_id, version DESC);
+	CREATE INDEX IF NOT EXISTS idx_doc_task_links_doc ON document_task_links(document_id);
+	CREATE INDEX IF NOT EXISTS idx_doc_task_links_task ON document_task_links(task_id);
+	CREATE INDEX IF NOT EXISTS idx_doc_comments_doc ON document_comments(document_id, created_at);
 	`
 
 	_, err = db.Exec(indexQuery)
