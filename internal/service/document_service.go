@@ -445,13 +445,78 @@ func (s *documentServiceImpl) PublishDocument(id int64, status string) (*model.D
 	return s.repo.GetDocumentByID(id)
 }
 func (s *documentServiceImpl) ListRevisions(documentID int64) ([]model.DocumentRevision, error) {
-	return nil, nil
+	_, err := s.repo.GetDocumentByID(documentID)
+	if err != nil {
+		if errors.Is(err, repository.ErrDocumentNotFound) {
+			return nil, ErrDocumentNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListRevisions(documentID)
 }
+
 func (s *documentServiceImpl) GetRevision(documentID int64, version int) (*model.DocumentRevision, error) {
-	return nil, nil
+	_, err := s.repo.GetDocumentByID(documentID)
+	if err != nil {
+		if errors.Is(err, repository.ErrDocumentNotFound) {
+			return nil, ErrDocumentNotFound
+		}
+		return nil, err
+	}
+	rev, err := s.repo.GetRevisionByVersion(documentID, version)
+	if err != nil {
+		if errors.Is(err, repository.ErrDocumentRevisionNotFound) {
+			return nil, ErrRevisionNotFound
+		}
+		return nil, err
+	}
+	return rev, nil
 }
+
 func (s *documentServiceImpl) RollbackDocument(documentID int64, authorID string, req model.RollbackRevisionRequest) (*model.Document, error) {
-	return nil, nil
+	doc, err := s.repo.GetDocumentByID(documentID)
+	if err != nil {
+		if errors.Is(err, repository.ErrDocumentNotFound) {
+			return nil, ErrDocumentNotFound
+		}
+		return nil, err
+	}
+
+	targetRev, err := s.repo.GetRevisionByVersion(documentID, req.TargetVersion)
+	if err != nil {
+		if errors.Is(err, repository.ErrDocumentRevisionNotFound) {
+			return nil, ErrRevisionNotFound
+		}
+		return nil, err
+	}
+
+	if authorID == "" {
+		authorID = doc.AuthorID
+	}
+
+	doc.Version++
+	doc.Title = targetRev.Title
+	doc.Content = targetRev.Content
+
+	reason := req.Reason
+	if reason == "" {
+		reason = fmt.Sprintf("Rolled back to version %d", req.TargetVersion)
+	}
+
+	_, _ = s.repo.CreateRevision(&model.DocumentRevision{
+		DocumentID:    doc.ID,
+		Version:       doc.Version,
+		Title:         doc.Title,
+		Content:       doc.Content,
+		AuthorID:      authorID,
+		ChangeSummary: reason,
+	})
+
+	err = s.repo.UpdateDocument(doc)
+	if err != nil {
+		return nil, err
+	}
+	return s.repo.GetDocumentByID(documentID)
 }
 func (s *documentServiceImpl) LinkTask(documentID int64, createdBy string, req model.LinkDocumentTaskRequest) (*model.DocumentTaskLink, error) {
 	return nil, nil
