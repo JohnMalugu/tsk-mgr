@@ -50,14 +50,109 @@ func NewDocumentRepository(db *sql.DB) DocumentRepository {
 	return &documentRepositoryImpl{db: db}
 }
 
+func (r *documentRepositoryImpl) scanDocument(scanner interface{ Scan(...interface{}) error }) (*model.Document, error) {
+	var doc model.Document
+	var projectID sql.NullInt64
+	var parentDocID sql.NullInt64
+	var isPinnedInt int
+	var authorUser, authorEmail, projName string
+
+	err := scanner.Scan(
+		&doc.ID,
+		&doc.WorkspaceID,
+		&projectID,
+		&parentDocID,
+		&doc.AuthorID,
+		&doc.Title,
+		&doc.Slug,
+		&doc.Content,
+		&doc.DocType,
+		&doc.Status,
+		&isPinnedInt,
+		&doc.ViewCount,
+		&doc.Version,
+		&doc.CreatedAt,
+		&doc.UpdatedAt,
+		&authorUser,
+		&authorEmail,
+		&projName,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrDocumentNotFound
+		}
+		return nil, err
+	}
+
+	if projectID.Valid {
+		pid := int(projectID.Int64)
+		doc.ProjectID = &pid
+	}
+	if parentDocID.Valid {
+		pdoc := parentDocID.Int64
+		doc.ParentDocumentID = &pdoc
+	}
+	doc.IsPinned = isPinnedInt == 1
+	doc.AuthorUsername = authorUser
+	doc.AuthorEmail = authorEmail
+	doc.ProjectName = projName
+	return &doc, nil
+}
+
+const docSelectFields = `
+	SELECT 
+		d.id, d.workspace_id, d.project_id, d.parent_document_id, d.author_id,
+		d.title, d.slug, d.content, d.doc_type, d.status, d.is_pinned,
+		d.view_count, d.version, d.created_at, d.updated_at,
+		COALESCE(u.username, ''), COALESCE(u.email, ''),
+		COALESCE(p.name, '')
+	FROM documents d
+	LEFT JOIN users u ON d.author_id = u.id
+	LEFT JOIN projects p ON d.project_id = p.id
+`
+
 func (r *documentRepositoryImpl) CreateDocument(doc *model.Document) (int64, error) {
-	return 0, nil
+	query := `
+		INSERT INTO documents (
+			workspace_id, project_id, parent_document_id, author_id,
+			title, slug, content, doc_type, status, is_pinned,
+			view_count, version, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+	`
+	pinned := 0
+	if doc.IsPinned {
+		pinned = 1
+	}
+	res, err := r.db.Exec(query,
+		doc.WorkspaceID,
+		doc.ProjectID,
+		doc.ParentDocumentID,
+		doc.AuthorID,
+		doc.Title,
+		doc.Slug,
+		doc.Content,
+		doc.DocType,
+		doc.Status,
+		pinned,
+		doc.ViewCount,
+		doc.Version,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
 }
+
 func (r *documentRepositoryImpl) GetDocumentByID(id int64) (*model.Document, error) {
-	return nil, nil
+	query := docSelectFields + ` WHERE d.id = ?`
+	row := r.db.QueryRow(query, id)
+	return r.scanDocument(row)
 }
+
 func (r *documentRepositoryImpl) GetDocumentBySlug(workspaceID int64, slug string) (*model.Document, error) {
-	return nil, nil
+	query := docSelectFields + ` WHERE d.workspace_id = ? AND d.slug = ?`
+	row := r.db.QueryRow(query, workspaceID, slug)
+	return r.scanDocument(row)
 }
 func (r *documentRepositoryImpl) ListDocuments(filter model.DocumentFilter) ([]*model.Document, error) {
 	return nil, nil
