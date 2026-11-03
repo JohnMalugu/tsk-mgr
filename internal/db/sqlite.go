@@ -990,6 +990,34 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	documentsQuery := `
+	CREATE TABLE IF NOT EXISTS documents (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		project_id INTEGER,
+		parent_document_id INTEGER,
+		author_id TEXT NOT NULL,
+		title TEXT NOT NULL,
+		slug TEXT NOT NULL,
+		content TEXT NOT NULL DEFAULT '',
+		doc_type TEXT NOT NULL DEFAULT 'general',
+		status TEXT NOT NULL DEFAULT 'draft',
+		is_pinned INTEGER NOT NULL DEFAULT 0,
+		view_count INTEGER NOT NULL DEFAULT 0,
+		version INTEGER NOT NULL DEFAULT 1,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+		FOREIGN KEY (parent_document_id) REFERENCES documents(id) ON DELETE SET NULL,
+		FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(documentsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
