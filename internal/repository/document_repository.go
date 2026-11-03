@@ -286,9 +286,38 @@ func (r *documentRepositoryImpl) DeleteDocument(id int64) error {
 	return nil
 }
 func (r *documentRepositoryImpl) IncrementViewCount(id int64) error {
+	query := `UPDATE documents SET view_count = view_count + 1 WHERE id = ?`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrDocumentNotFound
+	}
 	return nil
 }
+
 func (r *documentRepositoryImpl) TogglePinned(id int64, isPinned bool) error {
+	pinnedVal := 0
+	if isPinned {
+		pinnedVal = 1
+	}
+	query := `UPDATE documents SET is_pinned = ?, updated_at = datetime('now') WHERE id = ?`
+	res, err := r.db.Exec(query, pinnedVal, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrDocumentNotFound
+	}
 	return nil
 }
 func (r *documentRepositoryImpl) CreateRevision(rev *model.DocumentRevision) (int64, error) {
