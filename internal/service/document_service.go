@@ -611,14 +611,70 @@ func (s *documentServiceImpl) ListDocumentTasks(documentID int64) ([]model.Docum
 	return s.repo.ListDocumentTasks(documentID)
 }
 func (s *documentServiceImpl) CreateComment(documentID int64, authorID string, req model.CreateDocumentCommentRequest) (*model.DocumentComment, error) {
-	return nil, nil
+	_, err := s.repo.GetDocumentByID(documentID)
+	if err != nil {
+		if errors.Is(err, repository.ErrDocumentNotFound) {
+			return nil, ErrDocumentNotFound
+		}
+		return nil, err
+	}
+
+	content := strings.TrimSpace(req.Content)
+	if content == "" {
+		return nil, ErrCommentContentRequired
+	}
+
+	if authorID == "" {
+		authorID = "user_1"
+	}
+
+	comment := &model.DocumentComment{
+		DocumentID: documentID,
+		AuthorID:   authorID,
+		Content:    content,
+	}
+
+	id, err := s.repo.CreateComment(comment)
+	if err != nil {
+		return nil, err
+	}
+	return s.repo.GetCommentByID(id)
 }
+
 func (s *documentServiceImpl) ListComments(documentID int64) ([]model.DocumentComment, error) {
-	return nil, nil
+	_, err := s.repo.GetDocumentByID(documentID)
+	if err != nil {
+		if errors.Is(err, repository.ErrDocumentNotFound) {
+			return nil, ErrDocumentNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListComments(documentID)
 }
+
 func (s *documentServiceImpl) ResolveComment(commentID int64, resolvedBy string) (*model.DocumentComment, error) {
-	return nil, nil
+	if resolvedBy == "" {
+		resolvedBy = "user_1"
+	}
+
+	_, err := s.repo.GetCommentByID(commentID)
+	if err != nil {
+		if errors.Is(err, repository.ErrDocumentCommentNotFound) {
+			return nil, ErrCommentNotFound
+		}
+		return nil, err
+	}
+
+	err = s.repo.ResolveComment(commentID, resolvedBy)
+	if err != nil {
+		return nil, err
+	}
+	return s.repo.GetCommentByID(commentID)
 }
+
 func (s *documentServiceImpl) GetDocumentMetrics(workspaceID int64) (*model.DocumentMetrics, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	return s.repo.GetDocumentMetrics(workspaceID)
 }
