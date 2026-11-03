@@ -155,7 +155,76 @@ func (r *documentRepositoryImpl) GetDocumentBySlug(workspaceID int64, slug strin
 	return r.scanDocument(row)
 }
 func (r *documentRepositoryImpl) ListDocuments(filter model.DocumentFilter) ([]*model.Document, error) {
-	return nil, nil
+	query := docSelectFields + ` WHERE 1=1`
+	var args []interface{}
+
+	if filter.WorkspaceID > 0 {
+		query += ` AND d.workspace_id = ?`
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.ProjectID != nil {
+		query += ` AND d.project_id = ?`
+		args = append(args, *filter.ProjectID)
+	}
+	if filter.AuthorID != "" {
+		query += ` AND d.author_id = ?`
+		args = append(args, filter.AuthorID)
+	}
+	if filter.ParentDocumentID != nil {
+		query += ` AND d.parent_document_id = ?`
+		args = append(args, *filter.ParentDocumentID)
+	}
+	if filter.DocType != "" {
+		query += ` AND d.doc_type = ?`
+		args = append(args, filter.DocType)
+	}
+	if filter.Status != "" {
+		query += ` AND d.status = ?`
+		args = append(args, filter.Status)
+	}
+	if filter.IsPinned != nil {
+		pinnedVal := 0
+		if *filter.IsPinned {
+			pinnedVal = 1
+		}
+		query += ` AND d.is_pinned = ?`
+		args = append(args, pinnedVal)
+	}
+	if filter.Search != "" {
+		term := "%" + filter.Search + "%"
+		query += ` AND (d.title LIKE ? OR d.content LIKE ?)`
+		args = append(args, term, term)
+	}
+
+	query += ` ORDER BY d.is_pinned DESC, d.updated_at DESC`
+
+	if filter.Limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, filter.Limit)
+		if filter.Offset > 0 {
+			query += ` OFFSET ?`
+			args = append(args, filter.Offset)
+		}
+	}
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var docs []*model.Document
+	for rows.Next() {
+		doc, err := r.scanDocument(rows)
+		if err != nil {
+			return nil, err
+		}
+		docs = append(docs, doc)
+	}
+	if docs == nil {
+		docs = []*model.Document{}
+	}
+	return docs, rows.Err()
 }
 func (r *documentRepositoryImpl) UpdateDocument(doc *model.Document) error {
 	return nil
