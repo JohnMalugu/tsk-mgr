@@ -321,13 +321,98 @@ func (r *documentRepositoryImpl) TogglePinned(id int64, isPinned bool) error {
 	return nil
 }
 func (r *documentRepositoryImpl) CreateRevision(rev *model.DocumentRevision) (int64, error) {
-	return 0, nil
+	query := `
+		INSERT INTO document_revisions (
+			document_id, version, title, content, author_id, change_summary, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+	`
+	res, err := r.db.Exec(query,
+		rev.DocumentID,
+		rev.Version,
+		rev.Title,
+		rev.Content,
+		rev.AuthorID,
+		rev.ChangeSummary,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
 }
+
 func (r *documentRepositoryImpl) GetRevisionByVersion(documentID int64, version int) (*model.DocumentRevision, error) {
-	return nil, nil
+	query := `
+		SELECT 
+			r.id, r.document_id, r.version, r.title, r.content, r.author_id, r.change_summary, r.created_at,
+			COALESCE(u.username, '')
+		FROM document_revisions r
+		LEFT JOIN users u ON r.author_id = u.id
+		WHERE r.document_id = ? AND r.version = ?
+	`
+	var rev model.DocumentRevision
+	var authorUser string
+	err := r.db.QueryRow(query, documentID, version).Scan(
+		&rev.ID,
+		&rev.DocumentID,
+		&rev.Version,
+		&rev.Title,
+		&rev.Content,
+		&rev.AuthorID,
+		&rev.ChangeSummary,
+		&rev.CreatedAt,
+		&authorUser,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrDocumentRevisionNotFound
+		}
+		return nil, err
+	}
+	rev.AuthorUsername = authorUser
+	return &rev, nil
 }
+
 func (r *documentRepositoryImpl) ListRevisions(documentID int64) ([]model.DocumentRevision, error) {
-	return nil, nil
+	query := `
+		SELECT 
+			r.id, r.document_id, r.version, r.title, r.content, r.author_id, r.change_summary, r.created_at,
+			COALESCE(u.username, '')
+		FROM document_revisions r
+		LEFT JOIN users u ON r.author_id = u.id
+		WHERE r.document_id = ?
+		ORDER BY r.version DESC
+	`
+	rows, err := r.db.Query(query, documentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var revs []model.DocumentRevision
+	for rows.Next() {
+		var rev model.DocumentRevision
+		var authorUser string
+		err := rows.Scan(
+			&rev.ID,
+			&rev.DocumentID,
+			&rev.Version,
+			&rev.Title,
+			&rev.Content,
+			&rev.AuthorID,
+			&rev.ChangeSummary,
+			&rev.CreatedAt,
+			&authorUser,
+		)
+		if err != nil {
+			return nil, err
+		}
+		rev.AuthorUsername = authorUser
+		revs = append(revs, rev)
+	}
+	if revs == nil {
+		revs = []model.DocumentRevision{}
+	}
+	return revs, rows.Err()
 }
 func (r *documentRepositoryImpl) LinkTask(link *model.DocumentTaskLink) (int64, error) {
 	return 0, nil
