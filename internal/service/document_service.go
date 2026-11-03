@@ -518,14 +518,97 @@ func (s *documentServiceImpl) RollbackDocument(documentID int64, authorID string
 	}
 	return s.repo.GetDocumentByID(documentID)
 }
-func (s *documentServiceImpl) LinkTask(documentID int64, createdBy string, req model.LinkDocumentTaskRequest) (*model.DocumentTaskLink, error) {
-	return nil, nil
+func isValidTaskRelationship(rel string) bool {
+	switch rel {
+	case model.DocTaskRelRelated, model.DocTaskRelSpecification,
+		model.DocTaskRelMeetingActionItems, model.DocTaskRelPostmortemAction:
+		return true
+	default:
+		return false
+	}
 }
+
+func (s *documentServiceImpl) LinkTask(documentID int64, createdBy string, req model.LinkDocumentTaskRequest) (*model.DocumentTaskLink, error) {
+	_, err := s.repo.GetDocumentByID(documentID)
+	if err != nil {
+		if errors.Is(err, repository.ErrDocumentNotFound) {
+			return nil, ErrDocumentNotFound
+		}
+		return nil, err
+	}
+
+	if req.TaskID <= 0 {
+		return nil, ErrTaskNotFound
+	}
+	if s.taskRepo != nil {
+		t, err := s.taskRepo.GetByID(req.TaskID)
+		if err != nil || t == nil {
+			return nil, ErrTaskNotFound
+		}
+	}
+
+	rel := req.Relationship
+	if rel == "" {
+		rel = model.DocTaskRelRelated
+	} else if !isValidTaskRelationship(rel) {
+		return nil, ErrInvalidTaskRelationship
+	}
+
+	if createdBy == "" {
+		createdBy = "user_1"
+	}
+
+	link := &model.DocumentTaskLink{
+		DocumentID:   documentID,
+		TaskID:       req.TaskID,
+		Relationship: rel,
+		CreatedBy:    createdBy,
+	}
+
+	id, err := s.repo.LinkTask(link)
+	if err != nil {
+		return nil, err
+	}
+	link.ID = id
+
+	tasks, err := s.repo.ListDocumentTasks(documentID)
+	if err == nil {
+		for _, tl := range tasks {
+			if tl.TaskID == req.TaskID {
+				return &tl, nil
+			}
+		}
+	}
+	return link, nil
+}
+
 func (s *documentServiceImpl) UnlinkTask(documentID int64, taskID int) error {
+	_, err := s.repo.GetDocumentByID(documentID)
+	if err != nil {
+		if errors.Is(err, repository.ErrDocumentNotFound) {
+			return ErrDocumentNotFound
+		}
+		return err
+	}
+	err = s.repo.UnlinkTask(documentID, taskID)
+	if err != nil {
+		if errors.Is(err, repository.ErrDocumentTaskLinkNotFound) {
+			return ErrTaskNotFound
+		}
+		return err
+	}
 	return nil
 }
+
 func (s *documentServiceImpl) ListDocumentTasks(documentID int64) ([]model.DocumentTaskLink, error) {
-	return nil, nil
+	_, err := s.repo.GetDocumentByID(documentID)
+	if err != nil {
+		if errors.Is(err, repository.ErrDocumentNotFound) {
+			return nil, ErrDocumentNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListDocumentTasks(documentID)
 }
 func (s *documentServiceImpl) CreateComment(documentID int64, authorID string, req model.CreateDocumentCommentRequest) (*model.DocumentComment, error) {
 	return nil, nil
