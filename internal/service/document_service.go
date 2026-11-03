@@ -363,7 +363,56 @@ func (s *documentServiceImpl) TogglePin(id int64) (*model.Document, error) {
 	return nil, nil
 }
 func (s *documentServiceImpl) GetDocumentTree(workspaceID int64, projectID *int) ([]model.DocumentTreeNode, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+
+	docs, err := s.repo.ListDocuments(model.DocumentFilter{
+		WorkspaceID: workspaceID,
+		ProjectID:   projectID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	childrenMap := make(map[int64][]*model.Document)
+	var rootDocs []*model.Document
+
+	for _, d := range docs {
+		if d.ParentDocumentID == nil || *d.ParentDocumentID == 0 {
+			rootDocs = append(rootDocs, d)
+		} else {
+			pid := *d.ParentDocumentID
+			childrenMap[pid] = append(childrenMap[pid], d)
+		}
+	}
+
+	var buildNode func(doc *model.Document) model.DocumentTreeNode
+	buildNode = func(doc *model.Document) model.DocumentTreeNode {
+		node := model.DocumentTreeNode{
+			ID:        doc.ID,
+			Title:     doc.Title,
+			Slug:      doc.Slug,
+			DocType:   doc.DocType,
+			Status:    doc.Status,
+			IsPinned:  doc.IsPinned,
+			UpdatedAt: doc.UpdatedAt,
+			Children:  []model.DocumentTreeNode{},
+		}
+		if children, exists := childrenMap[doc.ID]; exists {
+			for _, child := range children {
+				node.Children = append(node.Children, buildNode(child))
+			}
+		}
+		return node
+	}
+
+	tree := make([]model.DocumentTreeNode, 0, len(rootDocs))
+	for _, root := range rootDocs {
+		tree = append(tree, buildNode(root))
+	}
+
+	return tree, nil
 }
 func (s *documentServiceImpl) PublishDocument(id int64, status string) (*model.Document, error) {
 	return nil, nil
