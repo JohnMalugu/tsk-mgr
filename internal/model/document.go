@@ -43,3 +43,19 @@ type Document struct {
 	AuthorEmail    string `json:"author_email,omitempty"`
 	ProjectName    string `json:"project_name,omitempty"`
 }
+
+// DocumentRevision preserves historical point-in-time snapshots of document content
+type DocumentRevision struct {
+	ID            int64     `json:"id"`
+	DocumentID    int64     `json:"document_id"`
+	Version       int       `json:"version"`
+	Title         string    `json:"title"`
+	Content       string    `json:"content"`
+	AuthorID      string    `json:"author_id"`
+	ChangeSummary string    `json:"change_summary,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+
+	// Enriched fields
+	AuthorUsername string `json:"author_username,omitempty"`
+}
+
