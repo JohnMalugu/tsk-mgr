@@ -193,6 +193,20 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET /v2/workload/heatmap?workspace_id={id}&from={date}&to={date}` to generate a multi-user workload heatmap with aggregated capacity, demand, and team utilization percentages across date ranges
 - `GET /v2/workload/overallocated?workspace_id={id}&from={date}&to={date}` to identify overallocated team members with deficit hours, affected dates count, and severity indicators (`moderate`, `high`, `critical`)
 - `GET /v2/workload/metrics?workspace_id={id}` for workspace resource planning metrics, active profiles count, total capacity vs. allocated demand, scheduled time-off days, utilization tier distribution, and automated team balancing recommendations
+- `GET|POST /v2/docs` to list documents with multi-criteria filters (`workspace_id`, `project_id`, `author_id`, `doc_type`, `status`, `pinned`, `search`, `limit`, `offset`) or create a document with auto-generated slug and initial version snapshot
+- `GET|PUT|PATCH|DELETE /v2/docs/{id}` to fetch a document (with optional view recording), update title/content/hierarchy (automatically generating point-in-time version revisions), or delete a document
+- `GET /v2/docs/slug/{slug}?workspace_id={id}` to fetch a document by workspace-scoped URL slug
+- `GET /v2/docs/tree?workspace_id={id}&project_id={id}` to retrieve the full hierarchical document tree with nested child pages
+- `POST /v2/docs/{id}/publish` to update publishing lifecycle status (`draft`, `in_review`, `published`, `archived`)
+- `POST|PATCH /v2/docs/{id}/pin` to toggle the pinned status of a document
+- `GET /v2/docs/{id}/revisions` to inspect chronological version history and changelogs
+- `GET /v2/docs/{id}/revisions/{version}` to inspect a specific historical snapshot with complete markdown content
+- `POST /v2/docs/{id}/rollback` to restore a document to a previous version revision with an audit reason
+- `GET|POST /v2/docs/{id}/tasks` to view linked tasks or link a task with relationship typing (`implements`, `references`, `specifies`, `related`, `blocks`)
+- `DELETE /v2/docs/{id}/tasks/{taskId}` to unlink a task from a document
+- `GET|POST /v2/docs/{id}/comments` to list inline review comments or submit a comment on a document
+- `POST|PATCH /v2/docs/comments/{commentId}/resolve` to mark an inline comment as resolved with resolver timestamp
+- `GET /v2/docs/metrics?workspace_id={id}` for workspace knowledge base metrics, document count by status and type, pinned count, revisions count, comments count, and recently updated documents
 
 ## Current limitations
 

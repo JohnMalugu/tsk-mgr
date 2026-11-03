@@ -184,10 +184,3 @@ type DocumentMetrics struct {
 	DocTypeBreakdown   map[string]int `json:"doc_type_breakdown"`
 	RecentlyUpdated    []Document     `json:"recently_updated"`
 }
-
-
-
-
-
-
-

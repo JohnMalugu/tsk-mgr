@@ -537,6 +537,13 @@ func (s *documentServiceImpl) LinkTask(documentID int64, createdBy string, req m
 		return nil, err
 	}
 
+	rel := req.Relationship
+	if rel == "" {
+		rel = model.DocTaskRelRelated
+	} else if !isValidTaskRelationship(rel) {
+		return nil, ErrInvalidTaskRelationship
+	}
+
 	if req.TaskID <= 0 {
 		return nil, ErrTaskNotFound
 	}
@@ -545,13 +552,6 @@ func (s *documentServiceImpl) LinkTask(documentID int64, createdBy string, req m
 		if err != nil || t == nil {
 			return nil, ErrTaskNotFound
 		}
-	}
-
-	rel := req.Relationship
-	if rel == "" {
-		rel = model.DocTaskRelRelated
-	} else if !isValidTaskRelationship(rel) {
-		return nil, ErrInvalidTaskRelationship
 	}
 
 	if createdBy == "" {

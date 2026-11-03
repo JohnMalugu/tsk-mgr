@@ -637,5 +637,3 @@ func (h *DocumentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	writeDocError(w, http.StatusNotFound, "not found")
 }
-
-

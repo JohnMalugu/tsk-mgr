@@ -727,4 +727,3 @@ func (r *documentRepositoryImpl) GetDocumentMetrics(workspaceID int64) (*model.D
 
 	return metrics, nil
 }
-
