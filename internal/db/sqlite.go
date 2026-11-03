@@ -1038,6 +1038,46 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	documentTaskLinksQuery := `
+	CREATE TABLE IF NOT EXISTS document_task_links (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		document_id INTEGER NOT NULL,
+		task_id INTEGER NOT NULL,
+		relationship TEXT NOT NULL DEFAULT 'related',
+		created_by TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		UNIQUE(document_id, task_id),
+		FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+		FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(documentTaskLinksQuery)
+	if err != nil {
+		return err
+	}
+
+	documentCommentsQuery := `
+	CREATE TABLE IF NOT EXISTS document_comments (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		document_id INTEGER NOT NULL,
+		author_id TEXT NOT NULL,
+		content TEXT NOT NULL,
+		is_resolved INTEGER NOT NULL DEFAULT 0,
+		resolved_by TEXT,
+		resolved_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+		FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE,
+		FOREIGN KEY (resolved_by) REFERENCES users(id) ON DELETE SET NULL
+	);`
+
+	_, err = db.Exec(documentCommentsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
