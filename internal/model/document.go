@@ -82,4 +82,22 @@ type DocumentTaskLink struct {
 	TaskPriority string `json:"task_priority,omitempty"`
 }
 
+// DocumentComment represents discussions, feedback, and reviews on a document
+type DocumentComment struct {
+	ID         int64      `json:"id"`
+	DocumentID int64      `json:"document_id"`
+	AuthorID   string     `json:"author_id"`
+	Content    string     `json:"content"`
+	IsResolved bool       `json:"is_resolved"`
+	ResolvedBy *string    `json:"resolved_by,omitempty"`
+	ResolvedAt *time.Time `json:"resolved_at,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
+
+	// Enriched fields
+	AuthorUsername   string `json:"author_username,omitempty"`
+	ResolvedUsername string `json:"resolved_username,omitempty"`
+}
+
+
 
