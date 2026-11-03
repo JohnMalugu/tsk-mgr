@@ -501,15 +501,147 @@ func (r *documentRepositoryImpl) ListDocumentTasks(documentID int64) ([]model.Do
 	return links, rows.Err()
 }
 func (r *documentRepositoryImpl) CreateComment(comment *model.DocumentComment) (int64, error) {
-	return 0, nil
+	query := `
+		INSERT INTO document_comments (
+			document_id, author_id, content, is_resolved, created_at, updated_at
+		) VALUES (?, ?, ?, 0, datetime('now'), datetime('now'))
+	`
+	res, err := r.db.Exec(query,
+		comment.DocumentID,
+		comment.AuthorID,
+		comment.Content,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
 }
+
 func (r *documentRepositoryImpl) GetCommentByID(id int64) (*model.DocumentComment, error) {
-	return nil, nil
+	query := `
+		SELECT 
+			c.id, c.document_id, c.author_id, c.content, c.is_resolved, c.resolved_by, c.resolved_at,
+			c.created_at, c.updated_at,
+			COALESCE(u.username, ''), COALESCE(ru.username, '')
+		FROM document_comments c
+		LEFT JOIN users u ON c.author_id = u.id
+		LEFT JOIN users ru ON c.resolved_by = ru.id
+		WHERE c.id = ?
+	`
+	var c model.DocumentComment
+	var isResolvedInt int
+	var resolvedBy sql.NullString
+	var resolvedAt sql.NullTime
+	var authorUser, resolvedUser string
+	err := r.db.QueryRow(query, id).Scan(
+		&c.ID,
+		&c.DocumentID,
+		&c.AuthorID,
+		&c.Content,
+		&isResolvedInt,
+		&resolvedBy,
+		&resolvedAt,
+		&c.CreatedAt,
+		&c.UpdatedAt,
+		&authorUser,
+		&resolvedUser,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrDocumentCommentNotFound
+		}
+		return nil, err
+	}
+	c.IsResolved = isResolvedInt == 1
+	if resolvedBy.Valid {
+		c.ResolvedBy = &resolvedBy.String
+	}
+	if resolvedAt.Valid {
+		c.ResolvedAt = &resolvedAt.Time
+	}
+	c.AuthorUsername = authorUser
+	c.ResolvedUsername = resolvedUser
+	return &c, nil
 }
+
 func (r *documentRepositoryImpl) ListComments(documentID int64) ([]model.DocumentComment, error) {
-	return nil, nil
+	query := `
+		SELECT 
+			c.id, c.document_id, c.author_id, c.content, c.is_resolved, c.resolved_by, c.resolved_at,
+			c.created_at, c.updated_at,
+			COALESCE(u.username, ''), COALESCE(ru.username, '')
+		FROM document_comments c
+		LEFT JOIN users u ON c.author_id = u.id
+		LEFT JOIN users ru ON c.resolved_by = ru.id
+		WHERE c.document_id = ?
+		ORDER BY c.created_at ASC
+	`
+	rows, err := r.db.Query(query, documentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var comments []model.DocumentComment
+	for rows.Next() {
+		var c model.DocumentComment
+		var isResolvedInt int
+		var resolvedBy sql.NullString
+		var resolvedAt sql.NullTime
+		var authorUser, resolvedUser string
+		err := rows.Scan(
+			&c.ID,
+			&c.DocumentID,
+			&c.AuthorID,
+			&c.Content,
+			&isResolvedInt,
+			&resolvedBy,
+			&resolvedAt,
+			&c.CreatedAt,
+			&c.UpdatedAt,
+			&authorUser,
+			&resolvedUser,
+		)
+		if err != nil {
+			return nil, err
+		}
+		c.IsResolved = isResolvedInt == 1
+		if resolvedBy.Valid {
+			c.ResolvedBy = &resolvedBy.String
+		}
+		if resolvedAt.Valid {
+			c.ResolvedAt = &resolvedAt.Time
+		}
+		c.AuthorUsername = authorUser
+		c.ResolvedUsername = resolvedUser
+		comments = append(comments, c)
+	}
+	if comments == nil {
+		comments = []model.DocumentComment{}
+	}
+	return comments, rows.Err()
 }
+
 func (r *documentRepositoryImpl) ResolveComment(id int64, resolvedBy string) error {
+	query := `
+		UPDATE document_comments SET
+			is_resolved = 1,
+			resolved_by = ?,
+			resolved_at = datetime('now'),
+			updated_at = datetime('now')
+		WHERE id = ?
+	`
+	res, err := r.db.Exec(query, resolvedBy, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrDocumentCommentNotFound
+	}
 	return nil
 }
 func (r *documentRepositoryImpl) GetDocumentMetrics(workspaceID int64) (*model.DocumentMetrics, error) {
