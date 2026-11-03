@@ -227,9 +227,62 @@ func (r *documentRepositoryImpl) ListDocuments(filter model.DocumentFilter) ([]*
 	return docs, rows.Err()
 }
 func (r *documentRepositoryImpl) UpdateDocument(doc *model.Document) error {
+	query := `
+		UPDATE documents SET
+			title = ?,
+			slug = ?,
+			content = ?,
+			doc_type = ?,
+			status = ?,
+			project_id = ?,
+			parent_document_id = ?,
+			is_pinned = ?,
+			version = ?,
+			updated_at = datetime('now')
+		WHERE id = ?
+	`
+	pinned := 0
+	if doc.IsPinned {
+		pinned = 1
+	}
+	res, err := r.db.Exec(query,
+		doc.Title,
+		doc.Slug,
+		doc.Content,
+		doc.DocType,
+		doc.Status,
+		doc.ProjectID,
+		doc.ParentDocumentID,
+		pinned,
+		doc.Version,
+		doc.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrDocumentNotFound
+	}
 	return nil
 }
+
 func (r *documentRepositoryImpl) DeleteDocument(id int64) error {
+	query := `DELETE FROM documents WHERE id = ?`
+	res, err := r.db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrDocumentNotFound
+	}
 	return nil
 }
 func (r *documentRepositoryImpl) IncrementViewCount(id int64) error {
