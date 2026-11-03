@@ -162,6 +162,30 @@ type CreateDocumentCommentRequest struct {
 	Content string `json:"content"`
 }
 
+// RollbackRevisionRequest defines parameters to restore document content from an earlier version
+type RollbackRevisionRequest struct {
+	TargetVersion int    `json:"target_version"`
+	Reason        string `json:"reason,omitempty"`
+}
+
+// DocumentMetrics aggregates workspace knowledge base and wiki statistics
+type DocumentMetrics struct {
+	WorkspaceID        int64          `json:"workspace_id"`
+	TotalDocuments     int            `json:"total_documents"`
+	PublishedDocuments int            `json:"published_documents"`
+	DraftDocuments     int            `json:"draft_documents"`
+	InReviewDocuments  int            `json:"in_review_documents"`
+	ArchivedDocuments  int            `json:"archived_documents"`
+	PinnedDocuments    int            `json:"pinned_documents"`
+	TotalRevisions     int            `json:"total_revisions"`
+	TotalComments      int            `json:"total_comments"`
+	UnresolvedComments int            `json:"unresolved_comments"`
+	TotalViews         int            `json:"total_views"`
+	DocTypeBreakdown   map[string]int `json:"doc_type_breakdown"`
+	RecentlyUpdated    []Document     `json:"recently_updated"`
+}
+
+
 
 
 
