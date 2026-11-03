@@ -360,7 +360,19 @@ func (s *documentServiceImpl) DeleteDocument(id int64) error {
 	return nil
 }
 func (s *documentServiceImpl) TogglePin(id int64) (*model.Document, error) {
-	return nil, nil
+	doc, err := s.repo.GetDocumentByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrDocumentNotFound) {
+			return nil, ErrDocumentNotFound
+		}
+		return nil, err
+	}
+	newPinned := !doc.IsPinned
+	err = s.repo.TogglePinned(id, newPinned)
+	if err != nil {
+		return nil, err
+	}
+	return s.repo.GetDocumentByID(id)
 }
 func (s *documentServiceImpl) GetDocumentTree(workspaceID int64, projectID *int) ([]model.DocumentTreeNode, error) {
 	if workspaceID <= 0 {
@@ -415,7 +427,22 @@ func (s *documentServiceImpl) GetDocumentTree(workspaceID int64, projectID *int)
 	return tree, nil
 }
 func (s *documentServiceImpl) PublishDocument(id int64, status string) (*model.Document, error) {
-	return nil, nil
+	if !isValidPublishStatus(status) {
+		return nil, ErrInvalidPublishStatus
+	}
+	doc, err := s.repo.GetDocumentByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrDocumentNotFound) {
+			return nil, ErrDocumentNotFound
+		}
+		return nil, err
+	}
+	doc.Status = status
+	err = s.repo.UpdateDocument(doc)
+	if err != nil {
+		return nil, err
+	}
+	return s.repo.GetDocumentByID(id)
 }
 func (s *documentServiceImpl) ListRevisions(documentID int64) ([]model.DocumentRevision, error) {
 	return nil, nil
