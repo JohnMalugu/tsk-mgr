@@ -1018,6 +1018,26 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	documentRevisionsQuery := `
+	CREATE TABLE IF NOT EXISTS document_revisions (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		document_id INTEGER NOT NULL,
+		version INTEGER NOT NULL,
+		title TEXT NOT NULL,
+		content TEXT NOT NULL,
+		author_id TEXT NOT NULL,
+		change_summary TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		UNIQUE(document_id, version),
+		FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+		FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(documentRevisionsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
