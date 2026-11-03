@@ -645,6 +645,86 @@ func (r *documentRepositoryImpl) ResolveComment(id int64, resolvedBy string) err
 	return nil
 }
 func (r *documentRepositoryImpl) GetDocumentMetrics(workspaceID int64) (*model.DocumentMetrics, error) {
-	return nil, nil
+	metrics := &model.DocumentMetrics{
+		WorkspaceID:      workspaceID,
+		DocTypeBreakdown: make(map[string]int),
+		RecentlyUpdated:  []model.Document{},
+	}
+
+	// 1. Status and counts from documents
+	summaryQuery := `
+		SELECT 
+			COUNT(*),
+			COALESCE(SUM(CASE WHEN status = 'published' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN status = 'in_review' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN status = 'archived' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN is_pinned = 1 THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(view_count), 0)
+		FROM documents
+		WHERE workspace_id = ?
+	`
+	err := r.db.QueryRow(summaryQuery, workspaceID).Scan(
+		&metrics.TotalDocuments,
+		&metrics.PublishedDocuments,
+		&metrics.DraftDocuments,
+		&metrics.InReviewDocuments,
+		&metrics.ArchivedDocuments,
+		&metrics.PinnedDocuments,
+		&metrics.TotalViews,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Revisions count
+	_ = r.db.QueryRow(`
+		SELECT COUNT(*) 
+		FROM document_revisions r
+		JOIN documents d ON r.document_id = d.id
+		WHERE d.workspace_id = ?
+	`, workspaceID).Scan(&metrics.TotalRevisions)
+
+	// 3. Comments and unresolved count
+	_ = r.db.QueryRow(`
+		SELECT 
+			COUNT(*),
+			COALESCE(SUM(CASE WHEN c.is_resolved = 0 THEN 1 ELSE 0 END), 0)
+		FROM document_comments c
+		JOIN documents d ON c.document_id = d.id
+		WHERE d.workspace_id = ?
+	`, workspaceID).Scan(&metrics.TotalComments, &metrics.UnresolvedComments)
+
+	// 4. DocType breakdown
+	typeRows, err := r.db.Query(`
+		SELECT doc_type, COUNT(*)
+		FROM documents
+		WHERE workspace_id = ?
+		GROUP BY doc_type
+	`, workspaceID)
+	if err == nil {
+		defer typeRows.Close()
+		for typeRows.Next() {
+			var dt string
+			var count int
+			if err := typeRows.Scan(&dt, &count); err == nil {
+				metrics.DocTypeBreakdown[dt] = count
+			}
+		}
+	}
+
+	// 5. Top 5 recently updated documents
+	recentRows, err := r.db.Query(docSelectFields+` WHERE d.workspace_id = ? ORDER BY d.updated_at DESC LIMIT 5`, workspaceID)
+	if err == nil {
+		defer recentRows.Close()
+		for recentRows.Next() {
+			doc, err := r.scanDocument(recentRows)
+			if err == nil {
+				metrics.RecentlyUpdated = append(metrics.RecentlyUpdated, *doc)
+			}
+		}
+	}
+
+	return metrics, nil
 }
 
