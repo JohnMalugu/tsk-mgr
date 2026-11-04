@@ -105,7 +105,9 @@ func (r *incidentRepositoryImpl) CreateIncident(incident *model.Incident) (int64
 	return id, nil
 }
 
-func scanIncident(scanner interface{ Scan(dest ...interface{}) error }) (*model.Incident, error) {
+func scanIncident(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.Incident, error) {
 	var inc model.Incident
 	var servicesJSON string
 	var projectID sql.NullInt32
@@ -200,7 +202,6 @@ func scanIncident(scanner interface{ Scan(dest ...interface{}) error }) (*model.
 
 	return &inc, nil
 }
-
 
 const incidentSelectQuery = `
 	SELECT 

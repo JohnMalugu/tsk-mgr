@@ -495,5 +495,3 @@ func (h *IncidentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	writeIncidentError(w, http.StatusNotFound, "not found")
 }
-
-

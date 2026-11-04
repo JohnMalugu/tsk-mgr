@@ -11,14 +11,14 @@ import (
 )
 
 var (
-	ErrIncidentNotFound          = errors.New("incident not found")
-	ErrIncidentTitleRequired     = errors.New("incident title is required")
-	ErrInvalidIncidentSeverity   = errors.New("invalid incident severity")
-	ErrInvalidIncidentStatus     = errors.New("invalid incident status")
-	ErrInvalidPostmortemStatus   = errors.New("invalid postmortem status")
-	ErrInvalidTimelineEventType  = errors.New("invalid timeline event type")
-	ErrTimelineMessageRequired   = errors.New("timeline message is required")
-	ErrInvalidIncidentTaskType   = errors.New("invalid incident task type")
+	ErrIncidentNotFound         = errors.New("incident not found")
+	ErrIncidentTitleRequired    = errors.New("incident title is required")
+	ErrInvalidIncidentSeverity  = errors.New("invalid incident severity")
+	ErrInvalidIncidentStatus    = errors.New("invalid incident status")
+	ErrInvalidPostmortemStatus  = errors.New("invalid postmortem status")
+	ErrInvalidTimelineEventType = errors.New("invalid timeline event type")
+	ErrTimelineMessageRequired  = errors.New("timeline message is required")
+	ErrInvalidIncidentTaskType  = errors.New("invalid incident task type")
 )
 
 // IncidentService manages operational incident response, timelines, remediation tasks, and metrics
@@ -627,4 +627,3 @@ func (s *incidentServiceImpl) GetIncidentMetrics(workspaceID int64) (*model.Inci
 	}
 	return s.repo.GetIncidentMetrics(workspaceID)
 }
-

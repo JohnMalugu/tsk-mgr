@@ -207,6 +207,16 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET|POST /v2/docs/{id}/comments` to list inline review comments or submit a comment on a document
 - `POST|PATCH /v2/docs/comments/{commentId}/resolve` to mark an inline comment as resolved with resolver timestamp
 - `GET /v2/docs/metrics?workspace_id={id}` for workspace knowledge base metrics, document count by status and type, pinned count, revisions count, comments count, and recently updated documents
+- `GET|POST /v2/incidents` to list incidents with multi-criteria filters (`workspace_id`, `project_id`, `status`, `severity`, `commander_id`, `scribe_id`, `postmortem_status`, `search`, `limit`, `offset`) or declare a new incident with automatic chronological incident numbering and timeline creation
+- `GET|PUT|PATCH|DELETE /v2/incidents/{id}` to fetch incident details (with timeline events and linked remediation tasks), update incident metadata, or delete an incident with cascade cleanup
+- `POST|PATCH /v2/incidents/{id}/status` to transition incident lifecycle (`investigating`, `identified`, `monitoring`, `resolved`) with automatic timestamping (`identified_at`, `mitigated_at`, `resolved_at`) and audit timeline logging
+- `POST|PATCH /v2/incidents/{id}/severity` to adjust incident severity tier (`sev1_critical`, `sev2_major`, `sev3_moderate`, `sev4_minor`) with audit timeline logging
+- `POST /v2/incidents/{id}/assign` to assign incident response roles (`commander_id`, `scribe_id`) with audit timeline logging
+- `GET|POST /v2/incidents/{id}/timeline` to list chronological incident event history or record timeline entries (`status_change`, `severity_change`, `role_assignment`, `note`, `mitigation`, `impact_update`, `root_cause_found`, `action_item_created`, `postmortem_linked`) with markdown notes
+- `GET|POST /v2/incidents/{id}/tasks` to view linked remediation tasks or link a task to an incident with role typing (`mitigation`, `prevention`, `investigation`, `follow_up`)
+- `DELETE /v2/incidents/{id}/tasks/{taskId}` to unlink a remediation task from an incident
+- `POST|PATCH /v2/incidents/{id}/postmortem` to update postmortem lifecycle status (`not_started`, `drafting`, `in_review`, `completed`, `skipped`), link to a postmortem wiki document in `/v2/docs`, and record root cause summary
+- `GET /v2/incidents/metrics?workspace_id={id}` for workspace operational reliability metrics, incident counts by status and severity, MTTA (Mean Time to Acknowledge), MTTR (Mean Time to Resolve), and postmortem completion rate
 
 ## Current limitations
 
