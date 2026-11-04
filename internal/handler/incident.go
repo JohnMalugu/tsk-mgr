@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
@@ -429,4 +430,70 @@ func (h *IncidentHandler) HandleMetrics(w http.ResponseWriter, r *http.Request) 
 	}
 	writeIncidentJSON(w, http.StatusOK, metrics)
 }
+
+// ServeHTTP dispatches requests under /v2/incidents
+func (h *IncidentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/incidents")
+	path = strings.TrimPrefix(path, "/")
+
+	if path == "" {
+		h.HandleIncidents(w, r)
+		return
+	}
+
+	if path == "metrics" || path == "metrics/" {
+		h.HandleMetrics(w, r)
+		return
+	}
+
+	parts := strings.Split(path, "/")
+	id, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || id <= 0 {
+		writeIncidentError(w, http.StatusBadRequest, "invalid incident id")
+		return
+	}
+
+	if len(parts) == 1 || (len(parts) == 2 && parts[1] == "") {
+		h.HandleIncidentDetail(w, r, id)
+		return
+	}
+
+	if len(parts) == 2 {
+		switch parts[1] {
+		case "status":
+			h.HandleChangeStatus(w, r, id)
+		case "severity":
+			h.HandleChangeSeverity(w, r, id)
+		case "assign":
+			h.HandleAssignRoles(w, r, id)
+		case "timeline":
+			h.HandleTimeline(w, r, id)
+		case "tasks":
+			h.HandleIncidentTasks(w, r, id)
+		case "postmortem":
+			h.HandlePostmortem(w, r, id)
+		default:
+			writeIncidentError(w, http.StatusNotFound, "not found")
+		}
+		return
+	}
+
+	if len(parts) == 3 {
+		switch parts[1] {
+		case "tasks":
+			taskID, err := strconv.Atoi(parts[2])
+			if err != nil || taskID <= 0 {
+				writeIncidentError(w, http.StatusBadRequest, "invalid task id")
+				return
+			}
+			h.HandleIncidentTaskDetail(w, r, id, taskID)
+		default:
+			writeIncidentError(w, http.StatusNotFound, "not found")
+		}
+		return
+	}
+
+	writeIncidentError(w, http.StatusNotFound, "not found")
+}
+
 

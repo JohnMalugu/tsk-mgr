@@ -111,6 +111,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 Operational Incidents & Reliability Management
+	if strings.HasPrefix(r.URL.Path, "/v2/incidents") {
+		if handler.GlobalIncidentHandler == nil {
+			http.Error(w, "Incident handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalIncidentHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return
