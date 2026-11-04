@@ -88,3 +88,27 @@ type IncidentTimeline struct {
 	AuthorUsername string `json:"author_username,omitempty"`
 }
 
+// Incident task classification types
+const (
+	IncidentTaskTypeMitigation         = "mitigation"
+	IncidentTaskTypePreventative       = "preventative"
+	IncidentTaskTypeDetection          = "detection"
+	IncidentTaskTypeProcessImprovement = "process_improvement"
+)
+
+// IncidentTaskLink establishes a cross-reference between an incident and remediation tasks
+type IncidentTaskLink struct {
+	ID         int64     `json:"id"`
+	IncidentID int64     `json:"incident_id"`
+	TaskID     int       `json:"task_id"`
+	TaskType   string    `json:"task_type"` // mitigation, preventative, detection, process_improvement
+	CreatedBy  string    `json:"created_by"`
+	CreatedAt  time.Time `json:"created_at"`
+
+	// Enriched fields
+	TaskTitle    string `json:"task_title,omitempty"`
+	TaskStatus   string `json:"task_status,omitempty"`
+	TaskPriority string `json:"task_priority,omitempty"`
+}
+
+
