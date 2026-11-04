@@ -2,7 +2,9 @@ package repository
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
@@ -40,9 +42,165 @@ func NewIncidentRepository(db *sql.DB) IncidentRepository {
 	return &incidentRepositoryImpl{db: db}
 }
 
-func (r *incidentRepositoryImpl) CreateIncident(incident *model.Incident) (int64, error) {
-	return 0, nil
+func (r *incidentRepositoryImpl) GetNextIncidentNumber(workspaceID int64) (int, error) {
+	query := `SELECT COALESCE(MAX(incident_number), 0) + 1 FROM incidents WHERE workspace_id = ?`
+	var nextNum int
+	err := r.db.QueryRow(query, workspaceID).Scan(&nextNum)
+	if err != nil {
+		return 1, err
+	}
+	return nextNum, nil
 }
+
+func (r *incidentRepositoryImpl) CreateIncident(incident *model.Incident) (int64, error) {
+	if incident.IncidentNumber <= 0 {
+		nextNum, err := r.GetNextIncidentNumber(incident.WorkspaceID)
+		if err != nil {
+			return 0, err
+		}
+		incident.IncidentNumber = nextNum
+	}
+
+	servicesJSON, err := json.Marshal(incident.ImpactedServices)
+	if err != nil {
+		servicesJSON = []byte("[]")
+	}
+
+	query := `
+	INSERT INTO incidents (
+		workspace_id, project_id, incident_number, title, summary,
+		severity, status, commander_id, scribe_id, reported_by_id,
+		postmortem_status, postmortem_doc_id, root_cause, impacted_services,
+		started_at, acknowledged_at, mitigated_at, resolved_at, closed_at,
+		created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	now := time.Now().UTC()
+	if incident.CreatedAt.IsZero() {
+		incident.CreatedAt = now
+	}
+	if incident.UpdatedAt.IsZero() {
+		incident.UpdatedAt = now
+	}
+	if incident.StartedAt.IsZero() {
+		incident.StartedAt = now
+	}
+
+	res, err := r.db.Exec(query,
+		incident.WorkspaceID, incident.ProjectID, incident.IncidentNumber, incident.Title, incident.Summary,
+		incident.Severity, incident.Status, incident.CommanderID, incident.ScribeID, incident.ReportedByID,
+		incident.PostmortemStatus, incident.PostmortemDocID, incident.RootCause, string(servicesJSON),
+		incident.StartedAt, incident.AcknowledgedAt, incident.MitigatedAt, incident.ResolvedAt, incident.ClosedAt,
+		incident.CreatedAt, incident.UpdatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	incident.ID = id
+	return id, nil
+}
+
+func scanIncident(scanner interface{ Scan(dest ...interface{}) error }) (*model.Incident, error) {
+	var inc model.Incident
+	var servicesJSON string
+	var projectID sql.NullInt32
+	var commanderID, scribeID sql.NullString
+	var postmortemDocID sql.NullInt64
+	var acknowledgedAt, mitigatedAt, resolvedAt, closedAt sql.NullTime
+	var commanderUsername, scribeUsername, reporterUsername, projectName sql.NullString
+
+	err := scanner.Scan(
+		&inc.ID, &inc.WorkspaceID, &projectID, &inc.IncidentNumber, &inc.Title, &inc.Summary,
+		&inc.Severity, &inc.Status, &commanderID, &scribeID, &inc.ReportedByID,
+		&inc.PostmortemStatus, &postmortemDocID, &inc.RootCause, &servicesJSON,
+		&inc.StartedAt, &acknowledgedAt, &mitigatedAt, &resolvedAt, &closedAt,
+		&inc.CreatedAt, &inc.UpdatedAt,
+		&commanderUsername, &scribeUsername, &reporterUsername, &projectName,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if projectID.Valid {
+		pid := int(projectID.Int32)
+		inc.ProjectID = &pid
+	}
+	if commanderID.Valid {
+		cid := commanderID.String
+		inc.CommanderID = &cid
+	}
+	if scribeID.Valid {
+		sid := scribeID.String
+		inc.ScribeID = &sid
+	}
+	if postmortemDocID.Valid {
+		inc.PostmortemDocID = &postmortemDocID.Int64
+	}
+	if acknowledgedAt.Valid {
+		t := acknowledgedAt.Time
+		inc.AcknowledgedAt = &t
+	}
+	if mitigatedAt.Valid {
+		t := mitigatedAt.Time
+		inc.MitigatedAt = &t
+	}
+	if resolvedAt.Valid {
+		t := resolvedAt.Time
+		inc.ResolvedAt = &t
+	}
+	if closedAt.Valid {
+		t := closedAt.Time
+		inc.ClosedAt = &t
+	}
+
+	if commanderUsername.Valid {
+		inc.CommanderUsername = commanderUsername.String
+	}
+	if scribeUsername.Valid {
+		inc.ScribeUsername = scribeUsername.String
+	}
+	if reporterUsername.Valid {
+		inc.ReporterUsername = reporterUsername.String
+	}
+	if projectName.Valid {
+		inc.ProjectName = projectName.String
+	}
+
+	if servicesJSON != "" {
+		_ = json.Unmarshal([]byte(servicesJSON), &inc.ImpactedServices)
+	}
+	if inc.ImpactedServices == nil {
+		inc.ImpactedServices = []string{}
+	}
+
+	// Calculate operational metrics
+	if inc.AcknowledgedAt != nil && !inc.AcknowledgedAt.IsZero() {
+		mins := int(inc.AcknowledgedAt.Sub(inc.StartedAt).Minutes())
+		if mins >= 0 {
+			inc.TimeToAcknowledgeMinutes = &mins
+		}
+	}
+	if inc.ResolvedAt != nil && !inc.ResolvedAt.IsZero() {
+		mins := int(inc.ResolvedAt.Sub(inc.StartedAt).Minutes())
+		if mins >= 0 {
+			inc.TimeToResolveMinutes = &mins
+			inc.DurationMinutes = &mins
+		}
+	} else {
+		mins := int(time.Since(inc.StartedAt).Minutes())
+		if mins >= 0 {
+			inc.DurationMinutes = &mins
+		}
+	}
+
+	return &inc, nil
+}
+
 
 func (r *incidentRepositoryImpl) GetIncidentByID(id int64) (*model.Incident, error) {
 	return nil, nil
@@ -62,10 +220,6 @@ func (r *incidentRepositoryImpl) UpdateIncident(incident *model.Incident) error 
 
 func (r *incidentRepositoryImpl) DeleteIncident(id int64) error {
 	return nil
-}
-
-func (r *incidentRepositoryImpl) GetNextIncidentNumber(workspaceID int64) (int, error) {
-	return 1, nil
 }
 
 func (r *incidentRepositoryImpl) CreateTimelineEvent(event *model.IncidentTimeline) (int64, error) {
