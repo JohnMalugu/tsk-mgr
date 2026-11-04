@@ -260,11 +260,122 @@ func (s *incidentServiceImpl) DeleteIncident(id int64) error {
 }
 
 func (s *incidentServiceImpl) ChangeStatus(id int64, authorID string, req model.ChangeIncidentStatusRequest) (*model.Incident, error) {
-	return nil, nil
+	inc, err := s.repo.GetIncidentByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrIncidentNotFound) {
+			return nil, ErrIncidentNotFound
+		}
+		return nil, err
+	}
+
+	if !isValidIncidentStatus(req.Status) {
+		return nil, ErrInvalidIncidentStatus
+	}
+
+	oldStatus := inc.Status
+	inc.Status = req.Status
+	now := time.Now().UTC()
+
+	switch req.Status {
+	case model.IncidentStatusInvestigating, model.IncidentStatusIdentified, model.IncidentStatusMonitoring:
+		if inc.AcknowledgedAt == nil {
+			inc.AcknowledgedAt = &now
+		}
+		if req.Status == model.IncidentStatusMonitoring && inc.MitigatedAt == nil {
+			inc.MitigatedAt = &now
+		}
+	case model.IncidentStatusResolved:
+		if inc.AcknowledgedAt == nil {
+			inc.AcknowledgedAt = &now
+		}
+		if inc.MitigatedAt == nil {
+			inc.MitigatedAt = &now
+		}
+		if inc.ResolvedAt == nil {
+			inc.ResolvedAt = &now
+		}
+	case model.IncidentStatusClosed:
+		if inc.AcknowledgedAt == nil {
+			inc.AcknowledgedAt = &now
+		}
+		if inc.MitigatedAt == nil {
+			inc.MitigatedAt = &now
+		}
+		if inc.ResolvedAt == nil {
+			inc.ResolvedAt = &now
+		}
+		if inc.ClosedAt == nil {
+			inc.ClosedAt = &now
+		}
+	}
+
+	err = s.repo.UpdateIncident(inc)
+	if err != nil {
+		return nil, err
+	}
+
+	msg := strings.TrimSpace(req.Message)
+	if msg == "" {
+		msg = fmt.Sprintf("Incident status changed from %s to %s", oldStatus, req.Status)
+	}
+
+	if authorID == "" {
+		authorID = "user_1"
+	}
+	_, _ = s.repo.CreateTimelineEvent(&model.IncidentTimeline{
+		IncidentID: id,
+		AuthorID:   authorID,
+		EventType:  model.TimelineEventStatusChange,
+		Message:    msg,
+		CreatedAt:  now,
+	})
+
+	return s.repo.GetIncidentByID(id)
 }
 
 func (s *incidentServiceImpl) ChangeSeverity(id int64, authorID string, req model.ChangeIncidentSeverityRequest) (*model.Incident, error) {
-	return nil, nil
+	inc, err := s.repo.GetIncidentByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrIncidentNotFound) {
+			return nil, ErrIncidentNotFound
+		}
+		return nil, err
+	}
+
+	if !isValidIncidentSeverity(req.Severity) {
+		return nil, ErrInvalidIncidentSeverity
+	}
+
+	oldSev := inc.Severity
+	inc.Severity = req.Severity
+
+	// Auto-escalate postmortem requirement for critical/high incidents
+	if (req.Severity == model.IncidentSev0 || req.Severity == model.IncidentSev1) && inc.PostmortemStatus == model.PostmortemNotRequired {
+		inc.PostmortemStatus = model.PostmortemPending
+	}
+
+	err = s.repo.UpdateIncident(inc)
+	if err != nil {
+		return nil, err
+	}
+
+	msg := strings.TrimSpace(req.Reason)
+	if msg == "" {
+		msg = fmt.Sprintf("Incident severity changed from %s to %s", oldSev, req.Severity)
+	}
+
+	if authorID == "" {
+		authorID = "user_1"
+	}
+	_, _ = s.repo.CreateTimelineEvent(&model.IncidentTimeline{
+		IncidentID: id,
+		AuthorID:   authorID,
+		EventType:  model.TimelineEventSeverityChange,
+		Message:    msg,
+		CreatedAt:  time.Now().UTC(),
+	})
+
+	return s.repo.GetIncidentByID(id)
 }
 
 func (s *incidentServiceImpl) AssignRoles(id int64, authorID string, req model.AssignIncidentRolesRequest) (*model.Incident, error) {
