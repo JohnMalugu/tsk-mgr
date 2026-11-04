@@ -570,10 +570,61 @@ func (s *incidentServiceImpl) ListIncidentTasks(incidentID int64) ([]model.Incid
 	return s.repo.ListIncidentTasks(incidentID)
 }
 
+func isValidPostmortemStatus(s string) bool {
+	switch s {
+	case model.PostmortemNotRequired, model.PostmortemPending,
+		model.PostmortemInReview, model.PostmortemCompleted, model.PostmortemWaived:
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *incidentServiceImpl) UpdatePostmortem(id int64, req model.UpdatePostmortemRequest) (*model.Incident, error) {
-	return nil, nil
+	inc, err := s.repo.GetIncidentByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrIncidentNotFound) {
+			return nil, ErrIncidentNotFound
+		}
+		return nil, err
+	}
+
+	if req.PostmortemStatus != "" {
+		if !isValidPostmortemStatus(req.PostmortemStatus) {
+			return nil, ErrInvalidPostmortemStatus
+		}
+		inc.PostmortemStatus = req.PostmortemStatus
+	}
+
+	if req.PostmortemDocID != nil {
+		if *req.PostmortemDocID > 0 {
+			if s.docRepo != nil {
+				_, err := s.docRepo.GetDocumentByID(*req.PostmortemDocID)
+				if err != nil {
+					return nil, ErrDocumentNotFound
+				}
+			}
+			inc.PostmortemDocID = req.PostmortemDocID
+		} else {
+			inc.PostmortemDocID = nil
+		}
+	}
+
+	if req.RootCause != nil {
+		inc.RootCause = strings.TrimSpace(*req.RootCause)
+	}
+
+	err = s.repo.UpdateIncident(inc)
+	if err != nil {
+		return nil, err
+	}
+	return s.repo.GetIncidentByID(id)
 }
 
 func (s *incidentServiceImpl) GetIncidentMetrics(workspaceID int64) (*model.IncidentMetrics, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	return s.repo.GetIncidentMetrics(workspaceID)
 }
+
