@@ -1133,6 +1133,26 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	incidentTaskLinksQuery := `
+	CREATE TABLE IF NOT EXISTS incident_task_links (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		incident_id INTEGER NOT NULL,
+		task_id INTEGER NOT NULL,
+		task_type TEXT NOT NULL DEFAULT 'mitigation',
+		created_by TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		UNIQUE(incident_id, task_id),
+		FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE CASCADE,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+		FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(incidentTaskLinksQuery)
+	if err != nil {
+		return err
+	}
+
+
 
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
