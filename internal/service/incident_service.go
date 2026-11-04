@@ -2,6 +2,9 @@ package service
 
 import (
 	"errors"
+	"fmt"
+	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -64,20 +67,133 @@ func NewIncidentService(
 	}
 }
 
+func isValidIncidentSeverity(sev string) bool {
+	switch sev {
+	case model.IncidentSev0, model.IncidentSev1, model.IncidentSev2, model.IncidentSev3:
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidIncidentStatus(status string) bool {
+	switch status {
+	case model.IncidentStatusReported, model.IncidentStatusInvestigating,
+		model.IncidentStatusIdentified, model.IncidentStatusMonitoring,
+		model.IncidentStatusResolved, model.IncidentStatusClosed:
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *incidentServiceImpl) CreateIncident(reporterID string, req model.CreateIncidentRequest) (*model.Incident, error) {
-	return nil, nil
+	if req.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		return nil, ErrIncidentTitleRequired
+	}
+
+	severity := req.Severity
+	if severity == "" {
+		severity = model.IncidentSev2
+	}
+	if !isValidIncidentSeverity(severity) {
+		return nil, ErrInvalidIncidentSeverity
+	}
+
+	if req.ProjectID != nil && s.projectRepo != nil {
+		p, err := s.projectRepo.GetByID(*req.ProjectID)
+		if err != nil || p == nil {
+			return nil, ErrProjectNotFound
+		}
+	}
+
+	if reporterID == "" {
+		reporterID = "user_1"
+	}
+
+	startedAt := time.Now().UTC()
+	if req.StartedAt != nil && !req.StartedAt.IsZero() {
+		startedAt = req.StartedAt.UTC()
+	}
+
+	pmStatus := model.PostmortemNotRequired
+	if severity == model.IncidentSev0 || severity == model.IncidentSev1 {
+		pmStatus = model.PostmortemPending
+	}
+
+	services := req.ImpactedServices
+	if services == nil {
+		services = []string{}
+	}
+
+	inc := &model.Incident{
+		WorkspaceID:      req.WorkspaceID,
+		ProjectID:        req.ProjectID,
+		Title:            title,
+		Summary:          strings.TrimSpace(req.Summary),
+		Severity:         severity,
+		Status:           model.IncidentStatusReported,
+		CommanderID:      req.CommanderID,
+		ScribeID:         req.ScribeID,
+		ReportedByID:     reporterID,
+		PostmortemStatus: pmStatus,
+		ImpactedServices: services,
+		StartedAt:        startedAt,
+		CreatedAt:        time.Now().UTC(),
+		UpdatedAt:        time.Now().UTC(),
+	}
+
+	id, err := s.repo.CreateIncident(inc)
+	if err != nil {
+		return nil, err
+	}
+
+	// Record initial timeline entry
+	_, _ = s.repo.CreateTimelineEvent(&model.IncidentTimeline{
+		IncidentID: id,
+		AuthorID:   reporterID,
+		EventType:  model.TimelineEventStatusChange,
+		Message:    fmt.Sprintf("Incident declared with severity %s", severity),
+		CreatedAt:  time.Now().UTC(),
+	})
+
+	return s.repo.GetIncidentByID(id)
 }
 
 func (s *incidentServiceImpl) GetIncident(id int64) (*model.Incident, error) {
-	return nil, nil
+	inc, err := s.repo.GetIncidentByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrIncidentNotFound) {
+			return nil, ErrIncidentNotFound
+		}
+		return nil, err
+	}
+	return inc, nil
 }
 
 func (s *incidentServiceImpl) GetIncidentByNumber(workspaceID int64, incidentNumber int) (*model.Incident, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	inc, err := s.repo.GetIncidentByNumber(workspaceID, incidentNumber)
+	if err != nil {
+		if errors.Is(err, repository.ErrIncidentNotFound) {
+			return nil, ErrIncidentNotFound
+		}
+		return nil, err
+	}
+	return inc, nil
 }
 
 func (s *incidentServiceImpl) ListIncidents(filter model.IncidentFilter) ([]*model.Incident, error) {
-	return nil, nil
+	if filter.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	return s.repo.ListIncidents(filter)
 }
 
 func (s *incidentServiceImpl) UpdateIncident(id int64, req model.UpdateIncidentRequest) (*model.Incident, error) {
