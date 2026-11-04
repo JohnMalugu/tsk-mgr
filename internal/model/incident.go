@@ -111,4 +111,47 @@ type IncidentTaskLink struct {
 	TaskPriority string `json:"task_priority,omitempty"`
 }
 
+// CreateIncidentRequest defines payload to declare a new incident
+type CreateIncidentRequest struct {
+	WorkspaceID      int64      `json:"workspace_id"`
+	ProjectID        *int       `json:"project_id,omitempty"`
+	Title            string     `json:"title"`
+	Summary          string     `json:"summary,omitempty"`
+	Severity         string     `json:"severity"` // sev0, sev1, sev2, sev3
+	CommanderID      *string    `json:"commander_id,omitempty"`
+	ScribeID         *string    `json:"scribe_id,omitempty"`
+	ImpactedServices []string   `json:"impacted_services,omitempty"`
+	StartedAt        *time.Time `json:"started_at,omitempty"`
+}
+
+// UpdateIncidentRequest defines parameters to modify an active incident
+type UpdateIncidentRequest struct {
+	Title            *string   `json:"title,omitempty"`
+	Summary          *string   `json:"summary,omitempty"`
+	ProjectID        *int      `json:"project_id,omitempty"`
+	CommanderID      *string   `json:"commander_id,omitempty"`
+	ScribeID         *string   `json:"scribe_id,omitempty"`
+	ImpactedServices *[]string `json:"impacted_services,omitempty"`
+	RootCause        *string   `json:"root_cause,omitempty"`
+}
+
+// ChangeIncidentStatusRequest defines payload to transition incident lifecycle
+type ChangeIncidentStatusRequest struct {
+	Status  string `json:"status"` // reported, investigating, identified, monitoring, resolved, closed
+	Message string `json:"message,omitempty"`
+}
+
+// ChangeIncidentSeverityRequest defines payload to escalate or de-escalate severity
+type ChangeIncidentSeverityRequest struct {
+	Severity string `json:"severity"` // sev0, sev1, sev2, sev3
+	Reason   string `json:"reason,omitempty"`
+}
+
+// AssignIncidentRolesRequest defines payload to appoint commander and scribe
+type AssignIncidentRolesRequest struct {
+	CommanderID *string `json:"commander_id,omitempty"`
+	ScribeID    *string `json:"scribe_id,omitempty"`
+}
+
+
 
