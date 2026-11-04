@@ -153,5 +153,34 @@ type AssignIncidentRolesRequest struct {
 	ScribeID    *string `json:"scribe_id,omitempty"`
 }
 
+// IncidentFilter specifies search and filtering criteria for incident list queries
+type IncidentFilter struct {
+	WorkspaceID  int64      `json:"workspace_id"`
+	ProjectID    *int       `json:"project_id,omitempty"`
+	Severity     string     `json:"severity,omitempty"`
+	Status       string     `json:"status,omitempty"`
+	CommanderID  string     `json:"commander_id,omitempty"`
+	ReportedByID string     `json:"reported_by_id,omitempty"`
+	Search       string     `json:"search,omitempty"`
+	From         *time.Time `json:"from,omitempty"`
+	To           *time.Time `json:"to,omitempty"`
+	Limit        int        `json:"limit,omitempty"`
+	Offset       int        `json:"offset,omitempty"`
+}
+
+// CreateIncidentTimelineRequest defines payload to record an operational update on the incident timeline
+type CreateIncidentTimelineRequest struct {
+	EventType string `json:"event_type"` // status_change, severity_change, lead_assigned, mitigation, investigation, customer_communication
+	Message   string `json:"message"`
+	Metadata  string `json:"metadata,omitempty"` // JSON string
+}
+
+// LinkIncidentTaskRequest defines payload to associate a task to an incident
+type LinkIncidentTaskRequest struct {
+	TaskID   int    `json:"task_id"`
+	TaskType string `json:"task_type,omitempty"` // mitigation, preventative, detection, process_improvement
+}
+
+
 
 
