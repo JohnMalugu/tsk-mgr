@@ -469,15 +469,84 @@ func (r *incidentRepositoryImpl) ListTimelineEvents(incidentID int64) ([]model.I
 }
 
 func (r *incidentRepositoryImpl) LinkTask(link *model.IncidentTaskLink) (int64, error) {
-	return 0, nil
+	if link.CreatedAt.IsZero() {
+		link.CreatedAt = time.Now().UTC()
+	}
+
+	query := `
+	INSERT INTO incident_task_links (incident_id, task_id, task_type, created_by, created_at)
+	VALUES (?, ?, ?, ?, ?)
+	ON CONFLICT(incident_id, task_id) DO UPDATE SET
+		task_type = excluded.task_type,
+		created_by = excluded.created_by`
+
+	res, err := r.db.Exec(query,
+		link.IncidentID,
+		link.TaskID,
+		link.TaskType,
+		link.CreatedBy,
+		link.CreatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err == nil && id > 0 {
+		link.ID = id
+	}
+	return link.ID, nil
 }
 
 func (r *incidentRepositoryImpl) UnlinkTask(incidentID int64, taskID int) error {
-	return nil
+	query := `DELETE FROM incident_task_links WHERE incident_id = ? AND task_id = ?`
+	_, err := r.db.Exec(query, incidentID, taskID)
+	return err
 }
 
 func (r *incidentRepositoryImpl) ListIncidentTasks(incidentID int64) ([]model.IncidentTaskLink, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		l.id, l.incident_id, l.task_id, l.task_type, l.created_by, l.created_at,
+		t.title AS task_title, t.status AS task_status, t.priority AS task_priority
+	FROM incident_task_links l
+	LEFT JOIN tasks t ON l.task_id = t.id
+	WHERE l.incident_id = ?
+	ORDER BY l.created_at ASC`
+
+	rows, err := r.db.Query(query, incidentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var links []model.IncidentTaskLink
+	for rows.Next() {
+		var l model.IncidentTaskLink
+		var taskTitle, taskStatus, taskPriority sql.NullString
+
+		err := rows.Scan(
+			&l.ID, &l.IncidentID, &l.TaskID, &l.TaskType, &l.CreatedBy, &l.CreatedAt,
+			&taskTitle, &taskStatus, &taskPriority,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if taskTitle.Valid {
+			l.TaskTitle = taskTitle.String
+		}
+		if taskStatus.Valid {
+			l.TaskStatus = taskStatus.String
+		}
+		if taskPriority.Valid {
+			l.TaskPriority = taskPriority.String
+		}
+		links = append(links, l)
+	}
+	if links == nil {
+		links = []model.IncidentTaskLink{}
+	}
+	return links, rows.Err()
 }
 
 func (r *incidentRepositoryImpl) GetIncidentMetrics(workspaceID int64) (*model.IncidentMetrics, error) {
