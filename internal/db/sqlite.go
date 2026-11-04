@@ -1115,6 +1115,25 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	incidentTimelinesQuery := `
+	CREATE TABLE IF NOT EXISTS incident_timelines (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		incident_id INTEGER NOT NULL,
+		author_id TEXT NOT NULL,
+		event_type TEXT NOT NULL,
+		message TEXT NOT NULL,
+		metadata TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE CASCADE,
+		FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(incidentTimelinesQuery)
+	if err != nil {
+		return err
+	}
+
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
