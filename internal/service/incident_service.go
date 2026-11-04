@@ -197,11 +197,66 @@ func (s *incidentServiceImpl) ListIncidents(filter model.IncidentFilter) ([]*mod
 }
 
 func (s *incidentServiceImpl) UpdateIncident(id int64, req model.UpdateIncidentRequest) (*model.Incident, error) {
-	return nil, nil
+	inc, err := s.repo.GetIncidentByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrIncidentNotFound) {
+			return nil, ErrIncidentNotFound
+		}
+		return nil, err
+	}
+
+	if req.Title != nil {
+		title := strings.TrimSpace(*req.Title)
+		if title == "" {
+			return nil, ErrIncidentTitleRequired
+		}
+		inc.Title = title
+	}
+	if req.Summary != nil {
+		inc.Summary = strings.TrimSpace(*req.Summary)
+	}
+	if req.ProjectID != nil {
+		if *req.ProjectID > 0 {
+			if s.projectRepo != nil {
+				p, err := s.projectRepo.GetByID(*req.ProjectID)
+				if err != nil || p == nil {
+					return nil, ErrProjectNotFound
+				}
+			}
+			inc.ProjectID = req.ProjectID
+		} else {
+			inc.ProjectID = nil
+		}
+	}
+	if req.CommanderID != nil {
+		inc.CommanderID = req.CommanderID
+	}
+	if req.ScribeID != nil {
+		inc.ScribeID = req.ScribeID
+	}
+	if req.ImpactedServices != nil {
+		inc.ImpactedServices = *req.ImpactedServices
+	}
+	if req.RootCause != nil {
+		inc.RootCause = strings.TrimSpace(*req.RootCause)
+	}
+
+	err = s.repo.UpdateIncident(inc)
+	if err != nil {
+		return nil, err
+	}
+	return s.repo.GetIncidentByID(id)
 }
 
 func (s *incidentServiceImpl) DeleteIncident(id int64) error {
-	return nil
+	_, err := s.repo.GetIncidentByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrIncidentNotFound) {
+			return ErrIncidentNotFound
+		}
+		return err
+	}
+	return s.repo.DeleteIncident(id)
 }
 
 func (s *incidentServiceImpl) ChangeStatus(id int64, authorID string, req model.ChangeIncidentStatusRequest) (*model.Incident, error) {
