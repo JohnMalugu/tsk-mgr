@@ -550,5 +550,95 @@ func (r *incidentRepositoryImpl) ListIncidentTasks(incidentID int64) ([]model.In
 }
 
 func (r *incidentRepositoryImpl) GetIncidentMetrics(workspaceID int64) (*model.IncidentMetrics, error) {
-	return nil, nil
+	metrics := &model.IncidentMetrics{
+		WorkspaceID:       workspaceID,
+		SeverityBreakdown: map[string]int{model.IncidentSev0: 0, model.IncidentSev1: 0, model.IncidentSev2: 0, model.IncidentSev3: 0},
+		StatusBreakdown: map[string]int{
+			model.IncidentStatusReported:      0,
+			model.IncidentStatusInvestigating: 0,
+			model.IncidentStatusIdentified:    0,
+			model.IncidentStatusMonitoring:    0,
+			model.IncidentStatusResolved:      0,
+			model.IncidentStatusClosed:        0,
+		},
+		RecentIncidents: []model.Incident{},
+	}
+
+	summaryQuery := `
+	SELECT 
+		COUNT(*),
+		COUNT(CASE WHEN status IN ('reported', 'investigating', 'identified', 'monitoring') THEN 1 END),
+		COUNT(CASE WHEN status = 'resolved' THEN 1 END),
+		COUNT(CASE WHEN status = 'closed' THEN 1 END),
+		COALESCE(AVG(CASE WHEN acknowledged_at IS NOT NULL THEN (julianday(acknowledged_at) - julianday(started_at)) * 1440.0 END), 0.0),
+		COALESCE(AVG(CASE WHEN resolved_at IS NOT NULL THEN (julianday(resolved_at) - julianday(started_at)) * 1440.0 END), 0.0)
+	FROM incidents
+	WHERE workspace_id = ?`
+
+	err := r.db.QueryRow(summaryQuery, workspaceID).Scan(
+		&metrics.TotalIncidents,
+		&metrics.ActiveIncidents,
+		&metrics.ResolvedIncidents,
+		&metrics.ClosedIncidents,
+		&metrics.MeanTimeToAcknowledgeMinutes,
+		&metrics.MeanTimeToResolveMinutes,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Severity breakdown
+	sevRows, err := r.db.Query(`SELECT severity, COUNT(*) FROM incidents WHERE workspace_id = ? GROUP BY severity`, workspaceID)
+	if err == nil {
+		defer sevRows.Close()
+		for sevRows.Next() {
+			var sev string
+			var count int
+			if err := sevRows.Scan(&sev, &count); err == nil {
+				metrics.SeverityBreakdown[sev] = count
+			}
+		}
+	}
+
+	// Status breakdown
+	statRows, err := r.db.Query(`SELECT status, COUNT(*) FROM incidents WHERE workspace_id = ? GROUP BY status`, workspaceID)
+	if err == nil {
+		defer statRows.Close()
+		for statRows.Next() {
+			var stat string
+			var count int
+			if err := statRows.Scan(&stat, &count); err == nil {
+				metrics.StatusBreakdown[stat] = count
+			}
+		}
+	}
+
+	// Postmortem compliance
+	var completedPm, totalSeverePm int
+	pmQuery := `
+	SELECT 
+		COUNT(CASE WHEN postmortem_status = 'completed' THEN 1 END),
+		COUNT(CASE WHEN severity IN ('sev0', 'sev1') THEN 1 END)
+	FROM incidents WHERE workspace_id = ?`
+	_ = r.db.QueryRow(pmQuery, workspaceID).Scan(&completedPm, &totalSeverePm)
+	if totalSeverePm > 0 {
+		metrics.PostmortemComplianceRate = (float64(completedPm) / float64(totalSeverePm)) * 100.0
+	} else if metrics.TotalIncidents > 0 {
+		metrics.PostmortemComplianceRate = 100.0
+	}
+
+	// Recent incidents
+	recent, err := r.ListIncidents(model.IncidentFilter{
+		WorkspaceID: workspaceID,
+		Limit:       5,
+	})
+	if err == nil {
+		for _, inc := range recent {
+			if inc != nil {
+				metrics.RecentIncidents = append(metrics.RecentIncidents, *inc)
+			}
+		}
+	}
+
+	return metrics, nil
 }
