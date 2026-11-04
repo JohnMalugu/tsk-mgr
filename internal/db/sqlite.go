@@ -1078,6 +1078,43 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	incidentsQuery := `
+	CREATE TABLE IF NOT EXISTS incidents (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		project_id INTEGER,
+		incident_number INTEGER NOT NULL,
+		title TEXT NOT NULL,
+		summary TEXT NOT NULL DEFAULT '',
+		severity TEXT NOT NULL DEFAULT 'sev2',
+		status TEXT NOT NULL DEFAULT 'reported',
+		commander_id TEXT,
+		scribe_id TEXT,
+		reported_by_id TEXT NOT NULL,
+		postmortem_status TEXT NOT NULL DEFAULT 'not_required',
+		postmortem_doc_id INTEGER,
+		root_cause TEXT NOT NULL DEFAULT '',
+		impacted_services TEXT NOT NULL DEFAULT '[]',
+		started_at DATETIME NOT NULL,
+		acknowledged_at DATETIME,
+		mitigated_at DATETIME,
+		resolved_at DATETIME,
+		closed_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+		FOREIGN KEY (commander_id) REFERENCES users(id) ON DELETE SET NULL,
+		FOREIGN KEY (scribe_id) REFERENCES users(id) ON DELETE SET NULL,
+		FOREIGN KEY (reported_by_id) REFERENCES users(id) ON DELETE CASCADE,
+		FOREIGN KEY (postmortem_doc_id) REFERENCES documents(id) ON DELETE SET NULL
+	);`
+
+	_, err = db.Exec(incidentsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
