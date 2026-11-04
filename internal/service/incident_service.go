@@ -483,16 +483,91 @@ func (s *incidentServiceImpl) ListTimeline(incidentID int64) ([]model.IncidentTi
 	return s.repo.ListTimelineEvents(incidentID)
 }
 
+func isValidIncidentTaskType(t string) bool {
+	switch t {
+	case model.IncidentTaskTypeMitigation, model.IncidentTaskTypePreventative,
+		model.IncidentTaskTypeDetection, model.IncidentTaskTypeProcessImprovement:
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *incidentServiceImpl) LinkTask(incidentID int64, createdBy string, req model.LinkIncidentTaskRequest) (*model.IncidentTaskLink, error) {
-	return nil, nil
+	_, err := s.repo.GetIncidentByID(incidentID)
+	if err != nil {
+		if errors.Is(err, repository.ErrIncidentNotFound) {
+			return nil, ErrIncidentNotFound
+		}
+		return nil, err
+	}
+
+	taskType := req.TaskType
+	if taskType == "" {
+		taskType = model.IncidentTaskTypeMitigation
+	}
+	if !isValidIncidentTaskType(taskType) {
+		return nil, ErrInvalidIncidentTaskType
+	}
+
+	if req.TaskID <= 0 {
+		return nil, ErrTaskNotFound
+	}
+	if s.taskRepo != nil {
+		t, err := s.taskRepo.GetByID(req.TaskID)
+		if err != nil || t == nil {
+			return nil, ErrTaskNotFound
+		}
+	}
+
+	if createdBy == "" {
+		createdBy = "user_1"
+	}
+
+	link := &model.IncidentTaskLink{
+		IncidentID: incidentID,
+		TaskID:     req.TaskID,
+		TaskType:   taskType,
+		CreatedBy:  createdBy,
+		CreatedAt:  time.Now().UTC(),
+	}
+
+	_, err = s.repo.LinkTask(link)
+	if err != nil {
+		return nil, err
+	}
+
+	tasks, err := s.repo.ListIncidentTasks(incidentID)
+	if err == nil {
+		for _, tl := range tasks {
+			if tl.TaskID == req.TaskID {
+				return &tl, nil
+			}
+		}
+	}
+	return link, nil
 }
 
 func (s *incidentServiceImpl) UnlinkTask(incidentID int64, taskID int) error {
-	return nil
+	_, err := s.repo.GetIncidentByID(incidentID)
+	if err != nil {
+		if errors.Is(err, repository.ErrIncidentNotFound) {
+			return ErrIncidentNotFound
+		}
+		return err
+	}
+	return s.repo.UnlinkTask(incidentID, taskID)
 }
 
 func (s *incidentServiceImpl) ListIncidentTasks(incidentID int64) ([]model.IncidentTaskLink, error) {
-	return nil, nil
+	_, err := s.repo.GetIncidentByID(incidentID)
+	if err != nil {
+		if errors.Is(err, repository.ErrIncidentNotFound) {
+			return nil, ErrIncidentNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListIncidentTasks(incidentID)
 }
 
 func (s *incidentServiceImpl) UpdatePostmortem(id int64, req model.UpdatePostmortemRequest) (*model.Incident, error) {
