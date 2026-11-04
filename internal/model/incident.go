@@ -63,3 +63,28 @@ type Incident struct {
 	TimeToAcknowledgeMinutes *int   `json:"time_to_acknowledge_minutes,omitempty"`
 	TimeToResolveMinutes     *int   `json:"time_to_resolve_minutes,omitempty"`
 }
+
+// Timeline event types for incident chronological log
+const (
+	TimelineEventStatusChange          = "status_change"
+	TimelineEventSeverityChange        = "severity_change"
+	TimelineEventLeadAssigned          = "lead_assigned"
+	TimelineEventMitigation            = "mitigation"
+	TimelineEventInvestigation         = "investigation"
+	TimelineEventCustomerCommunication = "customer_communication"
+)
+
+// IncidentTimeline represents a single chronological event or log entry during an incident
+type IncidentTimeline struct {
+	ID         int64     `json:"id"`
+	IncidentID int64     `json:"incident_id"`
+	AuthorID   string    `json:"author_id"`
+	EventType  string    `json:"event_type"` // status_change, severity_change, lead_assigned, mitigation, investigation, customer_communication
+	Message    string    `json:"message"`
+	Metadata   string    `json:"metadata,omitempty"` // JSON payload
+	CreatedAt  time.Time `json:"created_at"`
+
+	// Enriched fields
+	AuthorUsername string `json:"author_username,omitempty"`
+}
+
