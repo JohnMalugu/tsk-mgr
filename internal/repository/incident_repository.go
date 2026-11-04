@@ -319,10 +319,84 @@ func (r *incidentRepositoryImpl) ListIncidents(filter model.IncidentFilter) ([]*
 }
 
 func (r *incidentRepositoryImpl) UpdateIncident(incident *model.Incident) error {
+	servicesJSON, err := json.Marshal(incident.ImpactedServices)
+	if err != nil {
+		servicesJSON = []byte("[]")
+	}
+
+	incident.UpdatedAt = time.Now().UTC()
+
+	query := `
+	UPDATE incidents SET
+		project_id = ?,
+		title = ?,
+		summary = ?,
+		severity = ?,
+		status = ?,
+		commander_id = ?,
+		scribe_id = ?,
+		postmortem_status = ?,
+		postmortem_doc_id = ?,
+		root_cause = ?,
+		impacted_services = ?,
+		started_at = ?,
+		acknowledged_at = ?,
+		mitigated_at = ?,
+		resolved_at = ?,
+		closed_at = ?,
+		updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query,
+		incident.ProjectID,
+		incident.Title,
+		incident.Summary,
+		incident.Severity,
+		incident.Status,
+		incident.CommanderID,
+		incident.ScribeID,
+		incident.PostmortemStatus,
+		incident.PostmortemDocID,
+		incident.RootCause,
+		string(servicesJSON),
+		incident.StartedAt,
+		incident.AcknowledgedAt,
+		incident.MitigatedAt,
+		incident.ResolvedAt,
+		incident.ClosedAt,
+		incident.UpdatedAt,
+		incident.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrIncidentNotFound
+	}
 	return nil
 }
 
 func (r *incidentRepositoryImpl) DeleteIncident(id int64) error {
+	// Cascade cleanup of child tables
+	_, _ = r.db.Exec(`DELETE FROM incident_timelines WHERE incident_id = ?`, id)
+	_, _ = r.db.Exec(`DELETE FROM incident_task_links WHERE incident_id = ?`, id)
+
+	res, err := r.db.Exec(`DELETE FROM incidents WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrIncidentNotFound
+	}
 	return nil
 }
 
