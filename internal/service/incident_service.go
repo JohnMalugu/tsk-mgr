@@ -379,15 +379,108 @@ func (s *incidentServiceImpl) ChangeSeverity(id int64, authorID string, req mode
 }
 
 func (s *incidentServiceImpl) AssignRoles(id int64, authorID string, req model.AssignIncidentRolesRequest) (*model.Incident, error) {
-	return nil, nil
+	inc, err := s.repo.GetIncidentByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrIncidentNotFound) {
+			return nil, ErrIncidentNotFound
+		}
+		return nil, err
+	}
+
+	inc.CommanderID = req.CommanderID
+	inc.ScribeID = req.ScribeID
+
+	err = s.repo.UpdateIncident(inc)
+	if err != nil {
+		return nil, err
+	}
+
+	cmdStr := "unassigned"
+	if req.CommanderID != nil && *req.CommanderID != "" {
+		cmdStr = *req.CommanderID
+	}
+	scbStr := "unassigned"
+	if req.ScribeID != nil && *req.ScribeID != "" {
+		scbStr = *req.ScribeID
+	}
+
+	if authorID == "" {
+		authorID = "user_1"
+	}
+	_, _ = s.repo.CreateTimelineEvent(&model.IncidentTimeline{
+		IncidentID: id,
+		AuthorID:   authorID,
+		EventType:  model.TimelineEventLeadAssigned,
+		Message:    fmt.Sprintf("Incident roles assigned: Commander=%s, Scribe=%s", cmdStr, scbStr),
+		CreatedAt:  time.Now().UTC(),
+	})
+
+	return s.repo.GetIncidentByID(id)
+}
+
+func isValidTimelineEventType(t string) bool {
+	switch t {
+	case model.TimelineEventStatusChange, model.TimelineEventSeverityChange,
+		model.TimelineEventLeadAssigned, model.TimelineEventMitigation,
+		model.TimelineEventInvestigation, model.TimelineEventCustomerCommunication:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *incidentServiceImpl) AddTimelineEvent(incidentID int64, authorID string, req model.CreateIncidentTimelineRequest) (*model.IncidentTimeline, error) {
-	return nil, nil
+	_, err := s.repo.GetIncidentByID(incidentID)
+	if err != nil {
+		if errors.Is(err, repository.ErrIncidentNotFound) {
+			return nil, ErrIncidentNotFound
+		}
+		return nil, err
+	}
+
+	msg := strings.TrimSpace(req.Message)
+	if msg == "" {
+		return nil, ErrTimelineMessageRequired
+	}
+
+	eventType := req.EventType
+	if eventType == "" {
+		eventType = model.TimelineEventInvestigation
+	}
+	if !isValidTimelineEventType(eventType) {
+		return nil, ErrInvalidTimelineEventType
+	}
+
+	if authorID == "" {
+		authorID = "user_1"
+	}
+
+	event := &model.IncidentTimeline{
+		IncidentID: incidentID,
+		AuthorID:   authorID,
+		EventType:  eventType,
+		Message:    msg,
+		Metadata:   strings.TrimSpace(req.Metadata),
+		CreatedAt:  time.Now().UTC(),
+	}
+
+	id, err := s.repo.CreateTimelineEvent(event)
+	if err != nil {
+		return nil, err
+	}
+	event.ID = id
+	return event, nil
 }
 
 func (s *incidentServiceImpl) ListTimeline(incidentID int64) ([]model.IncidentTimeline, error) {
-	return nil, nil
+	_, err := s.repo.GetIncidentByID(incidentID)
+	if err != nil {
+		if errors.Is(err, repository.ErrIncidentNotFound) {
+			return nil, ErrIncidentNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListTimelineEvents(incidentID)
 }
 
 func (s *incidentServiceImpl) LinkTask(incidentID int64, createdBy string, req model.LinkIncidentTaskRequest) (*model.IncidentTaskLink, error) {
