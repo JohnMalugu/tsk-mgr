@@ -202,12 +202,48 @@ func scanIncident(scanner interface{ Scan(dest ...interface{}) error }) (*model.
 }
 
 
+const incidentSelectQuery = `
+	SELECT 
+		i.id, i.workspace_id, i.project_id, i.incident_number, i.title, i.summary,
+		i.severity, i.status, i.commander_id, i.scribe_id, i.reported_by_id,
+		i.postmortem_status, i.postmortem_doc_id, i.root_cause, i.impacted_services,
+		i.started_at, i.acknowledged_at, i.mitigated_at, i.resolved_at, i.closed_at,
+		i.created_at, i.updated_at,
+		u_cmd.username AS commander_username,
+		u_scb.username AS scribe_username,
+		u_rep.username AS reporter_username,
+		p.name AS project_name
+	FROM incidents i
+	LEFT JOIN users u_cmd ON i.commander_id = u_cmd.id
+	LEFT JOIN users u_scb ON i.scribe_id = u_scb.id
+	LEFT JOIN users u_rep ON i.reported_by_id = u_rep.id
+	LEFT JOIN projects p ON i.project_id = p.id
+`
+
 func (r *incidentRepositoryImpl) GetIncidentByID(id int64) (*model.Incident, error) {
-	return nil, nil
+	query := incidentSelectQuery + " WHERE i.id = ?"
+	row := r.db.QueryRow(query, id)
+	inc, err := scanIncident(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrIncidentNotFound
+		}
+		return nil, err
+	}
+	return inc, nil
 }
 
 func (r *incidentRepositoryImpl) GetIncidentByNumber(workspaceID int64, incidentNumber int) (*model.Incident, error) {
-	return nil, nil
+	query := incidentSelectQuery + " WHERE i.workspace_id = ? AND i.incident_number = ?"
+	row := r.db.QueryRow(query, workspaceID, incidentNumber)
+	inc, err := scanIncident(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrIncidentNotFound
+		}
+		return nil, err
+	}
+	return inc, nil
 }
 
 func (r *incidentRepositoryImpl) ListIncidents(filter model.IncidentFilter) ([]*model.Incident, error) {
