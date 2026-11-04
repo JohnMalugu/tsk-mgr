@@ -181,6 +181,29 @@ type LinkIncidentTaskRequest struct {
 	TaskType string `json:"task_type,omitempty"` // mitigation, preventative, detection, process_improvement
 }
 
+// UpdatePostmortemRequest defines payload to update postmortem progress, root cause, and document link
+type UpdatePostmortemRequest struct {
+	PostmortemStatus string  `json:"postmortem_status"` // not_required, pending, in_review, completed, waived
+	PostmortemDocID  *int64  `json:"postmortem_doc_id,omitempty"`
+	RootCause        *string `json:"root_cause,omitempty"`
+}
+
+// IncidentMetrics aggregates operational reliability, MTTA, MTTR, and incident statistics
+type IncidentMetrics struct {
+	WorkspaceID                   int64          `json:"workspace_id"`
+	TotalIncidents                int            `json:"total_incidents"`
+	ActiveIncidents               int            `json:"active_incidents"`
+	ResolvedIncidents             int            `json:"resolved_incidents"`
+	ClosedIncidents               int            `json:"closed_incidents"`
+	SeverityBreakdown             map[string]int `json:"severity_breakdown"`
+	StatusBreakdown               map[string]int `json:"status_breakdown"`
+	MeanTimeToAcknowledgeMinutes  float64        `json:"mean_time_to_acknowledge_minutes"`
+	MeanTimeToResolveMinutes      float64        `json:"mean_time_to_resolve_minutes"`
+	PostmortemComplianceRate      float64        `json:"postmortem_compliance_rate"`
+	RecentIncidents               []Incident     `json:"recent_incidents"`
+}
+
+
 
 
 
