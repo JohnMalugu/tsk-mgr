@@ -401,11 +401,71 @@ func (r *incidentRepositoryImpl) DeleteIncident(id int64) error {
 }
 
 func (r *incidentRepositoryImpl) CreateTimelineEvent(event *model.IncidentTimeline) (int64, error) {
-	return 0, nil
+	if event.CreatedAt.IsZero() {
+		event.CreatedAt = time.Now().UTC()
+	}
+
+	query := `
+	INSERT INTO incident_timelines (incident_id, author_id, event_type, message, metadata, created_at)
+	VALUES (?, ?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query,
+		event.IncidentID,
+		event.AuthorID,
+		event.EventType,
+		event.Message,
+		event.Metadata,
+		event.CreatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	event.ID = id
+	return id, nil
 }
 
 func (r *incidentRepositoryImpl) ListTimelineEvents(incidentID int64) ([]model.IncidentTimeline, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		t.id, t.incident_id, t.author_id, t.event_type, t.message, t.metadata, t.created_at,
+		u.username AS author_username
+	FROM incident_timelines t
+	LEFT JOIN users u ON t.author_id = u.id
+	WHERE t.incident_id = ?
+	ORDER BY t.created_at ASC, t.id ASC`
+
+	rows, err := r.db.Query(query, incidentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []model.IncidentTimeline
+	for rows.Next() {
+		var ev model.IncidentTimeline
+		var authorUsername sql.NullString
+
+		err := rows.Scan(
+			&ev.ID, &ev.IncidentID, &ev.AuthorID, &ev.EventType, &ev.Message, &ev.Metadata, &ev.CreatedAt,
+			&authorUsername,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if authorUsername.Valid {
+			ev.AuthorUsername = authorUsername.String
+		}
+		events = append(events, ev)
+	}
+	if events == nil {
+		events = []model.IncidentTimeline{}
+	}
+	return events, rows.Err()
 }
 
 func (r *incidentRepositoryImpl) LinkTask(link *model.IncidentTaskLink) (int64, error) {
