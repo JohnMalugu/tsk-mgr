@@ -247,7 +247,75 @@ func (r *incidentRepositoryImpl) GetIncidentByNumber(workspaceID int64, incident
 }
 
 func (r *incidentRepositoryImpl) ListIncidents(filter model.IncidentFilter) ([]*model.Incident, error) {
-	return nil, nil
+	query := incidentSelectQuery + " WHERE i.workspace_id = ?"
+	args := []interface{}{filter.WorkspaceID}
+
+	if filter.ProjectID != nil {
+		query += " AND i.project_id = ?"
+		args = append(args, *filter.ProjectID)
+	}
+	if filter.Severity != "" {
+		query += " AND i.severity = ?"
+		args = append(args, filter.Severity)
+	}
+	if filter.Status != "" {
+		query += " AND i.status = ?"
+		args = append(args, filter.Status)
+	}
+	if filter.CommanderID != "" {
+		query += " AND i.commander_id = ?"
+		args = append(args, filter.CommanderID)
+	}
+	if filter.ReportedByID != "" {
+		query += " AND i.reported_by_id = ?"
+		args = append(args, filter.ReportedByID)
+	}
+	if filter.Search != "" {
+		query += " AND (i.title LIKE ? OR i.summary LIKE ? OR i.root_cause LIKE ?)"
+		pat := "%" + filter.Search + "%"
+		args = append(args, pat, pat, pat)
+	}
+	if filter.From != nil {
+		query += " AND i.started_at >= ?"
+		args = append(args, *filter.From)
+	}
+	if filter.To != nil {
+		query += " AND i.started_at <= ?"
+		args = append(args, *filter.To)
+	}
+
+	query += " ORDER BY i.started_at DESC, i.id DESC"
+
+	limit := filter.Limit
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	query += " LIMIT ?"
+	args = append(args, limit)
+
+	if filter.Offset > 0 {
+		query += " OFFSET ?"
+		args = append(args, filter.Offset)
+	}
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var incidents []*model.Incident
+	for rows.Next() {
+		inc, err := scanIncident(rows)
+		if err != nil {
+			return nil, err
+		}
+		incidents = append(incidents, inc)
+	}
+	if incidents == nil {
+		incidents = []*model.Incident{}
+	}
+	return incidents, rows.Err()
 }
 
 func (r *incidentRepositoryImpl) UpdateIncident(incident *model.Incident) error {
