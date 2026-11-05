@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -269,11 +270,104 @@ func (s *riskServiceImpl) DeleteRisk(id int64) error {
 }
 
 func (s *riskServiceImpl) AssessRisk(id int64, reviewerID string, req model.AssessRiskRequest) (*model.Risk, error) {
-	return nil, errors.New("not implemented")
+	if id <= 0 {
+		return nil, ErrRiskNotFound
+	}
+
+	if req.Probability < 1 || req.Probability > 5 {
+		return nil, ErrInvalidProbability
+	}
+	if req.Impact < 1 || req.Impact > 5 {
+		return nil, ErrInvalidImpact
+	}
+
+	existing, err := s.repo.GetRiskByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	prevProbability := existing.Probability
+	prevImpact := existing.Impact
+	prevScore := existing.Score
+
+	existing.Probability = req.Probability
+	existing.Impact = req.Impact
+	existing.Score, existing.Severity = model.CalculateRiskSeverity(existing.Probability, existing.Impact)
+
+	if err := s.repo.UpdateRisk(existing); err != nil {
+		return nil, err
+	}
+
+	// Record audit review log
+	review := &model.RiskReview{
+		RiskID:              id,
+		ReviewerID:          reviewerID,
+		PreviousProbability: prevProbability,
+		PreviousImpact:      prevImpact,
+		PreviousScore:       prevScore,
+		NewProbability:      existing.Probability,
+		NewImpact:           existing.Impact,
+		NewScore:            existing.Score,
+		PreviousStatus:      existing.Status,
+		NewStatus:           existing.Status,
+		Comments:            strings.TrimSpace(req.Comments),
+	}
+	_, _ = s.repo.CreateReview(review)
+
+	return s.repo.GetRiskByID(id)
 }
 
 func (s *riskServiceImpl) ChangeStatus(id int64, reviewerID string, req model.ChangeRiskStatusRequest) (*model.Risk, error) {
-	return nil, errors.New("not implemented")
+	if id <= 0 {
+		return nil, ErrRiskNotFound
+	}
+
+	status := strings.TrimSpace(req.Status)
+	if !isValidRiskStatus(status) {
+		return nil, ErrInvalidRiskStatus
+	}
+
+	existing, err := s.repo.GetRiskByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	prevStatus := existing.Status
+	existing.Status = status
+
+	if status == model.RiskStatusClosed {
+		if existing.ClosedAt == nil {
+			now := time.Now().UTC()
+			existing.ClosedAt = &now
+		}
+	} else {
+		existing.ClosedAt = nil
+	}
+
+	if err := s.repo.UpdateRisk(existing); err != nil {
+		return nil, err
+	}
+
+	// Record review if comments provided or status changed
+	comments := strings.TrimSpace(req.Comments)
+	if comments != "" || prevStatus != status {
+		review := &model.RiskReview{
+			RiskID:              id,
+			ReviewerID:          reviewerID,
+			PreviousProbability: existing.Probability,
+			PreviousImpact:      existing.Impact,
+			PreviousScore:       existing.Score,
+			NewProbability:      existing.Probability,
+			NewImpact:           existing.Impact,
+			NewScore:            existing.Score,
+			PreviousStatus:      prevStatus,
+			NewStatus:           status,
+			Comments:            comments,
+		}
+		_, _ = s.repo.CreateReview(review)
+	}
+
+	return s.repo.GetRiskByID(id)
 }
 
 func (s *riskServiceImpl) LinkTask(riskID int64, req model.LinkRiskTaskRequest) (*model.RiskTaskLink, error) {
