@@ -201,11 +201,71 @@ func (s *riskServiceImpl) ListRisks(filter model.RiskFilter) ([]*model.Risk, err
 }
 
 func (s *riskServiceImpl) UpdateRisk(id int64, req model.UpdateRiskRequest) (*model.Risk, error) {
-	return nil, errors.New("not implemented")
+	if id <= 0 {
+		return nil, ErrRiskNotFound
+	}
+
+	existing, err := s.repo.GetRiskByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Title != nil {
+		title := strings.TrimSpace(*req.Title)
+		if title == "" {
+			return nil, ErrRiskTitleRequired
+		}
+		existing.Title = title
+	}
+
+	if req.Description != nil {
+		existing.Description = strings.TrimSpace(*req.Description)
+	}
+
+	if req.Category != nil {
+		cat := strings.TrimSpace(*req.Category)
+		if !isValidRiskCategory(cat) {
+			return nil, ErrInvalidRiskCategory
+		}
+		existing.Category = cat
+	}
+
+	if req.Strategy != nil {
+		strat := strings.TrimSpace(*req.Strategy)
+		if !isValidRiskStrategy(strat) {
+			return nil, ErrInvalidRiskStrategy
+		}
+		existing.Strategy = strat
+	}
+
+	if req.MitigationPlan != nil {
+		existing.MitigationPlan = strings.TrimSpace(*req.MitigationPlan)
+	}
+
+	if req.ContingencyPlan != nil {
+		existing.ContingencyPlan = strings.TrimSpace(*req.ContingencyPlan)
+	}
+
+	if req.OwnerID != nil {
+		existing.OwnerID = req.OwnerID
+	}
+
+	if req.TargetResolutionDate != nil {
+		existing.TargetResolutionDate = req.TargetResolutionDate
+	}
+
+	if err := s.repo.UpdateRisk(existing); err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetRiskByID(id)
 }
 
 func (s *riskServiceImpl) DeleteRisk(id int64) error {
-	return errors.New("not implemented")
+	if id <= 0 {
+		return ErrRiskNotFound
+	}
+	return s.repo.DeleteRisk(id)
 }
 
 func (s *riskServiceImpl) AssessRisk(id int64, reviewerID string, req model.AssessRiskRequest) (*model.Risk, error) {
