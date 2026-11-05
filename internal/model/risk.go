@@ -175,3 +175,24 @@ type AssessRiskRequest struct {
 	Impact      int    `json:"impact"`      // 1-5 scale
 	Comments    string `json:"comments"`
 }
+
+// ChangeRiskStatusRequest payload for updating risk lifecycle status
+type ChangeRiskStatusRequest struct {
+	Status   string `json:"status"` // identified, assessing, mitigating, monitored, accepted, closed
+	Comments string `json:"comments,omitempty"`
+}
+
+// LinkRiskTaskRequest payload for associating a task with a risk
+type LinkRiskTaskRequest struct {
+	TaskID     int    `json:"task_id"`
+	ActionType string `json:"action_type"` // mitigation, contingency, investigation
+	Notes      string `json:"notes,omitempty"`
+}
+
+// CreateRiskReviewRequest payload for submitting a periodic risk review
+type CreateRiskReviewRequest struct {
+	NewProbability *int   `json:"new_probability,omitempty"` // optional updated probability
+	NewImpact      *int   `json:"new_impact,omitempty"`      // optional updated impact
+	NewStatus      string `json:"new_status,omitempty"`      // optional updated status
+	Comments       string `json:"comments"`
+}
