@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
@@ -317,5 +318,112 @@ func (h *RiskHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeRiskJSON(w, http.StatusOK, metrics)
+}
+
+// ServeHTTP dispatches requests under /v2/risks
+func (h *RiskHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/risks")
+	path = strings.TrimPrefix(path, "/")
+
+	if path == "" {
+		switch r.Method {
+		case http.MethodGet:
+			h.ListRisks(w, r)
+		case http.MethodPost:
+			h.CreateRisk(w, r)
+		default:
+			writeRiskError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if path == "metrics" || path == "metrics/" {
+		if r.Method != http.MethodGet {
+			writeRiskError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		h.GetMetrics(w, r)
+		return
+	}
+
+	parts := strings.Split(path, "/")
+	id, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || id <= 0 {
+		writeRiskError(w, http.StatusBadRequest, "invalid risk id")
+		return
+	}
+
+	if len(parts) == 1 || (len(parts) == 2 && parts[1] == "") {
+		switch r.Method {
+		case http.MethodGet:
+			h.GetRisk(w, r, id)
+		case http.MethodPut, http.MethodPatch:
+			h.UpdateRisk(w, r, id)
+		case http.MethodDelete:
+			h.DeleteRisk(w, r, id)
+		default:
+			writeRiskError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if len(parts) == 2 {
+		switch parts[1] {
+		case "assess":
+			if r.Method != http.MethodPost {
+				writeRiskError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.AssessRisk(w, r, id)
+		case "status":
+			if r.Method != http.MethodPost && r.Method != http.MethodPatch {
+				writeRiskError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.ChangeStatus(w, r, id)
+		case "tasks":
+			switch r.Method {
+			case http.MethodGet:
+				h.ListRiskTasks(w, r, id)
+			case http.MethodPost:
+				h.LinkTask(w, r, id)
+			default:
+				writeRiskError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		case "reviews":
+			switch r.Method {
+			case http.MethodGet:
+				h.ListReviews(w, r, id)
+			case http.MethodPost:
+				h.CreateReview(w, r, id)
+			default:
+				writeRiskError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		default:
+			writeRiskError(w, http.StatusNotFound, "not found")
+		}
+		return
+	}
+
+	if len(parts) == 3 {
+		switch parts[1] {
+		case "tasks":
+			taskID, err := strconv.Atoi(parts[2])
+			if err != nil || taskID <= 0 {
+				writeRiskError(w, http.StatusBadRequest, "invalid task id")
+				return
+			}
+			if r.Method != http.MethodDelete {
+				writeRiskError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.UnlinkTask(w, r, id, taskID)
+		default:
+			writeRiskError(w, http.StatusNotFound, "not found")
+		}
+		return
+	}
+
+	writeRiskError(w, http.StatusNotFound, "not found")
 }
 

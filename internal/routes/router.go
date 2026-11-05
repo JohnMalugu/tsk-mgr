@@ -121,6 +121,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 Enterprise Risk Management & Governance
+	if strings.HasPrefix(r.URL.Path, "/v2/risks") {
+		if handler.GlobalRiskHandler == nil {
+			http.Error(w, "Risk handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalRiskHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return

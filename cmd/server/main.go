@@ -131,6 +131,10 @@ func main() {
 	incidentSvc := service.NewIncidentService(incidentRepo, projectRepo, taskRepo, docRepo)
 	handler.InitIncidentHandler(incidentSvc)
 
+	riskRepo := repository.NewRiskRepository(sqliteDB)
+	riskSvc := service.NewRiskService(riskRepo, projectRepo, taskRepo)
+	handler.InitRiskHandler(riskSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
