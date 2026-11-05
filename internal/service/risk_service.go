@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -60,20 +61,143 @@ func NewRiskService(
 	}
 }
 
+func isValidRiskCategory(cat string) bool {
+	switch cat {
+	case model.RiskCategoryTechnical,
+		model.RiskCategorySchedule,
+		model.RiskCategoryFinancial,
+		model.RiskCategoryOperational,
+		model.RiskCategorySecurity,
+		model.RiskCategoryCompliance,
+		model.RiskCategoryExternal:
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidRiskStrategy(strat string) bool {
+	switch strat {
+	case model.RiskStrategyMitigate,
+		model.RiskStrategyAvoid,
+		model.RiskStrategyTransfer,
+		model.RiskStrategyAccept:
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidRiskStatus(st string) bool {
+	switch st {
+	case model.RiskStatusIdentified,
+		model.RiskStatusAssessing,
+		model.RiskStatusMitigating,
+		model.RiskStatusMonitored,
+		model.RiskStatusAccepted,
+		model.RiskStatusClosed:
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *riskServiceImpl) CreateRisk(creatorID string, req model.CreateRiskRequest) (*model.Risk, error) {
-	return nil, errors.New("not implemented")
+	if req.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		return nil, ErrRiskTitleRequired
+	}
+
+	if req.ProjectID != nil {
+		if _, err := s.projectRepo.GetByID(*req.ProjectID); err != nil {
+			return nil, ErrProjectNotFound
+		}
+	}
+
+	category := strings.TrimSpace(req.Category)
+	if category == "" {
+		category = model.RiskCategoryOperational
+	} else if !isValidRiskCategory(category) {
+		return nil, ErrInvalidRiskCategory
+	}
+
+	probability := req.Probability
+	if probability == 0 {
+		probability = 3
+	} else if probability < 1 || probability > 5 {
+		return nil, ErrInvalidProbability
+	}
+
+	impact := req.Impact
+	if impact == 0 {
+		impact = 3
+	} else if impact < 1 || impact > 5 {
+		return nil, ErrInvalidImpact
+	}
+
+	strategy := strings.TrimSpace(req.Strategy)
+	if strategy == "" {
+		strategy = model.RiskStrategyMitigate
+	} else if !isValidRiskStrategy(strategy) {
+		return nil, ErrInvalidRiskStrategy
+	}
+
+	ownerID := req.OwnerID
+	if ownerID == nil || strings.TrimSpace(*ownerID) == "" {
+		ownerID = &creatorID
+	}
+
+	risk := &model.Risk{
+		WorkspaceID:          req.WorkspaceID,
+		ProjectID:            req.ProjectID,
+		Title:                title,
+		Description:          strings.TrimSpace(req.Description),
+		Category:             category,
+		Probability:          probability,
+		Impact:               impact,
+		Status:               model.RiskStatusIdentified,
+		Strategy:             strategy,
+		MitigationPlan:       strings.TrimSpace(req.MitigationPlan),
+		ContingencyPlan:      strings.TrimSpace(req.ContingencyPlan),
+		OwnerID:              ownerID,
+		TargetResolutionDate: req.TargetResolutionDate,
+	}
+
+	id, err := s.repo.CreateRisk(risk)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetRiskByID(id)
 }
 
 func (s *riskServiceImpl) GetRisk(id int64) (*model.Risk, error) {
-	return nil, errors.New("not implemented")
+	if id <= 0 {
+		return nil, ErrRiskNotFound
+	}
+	return s.repo.GetRiskByID(id)
 }
 
 func (s *riskServiceImpl) GetRiskByCode(workspaceID int64, code string) (*model.Risk, error) {
-	return nil, errors.New("not implemented")
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return nil, ErrRiskNotFound
+	}
+	return s.repo.GetRiskByCode(workspaceID, code)
 }
 
 func (s *riskServiceImpl) ListRisks(filter model.RiskFilter) ([]*model.Risk, error) {
-	return nil, errors.New("not implemented")
+	if filter.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	return s.repo.ListRisks(filter)
 }
 
 func (s *riskServiceImpl) UpdateRisk(id int64, req model.UpdateRiskRequest) (*model.Risk, error) {
