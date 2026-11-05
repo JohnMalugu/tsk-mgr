@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -172,19 +173,127 @@ const riskSelectQuery = `
 
 
 func (r *riskRepositoryImpl) GetRiskByID(id int64) (*model.Risk, error) {
-	return nil, errors.New("not implemented")
+	query := riskSelectQuery + " WHERE r.id = ?"
+	row := r.db.QueryRow(query, id)
+	risk, err := scanRisk(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRiskNotFound
+		}
+		return nil, err
+	}
+	return risk, nil
 }
 
 func (r *riskRepositoryImpl) GetRiskByCode(workspaceID int64, code string) (*model.Risk, error) {
-	return nil, errors.New("not implemented")
+	query := riskSelectQuery + " WHERE r.workspace_id = ? AND r.risk_code = ?"
+	row := r.db.QueryRow(query, workspaceID, code)
+	risk, err := scanRisk(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRiskNotFound
+		}
+		return nil, err
+	}
+	return risk, nil
 }
 
 func (r *riskRepositoryImpl) GetRiskByNumber(workspaceID int64, number int) (*model.Risk, error) {
-	return nil, errors.New("not implemented")
+	query := riskSelectQuery + " WHERE r.workspace_id = ? AND r.risk_number = ?"
+	row := r.db.QueryRow(query, workspaceID, number)
+	risk, err := scanRisk(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRiskNotFound
+		}
+		return nil, err
+	}
+	return risk, nil
 }
 
 func (r *riskRepositoryImpl) ListRisks(filter model.RiskFilter) ([]*model.Risk, error) {
-	return nil, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	conditions = append(conditions, "r.workspace_id = ?")
+	args = append(args, filter.WorkspaceID)
+
+	if filter.ProjectID != nil {
+		conditions = append(conditions, "r.project_id = ?")
+		args = append(args, *filter.ProjectID)
+	}
+	if filter.Category != "" {
+		conditions = append(conditions, "r.category = ?")
+		args = append(args, filter.Category)
+	}
+	if filter.Severity != "" {
+		conditions = append(conditions, "r.severity = ?")
+		args = append(args, filter.Severity)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "r.status = ?")
+		args = append(args, filter.Status)
+	}
+	if filter.Strategy != "" {
+		conditions = append(conditions, "r.strategy = ?")
+		args = append(args, filter.Strategy)
+	}
+	if filter.OwnerID != "" {
+		conditions = append(conditions, "r.owner_id = ?")
+		args = append(args, filter.OwnerID)
+	}
+	if filter.MinScore > 0 {
+		conditions = append(conditions, "r.score >= ?")
+		args = append(args, filter.MinScore)
+	}
+	if filter.MaxScore > 0 {
+		conditions = append(conditions, "r.score <= ?")
+		args = append(args, filter.MaxScore)
+	}
+	if filter.Search != "" {
+		conditions = append(conditions, "(r.title LIKE ? OR r.description LIKE ? OR r.risk_code LIKE ?)")
+		pattern := "%" + filter.Search + "%"
+		args = append(args, pattern, pattern, pattern)
+	}
+
+	whereClause := " WHERE " + strings.Join(conditions, " AND ")
+	orderClause := " ORDER BY r.score DESC, r.created_at DESC"
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	} else if limit > 100 {
+		limit = 100
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	paginationClause := " LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+
+	query := riskSelectQuery + whereClause + orderClause + paginationClause
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var risks []*model.Risk
+	for rows.Next() {
+		rk, err := scanRisk(rows)
+		if err != nil {
+			return nil, err
+		}
+		risks = append(risks, rk)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return risks, nil
 }
 
 func (r *riskRepositoryImpl) UpdateRisk(risk *model.Risk) error {
