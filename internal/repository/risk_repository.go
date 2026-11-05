@@ -446,15 +446,15 @@ func (r *riskRepositoryImpl) ListRiskTasks(riskID int64) ([]model.RiskTaskLink, 
 	var links []model.RiskTaskLink
 	for rows.Next() {
 		var l model.RiskTaskLink
-		var completedInt int
+		var completed bool
 		err := rows.Scan(
 			&l.ID, &l.RiskID, &l.TaskID, &l.ActionType, &l.Notes, &l.CreatedAt,
-			&l.TaskTitle, &l.TaskStatus, &l.TaskPriority, &completedInt,
+			&l.TaskTitle, &l.TaskStatus, &l.TaskPriority, &completed,
 		)
 		if err != nil {
 			return nil, err
 		}
-		l.TaskCompleted = (completedInt == 1)
+		l.TaskCompleted = completed
 		links = append(links, l)
 	}
 

@@ -114,7 +114,8 @@ func (s *riskServiceImpl) CreateRisk(creatorID string, req model.CreateRiskReque
 	}
 
 	if req.ProjectID != nil {
-		if _, err := s.projectRepo.GetByID(*req.ProjectID); err != nil {
+		proj, err := s.projectRepo.GetByID(*req.ProjectID)
+		if err != nil || proj == nil {
 			return nil, ErrProjectNotFound
 		}
 	}
@@ -180,7 +181,14 @@ func (s *riskServiceImpl) GetRisk(id int64) (*model.Risk, error) {
 	if id <= 0 {
 		return nil, ErrRiskNotFound
 	}
-	return s.repo.GetRiskByID(id)
+	risk, err := s.repo.GetRiskByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrRiskNotFound) {
+			return nil, ErrRiskNotFound
+		}
+		return nil, err
+	}
+	return risk, nil
 }
 
 func (s *riskServiceImpl) GetRiskByCode(workspaceID int64, code string) (*model.Risk, error) {
@@ -191,7 +199,14 @@ func (s *riskServiceImpl) GetRiskByCode(workspaceID int64, code string) (*model.
 	if code == "" {
 		return nil, ErrRiskNotFound
 	}
-	return s.repo.GetRiskByCode(workspaceID, code)
+	risk, err := s.repo.GetRiskByCode(workspaceID, code)
+	if err != nil {
+		if errors.Is(err, repository.ErrRiskNotFound) {
+			return nil, ErrRiskNotFound
+		}
+		return nil, err
+	}
+	return risk, nil
 }
 
 func (s *riskServiceImpl) ListRisks(filter model.RiskFilter) ([]*model.Risk, error) {
@@ -208,6 +223,9 @@ func (s *riskServiceImpl) UpdateRisk(id int64, req model.UpdateRiskRequest) (*mo
 
 	existing, err := s.repo.GetRiskByID(id)
 	if err != nil {
+		if errors.Is(err, repository.ErrRiskNotFound) {
+			return nil, ErrRiskNotFound
+		}
 		return nil, err
 	}
 
@@ -256,6 +274,9 @@ func (s *riskServiceImpl) UpdateRisk(id int64, req model.UpdateRiskRequest) (*mo
 	}
 
 	if err := s.repo.UpdateRisk(existing); err != nil {
+		if errors.Is(err, repository.ErrRiskNotFound) {
+			return nil, ErrRiskNotFound
+		}
 		return nil, err
 	}
 
@@ -266,7 +287,14 @@ func (s *riskServiceImpl) DeleteRisk(id int64) error {
 	if id <= 0 {
 		return ErrRiskNotFound
 	}
-	return s.repo.DeleteRisk(id)
+	err := s.repo.DeleteRisk(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrRiskNotFound) {
+			return ErrRiskNotFound
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *riskServiceImpl) AssessRisk(id int64, reviewerID string, req model.AssessRiskRequest) (*model.Risk, error) {
@@ -394,7 +422,7 @@ func (s *riskServiceImpl) LinkTask(riskID int64, req model.LinkRiskTaskRequest) 
 	}
 
 	task, err := s.taskRepo.GetByID(req.TaskID)
-	if err != nil {
+	if err != nil || task == nil {
 		return nil, ErrTaskNotFound
 	}
 
