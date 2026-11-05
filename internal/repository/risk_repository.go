@@ -383,15 +383,86 @@ func (r *riskRepositoryImpl) DeleteRisk(id int64) error {
 }
 
 func (r *riskRepositoryImpl) LinkTask(link *model.RiskTaskLink) (int64, error) {
-	return 0, errors.New("not implemented")
+	if link.ActionType == "" {
+		link.ActionType = model.RiskActionMitigation
+	}
+	now := time.Now().UTC()
+	if link.CreatedAt.IsZero() {
+		link.CreatedAt = now
+	}
+
+	query := `
+	INSERT INTO risk_task_links (risk_id, task_id, action_type, notes, created_at)
+	VALUES (?, ?, ?, ?, ?)
+	ON CONFLICT(risk_id, task_id) DO UPDATE SET
+		action_type = excluded.action_type,
+		notes = excluded.notes`
+
+	res, err := r.db.Exec(query, link.RiskID, link.TaskID, link.ActionType, link.Notes, link.CreatedAt)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	link.ID = id
+	return id, nil
 }
 
 func (r *riskRepositoryImpl) UnlinkTask(riskID int64, taskID int) error {
-	return errors.New("not implemented")
+	query := `DELETE FROM risk_task_links WHERE risk_id = ? AND task_id = ?`
+	res, err := r.db.Exec(query, riskID, taskID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return errors.New("risk task link not found")
+	}
+	return nil
 }
 
 func (r *riskRepositoryImpl) ListRiskTasks(riskID int64) ([]model.RiskTaskLink, error) {
-	return nil, errors.New("not implemented")
+	query := `
+	SELECT 
+		rtl.id, rtl.risk_id, rtl.task_id, rtl.action_type, rtl.notes, rtl.created_at,
+		t.title, t.status, t.priority, t.completed
+	FROM risk_task_links rtl
+	JOIN tasks t ON rtl.task_id = t.id
+	WHERE rtl.risk_id = ?
+	ORDER BY rtl.created_at ASC`
+
+	rows, err := r.db.Query(query, riskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var links []model.RiskTaskLink
+	for rows.Next() {
+		var l model.RiskTaskLink
+		var completedInt int
+		err := rows.Scan(
+			&l.ID, &l.RiskID, &l.TaskID, &l.ActionType, &l.Notes, &l.CreatedAt,
+			&l.TaskTitle, &l.TaskStatus, &l.TaskPriority, &completedInt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		l.TaskCompleted = (completedInt == 1)
+		links = append(links, l)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return links, nil
 }
 
 func (r *riskRepositoryImpl) CreateReview(review *model.RiskReview) (int64, error) {
