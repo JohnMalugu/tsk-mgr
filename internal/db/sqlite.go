@@ -1152,6 +1152,40 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	risksQuery := `
+	CREATE TABLE IF NOT EXISTS risks (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		project_id INTEGER,
+		risk_number INTEGER NOT NULL,
+		risk_code TEXT NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		category TEXT NOT NULL DEFAULT 'operational',
+		probability INTEGER NOT NULL DEFAULT 1,
+		impact INTEGER NOT NULL DEFAULT 1,
+		score INTEGER NOT NULL DEFAULT 1,
+		severity TEXT NOT NULL DEFAULT 'low',
+		status TEXT NOT NULL DEFAULT 'identified',
+		strategy TEXT NOT NULL DEFAULT 'mitigate',
+		mitigation_plan TEXT NOT NULL DEFAULT '',
+		contingency_plan TEXT NOT NULL DEFAULT '',
+		owner_id TEXT,
+		target_resolution_date DATETIME,
+		closed_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		UNIQUE(workspace_id, risk_number),
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+		FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE SET NULL
+	);`
+
+	_, err = db.Exec(risksQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
