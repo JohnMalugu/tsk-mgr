@@ -112,3 +112,66 @@ type RiskReview struct {
 	// Enriched fields
 	ReviewerUsername string `json:"reviewer_username,omitempty"`
 }
+
+// CalculateRiskSeverity calculates risk score and categorizes it into severity tier
+func CalculateRiskSeverity(probability, impact int) (int, string) {
+	if probability < 1 {
+		probability = 1
+	} else if probability > 5 {
+		probability = 5
+	}
+	if impact < 1 {
+		impact = 1
+	} else if impact > 5 {
+		impact = 5
+	}
+
+	score := probability * impact
+	var severity string
+	switch {
+	case score >= 20:
+		severity = RiskSeverityCritical
+	case score >= 12:
+		severity = RiskSeverityHigh
+	case score >= 6:
+		severity = RiskSeverityMedium
+	default:
+		severity = RiskSeverityLow
+	}
+	return score, severity
+}
+
+// CreateRiskRequest payload for defining a new risk in the register
+type CreateRiskRequest struct {
+	WorkspaceID          int64      `json:"workspace_id"`
+	ProjectID            *int       `json:"project_id,omitempty"`
+	Title                string     `json:"title"`
+	Description          string     `json:"description"`
+	Category             string     `json:"category"`
+	Probability          int        `json:"probability"` // 1-5 scale
+	Impact               int        `json:"impact"`      // 1-5 scale
+	Strategy             string     `json:"strategy"`    // mitigate, avoid, transfer, accept
+	MitigationPlan       string     `json:"mitigation_plan,omitempty"`
+	ContingencyPlan      string     `json:"contingency_plan,omitempty"`
+	OwnerID              *string    `json:"owner_id,omitempty"`
+	TargetResolutionDate *time.Time `json:"target_resolution_date,omitempty"`
+}
+
+// UpdateRiskRequest payload for updating risk metadata and plans
+type UpdateRiskRequest struct {
+	Title                *string    `json:"title,omitempty"`
+	Description          *string    `json:"description,omitempty"`
+	Category             *string    `json:"category,omitempty"`
+	Strategy             *string    `json:"strategy,omitempty"`
+	MitigationPlan       *string    `json:"mitigation_plan,omitempty"`
+	ContingencyPlan      *string    `json:"contingency_plan,omitempty"`
+	OwnerID              *string    `json:"owner_id,omitempty"`
+	TargetResolutionDate *time.Time `json:"target_resolution_date,omitempty"`
+}
+
+// AssessRiskRequest payload for reassessing probability and impact
+type AssessRiskRequest struct {
+	Probability int    `json:"probability"` // 1-5 scale
+	Impact      int    `json:"impact"`      // 1-5 scale
+	Comments    string `json:"comments"`
+}
