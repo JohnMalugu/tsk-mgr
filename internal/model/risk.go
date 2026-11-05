@@ -64,8 +64,51 @@ type Risk struct {
 	UpdatedAt            time.Time  `json:"updated_at"`
 
 	// Enriched fields
-	OwnerUsername       string `json:"owner_username,omitempty"`
-	ProjectName         string `json:"project_name,omitempty"`
-	TaskLinksCount      int    `json:"task_links_count,omitempty"`
-	OpenTaskLinksCount  int    `json:"open_task_links_count,omitempty"`
+	OwnerUsername      string `json:"owner_username,omitempty"`
+	ProjectName        string `json:"project_name,omitempty"`
+	TaskLinksCount     int    `json:"task_links_count,omitempty"`
+	OpenTaskLinksCount int    `json:"open_task_links_count,omitempty"`
+}
+
+// Risk task link action types
+const (
+	RiskActionMitigation    = "mitigation"
+	RiskActionContingency   = "contingency"
+	RiskActionInvestigation = "investigation"
+)
+
+// RiskTaskLink associates a remediation, preventative, or investigation task with a risk
+type RiskTaskLink struct {
+	ID         int64     `json:"id"`
+	RiskID     int64     `json:"risk_id"`
+	TaskID     int       `json:"task_id"`
+	ActionType string    `json:"action_type"` // mitigation, contingency, investigation
+	Notes      string    `json:"notes,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+
+	// Enriched task fields
+	TaskTitle     string `json:"task_title,omitempty"`
+	TaskStatus    string `json:"task_status,omitempty"`
+	TaskPriority  string `json:"task_priority,omitempty"`
+	TaskCompleted bool   `json:"task_completed"`
+}
+
+// RiskReview represents a formal periodic evaluation or reassessment of a risk
+type RiskReview struct {
+	ID                  int64     `json:"id"`
+	RiskID              int64     `json:"risk_id"`
+	ReviewerID          string    `json:"reviewer_id"`
+	PreviousProbability int       `json:"previous_probability"`
+	PreviousImpact      int       `json:"previous_impact"`
+	PreviousScore       int       `json:"previous_score"`
+	NewProbability      int       `json:"new_probability"`
+	NewImpact           int       `json:"new_impact"`
+	NewScore            int       `json:"new_score"`
+	PreviousStatus      string    `json:"previous_status"`
+	NewStatus           string    `json:"new_status"`
+	Comments            string    `json:"comments"`
+	CreatedAt           time.Time `json:"created_at"`
+
+	// Enriched fields
+	ReviewerUsername string `json:"reviewer_username,omitempty"`
 }
