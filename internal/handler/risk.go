@@ -189,3 +189,133 @@ func (h *RiskHandler) DeleteRisk(w http.ResponseWriter, r *http.Request, id int6
 	}
 	writeRiskJSON(w, http.StatusOK, map[string]string{"message": "risk deleted successfully"})
 }
+
+// AssessRisk handles POST /v2/risks/{id}/assess
+func (h *RiskHandler) AssessRisk(w http.ResponseWriter, r *http.Request, id int64) {
+	var req model.AssessRiskRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeRiskError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	reviewerID := getRiskUser(r)
+	risk, err := h.svc.AssessRisk(id, reviewerID, req)
+	if err != nil {
+		handleRiskServiceError(w, err)
+		return
+	}
+	writeRiskJSON(w, http.StatusOK, risk)
+}
+
+// ChangeStatus handles POST /v2/risks/{id}/status
+func (h *RiskHandler) ChangeStatus(w http.ResponseWriter, r *http.Request, id int64) {
+	var req model.ChangeRiskStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeRiskError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	reviewerID := getRiskUser(r)
+	risk, err := h.svc.ChangeStatus(id, reviewerID, req)
+	if err != nil {
+		handleRiskServiceError(w, err)
+		return
+	}
+	writeRiskJSON(w, http.StatusOK, risk)
+}
+
+// ListRiskTasks handles GET /v2/risks/{id}/tasks
+func (h *RiskHandler) ListRiskTasks(w http.ResponseWriter, r *http.Request, riskID int64) {
+	tasks, err := h.svc.ListRiskTasks(riskID)
+	if err != nil {
+		handleRiskServiceError(w, err)
+		return
+	}
+	if tasks == nil {
+		tasks = []model.RiskTaskLink{}
+	}
+	writeRiskJSON(w, http.StatusOK, map[string]interface{}{
+		"tasks": tasks,
+		"count": len(tasks),
+	})
+}
+
+// LinkTask handles POST /v2/risks/{id}/tasks
+func (h *RiskHandler) LinkTask(w http.ResponseWriter, r *http.Request, riskID int64) {
+	var req model.LinkRiskTaskRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeRiskError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	link, err := h.svc.LinkTask(riskID, req)
+	if err != nil {
+		handleRiskServiceError(w, err)
+		return
+	}
+	writeRiskJSON(w, http.StatusCreated, link)
+}
+
+// UnlinkTask handles DELETE /v2/risks/{id}/tasks/{taskId}
+func (h *RiskHandler) UnlinkTask(w http.ResponseWriter, r *http.Request, riskID int64, taskID int) {
+	if err := h.svc.UnlinkTask(riskID, taskID); err != nil {
+		handleRiskServiceError(w, err)
+		return
+	}
+	writeRiskJSON(w, http.StatusOK, map[string]string{"message": "task unlinked from risk successfully"})
+}
+
+// ListReviews handles GET /v2/risks/{id}/reviews
+func (h *RiskHandler) ListReviews(w http.ResponseWriter, r *http.Request, riskID int64) {
+	reviews, err := h.svc.ListReviews(riskID)
+	if err != nil {
+		handleRiskServiceError(w, err)
+		return
+	}
+	if reviews == nil {
+		reviews = []model.RiskReview{}
+	}
+	writeRiskJSON(w, http.StatusOK, map[string]interface{}{
+		"reviews": reviews,
+		"count":   len(reviews),
+	})
+}
+
+// CreateReview handles POST /v2/risks/{id}/reviews
+func (h *RiskHandler) CreateReview(w http.ResponseWriter, r *http.Request, riskID int64) {
+	var req model.CreateRiskReviewRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeRiskError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	reviewerID := getRiskUser(r)
+	review, err := h.svc.CreateReview(riskID, reviewerID, req)
+	if err != nil {
+		handleRiskServiceError(w, err)
+		return
+	}
+	writeRiskJSON(w, http.StatusCreated, review)
+}
+
+// GetMetrics handles GET /v2/risks/metrics?workspace_id={id}
+func (h *RiskHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
+	wsStr := r.URL.Query().Get("workspace_id")
+	if wsStr == "" {
+		writeRiskError(w, http.StatusBadRequest, "workspace_id is required")
+		return
+	}
+	wsID, err := strconv.ParseInt(wsStr, 10, 64)
+	if err != nil || wsID <= 0 {
+		writeRiskError(w, http.StatusBadRequest, "invalid workspace_id")
+		return
+	}
+
+	metrics, err := h.svc.GetRiskMetrics(wsID)
+	if err != nil {
+		handleRiskServiceError(w, err)
+		return
+	}
+	writeRiskJSON(w, http.StatusOK, metrics)
+}
+
