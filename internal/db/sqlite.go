@@ -1186,6 +1186,48 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	riskTaskLinksQuery := `
+	CREATE TABLE IF NOT EXISTS risk_task_links (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		risk_id INTEGER NOT NULL,
+		task_id INTEGER NOT NULL,
+		action_type TEXT NOT NULL DEFAULT 'mitigation',
+		notes TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		UNIQUE(risk_id, task_id),
+		FOREIGN KEY (risk_id) REFERENCES risks(id) ON DELETE CASCADE,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(riskTaskLinksQuery)
+	if err != nil {
+		return err
+	}
+
+	riskReviewsQuery := `
+	CREATE TABLE IF NOT EXISTS risk_reviews (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		risk_id INTEGER NOT NULL,
+		reviewer_id TEXT NOT NULL,
+		previous_probability INTEGER NOT NULL,
+		previous_impact INTEGER NOT NULL,
+		previous_score INTEGER NOT NULL,
+		new_probability INTEGER NOT NULL,
+		new_impact INTEGER NOT NULL,
+		new_score INTEGER NOT NULL,
+		previous_status TEXT NOT NULL,
+		new_status TEXT NOT NULL,
+		comments TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (risk_id) REFERENCES risks(id) ON DELETE CASCADE,
+		FOREIGN KEY (reviewer_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(riskReviewsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
