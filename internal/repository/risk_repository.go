@@ -466,13 +466,188 @@ func (r *riskRepositoryImpl) ListRiskTasks(riskID int64) ([]model.RiskTaskLink, 
 }
 
 func (r *riskRepositoryImpl) CreateReview(review *model.RiskReview) (int64, error) {
-	return 0, errors.New("not implemented")
+	now := time.Now().UTC()
+	if review.CreatedAt.IsZero() {
+		review.CreatedAt = now
+	}
+
+	query := `
+	INSERT INTO risk_reviews (
+		risk_id, reviewer_id, previous_probability, previous_impact, previous_score,
+		new_probability, new_impact, new_score, previous_status, new_status, comments, created_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query,
+		review.RiskID, review.ReviewerID, review.PreviousProbability, review.PreviousImpact, review.PreviousScore,
+		review.NewProbability, review.NewImpact, review.NewScore, review.PreviousStatus, review.NewStatus, review.Comments, review.CreatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	review.ID = id
+	return id, nil
 }
 
 func (r *riskRepositoryImpl) ListReviews(riskID int64) ([]model.RiskReview, error) {
-	return nil, errors.New("not implemented")
+	query := `
+	SELECT 
+		rr.id, rr.risk_id, rr.reviewer_id, rr.previous_probability, rr.previous_impact, rr.previous_score,
+		rr.new_probability, rr.new_impact, rr.new_score, rr.previous_status, rr.new_status, rr.comments, rr.created_at,
+		COALESCE(u.username, '') AS reviewer_username
+	FROM risk_reviews rr
+	LEFT JOIN users u ON rr.reviewer_id = u.id
+	WHERE rr.risk_id = ?
+	ORDER BY rr.created_at DESC`
+
+	rows, err := r.db.Query(query, riskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var reviews []model.RiskReview
+	for rows.Next() {
+		var rev model.RiskReview
+		err := rows.Scan(
+			&rev.ID, &rev.RiskID, &rev.ReviewerID, &rev.PreviousProbability, &rev.PreviousImpact, &rev.PreviousScore,
+			&rev.NewProbability, &rev.NewImpact, &rev.NewScore, &rev.PreviousStatus, &rev.NewStatus, &rev.Comments, &rev.CreatedAt,
+			&rev.ReviewerUsername,
+		)
+		if err != nil {
+			return nil, err
+		}
+		reviews = append(reviews, rev)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return reviews, nil
 }
 
 func (r *riskRepositoryImpl) GetRiskMetrics(workspaceID int64) (*model.RiskMetrics, error) {
-	return nil, errors.New("not implemented")
+	metrics := &model.RiskMetrics{
+		WorkspaceID:       workspaceID,
+		SeverityBreakdown: make(map[string]int),
+		StatusBreakdown:   make(map[string]int),
+		CategoryBreakdown: make(map[string]int),
+		StrategyBreakdown: make(map[string]int),
+		CriticalRisks:     []model.Risk{},
+	}
+
+	// 1. Overall counts and exposure
+	summaryQuery := `
+	SELECT 
+		COUNT(*),
+		COALESCE(SUM(CASE WHEN status != 'closed' THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN status = 'closed' THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN status != 'closed' THEN score ELSE 0 END), 0),
+		COALESCE(AVG(CASE WHEN status != 'closed' THEN score ELSE NULL END), 0.0)
+	FROM risks
+	WHERE workspace_id = ?`
+
+	err := r.db.QueryRow(summaryQuery, workspaceID).Scan(
+		&metrics.TotalRisks,
+		&metrics.ActiveRisks,
+		&metrics.ClosedRisks,
+		&metrics.TotalExposureScore,
+		&metrics.AverageRiskScore,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Severity breakdown (active)
+	sevRows, err := r.db.Query(`SELECT severity, COUNT(*) FROM risks WHERE workspace_id = ? AND status != 'closed' GROUP BY severity`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer sevRows.Close()
+	for sevRows.Next() {
+		var sev string
+		var count int
+		if err := sevRows.Scan(&sev, &count); err == nil {
+			metrics.SeverityBreakdown[sev] = count
+		}
+	}
+
+	// 3. Status breakdown (all)
+	statusRows, err := r.db.Query(`SELECT status, COUNT(*) FROM risks WHERE workspace_id = ? GROUP BY status`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer statusRows.Close()
+	for statusRows.Next() {
+		var st string
+		var count int
+		if err := statusRows.Scan(&st, &count); err == nil {
+			metrics.StatusBreakdown[st] = count
+		}
+	}
+
+	// 4. Category breakdown (active)
+	catRows, err := r.db.Query(`SELECT category, COUNT(*) FROM risks WHERE workspace_id = ? AND status != 'closed' GROUP BY category`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer catRows.Close()
+	for catRows.Next() {
+		var cat string
+		var count int
+		if err := catRows.Scan(&cat, &count); err == nil {
+			metrics.CategoryBreakdown[cat] = count
+		}
+	}
+
+	// 5. Strategy breakdown (active)
+	stratRows, err := r.db.Query(`SELECT strategy, COUNT(*) FROM risks WHERE workspace_id = ? AND status != 'closed' GROUP BY strategy`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer stratRows.Close()
+	for stratRows.Next() {
+		var strat string
+		var count int
+		if err := stratRows.Scan(&strat, &count); err == nil {
+			metrics.StrategyBreakdown[strat] = count
+		}
+	}
+
+	// 6. 5x5 heatmap matrix (active risks)
+	matrixRows, err := r.db.Query(`SELECT probability, impact, COUNT(*) FROM risks WHERE workspace_id = ? AND status != 'closed' GROUP BY probability, impact`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer matrixRows.Close()
+	for matrixRows.Next() {
+		var p, i, count int
+		if err := matrixRows.Scan(&p, &i, &count); err == nil {
+			if p >= 1 && p <= 5 && i >= 1 && i <= 5 {
+				metrics.HeatmapMatrix[p-1][i-1] = count
+			}
+		}
+	}
+
+	// 7. Top critical / high risks
+	critQuery := riskSelectQuery + ` WHERE r.workspace_id = ? AND r.status != 'closed' AND r.severity IN ('critical', 'high') ORDER BY r.score DESC, r.created_at DESC LIMIT 5`
+	critRows, err := r.db.Query(critQuery, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer critRows.Close()
+	for critRows.Next() {
+		rk, err := scanRisk(critRows)
+		if err != nil {
+			return nil, err
+		}
+		metrics.CriticalRisks = append(metrics.CriticalRisks, *rk)
+	}
+
+	return metrics, nil
 }
