@@ -370,26 +370,176 @@ func (s *riskServiceImpl) ChangeStatus(id int64, reviewerID string, req model.Ch
 	return s.repo.GetRiskByID(id)
 }
 
+func isValidRiskAction(action string) bool {
+	switch action {
+	case model.RiskActionMitigation,
+		model.RiskActionContingency,
+		model.RiskActionInvestigation:
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *riskServiceImpl) LinkTask(riskID int64, req model.LinkRiskTaskRequest) (*model.RiskTaskLink, error) {
-	return nil, errors.New("not implemented")
+	if riskID <= 0 {
+		return nil, ErrRiskNotFound
+	}
+	if req.TaskID <= 0 {
+		return nil, ErrTaskNotFound
+	}
+
+	if _, err := s.repo.GetRiskByID(riskID); err != nil {
+		return nil, err
+	}
+
+	task, err := s.taskRepo.GetByID(req.TaskID)
+	if err != nil {
+		return nil, ErrTaskNotFound
+	}
+
+	actionType := strings.TrimSpace(req.ActionType)
+	if actionType == "" {
+		actionType = model.RiskActionMitigation
+	} else if !isValidRiskAction(actionType) {
+		return nil, ErrInvalidRiskAction
+	}
+
+	link := &model.RiskTaskLink{
+		RiskID:     riskID,
+		TaskID:     req.TaskID,
+		ActionType: actionType,
+		Notes:      strings.TrimSpace(req.Notes),
+	}
+
+	id, err := s.repo.LinkTask(link)
+	if err != nil {
+		return nil, err
+	}
+	link.ID = id
+	link.TaskTitle = task.Title
+	link.TaskStatus = task.Status
+	link.TaskPriority = task.Priority
+	link.TaskCompleted = task.Completed
+	return link, nil
 }
 
 func (s *riskServiceImpl) UnlinkTask(riskID int64, taskID int) error {
-	return errors.New("not implemented")
+	if riskID <= 0 {
+		return ErrRiskNotFound
+	}
+	if taskID <= 0 {
+		return ErrTaskNotFound
+	}
+	return s.repo.UnlinkTask(riskID, taskID)
 }
 
 func (s *riskServiceImpl) ListRiskTasks(riskID int64) ([]model.RiskTaskLink, error) {
-	return nil, errors.New("not implemented")
+	if riskID <= 0 {
+		return nil, ErrRiskNotFound
+	}
+	if _, err := s.repo.GetRiskByID(riskID); err != nil {
+		return nil, err
+	}
+	return s.repo.ListRiskTasks(riskID)
 }
 
 func (s *riskServiceImpl) CreateReview(riskID int64, reviewerID string, req model.CreateRiskReviewRequest) (*model.RiskReview, error) {
-	return nil, errors.New("not implemented")
+	if riskID <= 0 {
+		return nil, ErrRiskNotFound
+	}
+	comments := strings.TrimSpace(req.Comments)
+	if comments == "" {
+		return nil, ErrReviewCommentReq
+	}
+
+	existing, err := s.repo.GetRiskByID(riskID)
+	if err != nil {
+		return nil, err
+	}
+
+	prevProbability := existing.Probability
+	prevImpact := existing.Impact
+	prevScore := existing.Score
+	prevStatus := existing.Status
+
+	modified := false
+	if req.NewProbability != nil {
+		if *req.NewProbability < 1 || *req.NewProbability > 5 {
+			return nil, ErrInvalidProbability
+		}
+		existing.Probability = *req.NewProbability
+		modified = true
+	}
+	if req.NewImpact != nil {
+		if *req.NewImpact < 1 || *req.NewImpact > 5 {
+			return nil, ErrInvalidImpact
+		}
+		existing.Impact = *req.NewImpact
+		modified = true
+	}
+	if modified {
+		existing.Score, existing.Severity = model.CalculateRiskSeverity(existing.Probability, existing.Impact)
+	}
+
+	targetStatus := strings.TrimSpace(req.NewStatus)
+	if targetStatus != "" {
+		if !isValidRiskStatus(targetStatus) {
+			return nil, ErrInvalidRiskStatus
+		}
+		existing.Status = targetStatus
+		if targetStatus == model.RiskStatusClosed {
+			if existing.ClosedAt == nil {
+				now := time.Now().UTC()
+				existing.ClosedAt = &now
+			}
+		} else {
+			existing.ClosedAt = nil
+		}
+		modified = true
+	}
+
+	if modified {
+		if err := s.repo.UpdateRisk(existing); err != nil {
+			return nil, err
+		}
+	}
+
+	review := &model.RiskReview{
+		RiskID:              riskID,
+		ReviewerID:          reviewerID,
+		PreviousProbability: prevProbability,
+		PreviousImpact:      prevImpact,
+		PreviousScore:       prevScore,
+		NewProbability:      existing.Probability,
+		NewImpact:           existing.Impact,
+		NewScore:            existing.Score,
+		PreviousStatus:      prevStatus,
+		NewStatus:           existing.Status,
+		Comments:            comments,
+	}
+
+	id, err := s.repo.CreateReview(review)
+	if err != nil {
+		return nil, err
+	}
+	review.ID = id
+	return review, nil
 }
 
 func (s *riskServiceImpl) ListReviews(riskID int64) ([]model.RiskReview, error) {
-	return nil, errors.New("not implemented")
+	if riskID <= 0 {
+		return nil, ErrRiskNotFound
+	}
+	if _, err := s.repo.GetRiskByID(riskID); err != nil {
+		return nil, err
+	}
+	return s.repo.ListReviews(riskID)
 }
 
 func (s *riskServiceImpl) GetRiskMetrics(workspaceID int64) (*model.RiskMetrics, error) {
-	return nil, errors.New("not implemented")
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	return s.repo.GetRiskMetrics(workspaceID)
 }
