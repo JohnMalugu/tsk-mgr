@@ -426,4 +426,3 @@ func (h *RiskHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	writeRiskError(w, http.StatusNotFound, "not found")
 }
-

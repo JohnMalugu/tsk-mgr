@@ -215,16 +215,16 @@ type RiskFilter struct {
 
 // RiskMetrics summarizes workspace-level risk exposure, heatmaps, and distribution
 type RiskMetrics struct {
-	WorkspaceID          int64          `json:"workspace_id"`
-	TotalRisks           int            `json:"total_risks"`
-	ActiveRisks          int            `json:"active_risks"`
-	ClosedRisks          int            `json:"closed_risks"`
-	TotalExposureScore   int            `json:"total_exposure_score"`
-	AverageRiskScore     float64        `json:"average_risk_score"`
-	SeverityBreakdown    map[string]int `json:"severity_breakdown"`
-	StatusBreakdown      map[string]int `json:"status_breakdown"`
-	CategoryBreakdown    map[string]int `json:"category_breakdown"`
-	StrategyBreakdown    map[string]int `json:"strategy_breakdown"`
-	HeatmapMatrix        [5][5]int      `json:"heatmap_matrix"` // rows: probability 1..5, cols: impact 1..5
-	CriticalRisks        []Risk         `json:"critical_risks"`
+	WorkspaceID        int64          `json:"workspace_id"`
+	TotalRisks         int            `json:"total_risks"`
+	ActiveRisks        int            `json:"active_risks"`
+	ClosedRisks        int            `json:"closed_risks"`
+	TotalExposureScore int            `json:"total_exposure_score"`
+	AverageRiskScore   float64        `json:"average_risk_score"`
+	SeverityBreakdown  map[string]int `json:"severity_breakdown"`
+	StatusBreakdown    map[string]int `json:"status_breakdown"`
+	CategoryBreakdown  map[string]int `json:"category_breakdown"`
+	StrategyBreakdown  map[string]int `json:"strategy_breakdown"`
+	HeatmapMatrix      [5][5]int      `json:"heatmap_matrix"` // rows: probability 1..5, cols: impact 1..5
+	CriticalRisks      []Risk         `json:"critical_risks"`
 }

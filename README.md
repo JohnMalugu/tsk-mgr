@@ -217,6 +217,14 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `DELETE /v2/incidents/{id}/tasks/{taskId}` to unlink a remediation task from an incident
 - `POST|PATCH /v2/incidents/{id}/postmortem` to update postmortem lifecycle status (`not_started`, `drafting`, `in_review`, `completed`, `skipped`), link to a postmortem wiki document in `/v2/docs`, and record root cause summary
 - `GET /v2/incidents/metrics?workspace_id={id}` for workspace operational reliability metrics, incident counts by status and severity, MTTA (Mean Time to Acknowledge), MTTR (Mean Time to Resolve), and postmortem completion rate
+- `GET|POST /v2/risks` to list risks with multi-criteria filters (`workspace_id`, `project_id`, `category`, `severity`, `status`, `strategy`, `owner_id`, `search`, `min_score`, `max_score`, `limit`, `offset`) or register a new risk with automatic sequential risk numbering (`RSK-1`), score calculation (Probability * Impact: 1-25), and severity tiering (`low`, `medium`, `high`, `critical`)
+- `GET|PUT|PATCH|DELETE /v2/risks/{id}` to fetch risk details (with linked mitigation tasks and audit counts), update risk metadata and plans, or delete a risk with cascade cleanup
+- `POST /v2/risks/{id}/assess` to reassess risk probability (1-5) and impact (1-5), automatically recalculate severity, and append an audit review log with rationale comments
+- `POST|PATCH /v2/risks/{id}/status` to transition risk lifecycle status (`identified`, `assessing`, `mitigating`, `monitored`, `accepted`, `closed`), automatically tracking closure timestamps (`closed_at`) and audit logs
+- `GET|POST /v2/risks/{id}/tasks` to view linked mitigation/contingency tasks or associate a task to a risk with action typing (`mitigation`, `contingency`, `investigation`)
+- `DELETE /v2/risks/{id}/tasks/{taskId}` to unlink a remediation task from a risk
+- `GET|POST /v2/risks/{id}/reviews` to list chronological evaluation reviews or record formal risk evaluations with score adjustments and reviewer audit details
+- `GET /v2/risks/metrics?workspace_id={id}` for workspace risk exposure index, active vs. closed distribution, severity and category breakdowns, 5x5 probability-impact heatmap matrix, and top critical risks
 
 ## Current limitations
 

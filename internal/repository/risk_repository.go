@@ -171,7 +171,6 @@ const riskSelectQuery = `
 	LEFT JOIN projects p ON r.project_id = p.id
 `
 
-
 func (r *riskRepositoryImpl) GetRiskByID(id int64) (*model.Risk, error) {
 	query := riskSelectQuery + " WHERE r.id = ?"
 	row := r.db.QueryRow(query, id)
