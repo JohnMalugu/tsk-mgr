@@ -297,11 +297,89 @@ func (r *riskRepositoryImpl) ListRisks(filter model.RiskFilter) ([]*model.Risk, 
 }
 
 func (r *riskRepositoryImpl) UpdateRisk(risk *model.Risk) error {
-	return errors.New("not implemented")
+	risk.Score, risk.Severity = model.CalculateRiskSeverity(risk.Probability, risk.Impact)
+	risk.UpdatedAt = time.Now().UTC()
+
+	query := `
+	UPDATE risks SET
+		project_id = ?,
+		title = ?,
+		description = ?,
+		category = ?,
+		probability = ?,
+		impact = ?,
+		score = ?,
+		severity = ?,
+		status = ?,
+		strategy = ?,
+		mitigation_plan = ?,
+		contingency_plan = ?,
+		owner_id = ?,
+		target_resolution_date = ?,
+		closed_at = ?,
+		updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query,
+		risk.ProjectID,
+		risk.Title,
+		risk.Description,
+		risk.Category,
+		risk.Probability,
+		risk.Impact,
+		risk.Score,
+		risk.Severity,
+		risk.Status,
+		risk.Strategy,
+		risk.MitigationPlan,
+		risk.ContingencyPlan,
+		risk.OwnerID,
+		risk.TargetResolutionDate,
+		risk.ClosedAt,
+		risk.UpdatedAt,
+		risk.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrRiskNotFound
+	}
+	return nil
 }
 
 func (r *riskRepositoryImpl) DeleteRisk(id int64) error {
-	return errors.New("not implemented")
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("DELETE FROM risk_reviews WHERE risk_id = ?", id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM risk_task_links WHERE risk_id = ?", id); err != nil {
+		return err
+	}
+
+	res, err := tx.Exec("DELETE FROM risks WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrRiskNotFound
+	}
+
+	return tx.Commit()
 }
 
 func (r *riskRepositoryImpl) LinkTask(link *model.RiskTaskLink) (int64, error) {
