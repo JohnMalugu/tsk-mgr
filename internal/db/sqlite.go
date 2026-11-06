@@ -1256,6 +1256,28 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	timesheetLinesQuery := `
+	CREATE TABLE IF NOT EXISTS timesheet_lines (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		timesheet_id INTEGER NOT NULL,
+		task_id INTEGER,
+		project_id INTEGER,
+		work_date TEXT NOT NULL,
+		duration_minutes INTEGER NOT NULL DEFAULT 0,
+		is_billable BOOLEAN NOT NULL DEFAULT 1,
+		description TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (timesheet_id) REFERENCES timesheets(id) ON DELETE CASCADE,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL,
+		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
+	);`
+
+	_, err = db.Exec(timesheetLinesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
