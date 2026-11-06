@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -73,23 +74,127 @@ func NewInvoiceService(
 }
 
 func (s *invoiceServiceImpl) CreateClient(userID string, req model.CreateClientRequest) (*model.Client, error) {
-	return nil, nil
+	if req.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	if err := model.ValidateClient(req.Name, req.Email); err != nil {
+		return nil, err
+	}
+
+	ws, err := s.workspaceRepo.GetByID(int(req.WorkspaceID))
+	if err != nil || ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+
+	currency := strings.ToUpper(strings.TrimSpace(req.Currency))
+	if currency == "" {
+		currency = "USD"
+	}
+
+	client := &model.Client{
+		WorkspaceID: req.WorkspaceID,
+		Name:        strings.TrimSpace(req.Name),
+		Email:       strings.TrimSpace(req.Email),
+		CompanyName: strings.TrimSpace(req.CompanyName),
+		Phone:       strings.TrimSpace(req.Phone),
+		Address:     strings.TrimSpace(req.Address),
+		TaxID:       strings.TrimSpace(req.TaxID),
+		Currency:    currency,
+		Notes:       strings.TrimSpace(req.Notes),
+	}
+
+	id, err := s.repo.CreateClient(client)
+	if err != nil {
+		return nil, err
+	}
+	return s.repo.GetClientByID(id)
 }
 
 func (s *invoiceServiceImpl) GetClient(id int64) (*model.Client, error) {
-	return nil, nil
+	if id <= 0 {
+		return nil, ErrClientNotFound
+	}
+	client, err := s.repo.GetClientByID(id)
+	if err != nil || client == nil {
+		return nil, ErrClientNotFound
+	}
+	return client, nil
 }
 
 func (s *invoiceServiceImpl) ListClients(workspaceID int64) ([]*model.Client, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	clients, err := s.repo.ListClients(workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if clients == nil {
+		return []*model.Client{}, nil
+	}
+	return clients, nil
 }
 
 func (s *invoiceServiceImpl) UpdateClient(id int64, userID string, req model.UpdateClientRequest) (*model.Client, error) {
-	return nil, nil
+	if id <= 0 {
+		return nil, ErrClientNotFound
+	}
+	client, err := s.repo.GetClientByID(id)
+	if err != nil || client == nil {
+		return nil, ErrClientNotFound
+	}
+
+	name := client.Name
+	if req.Name != nil {
+		name = *req.Name
+	}
+	email := client.Email
+	if req.Email != nil {
+		email = *req.Email
+	}
+	if err := model.ValidateClient(name, email); err != nil {
+		return nil, err
+	}
+
+	client.Name = strings.TrimSpace(name)
+	client.Email = strings.TrimSpace(email)
+	if req.CompanyName != nil {
+		client.CompanyName = strings.TrimSpace(*req.CompanyName)
+	}
+	if req.Phone != nil {
+		client.Phone = strings.TrimSpace(*req.Phone)
+	}
+	if req.Address != nil {
+		client.Address = strings.TrimSpace(*req.Address)
+	}
+	if req.TaxID != nil {
+		client.TaxID = strings.TrimSpace(*req.TaxID)
+	}
+	if req.Currency != nil {
+		curr := strings.ToUpper(strings.TrimSpace(*req.Currency))
+		if curr != "" {
+			client.Currency = curr
+		}
+	}
+	if req.Notes != nil {
+		client.Notes = strings.TrimSpace(*req.Notes)
+	}
+
+	if err := s.repo.UpdateClient(client); err != nil {
+		return nil, err
+	}
+	return s.repo.GetClientByID(id)
 }
 
 func (s *invoiceServiceImpl) DeleteClient(id int64, userID string) error {
-	return nil
+	if id <= 0 {
+		return ErrClientNotFound
+	}
+	client, err := s.repo.GetClientByID(id)
+	if err != nil || client == nil {
+		return ErrClientNotFound
+	}
+	return s.repo.DeleteClient(id)
 }
 
 func (s *invoiceServiceImpl) CreateInvoice(userID string, req model.CreateInvoiceRequest) (*model.Invoice, error) {
