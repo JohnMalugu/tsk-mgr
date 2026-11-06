@@ -745,13 +745,89 @@ func (s *invoiceServiceImpl) GenerateFromTimesheet(userID string, req model.Gene
 }
 
 func (s *invoiceServiceImpl) RecordPayment(invoiceID int64, userID string, req model.RecordPaymentRequest) (*model.InvoicePayment, error) {
-	return nil, nil
+	if invoiceID <= 0 {
+		return nil, ErrInvoiceNotFound
+	}
+	inv, err := s.repo.GetInvoiceByID(invoiceID)
+	if err != nil || inv == nil {
+		return nil, ErrInvoiceNotFound
+	}
+
+	if inv.Status == model.InvoiceStatusDraft || inv.Status == model.InvoiceStatusVoid {
+		return nil, ErrInvoiceNotEditable
+	}
+
+	if req.Amount <= 0 || req.Amount > (inv.BalanceDue+0.0001) {
+		return nil, ErrInvalidPaymentAmount
+	}
+
+	pDate := strings.TrimSpace(req.PaymentDate)
+	if pDate == "" {
+		pDate = time.Now().UTC().Format("2006-01-02")
+	}
+	if _, err := time.Parse("2006-01-02", pDate); err != nil {
+		return nil, errors.New("invalid payment date format (YYYY-MM-DD)")
+	}
+
+	method := strings.TrimSpace(req.PaymentMethod)
+	if method == "" {
+		method = model.PaymentMethodBankTransfer
+	}
+
+	payment := &model.InvoicePayment{
+		InvoiceID:            invoiceID,
+		Amount:               req.Amount,
+		PaymentDate:          pDate,
+		PaymentMethod:        method,
+		TransactionReference: strings.TrimSpace(req.TransactionReference),
+		Notes:                strings.TrimSpace(req.Notes),
+		RecordedByUserID:     userID,
+		CreatedAt:            time.Now(),
+	}
+
+	id, err := s.repo.RecordPayment(payment)
+	if err != nil {
+		return nil, err
+	}
+
+	payments, err := s.repo.ListPayments(invoiceID)
+	if err == nil {
+		for _, p := range payments {
+			if p.ID == id {
+				return &p, nil
+			}
+		}
+	}
+
+	payment.ID = id
+	return payment, nil
 }
 
 func (s *invoiceServiceImpl) ListPayments(invoiceID int64) ([]model.InvoicePayment, error) {
-	return nil, nil
+	if invoiceID <= 0 {
+		return nil, ErrInvoiceNotFound
+	}
+	inv, err := s.repo.GetInvoiceByID(invoiceID)
+	if err != nil || inv == nil {
+		return nil, ErrInvoiceNotFound
+	}
+	payments, err := s.repo.ListPayments(invoiceID)
+	if err != nil {
+		return nil, err
+	}
+	if payments == nil {
+		return []model.InvoicePayment{}, nil
+	}
+	return payments, nil
 }
 
 func (s *invoiceServiceImpl) GetInvoiceMetrics(workspaceID int64) (*model.InvoiceMetrics, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	ws, err := s.workspaceRepo.GetByID(int(workspaceID))
+	if err != nil || ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+	return s.repo.GetInvoiceMetrics(workspaceID)
 }
