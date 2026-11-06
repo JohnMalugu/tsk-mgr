@@ -116,3 +116,29 @@ type ReviewTimesheetRequest struct {
 	RejectionReason string `json:"rejection_reason,omitempty"`
 }
 
+// TimesheetFilter provides querying and filtering options across timesheets
+type TimesheetFilter struct {
+	WorkspaceID int64   `json:"workspace_id"`
+	UserID      *int64  `json:"user_id,omitempty"`
+	Status      *string `json:"status,omitempty"`
+	StartDate   *string `json:"start_date,omitempty"` // YYYY-MM-DD
+	EndDate     *string `json:"end_date,omitempty"`   // YYYY-MM-DD
+	Limit       int     `json:"limit,omitempty"`
+	Offset      int     `json:"offset,omitempty"`
+}
+
+// TimesheetMetrics aggregates utilization and compliance statistics
+type TimesheetMetrics struct {
+	WorkspaceID          int64   `json:"workspace_id"`
+	TotalTimesheets      int     `json:"total_timesheets"`
+	DraftCount           int     `json:"draft_count"`
+	SubmittedCount       int     `json:"submitted_count"`
+	ApprovedCount        int     `json:"approved_count"`
+	RejectedCount        int     `json:"rejected_count"`
+	TotalLoggedMinutes   int     `json:"total_logged_minutes"`
+	TotalBillableMinutes int     `json:"total_billable_minutes"`
+	TotalLoggedHours     float64 `json:"total_logged_hours"`
+	TotalBillableHours   float64 `json:"total_billable_hours"`
+	BillablePercentage   float64 `json:"billable_percentage"`
+}
+
