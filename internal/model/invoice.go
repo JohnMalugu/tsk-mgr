@@ -171,6 +171,7 @@ type CreateInvoiceRequest struct {
 	DiscountAmount float64 `json:"discount_amount,omitempty"`
 	Notes          string  `json:"notes,omitempty"`
 	PaymentTerms   string  `json:"payment_terms,omitempty"`
+	Items          []InvoiceItemRequest `json:"items,omitempty"`
 }
 
 // UpdateInvoiceRequest payload for modifying draft invoice attributes
@@ -189,6 +190,25 @@ type ChangeInvoiceStatusRequest struct {
 	Status string `json:"status"` // draft, sent, void
 	Notes  string `json:"notes,omitempty"`
 }
+
+// InvoiceItemRequest payload for creating or updating an individual invoice line item
+type InvoiceItemRequest struct {
+	Description     string  `json:"description"`
+	ItemType        string  `json:"item_type,omitempty"` // labor, service, expense, product
+	Quantity        float64 `json:"quantity"`
+	UnitPrice       float64 `json:"unit_price"`
+	TimesheetLineID *int64  `json:"timesheet_line_id,omitempty"`
+}
+
+// RecordPaymentRequest payload for logging a settlement payment against an invoice
+type RecordPaymentRequest struct {
+	Amount               float64 `json:"amount"`
+	PaymentDate          string  `json:"payment_date"` // YYYY-MM-DD
+	PaymentMethod        string  `json:"payment_method"`
+	TransactionReference string  `json:"transaction_reference,omitempty"`
+	Notes                string  `json:"notes,omitempty"`
+}
+
 
 
 
