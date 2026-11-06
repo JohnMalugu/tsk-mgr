@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
@@ -11,6 +12,81 @@ var (
 	ErrTimesheetNotFound     = errors.New("timesheet not found")
 	ErrTimesheetLineNotFound = errors.New("timesheet line not found")
 )
+
+const timesheetBaseSelect = `
+	SELECT 
+		ts.id,
+		ts.workspace_id,
+		ts.user_id,
+		ts.period_start_date,
+		ts.period_end_date,
+		ts.status,
+		ts.total_minutes,
+		ts.billable_minutes,
+		ts.submitted_at,
+		ts.reviewed_at,
+		ts.reviewer_id,
+		ts.rejection_reason,
+		ts.notes,
+		ts.created_at,
+		ts.updated_at,
+		u.username AS username,
+		rev.username AS reviewer_username,
+		(SELECT COUNT(*) FROM timesheet_lines tl WHERE tl.timesheet_id = ts.id) AS lines_count
+	FROM timesheets ts
+	LEFT JOIN users u ON ts.user_id = u.id
+	LEFT JOIN users rev ON ts.reviewer_id = rev.id
+`
+
+func scanTimesheet(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.Timesheet, error) {
+	var ts model.Timesheet
+	var submittedAt, reviewedAt sql.NullTime
+	var reviewerID sql.NullString
+	var username, reviewerUsername sql.NullString
+
+	err := scanner.Scan(
+		&ts.ID,
+		&ts.WorkspaceID,
+		&ts.UserID,
+		&ts.PeriodStartDate,
+		&ts.PeriodEndDate,
+		&ts.Status,
+		&ts.TotalMinutes,
+		&ts.BillableMinutes,
+		&submittedAt,
+		&reviewedAt,
+		&reviewerID,
+		&ts.RejectionReason,
+		&ts.Notes,
+		&ts.CreatedAt,
+		&ts.UpdatedAt,
+		&username,
+		&reviewerUsername,
+		&ts.LinesCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if submittedAt.Valid {
+		ts.SubmittedAt = &submittedAt.Time
+	}
+	if reviewedAt.Valid {
+		ts.ReviewedAt = &reviewedAt.Time
+	}
+	if reviewerID.Valid {
+		ts.ReviewerID = &reviewerID.String
+	}
+	if username.Valid {
+		ts.Username = username.String
+	}
+	if reviewerUsername.Valid {
+		ts.ReviewerUsername = reviewerUsername.String
+	}
+
+	return &ts, nil
+}
 
 // TimesheetRepository manages database operations for timesheets, line entries, and approvals
 type TimesheetRepository interface {
@@ -44,15 +120,72 @@ func NewTimesheetRepository(db *sql.DB) TimesheetRepository {
 }
 
 func (r *timesheetRepositoryImpl) CreateTimesheet(ts *model.Timesheet) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	ts.CreatedAt = now
+	ts.UpdatedAt = now
+	if ts.Status == "" {
+		ts.Status = model.TimesheetStatusDraft
+	}
+
+	query := `
+	INSERT INTO timesheets (
+		workspace_id, user_id, period_start_date, period_end_date, status,
+		total_minutes, billable_minutes, submitted_at, reviewed_at, reviewer_id,
+		rejection_reason, notes, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	res, err := r.db.Exec(
+		query,
+		ts.WorkspaceID,
+		ts.UserID,
+		ts.PeriodStartDate,
+		ts.PeriodEndDate,
+		ts.Status,
+		ts.TotalMinutes,
+		ts.BillableMinutes,
+		ts.SubmittedAt,
+		ts.ReviewedAt,
+		ts.ReviewerID,
+		ts.RejectionReason,
+		ts.Notes,
+		ts.CreatedAt,
+		ts.UpdatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	ts.ID = id
+	return id, nil
 }
 
 func (r *timesheetRepositoryImpl) GetTimesheetByID(id int64) (*model.Timesheet, error) {
-	return nil, nil
+	query := timesheetBaseSelect + ` WHERE ts.id = ?`
+	row := r.db.QueryRow(query, id)
+	ts, err := scanTimesheet(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTimesheetNotFound
+		}
+		return nil, err
+	}
+	return ts, nil
 }
 
 func (r *timesheetRepositoryImpl) GetTimesheetByPeriod(workspaceID int64, userID string, startDate string) (*model.Timesheet, error) {
-	return nil, nil
+	query := timesheetBaseSelect + ` WHERE ts.workspace_id = ? AND ts.user_id = ? AND ts.period_start_date = ?`
+	row := r.db.QueryRow(query, workspaceID, userID, startDate)
+	ts, err := scanTimesheet(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTimesheetNotFound
+		}
+		return nil, err
+	}
+	return ts, nil
 }
 
 func (r *timesheetRepositoryImpl) ListTimesheets(filter model.TimesheetFilter) ([]*model.Timesheet, error) {
