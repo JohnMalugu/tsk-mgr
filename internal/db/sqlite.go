@@ -1355,7 +1355,29 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	invoiceItemsQuery := `
+	CREATE TABLE IF NOT EXISTS invoice_items (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		invoice_id INTEGER NOT NULL,
+		timesheet_line_id INTEGER,
+		description TEXT NOT NULL,
+		item_type TEXT NOT NULL DEFAULT 'service',
+		quantity REAL NOT NULL DEFAULT 1.0,
+		unit_price REAL NOT NULL DEFAULT 0.0,
+		amount REAL NOT NULL DEFAULT 0.0,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE,
+		FOREIGN KEY (timesheet_line_id) REFERENCES timesheet_lines(id) ON DELETE SET NULL
+	);`
+
+	_, err = db.Exec(invoiceItemsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
+
 
 
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
