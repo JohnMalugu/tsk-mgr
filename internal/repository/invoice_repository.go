@@ -936,5 +936,86 @@ func (r *invoiceRepositoryImpl) ListPayments(invoiceID int64) ([]model.InvoicePa
 
 
 func (r *invoiceRepositoryImpl) GetInvoiceMetrics(workspaceID int64) (*model.InvoiceMetrics, error) {
-	return nil, nil
+	metrics := &model.InvoiceMetrics{
+		WorkspaceID: workspaceID,
+	}
+
+	summaryQuery := `
+	SELECT 
+		COUNT(*),
+		COALESCE(SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN status = 'partially_paid' THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN status = 'overdue' THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(total_amount), 0.0),
+		COALESCE(SUM(amount_paid), 0.0),
+		COALESCE(SUM(balance_due), 0.0)
+	FROM invoices
+	WHERE workspace_id = ? AND status != 'void'
+	`
+	err := r.db.QueryRow(summaryQuery, workspaceID).Scan(
+		&metrics.TotalInvoices,
+		&metrics.DraftCount,
+		&metrics.SentCount,
+		&metrics.PaidCount,
+		&metrics.PartiallyPaidCount,
+		&metrics.OverdueCount,
+		&metrics.TotalBilledAmount,
+		&metrics.TotalPaidAmount,
+		&metrics.TotalOutstandingAmount,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Calculate Aging and Overdue amounts
+	agingQuery := `
+	SELECT due_date, balance_due
+	FROM invoices
+	WHERE workspace_id = ? AND balance_due > 0 AND status != 'void'
+	`
+	rows, err := r.db.Query(agingQuery, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	now := time.Now().Truncate(24 * time.Hour)
+	for rows.Next() {
+		var dueDateStr string
+		var balanceDue float64
+		if err := rows.Scan(&dueDateStr, &balanceDue); err != nil {
+			return nil, err
+		}
+
+		dueDate, err := time.Parse("2006-01-02", dueDateStr)
+		if err != nil {
+			metrics.AgingCurrent += balanceDue
+			continue
+		}
+
+		daysPastDue := int(now.Sub(dueDate).Hours() / 24)
+		if daysPastDue > 0 {
+			metrics.TotalOverdueAmount += balanceDue
+		}
+
+		switch {
+		case daysPastDue <= 30:
+			metrics.AgingCurrent += balanceDue
+		case daysPastDue <= 60:
+			metrics.Aging30to60 += balanceDue
+		case daysPastDue <= 90:
+			metrics.Aging60to90 += balanceDue
+		default:
+			metrics.AgingOver90 += balanceDue
+		}
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return metrics, nil
 }
+
