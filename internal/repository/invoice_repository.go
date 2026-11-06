@@ -435,8 +435,68 @@ func (r *invoiceRepositoryImpl) GetInvoiceByNumber(workspaceID int64, invoiceNum
 
 
 func (r *invoiceRepositoryImpl) ListInvoices(filter model.InvoiceFilter) ([]*model.Invoice, error) {
-	return nil, nil
+	query := invoiceBaseSelect + ` WHERE 1=1`
+	var args []interface{}
+
+	if filter.WorkspaceID > 0 {
+		query += ` AND inv.workspace_id = ?`
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.ClientID != nil && *filter.ClientID > 0 {
+		query += ` AND inv.client_id = ?`
+		args = append(args, *filter.ClientID)
+	}
+	if filter.ProjectID != nil && *filter.ProjectID > 0 {
+		query += ` AND inv.project_id = ?`
+		args = append(args, *filter.ProjectID)
+	}
+	if filter.Status != nil && *filter.Status != "" {
+		query += ` AND inv.status = ?`
+		args = append(args, *filter.Status)
+	}
+	if filter.StartDate != nil && *filter.StartDate != "" {
+		query += ` AND inv.issue_date >= ?`
+		args = append(args, *filter.StartDate)
+	}
+	if filter.EndDate != nil && *filter.EndDate != "" {
+		query += ` AND inv.issue_date <= ?`
+		args = append(args, *filter.EndDate)
+	}
+
+	query += ` ORDER BY inv.issue_date DESC, inv.created_at DESC, inv.id DESC`
+
+	if filter.Limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, filter.Limit)
+		if filter.Offset > 0 {
+			query += ` OFFSET ?`
+			args = append(args, filter.Offset)
+		}
+	}
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var invoices []*model.Invoice
+	for rows.Next() {
+		inv, err := scanInvoice(rows)
+		if err != nil {
+			return nil, err
+		}
+		invoices = append(invoices, inv)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if invoices == nil {
+		invoices = []*model.Invoice{}
+	}
+	return invoices, nil
 }
+
 
 func (r *invoiceRepositoryImpl) UpdateInvoice(invoice *model.Invoice) error {
 	return nil
