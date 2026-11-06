@@ -3,10 +3,12 @@ package repository
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
+
 
 var (
 	ErrClientNotFound      = errors.New("client not found")
@@ -235,21 +237,202 @@ func (r *invoiceRepositoryImpl) DeleteClient(id int64) error {
 }
 
 
+const invoiceBaseSelect = `
+	SELECT 
+		inv.id,
+		inv.workspace_id,
+		inv.client_id,
+		inv.project_id,
+		inv.timesheet_id,
+		inv.invoice_number,
+		inv.status,
+		inv.issue_date,
+		inv.due_date,
+		inv.currency,
+		inv.subtotal,
+		inv.tax_rate,
+		inv.tax_amount,
+		inv.discount_amount,
+		inv.total_amount,
+		inv.amount_paid,
+		inv.balance_due,
+		inv.paid_at,
+		inv.notes,
+		inv.payment_terms,
+		inv.created_at,
+		inv.updated_at,
+		c.name AS client_name,
+		c.email AS client_email,
+		p.name AS project_name,
+		(SELECT COUNT(*) FROM invoice_items ii WHERE ii.invoice_id = inv.id) AS items_count
+	FROM invoices inv
+	LEFT JOIN clients c ON inv.client_id = c.id
+	LEFT JOIN projects p ON inv.project_id = p.id
+`
+
+func scanInvoice(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.Invoice, error) {
+	var inv model.Invoice
+	var projectID, timesheetID sql.NullInt64
+	var paidAt sql.NullTime
+	var clientName, clientEmail, projectName sql.NullString
+
+	err := scanner.Scan(
+		&inv.ID,
+		&inv.WorkspaceID,
+		&inv.ClientID,
+		&projectID,
+		&timesheetID,
+		&inv.InvoiceNumber,
+		&inv.Status,
+		&inv.IssueDate,
+		&inv.DueDate,
+		&inv.Currency,
+		&inv.Subtotal,
+		&inv.TaxRate,
+		&inv.TaxAmount,
+		&inv.DiscountAmount,
+		&inv.TotalAmount,
+		&inv.AmountPaid,
+		&inv.BalanceDue,
+		&paidAt,
+		&inv.Notes,
+		&inv.PaymentTerms,
+		&inv.CreatedAt,
+		&inv.UpdatedAt,
+		&clientName,
+		&clientEmail,
+		&projectName,
+		&inv.ItemsCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if projectID.Valid {
+		inv.ProjectID = &projectID.Int64
+	}
+	if timesheetID.Valid {
+		inv.TimesheetID = &timesheetID.Int64
+	}
+	if paidAt.Valid {
+		inv.PaidAt = &paidAt.Time
+	}
+	if clientName.Valid {
+		inv.ClientName = clientName.String
+	}
+	if clientEmail.Valid {
+		inv.ClientEmail = clientEmail.String
+	}
+	if projectName.Valid {
+		inv.ProjectName = projectName.String
+	}
+	return &inv, nil
+}
+
 func (r *invoiceRepositoryImpl) GetNextInvoiceNumber(workspaceID int64) (string, error) {
-	return "", nil
+	query := `SELECT COALESCE(MAX(id), 0) + 1 FROM invoices WHERE workspace_id = ?`
+	var nextNum int
+	if err := r.db.QueryRow(query, workspaceID).Scan(&nextNum); err != nil {
+		return "INV-1", err
+	}
+	return fmt.Sprintf("INV-%d", nextNum), nil
 }
 
 func (r *invoiceRepositoryImpl) CreateInvoice(invoice *model.Invoice) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	invoice.CreatedAt = now
+	invoice.UpdatedAt = now
+	if invoice.Status == "" {
+		invoice.Status = model.InvoiceStatusDraft
+	}
+	if invoice.Currency == "" {
+		invoice.Currency = "USD"
+	}
+	if invoice.PaymentTerms == "" {
+		invoice.PaymentTerms = "Net 30"
+	}
+	if invoice.InvoiceNumber == "" {
+		num, err := r.GetNextInvoiceNumber(invoice.WorkspaceID)
+		if err == nil {
+			invoice.InvoiceNumber = num
+		} else {
+			invoice.InvoiceNumber = "INV-1"
+		}
+	}
+	invoice.BalanceDue = invoice.TotalAmount - invoice.AmountPaid
+	if invoice.BalanceDue < 0 {
+		invoice.BalanceDue = 0
+	}
+
+	query := `
+	INSERT INTO invoices (
+		workspace_id, client_id, project_id, timesheet_id, invoice_number, status,
+		issue_date, due_date, currency, subtotal, tax_rate, tax_amount, discount_amount,
+		total_amount, amount_paid, balance_due, paid_at, notes, payment_terms, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	res, err := r.db.Exec(
+		query,
+		invoice.WorkspaceID,
+		invoice.ClientID,
+		invoice.ProjectID,
+		invoice.TimesheetID,
+		invoice.InvoiceNumber,
+		invoice.Status,
+		invoice.IssueDate,
+		invoice.DueDate,
+		invoice.Currency,
+		invoice.Subtotal,
+		invoice.TaxRate,
+		invoice.TaxAmount,
+		invoice.DiscountAmount,
+		invoice.TotalAmount,
+		invoice.AmountPaid,
+		invoice.BalanceDue,
+		invoice.PaidAt,
+		invoice.Notes,
+		invoice.PaymentTerms,
+		invoice.CreatedAt,
+		invoice.UpdatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	invoice.ID = id
+	return id, nil
 }
 
 func (r *invoiceRepositoryImpl) GetInvoiceByID(id int64) (*model.Invoice, error) {
-	return nil, nil
+	query := invoiceBaseSelect + ` WHERE inv.id = ?`
+	row := r.db.QueryRow(query, id)
+	inv, err := scanInvoice(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrInvoiceNotFound
+		}
+		return nil, err
+	}
+	return inv, nil
 }
 
 func (r *invoiceRepositoryImpl) GetInvoiceByNumber(workspaceID int64, invoiceNumber string) (*model.Invoice, error) {
-	return nil, nil
+	query := invoiceBaseSelect + ` WHERE inv.workspace_id = ? AND inv.invoice_number = ?`
+	row := r.db.QueryRow(query, workspaceID, invoiceNumber)
+	inv, err := scanInvoice(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrInvoiceNotFound
+		}
+		return nil, err
+	}
+	return inv, nil
 }
+
 
 func (r *invoiceRepositoryImpl) ListInvoices(filter model.InvoiceFilter) ([]*model.Invoice, error) {
 	return nil, nil
