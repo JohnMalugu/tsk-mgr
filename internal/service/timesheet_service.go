@@ -280,19 +280,177 @@ func (s *timesheetServiceImpl) PopulateFromTimeEntries(id int64, userID string, 
 }
 
 func (s *timesheetServiceImpl) AddLine(timesheetID int64, userID string, req model.TimesheetLineRequest) (*model.TimesheetLine, error) {
-	return nil, nil
+	ts, err := s.GetTimesheet(timesheetID)
+	if err != nil {
+		return nil, err
+	}
+	if ts.UserID != userID {
+		return nil, ErrUnauthorizedTimesheet
+	}
+	if ts.Status != model.TimesheetStatusDraft {
+		return nil, ErrTimesheetNotEditable
+	}
+	if req.DurationMinutes <= 0 {
+		return nil, ErrInvalidLineDuration
+	}
+
+	workDateStr := strings.TrimSpace(req.WorkDate)
+	if workDateStr == "" {
+		return nil, ErrInvalidWorkDate
+	}
+	wDate, err := time.Parse("2006-01-02", workDateStr)
+	if err != nil {
+		return nil, ErrInvalidWorkDate
+	}
+	pStart, _ := time.Parse("2006-01-02", ts.PeriodStartDate)
+	pEnd, _ := time.Parse("2006-01-02", ts.PeriodEndDate)
+	if wDate.Before(pStart) || wDate.After(pEnd) {
+		return nil, ErrInvalidWorkDate
+	}
+
+	var tid *int
+	var pid *int
+	if req.TaskID != nil {
+		t := int(*req.TaskID)
+		tid = &t
+		task, _ := s.taskRepo.GetByID(t)
+		if task != nil && task.ProjectID != nil && req.ProjectID == nil {
+			p := *task.ProjectID
+			pid = &p
+		}
+	}
+	if req.ProjectID != nil {
+		p := int(*req.ProjectID)
+		pid = &p
+	}
+
+	isBillable := true
+	if req.IsBillable != nil {
+		isBillable = *req.IsBillable
+	}
+
+	line := &model.TimesheetLine{
+		TimesheetID:     timesheetID,
+		TaskID:          tid,
+		ProjectID:       pid,
+		WorkDate:        workDateStr,
+		DurationMinutes: req.DurationMinutes,
+		IsBillable:      isBillable,
+		Description:     strings.TrimSpace(req.Description),
+	}
+
+	id, err := s.repo.AddTimesheetLine(line)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.repo.RecalculateTotals(timesheetID); err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetTimesheetLineByID(id)
 }
 
 func (s *timesheetServiceImpl) UpdateLine(timesheetID int64, lineID int64, userID string, req model.TimesheetLineRequest) (*model.TimesheetLine, error) {
-	return nil, nil
+	ts, err := s.GetTimesheet(timesheetID)
+	if err != nil {
+		return nil, err
+	}
+	if ts.UserID != userID {
+		return nil, ErrUnauthorizedTimesheet
+	}
+	if ts.Status != model.TimesheetStatusDraft {
+		return nil, ErrTimesheetNotEditable
+	}
+
+	line, err := s.repo.GetTimesheetLineByID(lineID)
+	if err != nil {
+		return nil, ErrTimesheetLineNotFound
+	}
+	if line.TimesheetID != timesheetID {
+		return nil, ErrTimesheetLineNotFound
+	}
+
+	if req.DurationMinutes > 0 {
+		line.DurationMinutes = req.DurationMinutes
+	}
+	if req.WorkDate != "" {
+		wDate, err := time.Parse("2006-01-02", req.WorkDate)
+		if err != nil {
+			return nil, ErrInvalidWorkDate
+		}
+		pStart, _ := time.Parse("2006-01-02", ts.PeriodStartDate)
+		pEnd, _ := time.Parse("2006-01-02", ts.PeriodEndDate)
+		if wDate.Before(pStart) || wDate.After(pEnd) {
+			return nil, ErrInvalidWorkDate
+		}
+		line.WorkDate = req.WorkDate
+	}
+	if req.IsBillable != nil {
+		line.IsBillable = *req.IsBillable
+	}
+	if req.Description != "" {
+		line.Description = strings.TrimSpace(req.Description)
+	}
+	if req.TaskID != nil {
+		t := int(*req.TaskID)
+		line.TaskID = &t
+	}
+	if req.ProjectID != nil {
+		p := int(*req.ProjectID)
+		line.ProjectID = &p
+	}
+
+	if err := s.repo.UpdateTimesheetLine(line); err != nil {
+		return nil, err
+	}
+
+	if err := s.repo.RecalculateTotals(timesheetID); err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetTimesheetLineByID(lineID)
 }
 
 func (s *timesheetServiceImpl) DeleteLine(timesheetID int64, lineID int64, userID string) error {
-	return nil
+	ts, err := s.GetTimesheet(timesheetID)
+	if err != nil {
+		return err
+	}
+	if ts.UserID != userID {
+		return ErrUnauthorizedTimesheet
+	}
+	if ts.Status != model.TimesheetStatusDraft {
+		return ErrTimesheetNotEditable
+	}
+
+	line, err := s.repo.GetTimesheetLineByID(lineID)
+	if err != nil {
+		return ErrTimesheetLineNotFound
+	}
+	if line.TimesheetID != timesheetID {
+		return ErrTimesheetLineNotFound
+	}
+
+	if err := s.repo.DeleteTimesheetLine(lineID); err != nil {
+		return err
+	}
+
+	return s.repo.RecalculateTotals(timesheetID)
 }
 
 func (s *timesheetServiceImpl) ListLines(timesheetID int64) ([]model.TimesheetLine, error) {
-	return nil, nil
+	if _, err := s.GetTimesheet(timesheetID); err != nil {
+		return nil, err
+	}
+	lines, err := s.repo.ListTimesheetLines(timesheetID)
+	if err != nil {
+		return nil, err
+	}
+	if lines == nil {
+		lines = []model.TimesheetLine{}
+	}
+	return lines, nil
 }
 
 func (s *timesheetServiceImpl) SubmitTimesheet(id int64, userID string, req model.SubmitTimesheetRequest) (*model.Timesheet, error) {
