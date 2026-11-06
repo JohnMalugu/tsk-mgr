@@ -161,16 +161,16 @@ type UpdateClientRequest struct {
 
 // CreateInvoiceRequest payload for drafting a new invoice
 type CreateInvoiceRequest struct {
-	WorkspaceID    int64   `json:"workspace_id"`
-	ClientID       int64   `json:"client_id"`
-	ProjectID      *int64  `json:"project_id,omitempty"`
-	IssueDate      string  `json:"issue_date"` // YYYY-MM-DD
-	DueDate        string  `json:"due_date"`   // YYYY-MM-DD
-	Currency       string  `json:"currency,omitempty"`
-	TaxRate        float64 `json:"tax_rate,omitempty"`
-	DiscountAmount float64 `json:"discount_amount,omitempty"`
-	Notes          string  `json:"notes,omitempty"`
-	PaymentTerms   string  `json:"payment_terms,omitempty"`
+	WorkspaceID    int64                `json:"workspace_id"`
+	ClientID       int64                `json:"client_id"`
+	ProjectID      *int64               `json:"project_id,omitempty"`
+	IssueDate      string               `json:"issue_date"` // YYYY-MM-DD
+	DueDate        string               `json:"due_date"`   // YYYY-MM-DD
+	Currency       string               `json:"currency,omitempty"`
+	TaxRate        float64              `json:"tax_rate,omitempty"`
+	DiscountAmount float64              `json:"discount_amount,omitempty"`
+	Notes          string               `json:"notes,omitempty"`
+	PaymentTerms   string               `json:"payment_terms,omitempty"`
 	Items          []InvoiceItemRequest `json:"items,omitempty"`
 }
 
@@ -251,9 +251,3 @@ type InvoiceMetrics struct {
 	Aging60to90            float64 `json:"aging_60_to_90"`
 	AgingOver90            float64 `json:"aging_over_90"`
 }
-
-
-
-
-
-

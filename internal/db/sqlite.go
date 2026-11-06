@@ -1533,7 +1533,6 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_invoice_payments_inv ON invoice_payments(invoice_id, payment_date DESC);
 	`
 
-
 	_, err = db.Exec(indexQuery)
 	return err
 }

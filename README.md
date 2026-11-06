@@ -236,6 +236,16 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `POST /v2/timesheets/{id}/reopen` to reopen a submitted or rejected timesheet back to draft status for employee revisions
 - `GET /v2/timesheets/{id}/approvals` to inspect the full chronological approval and audit history of a timesheet
 - `GET /v2/timesheets/metrics?workspace_id={id}` for workspace timesheet compliance metrics, total logged and billable hours, billable utilization percentage, and status distribution (`draft`, `submitted`, `approved`, `rejected`)
+- `GET|POST /v2/invoices/clients` to list clients within a workspace (`workspace_id`) or register a new client with contact info, currency, address, and tax ID
+- `GET|PUT|PATCH|DELETE /v2/invoices/clients/{id}` to fetch client profile details (with aggregated lifetime total billed and paid amounts), update client attributes, or delete a client
+- `GET|POST /v2/invoices` to query invoices with multi-criteria filters (`workspace_id`, `client_id`, `project_id`, `status`, `start_date`, `end_date`, `limit`, `offset`) or create an invoice with sequential numbering (`INV-1`), due dates, tax rates, discounts, and initial line items
+- `GET|PUT|PATCH|DELETE /v2/invoices/{id}` to fetch invoice details (with subtotal, tax amount, total amount, amount paid, and balance due), update draft invoice parameters, or delete a draft/void invoice
+- `POST|PUT /v2/invoices/{id}/status` to transition invoice lifecycle status (`draft`, `sent`, `void`)
+- `GET|POST /v2/invoices/{id}/items` to list line items or add a line item (`labor`, `service`, `expense`, `product`) with automatic invoice subtotal and balance due recalculation
+- `PUT|PATCH|DELETE /v2/invoices/{id}/items/{itemId}` to edit line item quantity and pricing or delete a line item with total recalculation
+- `POST /v2/invoices/from-timesheet` to auto-generate an invoice directly from an approved timesheet with billable hours converted to labor line items and hourly rates
+- `GET|POST /v2/invoices/{id}/payments` to view recorded payments or record a settlement payment against an invoice (automatically updating amount paid, balance due, and transitioning status to `partially_paid` or `paid`)
+- `GET /v2/invoices/metrics?workspace_id={id}` for accounts receivable (AR) aging metrics (current 0-30 days, 30-60 days, 60-90 days, >90 days), total billed amount, total collected amount, outstanding balance, and status breakdown
 
 ## Current limitations
 

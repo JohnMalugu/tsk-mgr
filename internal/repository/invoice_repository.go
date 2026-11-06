@@ -9,7 +9,6 @@ import (
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
 
-
 var (
 	ErrClientNotFound      = errors.New("client not found")
 	ErrInvoiceNotFound     = errors.New("invoice not found")
@@ -62,7 +61,6 @@ func scanClient(scanner interface {
 	}
 	return &c, nil
 }
-
 
 // InvoiceRepository manages database operations for clients, invoices, line items, and payments
 type InvoiceRepository interface {
@@ -235,7 +233,6 @@ func (r *invoiceRepositoryImpl) DeleteClient(id int64) error {
 	}
 	return nil
 }
-
 
 const invoiceBaseSelect = `
 	SELECT 
@@ -433,7 +430,6 @@ func (r *invoiceRepositoryImpl) GetInvoiceByNumber(workspaceID int64, invoiceNum
 	return inv, nil
 }
 
-
 func (r *invoiceRepositoryImpl) ListInvoices(filter model.InvoiceFilter) ([]*model.Invoice, error) {
 	query := invoiceBaseSelect + ` WHERE 1=1`
 	var args []interface{}
@@ -496,7 +492,6 @@ func (r *invoiceRepositoryImpl) ListInvoices(filter model.InvoiceFilter) ([]*mod
 	}
 	return invoices, nil
 }
-
 
 func (r *invoiceRepositoryImpl) UpdateInvoice(invoice *model.Invoice) error {
 	invoice.UpdatedAt = time.Now()
@@ -590,7 +585,6 @@ func (r *invoiceRepositoryImpl) DeleteInvoice(id int64) error {
 
 	return tx.Commit()
 }
-
 
 const invoiceItemBaseSelect = `
 	SELECT 
@@ -792,7 +786,6 @@ func (r *invoiceRepositoryImpl) RecalculateTotals(invoiceID int64) error {
 	return err
 }
 
-
 func (r *invoiceRepositoryImpl) RecordPayment(payment *model.InvoicePayment) (int64, error) {
 	now := time.Now()
 	if payment.CreatedAt.IsZero() {
@@ -934,7 +927,6 @@ func (r *invoiceRepositoryImpl) ListPayments(invoiceID int64) ([]model.InvoicePa
 	return payments, nil
 }
 
-
 func (r *invoiceRepositoryImpl) GetInvoiceMetrics(workspaceID int64) (*model.InvoiceMetrics, error) {
 	metrics := &model.InvoiceMetrics{
 		WorkspaceID: workspaceID,
@@ -1018,4 +1010,3 @@ func (r *invoiceRepositoryImpl) GetInvoiceMetrics(workspaceID int64) (*model.Inv
 
 	return metrics, nil
 }
-
