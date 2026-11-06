@@ -314,24 +314,185 @@ func (r *timesheetRepositoryImpl) DeleteTimesheet(id int64) error {
 	return tx.Commit()
 }
 
+const timesheetLineBaseSelect = `
+	SELECT 
+		tl.id,
+		tl.timesheet_id,
+		tl.task_id,
+		tl.project_id,
+		tl.work_date,
+		tl.duration_minutes,
+		tl.is_billable,
+		tl.description,
+		tl.created_at,
+		tl.updated_at,
+		t.title AS task_title,
+		p.name AS project_name
+	FROM timesheet_lines tl
+	LEFT JOIN tasks t ON tl.task_id = t.id
+	LEFT JOIN projects p ON tl.project_id = p.id
+`
+
+func scanTimesheetLine(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.TimesheetLine, error) {
+	var line model.TimesheetLine
+	var taskID, projectID sql.NullInt64
+	var taskTitle, projectName sql.NullString
+
+	err := scanner.Scan(
+		&line.ID,
+		&line.TimesheetID,
+		&taskID,
+		&projectID,
+		&line.WorkDate,
+		&line.DurationMinutes,
+		&line.IsBillable,
+		&line.Description,
+		&line.CreatedAt,
+		&line.UpdatedAt,
+		&taskTitle,
+		&projectName,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if taskID.Valid {
+		tid := int(taskID.Int64)
+		line.TaskID = &tid
+	}
+	if projectID.Valid {
+		pid := int(projectID.Int64)
+		line.ProjectID = &pid
+	}
+	if taskTitle.Valid {
+		line.TaskTitle = taskTitle.String
+	}
+	if projectName.Valid {
+		line.ProjectName = projectName.String
+	}
+	return &line, nil
+}
+
 func (r *timesheetRepositoryImpl) AddTimesheetLine(line *model.TimesheetLine) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	line.CreatedAt = now
+	line.UpdatedAt = now
+
+	query := `
+	INSERT INTO timesheet_lines (
+		timesheet_id, task_id, project_id, work_date, duration_minutes,
+		is_billable, description, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	res, err := r.db.Exec(
+		query,
+		line.TimesheetID,
+		line.TaskID,
+		line.ProjectID,
+		line.WorkDate,
+		line.DurationMinutes,
+		line.IsBillable,
+		line.Description,
+		line.CreatedAt,
+		line.UpdatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	line.ID = id
+	return id, nil
 }
 
 func (r *timesheetRepositoryImpl) GetTimesheetLineByID(id int64) (*model.TimesheetLine, error) {
-	return nil, nil
+	query := timesheetLineBaseSelect + ` WHERE tl.id = ?`
+	row := r.db.QueryRow(query, id)
+	line, err := scanTimesheetLine(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTimesheetLineNotFound
+		}
+		return nil, err
+	}
+	return line, nil
 }
 
 func (r *timesheetRepositoryImpl) UpdateTimesheetLine(line *model.TimesheetLine) error {
+	line.UpdatedAt = time.Now()
+	query := `
+	UPDATE timesheet_lines
+	SET task_id = ?,
+		project_id = ?,
+		work_date = ?,
+		duration_minutes = ?,
+		is_billable = ?,
+		description = ?,
+		updated_at = ?
+	WHERE id = ?
+	`
+	res, err := r.db.Exec(
+		query,
+		line.TaskID,
+		line.ProjectID,
+		line.WorkDate,
+		line.DurationMinutes,
+		line.IsBillable,
+		line.Description,
+		line.UpdatedAt,
+		line.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrTimesheetLineNotFound
+	}
 	return nil
 }
 
 func (r *timesheetRepositoryImpl) DeleteTimesheetLine(id int64) error {
+	res, err := r.db.Exec(`DELETE FROM timesheet_lines WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrTimesheetLineNotFound
+	}
 	return nil
 }
 
 func (r *timesheetRepositoryImpl) ListTimesheetLines(timesheetID int64) ([]model.TimesheetLine, error) {
-	return nil, nil
+	query := timesheetLineBaseSelect + ` WHERE tl.timesheet_id = ? ORDER BY tl.work_date ASC, tl.id ASC`
+	rows, err := r.db.Query(query, timesheetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var lines []model.TimesheetLine
+	for rows.Next() {
+		line, err := scanTimesheetLine(rows)
+		if err != nil {
+			return nil, err
+		}
+		lines = append(lines, *line)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return lines, nil
 }
 
 func (r *timesheetRepositoryImpl) RecordApproval(approval *model.TimesheetApproval) (int64, error) {
