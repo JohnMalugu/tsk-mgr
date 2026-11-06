@@ -794,12 +794,146 @@ func (r *invoiceRepositoryImpl) RecalculateTotals(invoiceID int64) error {
 
 
 func (r *invoiceRepositoryImpl) RecordPayment(payment *model.InvoicePayment) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if payment.CreatedAt.IsZero() {
+		payment.CreatedAt = now
+	}
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	query := `
+	INSERT INTO invoice_payments (
+		invoice_id, amount, payment_date, payment_method, transaction_reference, notes, recorded_by_user_id, created_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	res, err := tx.Exec(
+		query,
+		payment.InvoiceID,
+		payment.Amount,
+		payment.PaymentDate,
+		payment.PaymentMethod,
+		payment.TransactionReference,
+		payment.Notes,
+		payment.RecordedByUserID,
+		payment.CreatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	payment.ID = id
+
+	// Recompute invoice payment totals and status
+	var amountPaid float64
+	err = tx.QueryRow(`SELECT COALESCE(SUM(amount), 0.0) FROM invoice_payments WHERE invoice_id = ?`, payment.InvoiceID).Scan(&amountPaid)
+	if err != nil {
+		return 0, err
+	}
+
+	var totalAmount float64
+	var currentStatus string
+	err = tx.QueryRow(`SELECT total_amount, status FROM invoices WHERE id = ?`, payment.InvoiceID).Scan(&totalAmount, &currentStatus)
+	if err != nil {
+		return 0, err
+	}
+
+	balanceDue := totalAmount - amountPaid
+	var paidAt *time.Time
+	newStatus := currentStatus
+
+	if balanceDue <= 0.0001 {
+		balanceDue = 0
+		newStatus = model.InvoiceStatusPaid
+		paidAt = &now
+	} else if amountPaid > 0 {
+		newStatus = model.InvoiceStatusPartiallyPaid
+	}
+
+	updateQuery := `
+	UPDATE invoices
+	SET amount_paid = ?,
+		balance_due = ?,
+		status = ?,
+		paid_at = ?,
+		updated_at = ?
+	WHERE id = ?
+	`
+	_, err = tx.Exec(updateQuery, amountPaid, balanceDue, newStatus, paidAt, now, payment.InvoiceID)
+	if err != nil {
+		return 0, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+
+	return id, nil
 }
 
 func (r *invoiceRepositoryImpl) ListPayments(invoiceID int64) ([]model.InvoicePayment, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		ip.id,
+		ip.invoice_id,
+		ip.amount,
+		ip.payment_date,
+		ip.payment_method,
+		ip.transaction_reference,
+		ip.notes,
+		ip.recorded_by_user_id,
+		ip.created_at,
+		u.username AS recorded_by_username
+	FROM invoice_payments ip
+	LEFT JOIN users u ON ip.recorded_by_user_id = u.id
+	WHERE ip.invoice_id = ?
+	ORDER BY ip.payment_date ASC, ip.id ASC
+	`
+	rows, err := r.db.Query(query, invoiceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var payments []model.InvoicePayment
+	for rows.Next() {
+		var p model.InvoicePayment
+		var username sql.NullString
+		err := rows.Scan(
+			&p.ID,
+			&p.InvoiceID,
+			&p.Amount,
+			&p.PaymentDate,
+			&p.PaymentMethod,
+			&p.TransactionReference,
+			&p.Notes,
+			&p.RecordedByUserID,
+			&p.CreatedAt,
+			&username,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if username.Valid {
+			p.RecordedByUsername = username.String
+		}
+		payments = append(payments, p)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if payments == nil {
+		payments = []model.InvoicePayment{}
+	}
+	return payments, nil
 }
+
 
 func (r *invoiceRepositoryImpl) GetInvoiceMetrics(workspaceID int64) (*model.InvoiceMetrics, error) {
 	return nil, nil
