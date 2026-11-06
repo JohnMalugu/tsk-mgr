@@ -1376,7 +1376,28 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	invoicePaymentsQuery := `
+	CREATE TABLE IF NOT EXISTS invoice_payments (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		invoice_id INTEGER NOT NULL,
+		amount REAL NOT NULL,
+		payment_date TEXT NOT NULL,
+		payment_method TEXT NOT NULL DEFAULT 'bank_transfer',
+		transaction_reference TEXT NOT NULL DEFAULT '',
+		notes TEXT NOT NULL DEFAULT '',
+		recorded_by_user_id TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE,
+		FOREIGN KEY (recorded_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(invoicePaymentsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
+
 
 
 
