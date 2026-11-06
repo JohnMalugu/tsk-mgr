@@ -20,6 +20,7 @@ var (
 	ErrInvalidItemUnitPrice = errors.New("unit price must be non-negative")
 	ErrTimesheetNotApproved = errors.New("timesheet must be in approved status to generate an invoice")
 	ErrUnauthorizedInvoice  = errors.New("user not authorized to perform action on invoice")
+	ErrInvalidInvoiceStatus = errors.New("invalid invoice status")
 )
 
 // InvoiceService manages enterprise client billing, invoices, line items, and payment settlements
@@ -344,15 +345,144 @@ func (s *invoiceServiceImpl) ListInvoices(filter model.InvoiceFilter) ([]*model.
 }
 
 func (s *invoiceServiceImpl) UpdateInvoice(id int64, userID string, req model.UpdateInvoiceRequest) (*model.Invoice, error) {
-	return nil, nil
+	if id <= 0 {
+		return nil, ErrInvoiceNotFound
+	}
+	inv, err := s.repo.GetInvoiceByID(id)
+	if err != nil || inv == nil {
+		return nil, ErrInvoiceNotFound
+	}
+
+	if inv.Status != model.InvoiceStatusDraft {
+		return nil, ErrInvoiceNotEditable
+	}
+
+	if req.ProjectID != nil {
+		if *req.ProjectID > 0 {
+			proj, err := s.projectRepo.GetByID(int(*req.ProjectID))
+			if err != nil || proj == nil {
+				return nil, ErrProjectNotFound
+			}
+			inv.ProjectID = req.ProjectID
+		} else {
+			inv.ProjectID = nil
+		}
+	}
+
+	issueStr := inv.IssueDate
+	if req.IssueDate != nil {
+		issueStr = strings.TrimSpace(*req.IssueDate)
+	}
+	issueTime, err := time.Parse("2006-01-02", issueStr)
+	if err != nil {
+		return nil, ErrInvalidInvoiceDates
+	}
+
+	dueStr := inv.DueDate
+	if req.DueDate != nil {
+		dueStr = strings.TrimSpace(*req.DueDate)
+	}
+	dueTime, err := time.Parse("2006-01-02", dueStr)
+	if err != nil {
+		return nil, ErrInvalidInvoiceDates
+	}
+
+	if dueTime.Before(issueTime) {
+		return nil, ErrInvalidInvoiceDates
+	}
+
+	inv.IssueDate = issueStr
+	inv.DueDate = dueStr
+
+	if req.TaxRate != nil {
+		taxRate := *req.TaxRate
+		if taxRate < 0 {
+			taxRate = 0
+		}
+		inv.TaxRate = taxRate
+	}
+
+	if req.DiscountAmount != nil {
+		discount := *req.DiscountAmount
+		if discount < 0 {
+			discount = 0
+		}
+		inv.DiscountAmount = discount
+	}
+
+	if req.Notes != nil {
+		inv.Notes = strings.TrimSpace(*req.Notes)
+	}
+
+	if req.PaymentTerms != nil {
+		inv.PaymentTerms = strings.TrimSpace(*req.PaymentTerms)
+	}
+
+	if err := s.repo.UpdateInvoice(inv); err != nil {
+		return nil, err
+	}
+	_ = s.repo.RecalculateTotals(id)
+	return s.GetInvoice(id)
 }
 
 func (s *invoiceServiceImpl) DeleteInvoice(id int64, userID string) error {
-	return nil
+	if id <= 0 {
+		return ErrInvoiceNotFound
+	}
+	inv, err := s.repo.GetInvoiceByID(id)
+	if err != nil || inv == nil {
+		return ErrInvoiceNotFound
+	}
+
+	if inv.Status != model.InvoiceStatusDraft && inv.Status != model.InvoiceStatusVoid {
+		return ErrInvoiceNotEditable
+	}
+
+	return s.repo.DeleteInvoice(id)
 }
 
 func (s *invoiceServiceImpl) ChangeStatus(id int64, userID string, req model.ChangeInvoiceStatusRequest) (*model.Invoice, error) {
-	return nil, nil
+	if id <= 0 {
+		return nil, ErrInvoiceNotFound
+	}
+	inv, err := s.repo.GetInvoiceByID(id)
+	if err != nil || inv == nil {
+		return nil, ErrInvoiceNotFound
+	}
+
+	target := strings.ToLower(strings.TrimSpace(req.Status))
+	switch target {
+	case model.InvoiceStatusDraft:
+		if inv.AmountPaid > 0 {
+			return nil, ErrInvoiceNotEditable
+		}
+		inv.Status = model.InvoiceStatusDraft
+	case model.InvoiceStatusSent:
+		if inv.Status == model.InvoiceStatusPaid {
+			return nil, ErrInvoiceNotEditable
+		}
+		inv.Status = model.InvoiceStatusSent
+	case model.InvoiceStatusVoid:
+		if inv.AmountPaid > 0 {
+			return nil, ErrInvoiceNotEditable
+		}
+		inv.Status = model.InvoiceStatusVoid
+	default:
+		return nil, ErrInvalidInvoiceStatus
+	}
+
+	if strings.TrimSpace(req.Notes) != "" {
+		if inv.Notes != "" {
+			inv.Notes += "\n" + strings.TrimSpace(req.Notes)
+		} else {
+			inv.Notes = strings.TrimSpace(req.Notes)
+		}
+	}
+
+	if err := s.repo.UpdateInvoice(inv); err != nil {
+		return nil, err
+	}
+	return s.GetInvoice(id)
 }
 
 func (s *invoiceServiceImpl) AddItem(invoiceID int64, userID string, req model.InvoiceItemRequest) (*model.InvoiceItem, error) {
