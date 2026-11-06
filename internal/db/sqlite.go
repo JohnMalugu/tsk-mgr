@@ -1408,6 +1408,15 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_risk_task_links_risk ON risk_task_links(risk_id);
 	CREATE INDEX IF NOT EXISTS idx_risk_task_links_task ON risk_task_links(task_id);
 	CREATE INDEX IF NOT EXISTS idx_risk_reviews_risk ON risk_reviews(risk_id, created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_timesheets_ws_status ON timesheets(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_timesheets_user_dates ON timesheets(user_id, period_start_date, period_end_date);
+	CREATE INDEX IF NOT EXISTS idx_timesheets_reviewer ON timesheets(reviewer_id);
+	CREATE INDEX IF NOT EXISTS idx_timesheet_lines_sheet ON timesheet_lines(timesheet_id);
+	CREATE INDEX IF NOT EXISTS idx_timesheet_lines_task ON timesheet_lines(task_id);
+	CREATE INDEX IF NOT EXISTS idx_timesheet_lines_proj ON timesheet_lines(project_id);
+	CREATE INDEX IF NOT EXISTS idx_timesheet_lines_date ON timesheet_lines(work_date);
+	CREATE INDEX IF NOT EXISTS idx_timesheet_approvals_sheet ON timesheet_approvals(timesheet_id, created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_timesheet_approvals_actor ON timesheet_approvals(actor_id);
 	`
 
 	_, err = db.Exec(indexQuery)
