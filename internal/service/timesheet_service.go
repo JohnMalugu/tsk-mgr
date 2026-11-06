@@ -2,12 +2,15 @@ package service
 
 import (
 	"errors"
+	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
 )
 
 var (
+	ErrWorkspaceNotFound       = ErrWorkspaceNotFoundDB
 	ErrTimesheetNotFound       = errors.New("timesheet not found")
 	ErrTimesheetLineNotFound   = errors.New("timesheet line not found")
 	ErrInvalidPeriodDates      = errors.New("invalid timesheet period dates: end date must be on or after start date")
@@ -69,15 +72,169 @@ func NewTimesheetService(
 }
 
 func (s *timesheetServiceImpl) CreateTimesheet(userID string, req model.CreateTimesheetRequest) (*model.Timesheet, error) {
-	return nil, nil
+	if req.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	if strings.TrimSpace(userID) == "" {
+		return nil, ErrUnauthorizedTimesheet
+	}
+
+	startDate, err := time.Parse("2006-01-02", req.PeriodStartDate)
+	if err != nil {
+		return nil, ErrInvalidPeriodDates
+	}
+	endDate, err := time.Parse("2006-01-02", req.PeriodEndDate)
+	if err != nil {
+		return nil, ErrInvalidPeriodDates
+	}
+	if endDate.Before(startDate) {
+		return nil, ErrInvalidPeriodDates
+	}
+
+	ws, err := s.workspaceRepo.GetByID(int(req.WorkspaceID))
+	if err != nil || ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+
+	member, err := s.workspaceRepo.GetMember(int(req.WorkspaceID), userID)
+	if err != nil || member == nil {
+		return nil, ErrUnauthorizedTimesheet
+	}
+
+	existing, err := s.repo.GetTimesheetByPeriod(req.WorkspaceID, userID, req.PeriodStartDate)
+	if err == nil && existing != nil {
+		return nil, ErrTimesheetAlreadyExists
+	}
+
+	ts := &model.Timesheet{
+		WorkspaceID:     req.WorkspaceID,
+		UserID:          userID,
+		PeriodStartDate: req.PeriodStartDate,
+		PeriodEndDate:   req.PeriodEndDate,
+		Status:          model.TimesheetStatusDraft,
+		Notes:           strings.TrimSpace(req.Notes),
+	}
+	id, err := s.repo.CreateTimesheet(ts)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.AutoPopulate {
+		_, _ = s.populateHelper(id, userID, false)
+	}
+
+	return s.GetTimesheet(id)
 }
 
 func (s *timesheetServiceImpl) GetTimesheet(id int64) (*model.Timesheet, error) {
-	return nil, nil
+	ts, err := s.repo.GetTimesheetByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrTimesheetNotFound) {
+			return nil, ErrTimesheetNotFound
+		}
+		return nil, err
+	}
+	return ts, nil
 }
 
 func (s *timesheetServiceImpl) ListTimesheets(filter model.TimesheetFilter) ([]*model.Timesheet, error) {
-	return nil, nil
+	if filter.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	list, err := s.repo.ListTimesheets(filter)
+	if err != nil {
+		return nil, err
+	}
+	if list == nil {
+		list = []*model.Timesheet{}
+	}
+	return list, nil
+}
+
+func (s *timesheetServiceImpl) populateHelper(timesheetID int64, userID string, includeExisting bool) (*model.Timesheet, error) {
+	ts, err := s.repo.GetTimesheetByID(timesheetID)
+	if err != nil {
+		return nil, ErrTimesheetNotFound
+	}
+	if ts.UserID != userID {
+		return nil, ErrUnauthorizedTimesheet
+	}
+	if ts.Status != model.TimesheetStatusDraft {
+		return nil, ErrTimesheetNotEditable
+	}
+
+	startTime, err := time.Parse("2006-01-02", ts.PeriodStartDate)
+	if err != nil {
+		return nil, ErrInvalidPeriodDates
+	}
+	endTime, err := time.Parse("2006-01-02", ts.PeriodEndDate)
+	if err != nil {
+		return nil, ErrInvalidPeriodDates
+	}
+	endTime = endTime.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+
+	entries, err := s.timeEntryRepo.GetUserTimeEntriesInRange(userID, &startTime, &endTime)
+	if err != nil {
+		return nil, err
+	}
+
+	var existingLines []model.TimesheetLine
+	if !includeExisting {
+		existingLines, _ = s.repo.ListTimesheetLines(timesheetID)
+	}
+
+	for _, entry := range entries {
+		if entry.DurationSeconds <= 0 {
+			continue
+		}
+		durationMins := int(entry.DurationSeconds / 60)
+		if durationMins == 0 && entry.DurationSeconds > 0 {
+			durationMins = 1
+		}
+		workDate := entry.StartedAt.Format("2006-01-02")
+
+		if !includeExisting {
+			alreadyExists := false
+			for _, line := range existingLines {
+				if line.WorkDate == workDate && line.TaskID != nil && *line.TaskID == entry.TaskID {
+					alreadyExists = true
+					break
+				}
+			}
+			if alreadyExists {
+				continue
+			}
+		}
+
+		var projID *int
+		var taskID *int
+		if entry.TaskID > 0 {
+			tid := entry.TaskID
+			taskID = &tid
+			task, err := s.taskRepo.GetByID(entry.TaskID)
+			if err == nil && task != nil && task.ProjectID != nil {
+				pid := *task.ProjectID
+				projID = &pid
+			}
+		}
+
+		line := &model.TimesheetLine{
+			TimesheetID:     timesheetID,
+			TaskID:          taskID,
+			ProjectID:       projID,
+			WorkDate:        workDate,
+			DurationMinutes: durationMins,
+			IsBillable:      true,
+			Description:     entry.Note,
+		}
+		_, _ = s.repo.AddTimesheetLine(line)
+	}
+
+	if err := s.repo.RecalculateTotals(timesheetID); err != nil {
+		return nil, err
+	}
+
+	return s.GetTimesheet(timesheetID)
 }
 
 func (s *timesheetServiceImpl) UpdateTimesheet(id int64, userID string, req model.UpdateTimesheetRequest) (*model.Timesheet, error) {
