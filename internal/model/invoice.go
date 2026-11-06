@@ -159,5 +159,37 @@ type UpdateClientRequest struct {
 	Notes       *string `json:"notes,omitempty"`
 }
 
+// CreateInvoiceRequest payload for drafting a new invoice
+type CreateInvoiceRequest struct {
+	WorkspaceID    int64   `json:"workspace_id"`
+	ClientID       int64   `json:"client_id"`
+	ProjectID      *int64  `json:"project_id,omitempty"`
+	IssueDate      string  `json:"issue_date"` // YYYY-MM-DD
+	DueDate        string  `json:"due_date"`   // YYYY-MM-DD
+	Currency       string  `json:"currency,omitempty"`
+	TaxRate        float64 `json:"tax_rate,omitempty"`
+	DiscountAmount float64 `json:"discount_amount,omitempty"`
+	Notes          string  `json:"notes,omitempty"`
+	PaymentTerms   string  `json:"payment_terms,omitempty"`
+}
+
+// UpdateInvoiceRequest payload for modifying draft invoice attributes
+type UpdateInvoiceRequest struct {
+	ProjectID      *int64   `json:"project_id,omitempty"`
+	IssueDate      *string  `json:"issue_date,omitempty"`
+	DueDate        *string  `json:"due_date,omitempty"`
+	TaxRate        *float64 `json:"tax_rate,omitempty"`
+	DiscountAmount *float64 `json:"discount_amount,omitempty"`
+	Notes          *string  `json:"notes,omitempty"`
+	PaymentTerms   *string  `json:"payment_terms,omitempty"`
+}
+
+// ChangeInvoiceStatusRequest payload for manually transitioning invoice status
+type ChangeInvoiceStatusRequest struct {
+	Status string `json:"status"` // draft, sent, void
+	Notes  string `json:"notes,omitempty"`
+}
+
+
 
 
