@@ -86,3 +86,52 @@ type Invoice struct {
 	ItemsCount  int    `json:"items_count,omitempty"`
 }
 
+// Invoice item type constants
+const (
+	InvoiceItemTypeLabor   = "labor"
+	InvoiceItemTypeService = "service"
+	InvoiceItemTypeExpense = "expense"
+	InvoiceItemTypeProduct = "product"
+)
+
+// InvoiceItem represents a discrete line item billed within an invoice
+type InvoiceItem struct {
+	ID              int64     `json:"id"`
+	InvoiceID       int64     `json:"invoice_id"`
+	TimesheetLineID *int64    `json:"timesheet_line_id,omitempty"`
+	Description     string    `json:"description"`
+	ItemType        string    `json:"item_type"` // labor, service, expense, product
+	Quantity        float64   `json:"quantity"`
+	UnitPrice       float64   `json:"unit_price"`
+	Amount          float64   `json:"amount"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// Payment method constants
+const (
+	PaymentMethodCreditCard   = "credit_card"
+	PaymentMethodBankTransfer = "bank_transfer"
+	PaymentMethodCheck        = "check"
+	PaymentMethodCash         = "cash"
+	PaymentMethodStripe       = "stripe"
+	PaymentMethodOther        = "other"
+)
+
+// InvoicePayment records a settlement payment against an invoice
+type InvoicePayment struct {
+	ID                   int64     `json:"id"`
+	InvoiceID            int64     `json:"invoice_id"`
+	Amount               float64   `json:"amount"`
+	PaymentDate          string    `json:"payment_date"` // YYYY-MM-DD
+	PaymentMethod        string    `json:"payment_method"`
+	TransactionReference string    `json:"transaction_reference,omitempty"`
+	Notes                string    `json:"notes,omitempty"`
+	RecordedByUserID     string    `json:"recorded_by_user_id"`
+	CreatedAt            time.Time `json:"created_at"`
+
+	// Enriched fields
+	RecordedByUsername string `json:"recorded_by_username,omitempty"`
+}
+
+
