@@ -176,3 +176,73 @@ func (h *TimesheetHandler) DeleteTimesheet(w http.ResponseWriter, r *http.Reques
 	}
 	writeTimesheetJSON(w, http.StatusOK, map[string]string{"message": "timesheet deleted successfully"})
 }
+
+// PopulateFromTimeEntries handles POST /v2/timesheets/{id}/populate
+func (h *TimesheetHandler) PopulateFromTimeEntries(w http.ResponseWriter, r *http.Request, id int64) {
+	var req model.PopulateTimesheetRequest
+	if r.Body != nil && r.ContentLength > 0 {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+	userID := getTimesheetUser(r)
+
+	ts, err := h.svc.PopulateFromTimeEntries(id, userID, req)
+	if err != nil {
+		handleTimesheetServiceError(w, err)
+		return
+	}
+	writeTimesheetJSON(w, http.StatusOK, ts)
+}
+
+// AddLine handles POST /v2/timesheets/{id}/lines
+func (h *TimesheetHandler) AddLine(w http.ResponseWriter, r *http.Request, timesheetID int64) {
+	var req model.TimesheetLineRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeTimesheetError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	userID := getTimesheetUser(r)
+
+	line, err := h.svc.AddLine(timesheetID, userID, req)
+	if err != nil {
+		handleTimesheetServiceError(w, err)
+		return
+	}
+	writeTimesheetJSON(w, http.StatusCreated, line)
+}
+
+// ListLines handles GET /v2/timesheets/{id}/lines
+func (h *TimesheetHandler) ListLines(w http.ResponseWriter, r *http.Request, timesheetID int64) {
+	lines, err := h.svc.ListLines(timesheetID)
+	if err != nil {
+		handleTimesheetServiceError(w, err)
+		return
+	}
+	writeTimesheetJSON(w, http.StatusOK, lines)
+}
+
+// UpdateLine handles PUT /v2/timesheets/{id}/lines/{line_id}
+func (h *TimesheetHandler) UpdateLine(w http.ResponseWriter, r *http.Request, timesheetID, lineID int64) {
+	var req model.TimesheetLineRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeTimesheetError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	userID := getTimesheetUser(r)
+
+	line, err := h.svc.UpdateLine(timesheetID, lineID, userID, req)
+	if err != nil {
+		handleTimesheetServiceError(w, err)
+		return
+	}
+	writeTimesheetJSON(w, http.StatusOK, line)
+}
+
+// DeleteLine handles DELETE /v2/timesheets/{id}/lines/{line_id}
+func (h *TimesheetHandler) DeleteLine(w http.ResponseWriter, r *http.Request, timesheetID, lineID int64) {
+	userID := getTimesheetUser(r)
+	if err := h.svc.DeleteLine(timesheetID, lineID, userID); err != nil {
+		handleTimesheetServiceError(w, err)
+		return
+	}
+	writeTimesheetJSON(w, http.StatusOK, map[string]string{"message": "timesheet line deleted successfully"})
+}
