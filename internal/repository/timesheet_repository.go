@@ -579,9 +579,62 @@ func (r *timesheetRepositoryImpl) ListApprovals(timesheetID int64) ([]model.Time
 }
 
 func (r *timesheetRepositoryImpl) GetTimesheetMetrics(workspaceID int64) (*model.TimesheetMetrics, error) {
-	return nil, nil
+	metrics := &model.TimesheetMetrics{
+		WorkspaceID: workspaceID,
+	}
+
+	query := `
+	SELECT 
+		COUNT(*),
+		COALESCE(SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN status = 'submitted' THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(total_minutes), 0),
+		COALESCE(SUM(billable_minutes), 0)
+	FROM timesheets
+	WHERE workspace_id = ?
+	`
+	err := r.db.QueryRow(query, workspaceID).Scan(
+		&metrics.TotalTimesheets,
+		&metrics.DraftCount,
+		&metrics.SubmittedCount,
+		&metrics.ApprovedCount,
+		&metrics.RejectedCount,
+		&metrics.TotalLoggedMinutes,
+		&metrics.TotalBillableMinutes,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	metrics.TotalLoggedHours = float64(metrics.TotalLoggedMinutes) / 60.0
+	metrics.TotalBillableHours = float64(metrics.TotalBillableMinutes) / 60.0
+	if metrics.TotalLoggedMinutes > 0 {
+		metrics.BillablePercentage = float64(metrics.TotalBillableMinutes) / float64(metrics.TotalLoggedMinutes) * 100.0
+	}
+
+	return metrics, nil
 }
 
 func (r *timesheetRepositoryImpl) RecalculateTotals(timesheetID int64) error {
-	return nil
+	query := `
+	SELECT 
+		COALESCE(SUM(duration_minutes), 0),
+		COALESCE(SUM(CASE WHEN is_billable = 1 THEN duration_minutes ELSE 0 END), 0)
+	FROM timesheet_lines
+	WHERE timesheet_id = ?
+	`
+	var total, billable int
+	if err := r.db.QueryRow(query, timesheetID).Scan(&total, &billable); err != nil {
+		return err
+	}
+
+	updateQuery := `
+	UPDATE timesheets
+	SET total_minutes = ?, billable_minutes = ?, updated_at = ?
+	WHERE id = ?
+	`
+	_, err := r.db.Exec(updateQuery, total, billable, time.Now(), timesheetID)
+	return err
 }
