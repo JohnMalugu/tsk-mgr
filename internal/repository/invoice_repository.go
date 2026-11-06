@@ -499,12 +499,98 @@ func (r *invoiceRepositoryImpl) ListInvoices(filter model.InvoiceFilter) ([]*mod
 
 
 func (r *invoiceRepositoryImpl) UpdateInvoice(invoice *model.Invoice) error {
+	invoice.UpdatedAt = time.Now()
+	invoice.BalanceDue = invoice.TotalAmount - invoice.AmountPaid
+	if invoice.BalanceDue < 0 {
+		invoice.BalanceDue = 0
+	}
+
+	query := `
+	UPDATE invoices
+	SET project_id = ?,
+		timesheet_id = ?,
+		invoice_number = ?,
+		status = ?,
+		issue_date = ?,
+		due_date = ?,
+		currency = ?,
+		subtotal = ?,
+		tax_rate = ?,
+		tax_amount = ?,
+		discount_amount = ?,
+		total_amount = ?,
+		amount_paid = ?,
+		balance_due = ?,
+		paid_at = ?,
+		notes = ?,
+		payment_terms = ?,
+		updated_at = ?
+	WHERE id = ?
+	`
+	res, err := r.db.Exec(
+		query,
+		invoice.ProjectID,
+		invoice.TimesheetID,
+		invoice.InvoiceNumber,
+		invoice.Status,
+		invoice.IssueDate,
+		invoice.DueDate,
+		invoice.Currency,
+		invoice.Subtotal,
+		invoice.TaxRate,
+		invoice.TaxAmount,
+		invoice.DiscountAmount,
+		invoice.TotalAmount,
+		invoice.AmountPaid,
+		invoice.BalanceDue,
+		invoice.PaidAt,
+		invoice.Notes,
+		invoice.PaymentTerms,
+		invoice.UpdatedAt,
+		invoice.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrInvoiceNotFound
+	}
 	return nil
 }
 
 func (r *invoiceRepositoryImpl) DeleteInvoice(id int64) error {
-	return nil
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`DELETE FROM invoice_payments WHERE invoice_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM invoice_items WHERE invoice_id = ?`, id); err != nil {
+		return err
+	}
+
+	res, err := tx.Exec(`DELETE FROM invoices WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrInvoiceNotFound
+	}
+
+	return tx.Commit()
 }
+
 
 func (r *invoiceRepositoryImpl) AddItem(item *model.InvoiceItem) (int64, error) {
 	return 0, nil
