@@ -592,29 +592,206 @@ func (r *invoiceRepositoryImpl) DeleteInvoice(id int64) error {
 }
 
 
+const invoiceItemBaseSelect = `
+	SELECT 
+		id, invoice_id, timesheet_line_id, description, item_type, quantity, unit_price, amount, created_at, updated_at
+	FROM invoice_items
+`
+
+func scanInvoiceItem(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.InvoiceItem, error) {
+	var item model.InvoiceItem
+	var tsLineID sql.NullInt64
+
+	err := scanner.Scan(
+		&item.ID,
+		&item.InvoiceID,
+		&tsLineID,
+		&item.Description,
+		&item.ItemType,
+		&item.Quantity,
+		&item.UnitPrice,
+		&item.Amount,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if tsLineID.Valid {
+		item.TimesheetLineID = &tsLineID.Int64
+	}
+	return &item, nil
+}
+
 func (r *invoiceRepositoryImpl) AddItem(item *model.InvoiceItem) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	item.CreatedAt = now
+	item.UpdatedAt = now
+	if item.ItemType == "" {
+		item.ItemType = model.InvoiceItemTypeService
+	}
+	item.Amount = item.Quantity * item.UnitPrice
+
+	query := `
+	INSERT INTO invoice_items (
+		invoice_id, timesheet_line_id, description, item_type, quantity, unit_price, amount, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	res, err := r.db.Exec(
+		query,
+		item.InvoiceID,
+		item.TimesheetLineID,
+		item.Description,
+		item.ItemType,
+		item.Quantity,
+		item.UnitPrice,
+		item.Amount,
+		item.CreatedAt,
+		item.UpdatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	item.ID = id
+	return id, nil
 }
 
 func (r *invoiceRepositoryImpl) GetItemByID(id int64) (*model.InvoiceItem, error) {
-	return nil, nil
+	query := invoiceItemBaseSelect + ` WHERE id = ?`
+	row := r.db.QueryRow(query, id)
+	item, err := scanInvoiceItem(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrInvoiceItemNotFound
+		}
+		return nil, err
+	}
+	return item, nil
 }
 
 func (r *invoiceRepositoryImpl) UpdateItem(item *model.InvoiceItem) error {
+	item.UpdatedAt = time.Now()
+	item.Amount = item.Quantity * item.UnitPrice
+
+	query := `
+	UPDATE invoice_items
+	SET description = ?,
+		item_type = ?,
+		quantity = ?,
+		unit_price = ?,
+		amount = ?,
+		timesheet_line_id = ?,
+		updated_at = ?
+	WHERE id = ?
+	`
+	res, err := r.db.Exec(
+		query,
+		item.Description,
+		item.ItemType,
+		item.Quantity,
+		item.UnitPrice,
+		item.Amount,
+		item.TimesheetLineID,
+		item.UpdatedAt,
+		item.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrInvoiceItemNotFound
+	}
 	return nil
 }
 
 func (r *invoiceRepositoryImpl) DeleteItem(id int64) error {
+	res, err := r.db.Exec(`DELETE FROM invoice_items WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrInvoiceItemNotFound
+	}
 	return nil
 }
 
 func (r *invoiceRepositoryImpl) ListItems(invoiceID int64) ([]model.InvoiceItem, error) {
-	return nil, nil
+	query := invoiceItemBaseSelect + ` WHERE invoice_id = ? ORDER BY id ASC`
+	rows, err := r.db.Query(query, invoiceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []model.InvoiceItem
+	for rows.Next() {
+		item, err := scanInvoiceItem(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, *item)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []model.InvoiceItem{}
+	}
+	return items, nil
 }
 
 func (r *invoiceRepositoryImpl) RecalculateTotals(invoiceID int64) error {
-	return nil
+	var subtotal float64
+	err := r.db.QueryRow(`SELECT COALESCE(SUM(amount), 0.0) FROM invoice_items WHERE invoice_id = ?`, invoiceID).Scan(&subtotal)
+	if err != nil {
+		return err
+	}
+
+	var taxRate, discountAmount, amountPaid float64
+	err = r.db.QueryRow(`SELECT tax_rate, discount_amount, amount_paid FROM invoices WHERE id = ?`, invoiceID).Scan(
+		&taxRate, &discountAmount, &amountPaid,
+	)
+	if err != nil {
+		return err
+	}
+
+	taxAmount := subtotal * (taxRate / 100.0)
+	totalAmount := subtotal + taxAmount - discountAmount
+	if totalAmount < 0 {
+		totalAmount = 0
+	}
+	balanceDue := totalAmount - amountPaid
+	if balanceDue < 0 {
+		balanceDue = 0
+	}
+
+	updateQuery := `
+	UPDATE invoices
+	SET subtotal = ?,
+		tax_amount = ?,
+		total_amount = ?,
+		balance_due = ?,
+		updated_at = ?
+	WHERE id = ?
+	`
+	_, err = r.db.Exec(updateQuery, subtotal, taxAmount, totalAmount, balanceDue, time.Now(), invoiceID)
+	return err
 }
+
 
 func (r *invoiceRepositoryImpl) RecordPayment(payment *model.InvoicePayment) (int64, error) {
 	return 0, nil
