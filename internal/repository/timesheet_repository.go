@@ -245,11 +245,73 @@ func (r *timesheetRepositoryImpl) ListTimesheets(filter model.TimesheetFilter) (
 }
 
 func (r *timesheetRepositoryImpl) UpdateTimesheet(ts *model.Timesheet) error {
+	ts.UpdatedAt = time.Now()
+	query := `
+	UPDATE timesheets
+	SET status = ?,
+		total_minutes = ?,
+		billable_minutes = ?,
+		submitted_at = ?,
+		reviewed_at = ?,
+		reviewer_id = ?,
+		rejection_reason = ?,
+		notes = ?,
+		updated_at = ?
+	WHERE id = ?
+	`
+	res, err := r.db.Exec(
+		query,
+		ts.Status,
+		ts.TotalMinutes,
+		ts.BillableMinutes,
+		ts.SubmittedAt,
+		ts.ReviewedAt,
+		ts.ReviewerID,
+		ts.RejectionReason,
+		ts.Notes,
+		ts.UpdatedAt,
+		ts.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrTimesheetNotFound
+	}
 	return nil
 }
 
 func (r *timesheetRepositoryImpl) DeleteTimesheet(id int64) error {
-	return nil
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`DELETE FROM timesheet_approvals WHERE timesheet_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM timesheet_lines WHERE timesheet_id = ?`, id); err != nil {
+		return err
+	}
+
+	res, err := tx.Exec(`DELETE FROM timesheets WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrTimesheetNotFound
+	}
+
+	return tx.Commit()
 }
 
 func (r *timesheetRepositoryImpl) AddTimesheetLine(line *model.TimesheetLine) (int64, error) {
