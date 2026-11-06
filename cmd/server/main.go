@@ -139,6 +139,10 @@ func main() {
 	timesheetSvc := service.NewTimesheetService(timesheetRepo, timeRepo, taskRepo, projectRepo, workspaceRepo)
 	handler.InitTimesheetHandler(timesheetSvc)
 
+	invoiceRepo := repository.NewInvoiceRepository(sqliteDB)
+	invoiceSvc := service.NewInvoiceService(invoiceRepo, workspaceRepo, projectRepo, timesheetRepo)
+	handler.InitInvoiceHandler(invoiceSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 

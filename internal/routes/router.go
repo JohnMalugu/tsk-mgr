@@ -141,6 +141,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 Enterprise Client Invoicing & Billing
+	if strings.HasPrefix(r.URL.Path, "/v2/invoices") {
+		if handler.GlobalInvoiceHandler == nil {
+			http.Error(w, "Invoice handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalInvoiceHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return

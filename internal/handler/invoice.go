@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -293,4 +294,269 @@ func (h *InvoiceHandler) ChangeStatus(w http.ResponseWriter, r *http.Request, id
 		return
 	}
 	writeInvoiceJSON(w, http.StatusOK, inv)
+}
+
+// AddItem handles POST /v2/invoices/{id}/items
+func (h *InvoiceHandler) AddItem(w http.ResponseWriter, r *http.Request, invoiceID int64) {
+	var req model.InvoiceItemRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeInvoiceError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	userID := getInvoiceUser(r)
+
+	item, err := h.svc.AddItem(invoiceID, userID, req)
+	if err != nil {
+		handleInvoiceServiceError(w, err)
+		return
+	}
+	writeInvoiceJSON(w, http.StatusCreated, item)
+}
+
+// UpdateItem handles PUT/PATCH /v2/invoices/{id}/items/{itemId}
+func (h *InvoiceHandler) UpdateItem(w http.ResponseWriter, r *http.Request, invoiceID, itemID int64) {
+	var req model.InvoiceItemRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeInvoiceError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	userID := getInvoiceUser(r)
+
+	item, err := h.svc.UpdateItem(invoiceID, itemID, userID, req)
+	if err != nil {
+		handleInvoiceServiceError(w, err)
+		return
+	}
+	writeInvoiceJSON(w, http.StatusOK, item)
+}
+
+// DeleteItem handles DELETE /v2/invoices/{id}/items/{itemId}
+func (h *InvoiceHandler) DeleteItem(w http.ResponseWriter, r *http.Request, invoiceID, itemID int64) {
+	userID := getInvoiceUser(r)
+	if err := h.svc.DeleteItem(invoiceID, itemID, userID); err != nil {
+		handleInvoiceServiceError(w, err)
+		return
+	}
+	writeInvoiceJSON(w, http.StatusOK, map[string]string{"message": "item deleted successfully"})
+}
+
+// ListItems handles GET /v2/invoices/{id}/items
+func (h *InvoiceHandler) ListItems(w http.ResponseWriter, r *http.Request, invoiceID int64) {
+	items, err := h.svc.ListItems(invoiceID)
+	if err != nil {
+		handleInvoiceServiceError(w, err)
+		return
+	}
+	writeInvoiceJSON(w, http.StatusOK, items)
+}
+
+// GenerateFromTimesheet handles POST /v2/invoices/from-timesheet
+func (h *InvoiceHandler) GenerateFromTimesheet(w http.ResponseWriter, r *http.Request) {
+	var req model.GenerateInvoiceFromTimesheetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeInvoiceError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	userID := getInvoiceUser(r)
+
+	inv, err := h.svc.GenerateFromTimesheet(userID, req)
+	if err != nil {
+		handleInvoiceServiceError(w, err)
+		return
+	}
+	writeInvoiceJSON(w, http.StatusCreated, inv)
+}
+
+// RecordPayment handles POST /v2/invoices/{id}/payments
+func (h *InvoiceHandler) RecordPayment(w http.ResponseWriter, r *http.Request, invoiceID int64) {
+	var req model.RecordPaymentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeInvoiceError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	userID := getInvoiceUser(r)
+
+	payment, err := h.svc.RecordPayment(invoiceID, userID, req)
+	if err != nil {
+		handleInvoiceServiceError(w, err)
+		return
+	}
+	writeInvoiceJSON(w, http.StatusCreated, payment)
+}
+
+// ListPayments handles GET /v2/invoices/{id}/payments
+func (h *InvoiceHandler) ListPayments(w http.ResponseWriter, r *http.Request, invoiceID int64) {
+	payments, err := h.svc.ListPayments(invoiceID)
+	if err != nil {
+		handleInvoiceServiceError(w, err)
+		return
+	}
+	writeInvoiceJSON(w, http.StatusOK, payments)
+}
+
+// GetInvoiceMetrics handles GET /v2/invoices/metrics
+func (h *InvoiceHandler) GetInvoiceMetrics(w http.ResponseWriter, r *http.Request) {
+	wsIDStr := r.URL.Query().Get("workspace_id")
+	if wsIDStr == "" {
+		writeInvoiceError(w, http.StatusBadRequest, "workspace_id is required")
+		return
+	}
+	wsID, err := strconv.ParseInt(wsIDStr, 10, 64)
+	if err != nil || wsID <= 0 {
+		writeInvoiceError(w, http.StatusBadRequest, "invalid workspace_id")
+		return
+	}
+
+	metrics, err := h.svc.GetInvoiceMetrics(wsID)
+	if err != nil {
+		handleInvoiceServiceError(w, err)
+		return
+	}
+	writeInvoiceJSON(w, http.StatusOK, metrics)
+}
+
+// ServeHTTP dispatches incoming requests to the appropriate InvoiceHandler endpoint
+func (h *InvoiceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/invoices")
+	path = strings.TrimPrefix(path, "/")
+
+	if path == "" {
+		switch r.Method {
+		case http.MethodGet:
+			h.ListInvoices(w, r)
+		case http.MethodPost:
+			h.CreateInvoice(w, r)
+		default:
+			writeInvoiceError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if path == "metrics" || path == "metrics/" {
+		if r.Method != http.MethodGet {
+			writeInvoiceError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		h.GetInvoiceMetrics(w, r)
+		return
+	}
+
+	if path == "from-timesheet" || path == "from-timesheet/" {
+		if r.Method != http.MethodPost {
+			writeInvoiceError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		h.GenerateFromTimesheet(w, r)
+		return
+	}
+
+	if path == "clients" || path == "clients/" {
+		switch r.Method {
+		case http.MethodGet:
+			h.ListClients(w, r)
+		case http.MethodPost:
+			h.CreateClient(w, r)
+		default:
+			writeInvoiceError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if strings.HasPrefix(path, "clients/") {
+		clientPart := strings.TrimPrefix(path, "clients/")
+		clientParts := strings.Split(clientPart, "/")
+		clientID, err := strconv.ParseInt(clientParts[0], 10, 64)
+		if err != nil || clientID <= 0 {
+			writeInvoiceError(w, http.StatusBadRequest, "invalid client id")
+			return
+		}
+
+		if len(clientParts) == 1 || (len(clientParts) == 2 && clientParts[1] == "") {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetClient(w, r, clientID)
+			case http.MethodPut, http.MethodPatch:
+				h.UpdateClient(w, r, clientID)
+			case http.MethodDelete:
+				h.DeleteClient(w, r, clientID)
+			default:
+				writeInvoiceError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		writeInvoiceError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	parts := strings.Split(path, "/")
+	id, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || id <= 0 {
+		writeInvoiceError(w, http.StatusBadRequest, "invalid invoice id")
+		return
+	}
+
+	if len(parts) == 1 || (len(parts) == 2 && parts[1] == "") {
+		switch r.Method {
+		case http.MethodGet:
+			h.GetInvoice(w, r, id)
+		case http.MethodPut, http.MethodPatch:
+			h.UpdateInvoice(w, r, id)
+		case http.MethodDelete:
+			h.DeleteInvoice(w, r, id)
+		default:
+			writeInvoiceError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if len(parts) == 2 {
+		switch parts[1] {
+		case "status":
+			if r.Method != http.MethodPost && r.Method != http.MethodPut {
+				writeInvoiceError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.ChangeStatus(w, r, id)
+		case "items":
+			switch r.Method {
+			case http.MethodGet:
+				h.ListItems(w, r, id)
+			case http.MethodPost:
+				h.AddItem(w, r, id)
+			default:
+				writeInvoiceError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		case "payments":
+			switch r.Method {
+			case http.MethodGet:
+				h.ListPayments(w, r, id)
+			case http.MethodPost:
+				h.RecordPayment(w, r, id)
+			default:
+				writeInvoiceError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		default:
+			writeInvoiceError(w, http.StatusNotFound, "not found")
+		}
+		return
+	}
+
+	if len(parts) == 3 && parts[1] == "items" {
+		itemID, err := strconv.ParseInt(parts[2], 10, 64)
+		if err != nil || itemID <= 0 {
+			writeInvoiceError(w, http.StatusBadRequest, "invalid invoice item id")
+			return
+		}
+		switch r.Method {
+		case http.MethodPut, http.MethodPatch:
+			h.UpdateItem(w, r, id, itemID)
+		case http.MethodDelete:
+			h.DeleteItem(w, r, id, itemID)
+		default:
+			writeInvoiceError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	writeInvoiceError(w, http.StatusNotFound, "not found")
 }
