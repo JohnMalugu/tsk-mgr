@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -198,15 +199,148 @@ func (s *invoiceServiceImpl) DeleteClient(id int64, userID string) error {
 }
 
 func (s *invoiceServiceImpl) CreateInvoice(userID string, req model.CreateInvoiceRequest) (*model.Invoice, error) {
-	return nil, nil
+	if req.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	if req.ClientID <= 0 {
+		return nil, ErrClientNotFound
+	}
+
+	ws, err := s.workspaceRepo.GetByID(int(req.WorkspaceID))
+	if err != nil || ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+
+	client, err := s.repo.GetClientByID(req.ClientID)
+	if err != nil || client == nil || client.WorkspaceID != req.WorkspaceID {
+		return nil, ErrClientNotFound
+	}
+
+	if req.ProjectID != nil && *req.ProjectID > 0 {
+		proj, err := s.projectRepo.GetByID(int(*req.ProjectID))
+		if err != nil || proj == nil {
+			return nil, ErrProjectNotFound
+		}
+	}
+
+	issueStr := strings.TrimSpace(req.IssueDate)
+	if issueStr == "" {
+		issueStr = time.Now().UTC().Format("2006-01-02")
+	}
+	issueTime, err := time.Parse("2006-01-02", issueStr)
+	if err != nil {
+		return nil, ErrInvalidInvoiceDates
+	}
+
+	dueStr := strings.TrimSpace(req.DueDate)
+	if dueStr == "" {
+		dueStr = issueTime.AddDate(0, 0, 30).Format("2006-01-02")
+	}
+	dueTime, err := time.Parse("2006-01-02", dueStr)
+	if err != nil {
+		return nil, ErrInvalidInvoiceDates
+	}
+
+	if dueTime.Before(issueTime) {
+		return nil, ErrInvalidInvoiceDates
+	}
+
+	currency := strings.ToUpper(strings.TrimSpace(req.Currency))
+	if currency == "" {
+		currency = client.Currency
+	}
+	if currency == "" {
+		currency = "USD"
+	}
+
+	taxRate := req.TaxRate
+	if taxRate < 0 {
+		taxRate = 0
+	}
+	discount := req.DiscountAmount
+	if discount < 0 {
+		discount = 0
+	}
+
+	inv := &model.Invoice{
+		WorkspaceID:    req.WorkspaceID,
+		ClientID:       req.ClientID,
+		ProjectID:      req.ProjectID,
+		Status:         model.InvoiceStatusDraft,
+		IssueDate:      issueStr,
+		DueDate:        dueStr,
+		Currency:       currency,
+		TaxRate:        taxRate,
+		DiscountAmount: discount,
+		Notes:          strings.TrimSpace(req.Notes),
+		PaymentTerms:   strings.TrimSpace(req.PaymentTerms),
+	}
+
+	id, err := s.repo.CreateInvoice(inv)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, itemReq := range req.Items {
+		desc := strings.TrimSpace(itemReq.Description)
+		if desc == "" {
+			continue
+		}
+		qty := itemReq.Quantity
+		if qty <= 0 {
+			qty = 1
+		}
+		unitPrice := itemReq.UnitPrice
+		if unitPrice < 0 {
+			unitPrice = 0
+		}
+		itemType := strings.TrimSpace(itemReq.ItemType)
+		if itemType == "" {
+			itemType = model.InvoiceItemTypeService
+		}
+
+		item := &model.InvoiceItem{
+			InvoiceID:       id,
+			Description:     desc,
+			ItemType:        itemType,
+			Quantity:        qty,
+			UnitPrice:       unitPrice,
+			Amount:          qty * unitPrice,
+			TimesheetLineID: itemReq.TimesheetLineID,
+		}
+		_, _ = s.repo.AddItem(item)
+	}
+
+	if len(req.Items) > 0 {
+		_ = s.repo.RecalculateTotals(id)
+	}
+
+	return s.GetInvoice(id)
 }
 
 func (s *invoiceServiceImpl) GetInvoice(id int64) (*model.Invoice, error) {
-	return nil, nil
+	if id <= 0 {
+		return nil, ErrInvoiceNotFound
+	}
+	inv, err := s.repo.GetInvoiceByID(id)
+	if err != nil || inv == nil {
+		return nil, ErrInvoiceNotFound
+	}
+	return inv, nil
 }
 
 func (s *invoiceServiceImpl) ListInvoices(filter model.InvoiceFilter) ([]*model.Invoice, error) {
-	return nil, nil
+	if filter.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	invoices, err := s.repo.ListInvoices(filter)
+	if err != nil {
+		return nil, err
+	}
+	if invoices == nil {
+		return []*model.Invoice{}, nil
+	}
+	return invoices, nil
 }
 
 func (s *invoiceServiceImpl) UpdateInvoice(id int64, userID string, req model.UpdateInvoiceRequest) (*model.Invoice, error) {
