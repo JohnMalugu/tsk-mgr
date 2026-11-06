@@ -43,3 +43,46 @@ func ValidateClient(name, email string) error {
 	}
 	return nil
 }
+
+// Invoice status constants
+const (
+	InvoiceStatusDraft         = "draft"
+	InvoiceStatusSent          = "sent"
+	InvoiceStatusPaid          = "paid"
+	InvoiceStatusPartiallyPaid = "partially_paid"
+	InvoiceStatusOverdue       = "overdue"
+	InvoiceStatusVoid          = "void"
+)
+
+// Invoice represents a billing document sent to a client for work completed
+type Invoice struct {
+	ID             int64      `json:"id"`
+	WorkspaceID    int64      `json:"workspace_id"`
+	ClientID       int64      `json:"client_id"`
+	ProjectID      *int64     `json:"project_id,omitempty"`
+	TimesheetID    *int64     `json:"timesheet_id,omitempty"`
+	InvoiceNumber  string     `json:"invoice_number"`
+	Status         string     `json:"status"`
+	IssueDate      string     `json:"issue_date"` // YYYY-MM-DD
+	DueDate        string     `json:"due_date"`   // YYYY-MM-DD
+	Currency       string     `json:"currency"`
+	Subtotal       float64    `json:"subtotal"`
+	TaxRate        float64    `json:"tax_rate"`
+	TaxAmount      float64    `json:"tax_amount"`
+	DiscountAmount float64    `json:"discount_amount"`
+	TotalAmount    float64    `json:"total_amount"`
+	AmountPaid     float64    `json:"amount_paid"`
+	BalanceDue     float64    `json:"balance_due"`
+	PaidAt         *time.Time `json:"paid_at,omitempty"`
+	Notes          string     `json:"notes,omitempty"`
+	PaymentTerms   string     `json:"payment_terms,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+
+	// Enriched fields
+	ClientName  string `json:"client_name,omitempty"`
+	ClientEmail string `json:"client_email,omitempty"`
+	ProjectName string `json:"project_name,omitempty"`
+	ItemsCount  int    `json:"items_count,omitempty"`
+}
+
