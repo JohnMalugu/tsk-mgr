@@ -189,7 +189,59 @@ func (r *timesheetRepositoryImpl) GetTimesheetByPeriod(workspaceID int64, userID
 }
 
 func (r *timesheetRepositoryImpl) ListTimesheets(filter model.TimesheetFilter) ([]*model.Timesheet, error) {
-	return nil, nil
+	query := timesheetBaseSelect + ` WHERE 1=1`
+	var args []interface{}
+
+	if filter.WorkspaceID > 0 {
+		query += ` AND ts.workspace_id = ?`
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.UserID != nil && *filter.UserID != "" {
+		query += ` AND ts.user_id = ?`
+		args = append(args, *filter.UserID)
+	}
+	if filter.Status != nil && *filter.Status != "" {
+		query += ` AND ts.status = ?`
+		args = append(args, *filter.Status)
+	}
+	if filter.StartDate != nil && *filter.StartDate != "" {
+		query += ` AND ts.period_start_date >= ?`
+		args = append(args, *filter.StartDate)
+	}
+	if filter.EndDate != nil && *filter.EndDate != "" {
+		query += ` AND ts.period_end_date <= ?`
+		args = append(args, *filter.EndDate)
+	}
+
+	query += ` ORDER BY ts.period_start_date DESC, ts.created_at DESC`
+
+	if filter.Limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, filter.Limit)
+		if filter.Offset > 0 {
+			query += ` OFFSET ?`
+			args = append(args, filter.Offset)
+		}
+	}
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var timesheets []*model.Timesheet
+	for rows.Next() {
+		ts, err := scanTimesheet(rows)
+		if err != nil {
+			return nil, err
+		}
+		timesheets = append(timesheets, ts)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return timesheets, nil
 }
 
 func (r *timesheetRepositoryImpl) UpdateTimesheet(ts *model.Timesheet) error {

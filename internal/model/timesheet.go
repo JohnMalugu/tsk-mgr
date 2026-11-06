@@ -119,7 +119,7 @@ type ReviewTimesheetRequest struct {
 // TimesheetFilter provides querying and filtering options across timesheets
 type TimesheetFilter struct {
 	WorkspaceID int64   `json:"workspace_id"`
-	UserID      *int64  `json:"user_id,omitempty"`
+	UserID      *string `json:"user_id,omitempty"`
 	Status      *string `json:"status,omitempty"`
 	StartDate   *string `json:"start_date,omitempty"` // YYYY-MM-DD
 	EndDate     *string `json:"end_date,omitempty"`   // YYYY-MM-DD
