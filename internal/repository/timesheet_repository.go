@@ -496,11 +496,86 @@ func (r *timesheetRepositoryImpl) ListTimesheetLines(timesheetID int64) ([]model
 }
 
 func (r *timesheetRepositoryImpl) RecordApproval(approval *model.TimesheetApproval) (int64, error) {
-	return 0, nil
+	if approval.CreatedAt.IsZero() {
+		approval.CreatedAt = time.Now()
+	}
+
+	query := `
+	INSERT INTO timesheet_approvals (
+		timesheet_id, actor_id, action, previous_status, new_status, comments, created_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?)
+	`
+	res, err := r.db.Exec(
+		query,
+		approval.TimesheetID,
+		approval.ActorID,
+		approval.Action,
+		approval.PreviousStatus,
+		approval.NewStatus,
+		approval.Comments,
+		approval.CreatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	approval.ID = id
+	return id, nil
 }
 
 func (r *timesheetRepositoryImpl) ListApprovals(timesheetID int64) ([]model.TimesheetApproval, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		ta.id,
+		ta.timesheet_id,
+		ta.actor_id,
+		ta.action,
+		ta.previous_status,
+		ta.new_status,
+		ta.comments,
+		ta.created_at,
+		u.username AS actor_username
+	FROM timesheet_approvals ta
+	LEFT JOIN users u ON ta.actor_id = u.id
+	WHERE ta.timesheet_id = ?
+	ORDER BY ta.created_at ASC, ta.id ASC
+	`
+	rows, err := r.db.Query(query, timesheetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var approvals []model.TimesheetApproval
+	for rows.Next() {
+		var a model.TimesheetApproval
+		var username sql.NullString
+		err := rows.Scan(
+			&a.ID,
+			&a.TimesheetID,
+			&a.ActorID,
+			&a.Action,
+			&a.PreviousStatus,
+			&a.NewStatus,
+			&a.Comments,
+			&a.CreatedAt,
+			&username,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if username.Valid {
+			a.ActorUsername = username.String
+		}
+		approvals = append(approvals, a)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return approvals, nil
 }
 
 func (r *timesheetRepositoryImpl) GetTimesheetMetrics(workspaceID int64) (*model.TimesheetMetrics, error) {
