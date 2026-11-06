@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
@@ -333,4 +334,129 @@ func (h *TimesheetHandler) GetTimesheetMetrics(w http.ResponseWriter, r *http.Re
 		return
 	}
 	writeTimesheetJSON(w, http.StatusOK, metrics)
+}
+
+// ServeHTTP routes requests to /v2/timesheets
+func (h *TimesheetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/timesheets")
+	path = strings.TrimPrefix(path, "/")
+
+	if path == "" {
+		switch r.Method {
+		case http.MethodGet:
+			h.ListTimesheets(w, r)
+		case http.MethodPost:
+			h.CreateTimesheet(w, r)
+		default:
+			writeTimesheetError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if path == "metrics" || path == "metrics/" {
+		if r.Method != http.MethodGet {
+			writeTimesheetError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		h.GetTimesheetMetrics(w, r)
+		return
+	}
+
+	parts := strings.Split(path, "/")
+	id, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || id <= 0 {
+		writeTimesheetError(w, http.StatusBadRequest, "invalid timesheet id")
+		return
+	}
+
+	if len(parts) == 1 || (len(parts) == 2 && parts[1] == "") {
+		switch r.Method {
+		case http.MethodGet:
+			h.GetTimesheet(w, r, id)
+		case http.MethodPut, http.MethodPatch:
+			h.UpdateTimesheet(w, r, id)
+		case http.MethodDelete:
+			h.DeleteTimesheet(w, r, id)
+		default:
+			writeTimesheetError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if len(parts) == 2 {
+		switch parts[1] {
+		case "populate":
+			if r.Method != http.MethodPost {
+				writeTimesheetError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.PopulateFromTimeEntries(w, r, id)
+		case "submit":
+			if r.Method != http.MethodPost {
+				writeTimesheetError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.SubmitTimesheet(w, r, id)
+		case "approve":
+			if r.Method != http.MethodPost {
+				writeTimesheetError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.ApproveTimesheet(w, r, id)
+		case "reject":
+			if r.Method != http.MethodPost {
+				writeTimesheetError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.RejectTimesheet(w, r, id)
+		case "reopen":
+			if r.Method != http.MethodPost {
+				writeTimesheetError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.ReopenTimesheet(w, r, id)
+		case "approvals":
+			if r.Method != http.MethodGet {
+				writeTimesheetError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.ListApprovals(w, r, id)
+		case "lines":
+			switch r.Method {
+			case http.MethodGet:
+				h.ListLines(w, r, id)
+			case http.MethodPost:
+				h.AddLine(w, r, id)
+			default:
+				writeTimesheetError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		default:
+			writeTimesheetError(w, http.StatusNotFound, "not found")
+		}
+		return
+	}
+
+	if len(parts) == 3 {
+		switch parts[1] {
+		case "lines":
+			lineID, err := strconv.ParseInt(parts[2], 10, 64)
+			if err != nil || lineID <= 0 {
+				writeTimesheetError(w, http.StatusBadRequest, "invalid timesheet line id")
+				return
+			}
+			switch r.Method {
+			case http.MethodPut, http.MethodPatch:
+				h.UpdateLine(w, r, id, lineID)
+			case http.MethodDelete:
+				h.DeleteLine(w, r, id, lineID)
+			default:
+				writeTimesheetError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		default:
+			writeTimesheetError(w, http.StatusNotFound, "not found")
+		}
+		return
+	}
+
+	writeTimesheetError(w, http.StatusNotFound, "not found")
 }

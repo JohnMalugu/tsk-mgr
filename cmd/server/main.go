@@ -135,6 +135,10 @@ func main() {
 	riskSvc := service.NewRiskService(riskRepo, projectRepo, taskRepo)
 	handler.InitRiskHandler(riskSvc)
 
+	timesheetRepo := repository.NewTimesheetRepository(sqliteDB)
+	timesheetSvc := service.NewTimesheetService(timesheetRepo, timeRepo, taskRepo, projectRepo, workspaceRepo)
+	handler.InitTimesheetHandler(timesheetSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 

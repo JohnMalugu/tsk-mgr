@@ -131,6 +131,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 Enterprise Timesheet Management & Approvals
+	if strings.HasPrefix(r.URL.Path, "/v2/timesheets") {
+		if handler.GlobalTimesheetHandler == nil {
+			http.Error(w, "Timesheet handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalTimesheetHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return
