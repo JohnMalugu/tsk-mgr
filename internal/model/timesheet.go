@@ -141,4 +141,3 @@ type TimesheetMetrics struct {
 	TotalBillableHours   float64 `json:"total_billable_hours"`
 	BillablePercentage   float64 `json:"billable_percentage"`
 }
-

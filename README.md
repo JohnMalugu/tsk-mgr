@@ -225,6 +225,17 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `DELETE /v2/risks/{id}/tasks/{taskId}` to unlink a remediation task from a risk
 - `GET|POST /v2/risks/{id}/reviews` to list chronological evaluation reviews or record formal risk evaluations with score adjustments and reviewer audit details
 - `GET /v2/risks/metrics?workspace_id={id}` for workspace risk exposure index, active vs. closed distribution, severity and category breakdowns, 5x5 probability-impact heatmap matrix, and top critical risks
+- `GET|POST /v2/timesheets` to list timesheets with multi-criteria filters (`workspace_id`, `user_id`, `status`, `start_date`, `end_date`, `limit`, `offset`) or create a periodic timesheet draft with optional automatic time-entry pre-population
+- `GET|PUT|PATCH|DELETE /v2/timesheets/{id}` to fetch timesheet details (with total minutes, billable minutes, and line item counts), update draft notes, or delete a draft timesheet with cascade cleanup
+- `POST /v2/timesheets/{id}/populate` to import tracked time entries from `time_entries` into timesheet line items across the timesheet date range
+- `GET|POST /v2/timesheets/{id}/lines` to list line items or add a work line item (with task/project association, work date validation within period, duration minutes, and billable status)
+- `PUT|PATCH|DELETE /v2/timesheets/{id}/lines/{lineId}` to update a line item (automatically recalculating timesheet total and billable minutes) or delete a line item
+- `POST /v2/timesheets/{id}/submit` to submit a draft timesheet for manager review (locking line items against modifications and appending an audit approval event)
+- `POST /v2/timesheets/{id}/approve` to approve a submitted timesheet with reviewer timestamping and approval audit logging
+- `POST /v2/timesheets/{id}/reject` to reject a submitted timesheet with required rejection reason and audit logging
+- `POST /v2/timesheets/{id}/reopen` to reopen a submitted or rejected timesheet back to draft status for employee revisions
+- `GET /v2/timesheets/{id}/approvals` to inspect the full chronological approval and audit history of a timesheet
+- `GET /v2/timesheets/metrics?workspace_id={id}` for workspace timesheet compliance metrics, total logged and billable hours, billable utilization percentage, and status distribution (`draft`, `submitted`, `approved`, `rejected`)
 
 ## Current limitations
 
