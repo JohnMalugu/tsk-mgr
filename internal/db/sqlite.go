@@ -1520,7 +1520,19 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_timesheet_lines_date ON timesheet_lines(work_date);
 	CREATE INDEX IF NOT EXISTS idx_timesheet_approvals_sheet ON timesheet_approvals(timesheet_id, created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_timesheet_approvals_actor ON timesheet_approvals(actor_id);
+	CREATE INDEX IF NOT EXISTS idx_clients_ws_name ON clients(workspace_id, name);
+	CREATE INDEX IF NOT EXISTS idx_clients_ws_email ON clients(workspace_id, email);
+	CREATE INDEX IF NOT EXISTS idx_invoices_ws_status ON invoices(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_invoices_ws_client ON invoices(workspace_id, client_id);
+	CREATE INDEX IF NOT EXISTS idx_invoices_ws_dates ON invoices(workspace_id, issue_date, due_date);
+	CREATE INDEX IF NOT EXISTS idx_invoices_number ON invoices(workspace_id, invoice_number);
+	CREATE INDEX IF NOT EXISTS idx_invoices_project ON invoices(project_id);
+	CREATE INDEX IF NOT EXISTS idx_invoices_timesheet ON invoices(timesheet_id);
+	CREATE INDEX IF NOT EXISTS idx_invoice_items_inv ON invoice_items(invoice_id);
+	CREATE INDEX IF NOT EXISTS idx_invoice_items_tsline ON invoice_items(timesheet_line_id);
+	CREATE INDEX IF NOT EXISTS idx_invoice_payments_inv ON invoice_payments(invoice_id, payment_date DESC);
 	`
+
 
 	_, err = db.Exec(indexQuery)
 	return err
