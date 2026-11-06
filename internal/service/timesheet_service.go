@@ -454,25 +454,183 @@ func (s *timesheetServiceImpl) ListLines(timesheetID int64) ([]model.TimesheetLi
 }
 
 func (s *timesheetServiceImpl) SubmitTimesheet(id int64, userID string, req model.SubmitTimesheetRequest) (*model.Timesheet, error) {
-	return nil, nil
+	ts, err := s.GetTimesheet(id)
+	if err != nil {
+		return nil, err
+	}
+	if ts.UserID != userID {
+		return nil, ErrUnauthorizedTimesheet
+	}
+	if ts.Status != model.TimesheetStatusDraft {
+		return nil, ErrTimesheetNotSubmittable
+	}
+
+	now := time.Now()
+	ts.Status = model.TimesheetStatusSubmitted
+	ts.SubmittedAt = &now
+	ts.RejectionReason = ""
+
+	if err := s.repo.UpdateTimesheet(ts); err != nil {
+		return nil, err
+	}
+
+	approval := &model.TimesheetApproval{
+		TimesheetID:    id,
+		ActorID:        userID,
+		Action:         model.TimesheetActionSubmit,
+		PreviousStatus: model.TimesheetStatusDraft,
+		NewStatus:      model.TimesheetStatusSubmitted,
+		Comments:       strings.TrimSpace(req.Comments),
+		CreatedAt:      now,
+	}
+	_, _ = s.repo.RecordApproval(approval)
+
+	return s.GetTimesheet(id)
 }
 
 func (s *timesheetServiceImpl) ApproveTimesheet(id int64, reviewerID string, req model.ReviewTimesheetRequest) (*model.Timesheet, error) {
-	return nil, nil
+	ts, err := s.GetTimesheet(id)
+	if err != nil {
+		return nil, err
+	}
+
+	member, err := s.workspaceRepo.GetMember(int(ts.WorkspaceID), reviewerID)
+	if err != nil || member == nil {
+		return nil, ErrUnauthorizedTimesheet
+	}
+
+	if ts.Status != model.TimesheetStatusSubmitted {
+		return nil, ErrTimesheetNotReviewable
+	}
+
+	now := time.Now()
+	ts.Status = model.TimesheetStatusApproved
+	ts.ReviewedAt = &now
+	ts.ReviewerID = &reviewerID
+	ts.RejectionReason = ""
+
+	if err := s.repo.UpdateTimesheet(ts); err != nil {
+		return nil, err
+	}
+
+	approval := &model.TimesheetApproval{
+		TimesheetID:    id,
+		ActorID:        reviewerID,
+		Action:         model.TimesheetActionApprove,
+		PreviousStatus: model.TimesheetStatusSubmitted,
+		NewStatus:      model.TimesheetStatusApproved,
+		Comments:       strings.TrimSpace(req.Comments),
+		CreatedAt:      now,
+	}
+	_, _ = s.repo.RecordApproval(approval)
+
+	return s.GetTimesheet(id)
 }
 
 func (s *timesheetServiceImpl) RejectTimesheet(id int64, reviewerID string, req model.ReviewTimesheetRequest) (*model.Timesheet, error) {
-	return nil, nil
+	ts, err := s.GetTimesheet(id)
+	if err != nil {
+		return nil, err
+	}
+
+	member, err := s.workspaceRepo.GetMember(int(ts.WorkspaceID), reviewerID)
+	if err != nil || member == nil {
+		return nil, ErrUnauthorizedTimesheet
+	}
+
+	if ts.Status != model.TimesheetStatusSubmitted {
+		return nil, ErrTimesheetNotReviewable
+	}
+
+	reason := strings.TrimSpace(req.RejectionReason)
+	if reason == "" {
+		reason = strings.TrimSpace(req.Comments)
+	}
+	if reason == "" {
+		return nil, ErrRejectionReasonRequired
+	}
+
+	now := time.Now()
+	ts.Status = model.TimesheetStatusRejected
+	ts.ReviewedAt = &now
+	ts.ReviewerID = &reviewerID
+	ts.RejectionReason = reason
+
+	if err := s.repo.UpdateTimesheet(ts); err != nil {
+		return nil, err
+	}
+
+	approval := &model.TimesheetApproval{
+		TimesheetID:    id,
+		ActorID:        reviewerID,
+		Action:         model.TimesheetActionReject,
+		PreviousStatus: model.TimesheetStatusSubmitted,
+		NewStatus:      model.TimesheetStatusRejected,
+		Comments:       reason,
+		CreatedAt:      now,
+	}
+	_, _ = s.repo.RecordApproval(approval)
+
+	return s.GetTimesheet(id)
 }
 
 func (s *timesheetServiceImpl) ReopenTimesheet(id int64, reviewerID string, comments string) (*model.Timesheet, error) {
-	return nil, nil
+	ts, err := s.GetTimesheet(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if ts.UserID != reviewerID {
+		member, err := s.workspaceRepo.GetMember(int(ts.WorkspaceID), reviewerID)
+		if err != nil || member == nil {
+			return nil, ErrUnauthorizedTimesheet
+		}
+	}
+
+	if ts.Status != model.TimesheetStatusRejected && ts.Status != model.TimesheetStatusSubmitted {
+		return nil, ErrTimesheetNotEditable
+	}
+
+	prev := ts.Status
+	now := time.Now()
+	ts.Status = model.TimesheetStatusDraft
+	ts.RejectionReason = ""
+
+	if err := s.repo.UpdateTimesheet(ts); err != nil {
+		return nil, err
+	}
+
+	approval := &model.TimesheetApproval{
+		TimesheetID:    id,
+		ActorID:        reviewerID,
+		Action:         model.TimesheetActionReopen,
+		PreviousStatus: prev,
+		NewStatus:      model.TimesheetStatusDraft,
+		Comments:       strings.TrimSpace(comments),
+		CreatedAt:      now,
+	}
+	_, _ = s.repo.RecordApproval(approval)
+
+	return s.GetTimesheet(id)
 }
 
 func (s *timesheetServiceImpl) ListApprovals(timesheetID int64) ([]model.TimesheetApproval, error) {
-	return nil, nil
+	if _, err := s.GetTimesheet(timesheetID); err != nil {
+		return nil, err
+	}
+	approvals, err := s.repo.ListApprovals(timesheetID)
+	if err != nil {
+		return nil, err
+	}
+	if approvals == nil {
+		approvals = []model.TimesheetApproval{}
+	}
+	return approvals, nil
 }
 
 func (s *timesheetServiceImpl) GetTimesheetMetrics(workspaceID int64) (*model.TimesheetMetrics, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	return s.repo.GetTimesheetMetrics(workspaceID)
 }
