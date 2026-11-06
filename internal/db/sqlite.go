@@ -1319,7 +1319,44 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	invoicesQuery := `
+	CREATE TABLE IF NOT EXISTS invoices (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		client_id INTEGER NOT NULL,
+		project_id INTEGER,
+		timesheet_id INTEGER,
+		invoice_number TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'draft',
+		issue_date TEXT NOT NULL,
+		due_date TEXT NOT NULL,
+		currency TEXT NOT NULL DEFAULT 'USD',
+		subtotal REAL NOT NULL DEFAULT 0.0,
+		tax_rate REAL NOT NULL DEFAULT 0.0,
+		tax_amount REAL NOT NULL DEFAULT 0.0,
+		discount_amount REAL NOT NULL DEFAULT 0.0,
+		total_amount REAL NOT NULL DEFAULT 0.0,
+		amount_paid REAL NOT NULL DEFAULT 0.0,
+		balance_due REAL NOT NULL DEFAULT 0.0,
+		paid_at DATETIME,
+		notes TEXT NOT NULL DEFAULT '',
+		payment_terms TEXT NOT NULL DEFAULT 'Net 30',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		UNIQUE(workspace_id, invoice_number),
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+		FOREIGN KEY (timesheet_id) REFERENCES timesheets(id) ON DELETE SET NULL
+	);`
+
+	_, err = db.Exec(invoicesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
+
 
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
