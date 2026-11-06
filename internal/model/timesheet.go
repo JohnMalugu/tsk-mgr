@@ -74,3 +74,23 @@ type TimesheetApproval struct {
 	// Enriched fields
 	ActorUsername string `json:"actor_username,omitempty"`
 }
+
+// CreateTimesheetRequest payload for initializing a new timesheet
+type CreateTimesheetRequest struct {
+	WorkspaceID     int64  `json:"workspace_id"`
+	PeriodStartDate string `json:"period_start_date"` // YYYY-MM-DD
+	PeriodEndDate   string `json:"period_end_date"`   // YYYY-MM-DD
+	Notes           string `json:"notes,omitempty"`
+	AutoPopulate    bool   `json:"auto_populate,omitempty"` // pull existing time entries into lines
+}
+
+// UpdateTimesheetRequest payload for updating editable draft timesheet notes
+type UpdateTimesheetRequest struct {
+	Notes *string `json:"notes,omitempty"`
+}
+
+// PopulateTimesheetRequest payload for importing recorded time_entries into a timesheet
+type PopulateTimesheetRequest struct {
+	IncludeExisting bool `json:"include_existing,omitempty"`
+}
+
