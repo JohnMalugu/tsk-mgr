@@ -246,3 +246,91 @@ func (h *TimesheetHandler) DeleteLine(w http.ResponseWriter, r *http.Request, ti
 	}
 	writeTimesheetJSON(w, http.StatusOK, map[string]string{"message": "timesheet line deleted successfully"})
 }
+
+// SubmitTimesheet handles POST /v2/timesheets/{id}/submit
+func (h *TimesheetHandler) SubmitTimesheet(w http.ResponseWriter, r *http.Request, id int64) {
+	var req model.SubmitTimesheetRequest
+	if r.Body != nil && r.ContentLength > 0 {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+	userID := getTimesheetUser(r)
+
+	ts, err := h.svc.SubmitTimesheet(id, userID, req)
+	if err != nil {
+		handleTimesheetServiceError(w, err)
+		return
+	}
+	writeTimesheetJSON(w, http.StatusOK, ts)
+}
+
+// ApproveTimesheet handles POST /v2/timesheets/{id}/approve
+func (h *TimesheetHandler) ApproveTimesheet(w http.ResponseWriter, r *http.Request, id int64) {
+	var req model.ReviewTimesheetRequest
+	if r.Body != nil && r.ContentLength > 0 {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+	reviewerID := getTimesheetUser(r)
+
+	ts, err := h.svc.ApproveTimesheet(id, reviewerID, req)
+	if err != nil {
+		handleTimesheetServiceError(w, err)
+		return
+	}
+	writeTimesheetJSON(w, http.StatusOK, ts)
+}
+
+// RejectTimesheet handles POST /v2/timesheets/{id}/reject
+func (h *TimesheetHandler) RejectTimesheet(w http.ResponseWriter, r *http.Request, id int64) {
+	var req model.ReviewTimesheetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeTimesheetError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	reviewerID := getTimesheetUser(r)
+
+	ts, err := h.svc.RejectTimesheet(id, reviewerID, req)
+	if err != nil {
+		handleTimesheetServiceError(w, err)
+		return
+	}
+	writeTimesheetJSON(w, http.StatusOK, ts)
+}
+
+// ReopenTimesheet handles POST /v2/timesheets/{id}/reopen
+func (h *TimesheetHandler) ReopenTimesheet(w http.ResponseWriter, r *http.Request, id int64) {
+	var body struct {
+		Comments string `json:"comments"`
+	}
+	if r.Body != nil && r.ContentLength > 0 {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+	}
+	reviewerID := getTimesheetUser(r)
+
+	ts, err := h.svc.ReopenTimesheet(id, reviewerID, body.Comments)
+	if err != nil {
+		handleTimesheetServiceError(w, err)
+		return
+	}
+	writeTimesheetJSON(w, http.StatusOK, ts)
+}
+
+// ListApprovals handles GET /v2/timesheets/{id}/approvals
+func (h *TimesheetHandler) ListApprovals(w http.ResponseWriter, r *http.Request, timesheetID int64) {
+	approvals, err := h.svc.ListApprovals(timesheetID)
+	if err != nil {
+		handleTimesheetServiceError(w, err)
+		return
+	}
+	writeTimesheetJSON(w, http.StatusOK, approvals)
+}
+
+// GetTimesheetMetrics handles GET /v2/timesheets/metrics
+func (h *TimesheetHandler) GetTimesheetMetrics(w http.ResponseWriter, r *http.Request) {
+	wsID, _ := strconv.ParseInt(r.URL.Query().Get("workspace_id"), 10, 64)
+	metrics, err := h.svc.GetTimesheetMetrics(wsID)
+	if err != nil {
+		handleTimesheetServiceError(w, err)
+		return
+	}
+	writeTimesheetJSON(w, http.StatusOK, metrics)
+}
