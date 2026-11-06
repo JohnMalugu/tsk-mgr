@@ -134,4 +134,30 @@ type InvoicePayment struct {
 	RecordedByUsername string `json:"recorded_by_username,omitempty"`
 }
 
+// CreateClientRequest payload for adding a new client to a workspace
+type CreateClientRequest struct {
+	WorkspaceID int64  `json:"workspace_id"`
+	Name        string `json:"name"`
+	Email       string `json:"email,omitempty"`
+	CompanyName string `json:"company_name,omitempty"`
+	Phone       string `json:"phone,omitempty"`
+	Address     string `json:"address,omitempty"`
+	TaxID       string `json:"tax_id,omitempty"`
+	Currency    string `json:"currency,omitempty"` // defaults to "USD" if blank
+	Notes       string `json:"notes,omitempty"`
+}
+
+// UpdateClientRequest payload for modifying client attributes
+type UpdateClientRequest struct {
+	Name        *string `json:"name,omitempty"`
+	Email       *string `json:"email,omitempty"`
+	CompanyName *string `json:"company_name,omitempty"`
+	Phone       *string `json:"phone,omitempty"`
+	Address     *string `json:"address,omitempty"`
+	TaxID       *string `json:"tax_id,omitempty"`
+	Currency    *string `json:"currency,omitempty"`
+	Notes       *string `json:"notes,omitempty"`
+}
+
+
 
