@@ -238,15 +238,45 @@ func (s *timesheetServiceImpl) populateHelper(timesheetID int64, userID string, 
 }
 
 func (s *timesheetServiceImpl) UpdateTimesheet(id int64, userID string, req model.UpdateTimesheetRequest) (*model.Timesheet, error) {
-	return nil, nil
+	ts, err := s.GetTimesheet(id)
+	if err != nil {
+		return nil, err
+	}
+	if ts.UserID != userID {
+		return nil, ErrUnauthorizedTimesheet
+	}
+	if ts.Status != model.TimesheetStatusDraft {
+		return nil, ErrTimesheetNotEditable
+	}
+
+	if req.Notes != nil {
+		ts.Notes = strings.TrimSpace(*req.Notes)
+	}
+
+	if err := s.repo.UpdateTimesheet(ts); err != nil {
+		return nil, err
+	}
+
+	return s.GetTimesheet(id)
 }
 
 func (s *timesheetServiceImpl) DeleteTimesheet(id int64, userID string) error {
-	return nil
+	ts, err := s.GetTimesheet(id)
+	if err != nil {
+		return err
+	}
+	if ts.UserID != userID {
+		return ErrUnauthorizedTimesheet
+	}
+	if ts.Status != model.TimesheetStatusDraft {
+		return ErrTimesheetNotEditable
+	}
+
+	return s.repo.DeleteTimesheet(id)
 }
 
 func (s *timesheetServiceImpl) PopulateFromTimeEntries(id int64, userID string, req model.PopulateTimesheetRequest) (*model.Timesheet, error) {
-	return nil, nil
+	return s.populateHelper(id, userID, req.IncludeExisting)
 }
 
 func (s *timesheetServiceImpl) AddLine(timesheetID int64, userID string, req model.TimesheetLineRequest) (*model.TimesheetLine, error) {
