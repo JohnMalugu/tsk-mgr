@@ -94,3 +94,25 @@ type PopulateTimesheetRequest struct {
 	IncludeExisting bool `json:"include_existing,omitempty"`
 }
 
+// TimesheetLineRequest payload for adding or updating a timesheet line entry
+type TimesheetLineRequest struct {
+	TaskID          *int64 `json:"task_id,omitempty"`
+	ProjectID       *int64 `json:"project_id,omitempty"`
+	WorkDate        string `json:"work_date"` // YYYY-MM-DD
+	DurationMinutes int    `json:"duration_minutes"`
+	IsBillable      *bool  `json:"is_billable,omitempty"`
+	Description     string `json:"description,omitempty"`
+}
+
+// SubmitTimesheetRequest payload for submitting a timesheet for manager review
+type SubmitTimesheetRequest struct {
+	Comments string `json:"comments,omitempty"`
+}
+
+// ReviewTimesheetRequest payload for approving or rejecting a submitted timesheet
+type ReviewTimesheetRequest struct {
+	Action          string `json:"action"` // "approve" or "reject"
+	Comments        string `json:"comments,omitempty"`
+	RejectionReason string `json:"rejection_reason,omitempty"`
+}
+
