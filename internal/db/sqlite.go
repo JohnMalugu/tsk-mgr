@@ -1297,7 +1297,30 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	clientsQuery := `
+	CREATE TABLE IF NOT EXISTS clients (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		name TEXT NOT NULL,
+		email TEXT NOT NULL DEFAULT '',
+		company_name TEXT NOT NULL DEFAULT '',
+		phone TEXT NOT NULL DEFAULT '',
+		address TEXT NOT NULL DEFAULT '',
+		tax_id TEXT NOT NULL DEFAULT '',
+		currency TEXT NOT NULL DEFAULT 'USD',
+		notes TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(clientsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
+
 	CREATE INDEX IF NOT EXISTS idx_time_entries_user_time ON time_entries(user_id, started_at);
 	CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
 	CREATE INDEX IF NOT EXISTS idx_task_dependencies_task_id ON task_dependencies(task_id);
