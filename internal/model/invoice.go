@@ -209,6 +209,50 @@ type RecordPaymentRequest struct {
 	Notes                string  `json:"notes,omitempty"`
 }
 
+// GenerateInvoiceFromTimesheetRequest payload for creating an invoice directly from an approved timesheet
+type GenerateInvoiceFromTimesheetRequest struct {
+	WorkspaceID  int64   `json:"workspace_id"`
+	ClientID     int64   `json:"client_id"`
+	TimesheetID  int64   `json:"timesheet_id"`
+	HourlyRate   float64 `json:"hourly_rate,omitempty"`
+	IssueDate    string  `json:"issue_date,omitempty"` // YYYY-MM-DD
+	DueDate      string  `json:"due_date,omitempty"`   // YYYY-MM-DD
+	PaymentTerms string  `json:"payment_terms,omitempty"`
+	Notes        string  `json:"notes,omitempty"`
+}
+
+// InvoiceFilter provides querying and filtering options across invoices
+type InvoiceFilter struct {
+	WorkspaceID int64   `json:"workspace_id"`
+	ClientID    *int64  `json:"client_id,omitempty"`
+	ProjectID   *int64  `json:"project_id,omitempty"`
+	Status      *string `json:"status,omitempty"`
+	StartDate   *string `json:"start_date,omitempty"` // YYYY-MM-DD
+	EndDate     *string `json:"end_date,omitempty"`   // YYYY-MM-DD
+	Limit       int     `json:"limit,omitempty"`
+	Offset      int     `json:"offset,omitempty"`
+}
+
+// InvoiceMetrics aggregates financial billing, payment status, and AR aging buckets
+type InvoiceMetrics struct {
+	WorkspaceID            int64   `json:"workspace_id"`
+	TotalInvoices          int     `json:"total_invoices"`
+	DraftCount             int     `json:"draft_count"`
+	SentCount              int     `json:"sent_count"`
+	PaidCount              int     `json:"paid_count"`
+	PartiallyPaidCount     int     `json:"partially_paid_count"`
+	OverdueCount           int     `json:"overdue_count"`
+	TotalBilledAmount      float64 `json:"total_billed_amount"`
+	TotalPaidAmount        float64 `json:"total_paid_amount"`
+	TotalOutstandingAmount float64 `json:"total_outstanding_amount"`
+	TotalOverdueAmount     float64 `json:"total_overdue_amount"`
+	AgingCurrent           float64 `json:"aging_current"` // 0-30 days
+	Aging30to60            float64 `json:"aging_30_to_60"`
+	Aging60to90            float64 `json:"aging_60_to_90"`
+	AgingOver90            float64 `json:"aging_over_90"`
+}
+
+
 
 
 
