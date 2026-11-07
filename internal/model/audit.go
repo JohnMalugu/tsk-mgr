@@ -223,12 +223,12 @@ type AuditMetrics struct {
 
 // ComplianceSummary summarizes framework conformance and integrity state
 type ComplianceSummary struct {
-	WorkspaceID                  int64    `json:"workspace_id"`
-	ActiveFrameworks             []string `json:"active_frameworks"`
-	RetentionDays                int      `json:"retention_days"`
-	AuditTrailIntegrityVerified  bool     `json:"audit_trail_integrity_verified"`
-	TotalEventsLogged            int64    `json:"total_events_logged"`
-	TotalExportsCount            int      `json:"total_exports_count"`
-	OpenCriticalAlerts           int      `json:"open_critical_alerts"`
-	ComplianceScore              float64  `json:"compliance_score"` // 0.0 - 100.0
+	WorkspaceID                 int64    `json:"workspace_id"`
+	ActiveFrameworks            []string `json:"active_frameworks"`
+	RetentionDays               int      `json:"retention_days"`
+	AuditTrailIntegrityVerified bool     `json:"audit_trail_integrity_verified"`
+	TotalEventsLogged           int64    `json:"total_events_logged"`
+	TotalExportsCount           int      `json:"total_exports_count"`
+	OpenCriticalAlerts          int      `json:"open_critical_alerts"`
+	ComplianceScore             float64  `json:"compliance_score"` // 0.0 - 100.0
 }

@@ -733,11 +733,11 @@ func (r *auditRepositoryImpl) GetAuditMetrics(workspaceID int64) (*model.AuditMe
 
 func (r *auditRepositoryImpl) GetComplianceSummary(workspaceID int64) (*model.ComplianceSummary, error) {
 	summary := &model.ComplianceSummary{
-		WorkspaceID:                  workspaceID,
-		ActiveFrameworks:             []string{model.ComplianceSOC2, model.ComplianceGDPR},
-		RetentionDays:                365,
-		AuditTrailIntegrityVerified:  true,
-		ComplianceScore:              100.0,
+		WorkspaceID:                 workspaceID,
+		ActiveFrameworks:            []string{model.ComplianceSOC2, model.ComplianceGDPR},
+		RetentionDays:               365,
+		AuditTrailIntegrityVerified: true,
+		ComplianceScore:             100.0,
 	}
 
 	policy, err := r.GetRetentionPolicy(workspaceID)

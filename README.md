@@ -246,6 +246,16 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `POST /v2/invoices/from-timesheet` to auto-generate an invoice directly from an approved timesheet with billable hours converted to labor line items and hourly rates
 - `GET|POST /v2/invoices/{id}/payments` to view recorded payments or record a settlement payment against an invoice (automatically updating amount paid, balance due, and transitioning status to `partially_paid` or `paid`)
 - `GET /v2/invoices/metrics?workspace_id={id}` for accounts receivable (AR) aging metrics (current 0-30 days, 30-60 days, 60-90 days, >90 days), total billed amount, total collected amount, outstanding balance, and status breakdown
+- `GET|POST /v2/audit` to query immutable security audit logs with multi-criteria filters (`workspace_id`, `actor_id`, `action`, `category`, `severity`, `entity_type`, `entity_id`, `search`, `start_date`, `end_date`, `limit`, `offset`) or ingest an administrative/security audit event with SHA256 integrity checksum chaining
+- `GET /v2/audit/{id}` to fetch an individual audit record including before/after entity state snapshots, IP address, user-agent, and metadata
+- `GET|POST|PUT /v2/audit/retention` to inspect or configure workspace compliance data retention policies (`retention_days`, `frameworks`, `auto_purge_enabled`)
+- `POST /v2/audit/retention/purge?workspace_id={id}` to enforce data retention schedules by purging expired audit logs older than the configured threshold
+- `GET /v2/audit/alerts?workspace_id={id}` to list security anomaly alerts with optional filtering by status (`open`, `acknowledged`, `resolved`, `dismissed`) and severity
+- `GET /v2/audit/alerts/{id}` to inspect security anomaly alert details with triggering event correlation
+- `POST /v2/audit/alerts/{id}/resolve` to acknowledge, resolve, or dismiss a security alert with resolution notes and reviewer auditing
+- `GET|POST /v2/audit/exports` to list generated compliance exports or generate an immutable compliance export (`json`, `csv`) with content checksum verification and download support
+- `GET /v2/audit/metrics?workspace_id={id}` for audit log volume, severity distribution (`info`, `warning`, `critical`), security events, and open alert counts
+- `GET /v2/audit/compliance?workspace_id={id}` for workspace compliance summary, active frameworks (`soc2`, `gdpr`, `iso27001`, `hipaa`), audit trail integrity verification, and compliance score
 
 ## Current limitations
 

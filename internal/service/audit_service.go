@@ -17,7 +17,7 @@ import (
 
 var (
 	ErrAuditLogNotFoundDB      = errors.New("audit log not found")
-	ErrInvalidRetentionPeriod = errors.New("retention period must be at least 30 days")
+	ErrInvalidRetentionPeriod  = errors.New("retention period must be at least 30 days")
 	ErrAuditAlertNotFoundDB    = errors.New("audit alert not found")
 	ErrInvalidAlertStatus      = errors.New("invalid alert resolution status")
 	ErrExportFormatUnsupported = errors.New("unsupported audit export format: only 'json' and 'csv' are supported")
