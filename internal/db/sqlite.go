@@ -1622,6 +1622,17 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_invoice_items_inv ON invoice_items(invoice_id);
 	CREATE INDEX IF NOT EXISTS idx_invoice_items_tsline ON invoice_items(timesheet_line_id);
 	CREATE INDEX IF NOT EXISTS idx_invoice_payments_inv ON invoice_payments(invoice_id, payment_date DESC);
+	CREATE INDEX IF NOT EXISTS idx_audit_logs_ws_created ON audit_logs(workspace_id, created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor_id);
+	CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(workspace_id, action);
+	CREATE INDEX IF NOT EXISTS idx_audit_logs_category ON audit_logs(workspace_id, category);
+	CREATE INDEX IF NOT EXISTS idx_audit_logs_severity ON audit_logs(workspace_id, severity);
+	CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs(workspace_id, entity_type, entity_id);
+	CREATE INDEX IF NOT EXISTS idx_audit_alerts_ws_status ON audit_alerts(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_audit_alerts_sev ON audit_alerts(workspace_id, severity);
+	CREATE INDEX IF NOT EXISTS idx_audit_alerts_trigger ON audit_alerts(trigger_event_id);
+	CREATE INDEX IF NOT EXISTS idx_audit_exports_ws ON audit_exports(workspace_id, created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_audit_exports_user ON audit_exports(created_by_user_id);
 	`
 
 	_, err = db.Exec(indexQuery)
