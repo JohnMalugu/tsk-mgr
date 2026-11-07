@@ -63,12 +63,149 @@ func ComputeChecksum(workspaceID int64, actorID, action, entityType, entityID, d
 	return hex.EncodeToString(hash[:])
 }
 
+const auditLogBaseSelect = `
+	SELECT 
+		al.id,
+		al.workspace_id,
+		al.actor_id,
+		al.actor_name,
+		al.actor_email,
+		al.action,
+		al.category,
+		al.severity,
+		al.entity_type,
+		al.entity_id,
+		al.entity_name,
+		al.description,
+		al.before_state,
+		al.after_state,
+		al.metadata,
+		al.ip_address,
+		al.user_agent,
+		al.checksum,
+		al.created_at
+	FROM audit_logs al
+`
+
+func scanAuditLog(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.AuditLog, error) {
+	var l model.AuditLog
+	err := scanner.Scan(
+		&l.ID,
+		&l.WorkspaceID,
+		&l.ActorID,
+		&l.ActorName,
+		&l.ActorEmail,
+		&l.Action,
+		&l.Category,
+		&l.Severity,
+		&l.EntityType,
+		&l.EntityID,
+		&l.EntityName,
+		&l.Description,
+		&l.BeforeState,
+		&l.AfterState,
+		&l.Metadata,
+		&l.IPAddress,
+		&l.UserAgent,
+		&l.Checksum,
+		&l.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &l, nil
+}
+
 func (r *auditRepositoryImpl) CreateAuditLog(log *model.AuditLog) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if log.CreatedAt.IsZero() {
+		log.CreatedAt = now
+	}
+	if log.Category == "" {
+		log.Category = model.AuditCategorySystem
+	}
+	if log.Severity == "" {
+		log.Severity = model.AuditSeverityInfo
+	}
+
+	// Auto-enrich actor name/email from users table if blank
+	if log.ActorName == "" || log.ActorEmail == "" {
+		var uName, uEmail string
+		err := r.db.QueryRow(`SELECT username, email FROM users WHERE id = ?`, log.ActorID).Scan(&uName, &uEmail)
+		if err == nil {
+			if log.ActorName == "" {
+				log.ActorName = uName
+			}
+			if log.ActorEmail == "" {
+				log.ActorEmail = uEmail
+			}
+		}
+	}
+
+	if log.Checksum == "" {
+		log.Checksum = ComputeChecksum(
+			log.WorkspaceID,
+			log.ActorID,
+			log.Action,
+			log.EntityType,
+			log.EntityID,
+			log.Description,
+			log.CreatedAt,
+		)
+	}
+
+	query := `
+	INSERT INTO audit_logs (
+		workspace_id, actor_id, actor_name, actor_email, action, category, severity,
+		entity_type, entity_id, entity_name, description, before_state, after_state,
+		metadata, ip_address, user_agent, checksum, created_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	res, err := r.db.Exec(
+		query,
+		log.WorkspaceID,
+		log.ActorID,
+		log.ActorName,
+		log.ActorEmail,
+		log.Action,
+		log.Category,
+		log.Severity,
+		log.EntityType,
+		log.EntityID,
+		log.EntityName,
+		log.Description,
+		log.BeforeState,
+		log.AfterState,
+		log.Metadata,
+		log.IPAddress,
+		log.UserAgent,
+		log.Checksum,
+		log.CreatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	log.ID = id
+	return id, nil
 }
 
 func (r *auditRepositoryImpl) GetAuditLogByID(id int64) (*model.AuditLog, error) {
-	return nil, nil
+	query := auditLogBaseSelect + ` WHERE al.id = ?`
+	row := r.db.QueryRow(query, id)
+	log, err := scanAuditLog(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrAuditLogNotFound
+		}
+		return nil, err
+	}
+	return log, nil
 }
 
 func (r *auditRepositoryImpl) ListAuditLogs(filter model.AuditLogFilter) ([]*model.AuditLog, int64, error) {
