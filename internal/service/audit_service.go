@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -60,11 +61,99 @@ func NewAuditService(
 }
 
 func (s *auditServiceImpl) RecordEvent(actorID string, req model.CreateAuditLogRequest) (*model.AuditLog, error) {
-	return nil, nil
+	if req.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+
+	ws, err := s.workspaceRepo.GetByID(int(req.WorkspaceID))
+	if err != nil || ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+
+	action := strings.TrimSpace(req.Action)
+	if action == "" {
+		return nil, model.ErrAuditActionRequired
+	}
+
+	sev := strings.ToLower(strings.TrimSpace(req.Severity))
+	if sev == "" {
+		sev = model.AuditSeverityInfo
+	}
+	if err := model.ValidateAuditSeverity(sev); err != nil {
+		return nil, err
+	}
+
+	cat := strings.ToLower(strings.TrimSpace(req.Category))
+	if cat == "" {
+		cat = model.AuditCategorySystem
+	}
+
+	actor := strings.TrimSpace(actorID)
+	if actor == "" {
+		actor = "system"
+	}
+
+	log := &model.AuditLog{
+		WorkspaceID: req.WorkspaceID,
+		ActorID:     actor,
+		Action:      action,
+		Category:    cat,
+		Severity:    sev,
+		EntityType:  strings.TrimSpace(req.EntityType),
+		EntityID:    strings.TrimSpace(req.EntityID),
+		EntityName:  strings.TrimSpace(req.EntityName),
+		Description: strings.TrimSpace(req.Description),
+		BeforeState: strings.TrimSpace(req.BeforeState),
+		AfterState:  strings.TrimSpace(req.AfterState),
+		Metadata:    strings.TrimSpace(req.Metadata),
+		IPAddress:   strings.TrimSpace(req.IPAddress),
+		UserAgent:   strings.TrimSpace(req.UserAgent),
+	}
+
+	id, err := s.repo.CreateAuditLog(log)
+	if err != nil {
+		return nil, err
+	}
+
+	// Automated anomaly detection: if critical severity or failed login, trigger alert check
+	if sev == model.AuditSeverityCritical || action == model.AuditActionFailedLogin {
+		_ = s.evaluateAnomalyAlert(log)
+	}
+
+	return s.repo.GetAuditLogByID(id)
+}
+
+func (s *auditServiceImpl) evaluateAnomalyAlert(log *model.AuditLog) error {
+	title := "Security Anomaly Detected"
+	desc := log.Description
+	if log.Action == model.AuditActionFailedLogin {
+		title = "Repeated or Suspicious Failed Login Attempt"
+		desc = "Failed authentication event observed from IP: " + log.IPAddress
+	} else if log.Severity == model.AuditSeverityCritical {
+		title = "Critical Security Event: " + log.Action
+	}
+
+	alert := &model.AuditAlert{
+		WorkspaceID:    log.WorkspaceID,
+		Title:          title,
+		Description:    desc,
+		Severity:       log.Severity,
+		Status:         model.AuditAlertStatusOpen,
+		TriggerEventID: &log.ID,
+	}
+	_, err := s.repo.CreateAlert(alert)
+	return err
 }
 
 func (s *auditServiceImpl) GetEvent(id int64) (*model.AuditLog, error) {
-	return nil, nil
+	if id <= 0 {
+		return nil, ErrAuditLogNotFoundDB
+	}
+	log, err := s.repo.GetAuditLogByID(id)
+	if err != nil || log == nil {
+		return nil, ErrAuditLogNotFoundDB
+	}
+	return log, nil
 }
 
 func (s *auditServiceImpl) ListEvents(filter model.AuditLogFilter) ([]*model.AuditLog, int64, error) {
