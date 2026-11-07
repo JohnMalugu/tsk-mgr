@@ -157,7 +157,22 @@ func (s *auditServiceImpl) GetEvent(id int64) (*model.AuditLog, error) {
 }
 
 func (s *auditServiceImpl) ListEvents(filter model.AuditLogFilter) ([]*model.AuditLog, int64, error) {
-	return nil, 0, nil
+	if filter.WorkspaceID <= 0 {
+		return nil, 0, ErrWorkspaceRequired
+	}
+
+	ws, err := s.workspaceRepo.GetByID(int(filter.WorkspaceID))
+	if err != nil || ws == nil {
+		return nil, 0, ErrWorkspaceNotFound
+	}
+
+	if filter.Severity != nil && strings.TrimSpace(*filter.Severity) != "" {
+		if err := model.ValidateAuditSeverity(*filter.Severity); err != nil {
+			return nil, 0, err
+		}
+	}
+
+	return s.repo.ListAuditLogs(filter)
 }
 
 func (s *auditServiceImpl) GetRetentionPolicy(workspaceID int64) (*model.AuditRetentionPolicy, error) {
