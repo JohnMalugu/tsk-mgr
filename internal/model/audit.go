@@ -19,6 +19,41 @@ const (
 	AuditSeverityCritical = "critical"
 )
 
+// Audit category constants
+const (
+	AuditCategoryAuth          = "authentication"
+	AuditCategoryAuthz         = "authorization"
+	AuditCategoryDataAccess    = "data_access"
+	AuditCategoryConfiguration = "configuration"
+	AuditCategorySecurity      = "security"
+	AuditCategoryBilling       = "billing"
+	AuditCategorySystem        = "system"
+)
+
+// Standard audit action constants
+const (
+	AuditActionLogin             = "auth.login"
+	AuditActionLogout            = "auth.logout"
+	AuditActionFailedLogin       = "auth.failed_login"
+	AuditActionPasswordReset     = "auth.password_reset"
+	AuditActionPermissionGranted = "authz.permission_granted"
+	AuditActionPermissionRevoked = "authz.permission_revoked"
+	AuditActionRoleChanged       = "authz.role_changed"
+	AuditActionDataExported      = "data.exported"
+	AuditActionDataPurged        = "data.purged"
+	AuditActionConfigUpdated     = "config.updated"
+	AuditActionSecurityAlert     = "security.alert_triggered"
+)
+
+// Compliance framework identifiers
+const (
+	ComplianceSOC2     = "soc2"
+	ComplianceGDPR     = "gdpr"
+	ComplianceHIPAA    = "hipaa"
+	ComplianceISO27001 = "iso27001"
+	CompliancePCIDSS   = "pci_dss"
+)
+
 // ValidateAuditSeverity checks whether a severity string is valid
 func ValidateAuditSeverity(sev string) error {
 	switch strings.ToLower(strings.TrimSpace(sev)) {
