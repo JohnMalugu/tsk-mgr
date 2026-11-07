@@ -1396,6 +1396,36 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	auditLogsQuery := `
+	CREATE TABLE IF NOT EXISTS audit_logs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		actor_id TEXT NOT NULL,
+		actor_name TEXT NOT NULL DEFAULT '',
+		actor_email TEXT NOT NULL DEFAULT '',
+		action TEXT NOT NULL,
+		category TEXT NOT NULL DEFAULT 'system',
+		severity TEXT NOT NULL DEFAULT 'info',
+		entity_type TEXT NOT NULL DEFAULT '',
+		entity_id TEXT NOT NULL DEFAULT '',
+		entity_name TEXT NOT NULL DEFAULT '',
+		description TEXT NOT NULL,
+		before_state TEXT NOT NULL DEFAULT '',
+		after_state TEXT NOT NULL DEFAULT '',
+		metadata TEXT NOT NULL DEFAULT '',
+		ip_address TEXT NOT NULL DEFAULT '',
+		user_agent TEXT NOT NULL DEFAULT '',
+		checksum TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(auditLogsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
