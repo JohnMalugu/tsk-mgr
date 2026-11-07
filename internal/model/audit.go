@@ -205,3 +205,30 @@ type ExportAuditLogsRequest struct {
 	Format      string         `json:"format,omitempty"` // json, csv (default: json)
 	Filter      AuditLogFilter `json:"filter"`
 }
+
+// AuditMetrics aggregates log volume, severity distribution, and security events
+type AuditMetrics struct {
+	WorkspaceID         int64      `json:"workspace_id"`
+	TotalLogs           int64      `json:"total_logs"`
+	InfoCount           int64      `json:"info_count"`
+	WarningCount        int64      `json:"warning_count"`
+	CriticalCount       int64      `json:"critical_count"`
+	OpenAlertsCount     int64      `json:"open_alerts_count"`
+	AuthEventsCount     int64      `json:"auth_events_count"`
+	SecurityEventsCount int64      `json:"security_events_count"`
+	DataEventsCount     int64      `json:"data_events_count"`
+	ConfigEventsCount   int64      `json:"config_events_count"`
+	LastEventAt         *time.Time `json:"last_event_at,omitempty"`
+}
+
+// ComplianceSummary summarizes framework conformance and integrity state
+type ComplianceSummary struct {
+	WorkspaceID                  int64    `json:"workspace_id"`
+	ActiveFrameworks             []string `json:"active_frameworks"`
+	RetentionDays                int      `json:"retention_days"`
+	AuditTrailIntegrityVerified  bool     `json:"audit_trail_integrity_verified"`
+	TotalEventsLogged            int64    `json:"total_events_logged"`
+	TotalExportsCount            int      `json:"total_exports_count"`
+	OpenCriticalAlerts           int      `json:"open_critical_alerts"`
+	ComplianceScore              float64  `json:"compliance_score"` // 0.0 - 100.0
+}
