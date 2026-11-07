@@ -209,7 +209,93 @@ func (r *auditRepositoryImpl) GetAuditLogByID(id int64) (*model.AuditLog, error)
 }
 
 func (r *auditRepositoryImpl) ListAuditLogs(filter model.AuditLogFilter) ([]*model.AuditLog, int64, error) {
-	return nil, 0, nil
+	var conditions []string
+	var args []interface{}
+
+	conditions = append(conditions, "al.workspace_id = ?")
+	args = append(args, filter.WorkspaceID)
+
+	if filter.ActorID != nil && strings.TrimSpace(*filter.ActorID) != "" {
+		conditions = append(conditions, "al.actor_id = ?")
+		args = append(args, strings.TrimSpace(*filter.ActorID))
+	}
+	if filter.Action != nil && strings.TrimSpace(*filter.Action) != "" {
+		conditions = append(conditions, "al.action = ?")
+		args = append(args, strings.TrimSpace(*filter.Action))
+	}
+	if filter.Category != nil && strings.TrimSpace(*filter.Category) != "" {
+		conditions = append(conditions, "al.category = ?")
+		args = append(args, strings.TrimSpace(*filter.Category))
+	}
+	if filter.Severity != nil && strings.TrimSpace(*filter.Severity) != "" {
+		conditions = append(conditions, "al.severity = ?")
+		args = append(args, strings.TrimSpace(*filter.Severity))
+	}
+	if filter.EntityType != nil && strings.TrimSpace(*filter.EntityType) != "" {
+		conditions = append(conditions, "al.entity_type = ?")
+		args = append(args, strings.TrimSpace(*filter.EntityType))
+	}
+	if filter.EntityID != nil && strings.TrimSpace(*filter.EntityID) != "" {
+		conditions = append(conditions, "al.entity_id = ?")
+		args = append(args, strings.TrimSpace(*filter.EntityID))
+	}
+	if filter.Search != nil && strings.TrimSpace(*filter.Search) != "" {
+		term := "%" + strings.TrimSpace(*filter.Search) + "%"
+		conditions = append(conditions, "(al.description LIKE ? OR al.actor_name LIKE ? OR al.entity_name LIKE ?)")
+		args = append(args, term, term, term)
+	}
+	if filter.StartDate != nil && strings.TrimSpace(*filter.StartDate) != "" {
+		conditions = append(conditions, "al.created_at >= ?")
+		args = append(args, strings.TrimSpace(*filter.StartDate))
+	}
+	if filter.EndDate != nil && strings.TrimSpace(*filter.EndDate) != "" {
+		conditions = append(conditions, "al.created_at <= ?")
+		args = append(args, strings.TrimSpace(*filter.EndDate))
+	}
+
+	whereClause := strings.Join(conditions, " AND ")
+
+	// Count query
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM audit_logs al WHERE %s", whereClause)
+	var total int64
+	if err := r.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf("%s WHERE %s ORDER BY al.created_at DESC, al.id DESC LIMIT ? OFFSET ?", auditLogBaseSelect, whereClause)
+	queryArgs := append(args, limit, offset)
+
+	rows, err := r.db.Query(query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var logs []*model.AuditLog
+	for rows.Next() {
+		l, err := scanAuditLog(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		logs = append(logs, l)
+	}
+
+	if logs == nil {
+		logs = []*model.AuditLog{}
+	}
+	return logs, total, nil
 }
 
 func (r *auditRepositoryImpl) PurgeExpiredAuditLogs(workspaceID int64, olderThan time.Time) (int64, error) {
