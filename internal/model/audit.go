@@ -86,3 +86,44 @@ type AuditLog struct {
 	Checksum    string    `json:"checksum"` // SHA256 integrity hash
 	CreatedAt   time.Time `json:"created_at"`
 }
+
+// AuditRetentionPolicy governs how long audit records are preserved per workspace
+type AuditRetentionPolicy struct {
+	ID               int64      `json:"id"`
+	WorkspaceID      int64      `json:"workspace_id"`
+	RetentionDays    int        `json:"retention_days"` // e.g. 90, 365, 2555
+	Frameworks       string     `json:"frameworks"`     // comma-separated compliance frameworks
+	AutoPurgeEnabled bool       `json:"auto_purge_enabled"`
+	LastPurgeAt      *time.Time `json:"last_purge_at,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+// Alert status constants
+const (
+	AuditAlertStatusOpen         = "open"
+	AuditAlertStatusAcknowledged = "acknowledged"
+	AuditAlertStatusResolved     = "resolved"
+	AuditAlertStatusDismissed    = "dismissed"
+)
+
+// AuditAlert represents a security anomaly or compliance policy violation
+type AuditAlert struct {
+	ID                 int64      `json:"id"`
+	WorkspaceID        int64      `json:"workspace_id"`
+	Title              string     `json:"title"`
+	Description        string     `json:"description"`
+	Severity           string     `json:"severity"` // warning, critical
+	Status             string     `json:"status"`   // open, acknowledged, resolved, dismissed
+	TriggerEventID     *int64     `json:"trigger_event_id,omitempty"`
+	ResolutionNotes    string     `json:"resolution_notes,omitempty"`
+	ResolvedByUserID   string     `json:"resolved_by_user_id,omitempty"`
+	ResolvedAt         *time.Time `json:"resolved_at,omitempty"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+
+	// Enriched fields
+	TriggerAction      string `json:"trigger_action,omitempty"`
+	TriggerActor       string `json:"trigger_actor,omitempty"`
+	ResolvedByUsername string `json:"resolved_by_username,omitempty"`
+}
