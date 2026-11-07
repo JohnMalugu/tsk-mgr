@@ -21,6 +21,8 @@ var (
 	ErrAuditAlertNotFoundDB    = errors.New("audit alert not found")
 	ErrInvalidAlertStatus      = errors.New("invalid alert resolution status")
 	ErrExportFormatUnsupported = errors.New("unsupported audit export format: only 'json' and 'csv' are supported")
+	ErrRetentionPolicyNotFound = repository.ErrRetentionPolicyNotFound
+	ErrAuditExportNotFound     = repository.ErrAuditExportNotFound
 )
 
 // AuditService coordinates enterprise security audit event recording, compliance policies, anomaly alerting, and exports
