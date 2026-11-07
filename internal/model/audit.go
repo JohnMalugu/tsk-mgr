@@ -160,3 +160,20 @@ type AuditLogFilter struct {
 	Limit       int     `json:"limit,omitempty"`
 	Offset      int     `json:"offset,omitempty"`
 }
+
+// RetentionPolicyRequest payload for configuring workspace compliance data retention
+type RetentionPolicyRequest struct {
+	WorkspaceID      int64    `json:"workspace_id"`
+	RetentionDays    int      `json:"retention_days"` // e.g. 90, 365, 2555
+	Frameworks       []string `json:"frameworks,omitempty"`
+	AutoPurgeEnabled bool     `json:"auto_purge_enabled"`
+}
+
+// AuditAlertFilter provides query filters for security and compliance anomaly alerts
+type AuditAlertFilter struct {
+	WorkspaceID int64   `json:"workspace_id"`
+	Status      *string `json:"status,omitempty"`
+	Severity    *string `json:"severity,omitempty"`
+	Limit       int     `json:"limit,omitempty"`
+	Offset      int     `json:"offset,omitempty"`
+}
