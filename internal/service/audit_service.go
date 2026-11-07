@@ -1,7 +1,13 @@
 package service
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/csv"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -294,19 +300,109 @@ func (s *auditServiceImpl) ResolveAlert(id int64, userID string, req model.Resol
 }
 
 func (s *auditServiceImpl) GenerateExport(userID string, req model.ExportAuditLogsRequest) (*model.AuditExport, []byte, error) {
-	return nil, nil, nil
+	if req.WorkspaceID <= 0 {
+		return nil, nil, ErrWorkspaceRequired
+	}
+	ws, err := s.workspaceRepo.GetByID(int(req.WorkspaceID))
+	if err != nil || ws == nil {
+		return nil, nil, ErrWorkspaceNotFound
+	}
+
+	format := strings.ToLower(strings.TrimSpace(req.Format))
+	if format == "" {
+		format = "json"
+	}
+	if format != "json" && format != "csv" {
+		return nil, nil, ErrExportFormatUnsupported
+	}
+
+	req.Filter.WorkspaceID = req.WorkspaceID
+	if req.Filter.Limit <= 0 || req.Filter.Limit > 1000 {
+		req.Filter.Limit = 1000
+	}
+
+	logs, total, err := s.repo.ListAuditLogs(req.Filter)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var data []byte
+	if format == "json" {
+		data, err = json.MarshalIndent(logs, "", "  ")
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		var buf bytes.Buffer
+		writer := csv.NewWriter(&buf)
+		_ = writer.Write([]string{"ID", "Timestamp", "ActorID", "ActorName", "Action", "Category", "Severity", "Description", "Checksum"})
+		for _, l := range logs {
+			_ = writer.Write([]string{
+				fmt.Sprintf("%d", l.ID),
+				l.CreatedAt.Format(time.RFC3339),
+				l.ActorID,
+				l.ActorName,
+				l.Action,
+				l.Category,
+				l.Severity,
+				l.Description,
+				l.Checksum,
+			})
+		}
+		writer.Flush()
+		data = buf.Bytes()
+	}
+
+	hash := sha256.Sum256(data)
+	checksum := hex.EncodeToString(hash[:])
+
+	filterSummary := fmt.Sprintf("Records: %d, Format: %s", len(logs), format)
+	export := &model.AuditExport{
+		WorkspaceID:     req.WorkspaceID,
+		Format:          format,
+		FilterSummary:   filterSummary,
+		RecordCount:     int(total),
+		Checksum:        checksum,
+		CreatedByUserID: userID,
+		CreatedAt:       time.Now(),
+	}
+
+	id, err := s.repo.CreateExport(export)
+	if err != nil {
+		return nil, nil, err
+	}
+	export.ID = id
+
+	return export, data, nil
 }
 
 func (s *auditServiceImpl) ListExports(workspaceID int64) ([]*model.AuditExport, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	return s.repo.ListExports(workspaceID)
 }
 
 func (s *auditServiceImpl) GetAuditMetrics(workspaceID int64) (*model.AuditMetrics, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	ws, err := s.workspaceRepo.GetByID(int(workspaceID))
+	if err != nil || ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+	return s.repo.GetAuditMetrics(workspaceID)
 }
 
 func (s *auditServiceImpl) GetComplianceSummary(workspaceID int64) (*model.ComplianceSummary, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	ws, err := s.workspaceRepo.GetByID(int(workspaceID))
+	if err != nil || ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+	return s.repo.GetComplianceSummary(workspaceID)
 }
 
 // Ensure unused import doesn't fail
