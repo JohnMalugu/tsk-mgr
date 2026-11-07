@@ -561,16 +561,109 @@ func (r *auditRepositoryImpl) ResolveAlert(id int64, status, notes, resolvedBy s
 	return nil
 }
 
+const auditExportBaseSelect = `
+	SELECT 
+		ae.id,
+		ae.workspace_id,
+		ae.format,
+		ae.filter_summary,
+		ae.record_count,
+		ae.checksum,
+		ae.created_by_user_id,
+		ae.created_at,
+		COALESCE(u.username, '') AS created_by_username
+	FROM audit_exports ae
+	LEFT JOIN users u ON ae.created_by_user_id = u.id
+`
+
+func scanAuditExport(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.AuditExport, error) {
+	var e model.AuditExport
+	err := scanner.Scan(
+		&e.ID,
+		&e.WorkspaceID,
+		&e.Format,
+		&e.FilterSummary,
+		&e.RecordCount,
+		&e.Checksum,
+		&e.CreatedByUserID,
+		&e.CreatedAt,
+		&e.CreatedByUsername,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &e, nil
+}
+
 func (r *auditRepositoryImpl) CreateExport(export *model.AuditExport) (int64, error) {
-	return 0, nil
+	if export.CreatedAt.IsZero() {
+		export.CreatedAt = time.Now()
+	}
+	if export.Format == "" {
+		export.Format = "json"
+	}
+
+	query := `
+	INSERT INTO audit_exports (
+		workspace_id, format, filter_summary, record_count, checksum, created_by_user_id, created_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?)
+	`
+	res, err := r.db.Exec(
+		query,
+		export.WorkspaceID,
+		export.Format,
+		export.FilterSummary,
+		export.RecordCount,
+		export.Checksum,
+		export.CreatedByUserID,
+		export.CreatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	export.ID = id
+	return id, nil
 }
 
 func (r *auditRepositoryImpl) GetExportByID(id int64) (*model.AuditExport, error) {
-	return nil, nil
+	query := auditExportBaseSelect + ` WHERE ae.id = ?`
+	row := r.db.QueryRow(query, id)
+	export, err := scanAuditExport(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrAuditExportNotFound
+		}
+		return nil, err
+	}
+	return export, nil
 }
 
 func (r *auditRepositoryImpl) ListExports(workspaceID int64) ([]*model.AuditExport, error) {
-	return nil, nil
+	query := auditExportBaseSelect + ` WHERE ae.workspace_id = ? ORDER BY ae.created_at DESC`
+	rows, err := r.db.Query(query, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var exports []*model.AuditExport
+	for rows.Next() {
+		e, err := scanAuditExport(rows)
+		if err != nil {
+			return nil, err
+		}
+		exports = append(exports, e)
+	}
+	if exports == nil {
+		exports = []*model.AuditExport{}
+	}
+	return exports, nil
 }
 
 func (r *auditRepositoryImpl) GetAuditMetrics(workspaceID int64) (*model.AuditMetrics, error) {
