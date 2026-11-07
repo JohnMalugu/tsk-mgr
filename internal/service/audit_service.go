@@ -248,15 +248,49 @@ func (s *auditServiceImpl) PurgeExpiredEvents(workspaceID int64) (int64, error) 
 }
 
 func (s *auditServiceImpl) ListAlerts(filter model.AuditAlertFilter) ([]*model.AuditAlert, error) {
-	return nil, nil
+	if filter.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	ws, err := s.workspaceRepo.GetByID(int(filter.WorkspaceID))
+	if err != nil || ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+
+	return s.repo.ListAlerts(filter)
 }
 
 func (s *auditServiceImpl) GetAlert(id int64) (*model.AuditAlert, error) {
-	return nil, nil
+	if id <= 0 {
+		return nil, ErrAuditAlertNotFoundDB
+	}
+	alert, err := s.repo.GetAlertByID(id)
+	if err != nil || alert == nil {
+		return nil, ErrAuditAlertNotFoundDB
+	}
+	return alert, nil
 }
 
 func (s *auditServiceImpl) ResolveAlert(id int64, userID string, req model.ResolveAlertRequest) (*model.AuditAlert, error) {
-	return nil, nil
+	if id <= 0 {
+		return nil, ErrAuditAlertNotFoundDB
+	}
+	alert, err := s.repo.GetAlertByID(id)
+	if err != nil || alert == nil {
+		return nil, ErrAuditAlertNotFoundDB
+	}
+
+	target := strings.ToLower(strings.TrimSpace(req.Status))
+	switch target {
+	case model.AuditAlertStatusAcknowledged, model.AuditAlertStatusResolved, model.AuditAlertStatusDismissed:
+		// valid
+	default:
+		return nil, ErrInvalidAlertStatus
+	}
+
+	if err := s.repo.ResolveAlert(id, target, strings.TrimSpace(req.ResolutionNotes), userID); err != nil {
+		return nil, err
+	}
+	return s.GetAlert(id)
 }
 
 func (s *auditServiceImpl) GenerateExport(userID string, req model.ExportAuditLogsRequest) (*model.AuditExport, []byte, error) {
