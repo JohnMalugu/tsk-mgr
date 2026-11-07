@@ -1444,6 +1444,30 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	auditAlertsQuery := `
+	CREATE TABLE IF NOT EXISTS audit_alerts (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT NOT NULL,
+		severity TEXT NOT NULL DEFAULT 'warning',
+		status TEXT NOT NULL DEFAULT 'open',
+		trigger_event_id INTEGER,
+		resolution_notes TEXT NOT NULL DEFAULT '',
+		resolved_by_user_id TEXT,
+		resolved_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (trigger_event_id) REFERENCES audit_logs(id) ON DELETE SET NULL,
+		FOREIGN KEY (resolved_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+	);`
+
+	_, err = db.Exec(auditAlertsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
