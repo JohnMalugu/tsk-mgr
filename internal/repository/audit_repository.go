@@ -682,11 +682,104 @@ func (r *auditRepositoryImpl) ListExports(workspaceID int64) ([]*model.AuditExpo
 }
 
 func (r *auditRepositoryImpl) GetAuditMetrics(workspaceID int64) (*model.AuditMetrics, error) {
-	return nil, nil
+	metrics := &model.AuditMetrics{
+		WorkspaceID: workspaceID,
+	}
+
+	query := `
+	SELECT 
+		COUNT(*) AS total_logs,
+		COALESCE(SUM(CASE WHEN severity = 'info' THEN 1 ELSE 0 END), 0) AS info_count,
+		COALESCE(SUM(CASE WHEN severity = 'warning' THEN 1 ELSE 0 END), 0) AS warning_count,
+		COALESCE(SUM(CASE WHEN severity = 'critical' THEN 1 ELSE 0 END), 0) AS critical_count,
+		COALESCE(SUM(CASE WHEN category = 'authentication' THEN 1 ELSE 0 END), 0) AS auth_count,
+		COALESCE(SUM(CASE WHEN category = 'security' THEN 1 ELSE 0 END), 0) AS security_count,
+		COALESCE(SUM(CASE WHEN category = 'data_access' THEN 1 ELSE 0 END), 0) AS data_count,
+		COALESCE(SUM(CASE WHEN category = 'configuration' THEN 1 ELSE 0 END), 0) AS config_count,
+		MAX(created_at) AS last_event_at
+	FROM audit_logs
+	WHERE workspace_id = ?
+	`
+	var lastEvent sql.NullTime
+	err := r.db.QueryRow(query, workspaceID).Scan(
+		&metrics.TotalLogs,
+		&metrics.InfoCount,
+		&metrics.WarningCount,
+		&metrics.CriticalCount,
+		&metrics.AuthEventsCount,
+		&metrics.SecurityEventsCount,
+		&metrics.DataEventsCount,
+		&metrics.ConfigEventsCount,
+		&lastEvent,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if lastEvent.Valid {
+		metrics.LastEventAt = &lastEvent.Time
+	}
+
+	// Count open alerts
+	alertQuery := `SELECT COUNT(*) FROM audit_alerts WHERE workspace_id = ? AND status = 'open'`
+	_ = r.db.QueryRow(alertQuery, workspaceID).Scan(&metrics.OpenAlertsCount)
+
+	return metrics, nil
 }
 
 func (r *auditRepositoryImpl) GetComplianceSummary(workspaceID int64) (*model.ComplianceSummary, error) {
-	return nil, nil
+	summary := &model.ComplianceSummary{
+		WorkspaceID:                  workspaceID,
+		ActiveFrameworks:             []string{model.ComplianceSOC2, model.ComplianceGDPR},
+		RetentionDays:                365,
+		AuditTrailIntegrityVerified:  true,
+		ComplianceScore:              100.0,
+	}
+
+	policy, err := r.GetRetentionPolicy(workspaceID)
+	if err == nil && policy != nil {
+		summary.RetentionDays = policy.RetentionDays
+		if policy.Frameworks != "" {
+			parts := strings.Split(policy.Frameworks, ",")
+			var frameworks []string
+			for _, p := range parts {
+				if trimmed := strings.TrimSpace(p); trimmed != "" {
+					frameworks = append(frameworks, trimmed)
+				}
+			}
+			if len(frameworks) > 0 {
+				summary.ActiveFrameworks = frameworks
+			}
+		}
+	}
+
+	// Total logs
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM audit_logs WHERE workspace_id = ?`, workspaceID).Scan(&summary.TotalEventsLogged)
+
+	// Total exports
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM audit_exports WHERE workspace_id = ?`, workspaceID).Scan(&summary.TotalExportsCount)
+
+	// Open critical alerts
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM audit_alerts WHERE workspace_id = ? AND severity = 'critical' AND status = 'open'`, workspaceID).Scan(&summary.OpenCriticalAlerts)
+
+	// Check integrity: verify no logs have empty checksums
+	var unhashedCount int
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM audit_logs WHERE workspace_id = ? AND (checksum IS NULL OR checksum = '')`, workspaceID).Scan(&unhashedCount)
+	if unhashedCount > 0 {
+		summary.AuditTrailIntegrityVerified = false
+	}
+
+	// Compliance Score calculation
+	score := 100.0
+	if !summary.AuditTrailIntegrityVerified {
+		score -= 40.0
+	}
+	score -= float64(summary.OpenCriticalAlerts) * 15.0
+	if score < 0.0 {
+		score = 0.0
+	}
+	summary.ComplianceScore = score
+
+	return summary, nil
 }
 
 // Compile-time check
