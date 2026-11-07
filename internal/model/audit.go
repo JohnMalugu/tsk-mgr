@@ -127,3 +127,36 @@ type AuditAlert struct {
 	TriggerActor       string `json:"trigger_actor,omitempty"`
 	ResolvedByUsername string `json:"resolved_by_username,omitempty"`
 }
+
+// CreateAuditLogRequest payload for ingesting or recording an audit event
+type CreateAuditLogRequest struct {
+	WorkspaceID int64  `json:"workspace_id"`
+	Action      string `json:"action"`
+	Category    string `json:"category,omitempty"` // defaults to "system" if blank
+	Severity    string `json:"severity,omitempty"` // defaults to "info" if blank
+	EntityType  string `json:"entity_type,omitempty"`
+	EntityID    string `json:"entity_id,omitempty"`
+	EntityName  string `json:"entity_name,omitempty"`
+	Description string `json:"description"`
+	BeforeState string `json:"before_state,omitempty"` // JSON string
+	AfterState  string `json:"after_state,omitempty"`  // JSON string
+	Metadata    string `json:"metadata,omitempty"`     // JSON string
+	IPAddress   string `json:"ip_address,omitempty"`
+	UserAgent   string `json:"user_agent,omitempty"`
+}
+
+// AuditLogFilter provides querying, searching, and filtering options across audit logs
+type AuditLogFilter struct {
+	WorkspaceID int64   `json:"workspace_id"`
+	ActorID     *string `json:"actor_id,omitempty"`
+	Action      *string `json:"action,omitempty"`
+	Category    *string `json:"category,omitempty"`
+	Severity    *string `json:"severity,omitempty"`
+	EntityType  *string `json:"entity_type,omitempty"`
+	EntityID    *string `json:"entity_id,omitempty"`
+	Search      *string `json:"search,omitempty"`
+	StartDate   *string `json:"start_date,omitempty"` // YYYY-MM-DD or RFC3339
+	EndDate     *string `json:"end_date,omitempty"`   // YYYY-MM-DD or RFC3339
+	Limit       int     `json:"limit,omitempty"`
+	Offset      int     `json:"offset,omitempty"`
+}
