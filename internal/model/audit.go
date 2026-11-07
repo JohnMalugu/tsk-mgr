@@ -109,18 +109,18 @@ const (
 
 // AuditAlert represents a security anomaly or compliance policy violation
 type AuditAlert struct {
-	ID                 int64      `json:"id"`
-	WorkspaceID        int64      `json:"workspace_id"`
-	Title              string     `json:"title"`
-	Description        string     `json:"description"`
-	Severity           string     `json:"severity"` // warning, critical
-	Status             string     `json:"status"`   // open, acknowledged, resolved, dismissed
-	TriggerEventID     *int64     `json:"trigger_event_id,omitempty"`
-	ResolutionNotes    string     `json:"resolution_notes,omitempty"`
-	ResolvedByUserID   string     `json:"resolved_by_user_id,omitempty"`
-	ResolvedAt         *time.Time `json:"resolved_at,omitempty"`
-	CreatedAt          time.Time  `json:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at"`
+	ID               int64      `json:"id"`
+	WorkspaceID      int64      `json:"workspace_id"`
+	Title            string     `json:"title"`
+	Description      string     `json:"description"`
+	Severity         string     `json:"severity"` // warning, critical
+	Status           string     `json:"status"`   // open, acknowledged, resolved, dismissed
+	TriggerEventID   *int64     `json:"trigger_event_id,omitempty"`
+	ResolutionNotes  string     `json:"resolution_notes,omitempty"`
+	ResolvedByUserID string     `json:"resolved_by_user_id,omitempty"`
+	ResolvedAt       *time.Time `json:"resolved_at,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 
 	// Enriched fields
 	TriggerAction      string `json:"trigger_action,omitempty"`
@@ -176,4 +176,32 @@ type AuditAlertFilter struct {
 	Severity    *string `json:"severity,omitempty"`
 	Limit       int     `json:"limit,omitempty"`
 	Offset      int     `json:"offset,omitempty"`
+}
+
+// ResolveAlertRequest payload for acknowledging or resolving a security alert
+type ResolveAlertRequest struct {
+	Status          string `json:"status"` // acknowledged, resolved, dismissed
+	ResolutionNotes string `json:"resolution_notes,omitempty"`
+}
+
+// AuditExport records an immutable export artifact for compliance submissions
+type AuditExport struct {
+	ID              int64     `json:"id"`
+	WorkspaceID     int64     `json:"workspace_id"`
+	Format          string    `json:"format"` // json, csv
+	FilterSummary   string    `json:"filter_summary"`
+	RecordCount     int       `json:"record_count"`
+	Checksum        string    `json:"checksum"` // SHA256 of export contents
+	CreatedByUserID string    `json:"created_by_user_id"`
+	CreatedAt       time.Time `json:"created_at"`
+
+	// Enriched fields
+	CreatedByUsername string `json:"created_by_username,omitempty"`
+}
+
+// ExportAuditLogsRequest payload for generating an immutable compliance export
+type ExportAuditLogsRequest struct {
+	WorkspaceID int64          `json:"workspace_id"`
+	Format      string         `json:"format,omitempty"` // json, csv (default: json)
+	Filter      AuditLogFilter `json:"filter"`
 }
