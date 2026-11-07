@@ -299,7 +299,22 @@ func (r *auditRepositoryImpl) ListAuditLogs(filter model.AuditLogFilter) ([]*mod
 }
 
 func (r *auditRepositoryImpl) PurgeExpiredAuditLogs(workspaceID int64, olderThan time.Time) (int64, error) {
-	return 0, nil
+	query := `DELETE FROM audit_logs WHERE workspace_id = ? AND created_at < ?`
+	res, err := r.db.Exec(query, workspaceID, olderThan)
+	if err != nil {
+		return 0, err
+	}
+	deletedCount, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+
+	// Update last_purge_at in policy
+	updatePolicy := `UPDATE audit_retention_policies SET last_purge_at = ?, updated_at = ? WHERE workspace_id = ?`
+	now := time.Now()
+	_, _ = r.db.Exec(updatePolicy, now, now, workspaceID)
+
+	return deletedCount, nil
 }
 
 const retentionPolicyBaseSelect = `
