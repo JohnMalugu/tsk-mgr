@@ -372,19 +372,192 @@ func (r *auditRepositoryImpl) UpsertRetentionPolicy(policy *model.AuditRetention
 	return err
 }
 
+const auditAlertBaseSelect = `
+	SELECT 
+		aa.id,
+		aa.workspace_id,
+		aa.title,
+		aa.description,
+		aa.severity,
+		aa.status,
+		aa.trigger_event_id,
+		aa.resolution_notes,
+		aa.resolved_by_user_id,
+		aa.resolved_at,
+		aa.created_at,
+		aa.updated_at,
+		COALESCE(al.action, '') AS trigger_action,
+		COALESCE(al.actor_name, '') AS trigger_actor,
+		COALESCE(u.username, '') AS resolved_by_username
+	FROM audit_alerts aa
+	LEFT JOIN audit_logs al ON aa.trigger_event_id = al.id
+	LEFT JOIN users u ON aa.resolved_by_user_id = u.id
+`
+
+func scanAuditAlert(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.AuditAlert, error) {
+	var a model.AuditAlert
+	var triggerID sql.NullInt64
+	var resolvedBy sql.NullString
+	var resolvedAt sql.NullTime
+
+	err := scanner.Scan(
+		&a.ID,
+		&a.WorkspaceID,
+		&a.Title,
+		&a.Description,
+		&a.Severity,
+		&a.Status,
+		&triggerID,
+		&a.ResolutionNotes,
+		&resolvedBy,
+		&resolvedAt,
+		&a.CreatedAt,
+		&a.UpdatedAt,
+		&a.TriggerAction,
+		&a.TriggerActor,
+		&a.ResolvedByUsername,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if triggerID.Valid {
+		a.TriggerEventID = &triggerID.Int64
+	}
+	if resolvedBy.Valid {
+		a.ResolvedByUserID = resolvedBy.String
+	}
+	if resolvedAt.Valid {
+		a.ResolvedAt = &resolvedAt.Time
+	}
+	return &a, nil
+}
+
 func (r *auditRepositoryImpl) CreateAlert(alert *model.AuditAlert) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if alert.CreatedAt.IsZero() {
+		alert.CreatedAt = now
+	}
+	alert.UpdatedAt = now
+	if alert.Severity == "" {
+		alert.Severity = model.AuditSeverityWarning
+	}
+	if alert.Status == "" {
+		alert.Status = model.AuditAlertStatusOpen
+	}
+
+	query := `
+	INSERT INTO audit_alerts (
+		workspace_id, title, description, severity, status, trigger_event_id,
+		resolution_notes, resolved_by_user_id, resolved_at, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	res, err := r.db.Exec(
+		query,
+		alert.WorkspaceID,
+		alert.Title,
+		alert.Description,
+		alert.Severity,
+		alert.Status,
+		alert.TriggerEventID,
+		alert.ResolutionNotes,
+		alert.ResolvedByUserID,
+		alert.ResolvedAt,
+		alert.CreatedAt,
+		alert.UpdatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	alert.ID = id
+	return id, nil
 }
 
 func (r *auditRepositoryImpl) GetAlertByID(id int64) (*model.AuditAlert, error) {
-	return nil, nil
+	query := auditAlertBaseSelect + ` WHERE aa.id = ?`
+	row := r.db.QueryRow(query, id)
+	alert, err := scanAuditAlert(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrAuditAlertNotFound
+		}
+		return nil, err
+	}
+	return alert, nil
 }
 
 func (r *auditRepositoryImpl) ListAlerts(filter model.AuditAlertFilter) ([]*model.AuditAlert, error) {
-	return nil, nil
+	var conditions []string
+	var args []interface{}
+
+	conditions = append(conditions, "aa.workspace_id = ?")
+	args = append(args, filter.WorkspaceID)
+
+	if filter.Status != nil && strings.TrimSpace(*filter.Status) != "" {
+		conditions = append(conditions, "aa.status = ?")
+		args = append(args, strings.TrimSpace(*filter.Status))
+	}
+	if filter.Severity != nil && strings.TrimSpace(*filter.Severity) != "" {
+		conditions = append(conditions, "aa.severity = ?")
+		args = append(args, strings.TrimSpace(*filter.Severity))
+	}
+
+	whereClause := strings.Join(conditions, " AND ")
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf("%s WHERE %s ORDER BY aa.created_at DESC LIMIT ? OFFSET ?", auditAlertBaseSelect, whereClause)
+	args = append(args, limit, offset)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var alerts []*model.AuditAlert
+	for rows.Next() {
+		a, err := scanAuditAlert(rows)
+		if err != nil {
+			return nil, err
+		}
+		alerts = append(alerts, a)
+	}
+	if alerts == nil {
+		alerts = []*model.AuditAlert{}
+	}
+	return alerts, nil
 }
 
 func (r *auditRepositoryImpl) ResolveAlert(id int64, status, notes, resolvedBy string) error {
+	now := time.Now()
+	query := `
+	UPDATE audit_alerts
+	SET status = ?, resolution_notes = ?, resolved_by_user_id = ?, resolved_at = ?, updated_at = ?
+	WHERE id = ?
+	`
+	res, err := r.db.Exec(query, status, notes, resolvedBy, now, now, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrAuditAlertNotFound
+	}
 	return nil
 }
 
