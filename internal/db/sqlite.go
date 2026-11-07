@@ -1468,6 +1468,25 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	auditExportsQuery := `
+	CREATE TABLE IF NOT EXISTS audit_exports (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		format TEXT NOT NULL DEFAULT 'json',
+		filter_summary TEXT NOT NULL DEFAULT '',
+		record_count INTEGER NOT NULL DEFAULT 0,
+		checksum TEXT NOT NULL,
+		created_by_user_id TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(auditExportsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
