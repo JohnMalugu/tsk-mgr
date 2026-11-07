@@ -176,15 +176,75 @@ func (s *auditServiceImpl) ListEvents(filter model.AuditLogFilter) ([]*model.Aud
 }
 
 func (s *auditServiceImpl) GetRetentionPolicy(workspaceID int64) (*model.AuditRetentionPolicy, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	ws, err := s.workspaceRepo.GetByID(int(workspaceID))
+	if err != nil || ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+
+	policy, err := s.repo.GetRetentionPolicy(workspaceID)
+	if err != nil {
+		// Return standard default retention policy
+		return &model.AuditRetentionPolicy{
+			WorkspaceID:      workspaceID,
+			RetentionDays:    365,
+			Frameworks:       "soc2,gdpr",
+			AutoPurgeEnabled: false,
+		}, nil
+	}
+	return policy, nil
 }
 
 func (s *auditServiceImpl) ConfigureRetentionPolicy(workspaceID int64, req model.RetentionPolicyRequest) (*model.AuditRetentionPolicy, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	ws, err := s.workspaceRepo.GetByID(int(workspaceID))
+	if err != nil || ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+
+	if req.RetentionDays < 30 {
+		return nil, ErrInvalidRetentionPeriod
+	}
+
+	frameworks := "soc2,gdpr"
+	if len(req.Frameworks) > 0 {
+		frameworks = strings.Join(req.Frameworks, ",")
+	}
+
+	policy := &model.AuditRetentionPolicy{
+		WorkspaceID:      workspaceID,
+		RetentionDays:    req.RetentionDays,
+		Frameworks:       frameworks,
+		AutoPurgeEnabled: req.AutoPurgeEnabled,
+		UpdatedAt:        time.Now(),
+	}
+
+	if err := s.repo.UpsertRetentionPolicy(policy); err != nil {
+		return nil, err
+	}
+
+	if req.AutoPurgeEnabled {
+		_, _ = s.PurgeExpiredEvents(workspaceID)
+	}
+
+	return s.GetRetentionPolicy(workspaceID)
 }
 
 func (s *auditServiceImpl) PurgeExpiredEvents(workspaceID int64) (int64, error) {
-	return 0, nil
+	if workspaceID <= 0 {
+		return 0, ErrWorkspaceRequired
+	}
+	policy, err := s.GetRetentionPolicy(workspaceID)
+	if err != nil {
+		return 0, err
+	}
+
+	cutoff := time.Now().AddDate(0, 0, -policy.RetentionDays)
+	return s.repo.PurgeExpiredAuditLogs(workspaceID, cutoff)
 }
 
 func (s *auditServiceImpl) ListAlerts(filter model.AuditAlertFilter) ([]*model.AuditAlert, error) {
