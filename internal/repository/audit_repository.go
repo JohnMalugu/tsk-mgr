@@ -302,12 +302,74 @@ func (r *auditRepositoryImpl) PurgeExpiredAuditLogs(workspaceID int64, olderThan
 	return 0, nil
 }
 
+const retentionPolicyBaseSelect = `
+	SELECT 
+		id,
+		workspace_id,
+		retention_days,
+		frameworks,
+		auto_purge_enabled,
+		last_purge_at,
+		created_at,
+		updated_at
+	FROM audit_retention_policies
+`
+
 func (r *auditRepositoryImpl) GetRetentionPolicy(workspaceID int64) (*model.AuditRetentionPolicy, error) {
-	return nil, nil
+	query := retentionPolicyBaseSelect + ` WHERE workspace_id = ?`
+	row := r.db.QueryRow(query, workspaceID)
+
+	var p model.AuditRetentionPolicy
+	var lastPurge sql.NullTime
+	err := row.Scan(
+		&p.ID,
+		&p.WorkspaceID,
+		&p.RetentionDays,
+		&p.Frameworks,
+		&p.AutoPurgeEnabled,
+		&lastPurge,
+		&p.CreatedAt,
+		&p.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRetentionPolicyNotFound
+		}
+		return nil, err
+	}
+	if lastPurge.Valid {
+		p.LastPurgeAt = &lastPurge.Time
+	}
+	return &p, nil
 }
 
 func (r *auditRepositoryImpl) UpsertRetentionPolicy(policy *model.AuditRetentionPolicy) error {
-	return nil
+	now := time.Now()
+	if policy.CreatedAt.IsZero() {
+		policy.CreatedAt = now
+	}
+	policy.UpdatedAt = now
+
+	query := `
+	INSERT INTO audit_retention_policies (
+		workspace_id, retention_days, frameworks, auto_purge_enabled, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?)
+	ON CONFLICT(workspace_id) DO UPDATE SET
+		retention_days = excluded.retention_days,
+		frameworks = excluded.frameworks,
+		auto_purge_enabled = excluded.auto_purge_enabled,
+		updated_at = excluded.updated_at
+	`
+	_, err := r.db.Exec(
+		query,
+		policy.WorkspaceID,
+		policy.RetentionDays,
+		policy.Frameworks,
+		policy.AutoPurgeEnabled,
+		policy.CreatedAt,
+		policy.UpdatedAt,
+	)
+	return err
 }
 
 func (r *auditRepositoryImpl) CreateAlert(alert *model.AuditAlert) (int64, error) {
