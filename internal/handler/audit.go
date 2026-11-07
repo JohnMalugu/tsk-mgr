@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -175,4 +176,337 @@ func (h *AuditHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 		"offset": filter.Offset,
 	}
 	writeAuditJSON(w, http.StatusOK, resp)
+}
+
+// GetRetentionPolicy handles GET /v2/audit/retention?workspace_id=...
+func (h *AuditHandler) GetRetentionPolicy(w http.ResponseWriter, r *http.Request) {
+	wsIDStr := r.URL.Query().Get("workspace_id")
+	if wsIDStr == "" {
+		writeAuditError(w, http.StatusBadRequest, "workspace_id is required")
+		return
+	}
+	wsID, err := strconv.ParseInt(wsIDStr, 10, 64)
+	if err != nil || wsID <= 0 {
+		writeAuditError(w, http.StatusBadRequest, "invalid workspace_id")
+		return
+	}
+
+	policy, err := h.svc.GetRetentionPolicy(wsID)
+	if err != nil {
+		handleAuditServiceError(w, err)
+		return
+	}
+	writeAuditJSON(w, http.StatusOK, policy)
+}
+
+// ConfigureRetentionPolicy handles POST/PUT /v2/audit/retention
+func (h *AuditHandler) ConfigureRetentionPolicy(w http.ResponseWriter, r *http.Request) {
+	var req model.RetentionPolicyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAuditError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	policy, err := h.svc.ConfigureRetentionPolicy(req.WorkspaceID, req)
+	if err != nil {
+		handleAuditServiceError(w, err)
+		return
+	}
+	writeAuditJSON(w, http.StatusOK, policy)
+}
+
+// PurgeExpiredEvents handles POST /v2/audit/retention/purge?workspace_id=...
+func (h *AuditHandler) PurgeExpiredEvents(w http.ResponseWriter, r *http.Request) {
+	wsIDStr := r.URL.Query().Get("workspace_id")
+	if wsIDStr == "" {
+		writeAuditError(w, http.StatusBadRequest, "workspace_id is required")
+		return
+	}
+	wsID, err := strconv.ParseInt(wsIDStr, 10, 64)
+	if err != nil || wsID <= 0 {
+		writeAuditError(w, http.StatusBadRequest, "invalid workspace_id")
+		return
+	}
+
+	purged, err := h.svc.PurgeExpiredEvents(wsID)
+	if err != nil {
+		handleAuditServiceError(w, err)
+		return
+	}
+	writeAuditJSON(w, http.StatusOK, map[string]interface{}{
+		"message":        "expired audit logs purged successfully",
+		"purged_records": purged,
+	})
+}
+
+// ListAlerts handles GET /v2/audit/alerts?workspace_id=...
+func (h *AuditHandler) ListAlerts(w http.ResponseWriter, r *http.Request) {
+	wsIDStr := r.URL.Query().Get("workspace_id")
+	if wsIDStr == "" {
+		writeAuditError(w, http.StatusBadRequest, "workspace_id is required")
+		return
+	}
+	wsID, err := strconv.ParseInt(wsIDStr, 10, 64)
+	if err != nil || wsID <= 0 {
+		writeAuditError(w, http.StatusBadRequest, "invalid workspace_id")
+		return
+	}
+
+	filter := model.AuditAlertFilter{
+		WorkspaceID: wsID,
+	}
+	if status := r.URL.Query().Get("status"); status != "" {
+		filter.Status = &status
+	}
+	if sev := r.URL.Query().Get("severity"); sev != "" {
+		filter.Severity = &sev
+	}
+
+	alerts, err := h.svc.ListAlerts(filter)
+	if err != nil {
+		handleAuditServiceError(w, err)
+		return
+	}
+	writeAuditJSON(w, http.StatusOK, alerts)
+}
+
+// GetAlert handles GET /v2/audit/alerts/{id}
+func (h *AuditHandler) GetAlert(w http.ResponseWriter, r *http.Request, id int64) {
+	alert, err := h.svc.GetAlert(id)
+	if err != nil {
+		handleAuditServiceError(w, err)
+		return
+	}
+	writeAuditJSON(w, http.StatusOK, alert)
+}
+
+// ResolveAlert handles POST /v2/audit/alerts/{id}/resolve
+func (h *AuditHandler) ResolveAlert(w http.ResponseWriter, r *http.Request, id int64) {
+	var req model.ResolveAlertRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAuditError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	userID := getAuditUser(r)
+
+	alert, err := h.svc.ResolveAlert(id, userID, req)
+	if err != nil {
+		handleAuditServiceError(w, err)
+		return
+	}
+	writeAuditJSON(w, http.StatusOK, alert)
+}
+
+// GenerateExport handles POST /v2/audit/exports
+func (h *AuditHandler) GenerateExport(w http.ResponseWriter, r *http.Request) {
+	var req model.ExportAuditLogsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAuditError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	userID := getAuditUser(r)
+
+	export, data, err := h.svc.GenerateExport(userID, req)
+	if err != nil {
+		handleAuditServiceError(w, err)
+		return
+	}
+
+	if r.URL.Query().Get("download") == "true" {
+		contentType := "application/json"
+		if export.Format == "csv" {
+			contentType = "text/csv"
+		}
+		w.Header().Set("Content-Type", contentType)
+		w.Header().Set("Content-Disposition", "attachment; filename=\"audit-export."+export.Format+"\"")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(data)
+		return
+	}
+
+	writeAuditJSON(w, http.StatusCreated, export)
+}
+
+// ListExports handles GET /v2/audit/exports?workspace_id=...
+func (h *AuditHandler) ListExports(w http.ResponseWriter, r *http.Request) {
+	wsIDStr := r.URL.Query().Get("workspace_id")
+	if wsIDStr == "" {
+		writeAuditError(w, http.StatusBadRequest, "workspace_id is required")
+		return
+	}
+	wsID, err := strconv.ParseInt(wsIDStr, 10, 64)
+	if err != nil || wsID <= 0 {
+		writeAuditError(w, http.StatusBadRequest, "invalid workspace_id")
+		return
+	}
+
+	exports, err := h.svc.ListExports(wsID)
+	if err != nil {
+		handleAuditServiceError(w, err)
+		return
+	}
+	writeAuditJSON(w, http.StatusOK, exports)
+}
+
+// GetAuditMetrics handles GET /v2/audit/metrics?workspace_id=...
+func (h *AuditHandler) GetAuditMetrics(w http.ResponseWriter, r *http.Request) {
+	wsIDStr := r.URL.Query().Get("workspace_id")
+	if wsIDStr == "" {
+		writeAuditError(w, http.StatusBadRequest, "workspace_id is required")
+		return
+	}
+	wsID, err := strconv.ParseInt(wsIDStr, 10, 64)
+	if err != nil || wsID <= 0 {
+		writeAuditError(w, http.StatusBadRequest, "invalid workspace_id")
+		return
+	}
+
+	metrics, err := h.svc.GetAuditMetrics(wsID)
+	if err != nil {
+		handleAuditServiceError(w, err)
+		return
+	}
+	writeAuditJSON(w, http.StatusOK, metrics)
+}
+
+// GetComplianceSummary handles GET /v2/audit/compliance?workspace_id=...
+func (h *AuditHandler) GetComplianceSummary(w http.ResponseWriter, r *http.Request) {
+	wsIDStr := r.URL.Query().Get("workspace_id")
+	if wsIDStr == "" {
+		writeAuditError(w, http.StatusBadRequest, "workspace_id is required")
+		return
+	}
+	wsID, err := strconv.ParseInt(wsIDStr, 10, 64)
+	if err != nil || wsID <= 0 {
+		writeAuditError(w, http.StatusBadRequest, "invalid workspace_id")
+		return
+	}
+
+	summary, err := h.svc.GetComplianceSummary(wsID)
+	if err != nil {
+		handleAuditServiceError(w, err)
+		return
+	}
+	writeAuditJSON(w, http.StatusOK, summary)
+}
+
+// ServeHTTP dispatches incoming requests to the appropriate AuditHandler endpoint
+func (h *AuditHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/audit")
+	path = strings.TrimPrefix(path, "/")
+
+	if path == "" {
+		switch r.Method {
+		case http.MethodGet:
+			h.ListEvents(w, r)
+		case http.MethodPost:
+			h.RecordEvent(w, r)
+		default:
+			writeAuditError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if path == "metrics" || path == "metrics/" {
+		if r.Method != http.MethodGet {
+			writeAuditError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		h.GetAuditMetrics(w, r)
+		return
+	}
+
+	if path == "compliance" || path == "compliance/" {
+		if r.Method != http.MethodGet {
+			writeAuditError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		h.GetComplianceSummary(w, r)
+		return
+	}
+
+	if path == "retention" || path == "retention/" {
+		switch r.Method {
+		case http.MethodGet:
+			h.GetRetentionPolicy(w, r)
+		case http.MethodPost, http.MethodPut:
+			h.ConfigureRetentionPolicy(w, r)
+		default:
+			writeAuditError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if path == "retention/purge" || path == "retention/purge/" {
+		if r.Method != http.MethodPost {
+			writeAuditError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		h.PurgeExpiredEvents(w, r)
+		return
+	}
+
+	if path == "exports" || path == "exports/" {
+		switch r.Method {
+		case http.MethodGet:
+			h.ListExports(w, r)
+		case http.MethodPost:
+			h.GenerateExport(w, r)
+		default:
+			writeAuditError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if path == "alerts" || path == "alerts/" {
+		if r.Method != http.MethodGet {
+			writeAuditError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		h.ListAlerts(w, r)
+		return
+	}
+
+	if strings.HasPrefix(path, "alerts/") {
+		alertParts := strings.Split(strings.TrimPrefix(path, "alerts/"), "/")
+		alertID, err := strconv.ParseInt(alertParts[0], 10, 64)
+		if err != nil || alertID <= 0 {
+			writeAuditError(w, http.StatusBadRequest, "invalid alert id")
+			return
+		}
+
+		if len(alertParts) == 1 || (len(alertParts) == 2 && alertParts[1] == "") {
+			if r.Method != http.MethodGet {
+				writeAuditError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.GetAlert(w, r, alertID)
+			return
+		}
+
+		if len(alertParts) == 2 && alertParts[1] == "resolve" {
+			if r.Method != http.MethodPost {
+				writeAuditError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.ResolveAlert(w, r, alertID)
+			return
+		}
+
+		writeAuditError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	// Parse individual audit log event ID
+	id, err := strconv.ParseInt(path, 10, 64)
+	if err != nil || id <= 0 {
+		writeAuditError(w, http.StatusBadRequest, "invalid audit log id")
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		writeAuditError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	h.GetEvent(w, r, id)
 }

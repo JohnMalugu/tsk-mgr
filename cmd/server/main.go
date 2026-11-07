@@ -143,6 +143,10 @@ func main() {
 	invoiceSvc := service.NewInvoiceService(invoiceRepo, workspaceRepo, projectRepo, timesheetRepo)
 	handler.InitInvoiceHandler(invoiceSvc)
 
+	auditRepo := repository.NewAuditRepository(sqliteDB)
+	auditSvc := service.NewAuditService(auditRepo, workspaceRepo, userRepo)
+	handler.InitAuditHandler(auditSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
