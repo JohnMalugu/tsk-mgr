@@ -700,7 +700,7 @@ func (r *auditRepositoryImpl) GetAuditMetrics(workspaceID int64) (*model.AuditMe
 	FROM audit_logs
 	WHERE workspace_id = ?
 	`
-	var lastEvent sql.NullTime
+	var lastEventStr sql.NullString
 	err := r.db.QueryRow(query, workspaceID).Scan(
 		&metrics.TotalLogs,
 		&metrics.InfoCount,
@@ -710,13 +710,18 @@ func (r *auditRepositoryImpl) GetAuditMetrics(workspaceID int64) (*model.AuditMe
 		&metrics.SecurityEventsCount,
 		&metrics.DataEventsCount,
 		&metrics.ConfigEventsCount,
-		&lastEvent,
+		&lastEventStr,
 	)
 	if err != nil {
 		return nil, err
 	}
-	if lastEvent.Valid {
-		metrics.LastEventAt = &lastEvent.Time
+	if lastEventStr.Valid && lastEventStr.String != "" {
+		for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02 15:04:05.999999999-07:00", "2006-01-02 15:04:05.999999999", "2006-01-02 15:04:05", "2006-01-02T15:04:05Z07:00"} {
+			if t, err := time.Parse(layout, lastEventStr.String); err == nil {
+				metrics.LastEventAt = &t
+				break
+			}
+		}
 	}
 
 	// Count open alerts
