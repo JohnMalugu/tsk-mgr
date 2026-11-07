@@ -1426,6 +1426,24 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	auditRetentionPoliciesQuery := `
+	CREATE TABLE IF NOT EXISTS audit_retention_policies (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL UNIQUE,
+		retention_days INTEGER NOT NULL DEFAULT 365,
+		frameworks TEXT NOT NULL DEFAULT 'soc2,gdpr',
+		auto_purge_enabled INTEGER NOT NULL DEFAULT 0,
+		last_purge_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(auditRetentionPoliciesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
