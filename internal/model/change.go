@@ -239,3 +239,46 @@ type ChangePIR struct {
 	// Enriched fields
 	ReviewedByUsername string `json:"reviewed_by_username,omitempty"`
 }
+
+// CreateChangeRequest payload for raising a new change request
+type CreateChangeRequest struct {
+	WorkspaceID        int64   `json:"workspace_id"`
+	ProjectID          *int64  `json:"project_id,omitempty"`
+	Title              string  `json:"title"`
+	Description        string  `json:"description,omitempty"`
+	ChangeType         string  `json:"change_type"` // standard, normal, emergency
+	RiskLevel          string  `json:"risk_level,omitempty"` // low, medium, high, critical
+	ImpactLevel        string  `json:"impact_level,omitempty"` // low, medium, high
+	ReasonForChange    string  `json:"reason_for_change,omitempty"`
+	ImplementationPlan string  `json:"implementation_plan,omitempty"`
+	RollbackPlan       string  `json:"rollback_plan,omitempty"`
+	TestPlan           string  `json:"test_plan,omitempty"`
+	AssignedToUserID   string  `json:"assigned_to_user_id,omitempty"`
+	PlannedStartAt     *string `json:"planned_start_at,omitempty"` // RFC3339
+	PlannedEndAt       *string `json:"planned_end_at,omitempty"`   // RFC3339
+}
+
+// UpdateChangeRequest payload for editing a draft/pending change request
+type UpdateChangeRequest struct {
+	ProjectID          *int64  `json:"project_id,omitempty"`
+	Title              *string `json:"title,omitempty"`
+	Description        *string `json:"description,omitempty"`
+	ChangeType         *string `json:"change_type,omitempty"`
+	RiskLevel          *string `json:"risk_level,omitempty"`
+	ImpactLevel        *string `json:"impact_level,omitempty"`
+	ReasonForChange    *string `json:"reason_for_change,omitempty"`
+	ImplementationPlan *string `json:"implementation_plan,omitempty"`
+	RollbackPlan       *string `json:"rollback_plan,omitempty"`
+	TestPlan           *string `json:"test_plan,omitempty"`
+	AssignedToUserID   *string `json:"assigned_to_user_id,omitempty"`
+	PlannedStartAt     *string `json:"planned_start_at,omitempty"`
+	PlannedEndAt       *string `json:"planned_end_at,omitempty"`
+}
+
+// ChangeStatusRequest payload for transitioning change request lifecycle state
+type ChangeStatusRequest struct {
+	Status        string  `json:"status"`
+	Comments      string  `json:"comments,omitempty"`
+	ActualStartAt *string `json:"actual_start_at,omitempty"`
+	ActualEndAt   *string `json:"actual_end_at,omitempty"`
+}
