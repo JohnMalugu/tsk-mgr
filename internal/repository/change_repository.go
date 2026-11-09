@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -679,5 +680,77 @@ func (r *changeRepositoryImpl) GetPIR(changeID int64) (*model.ChangePIR, error) 
 }
 
 func (r *changeRepositoryImpl) GetChangeMetrics(workspaceID int64) (*model.ChangeMetrics, error) {
-	return nil, nil
+	metrics := &model.ChangeMetrics{
+		WorkspaceID: workspaceID,
+	}
+
+	query := `
+	SELECT
+		COUNT(*),
+		SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN status = 'submitted' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN status = 'cab_review' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN status = 'scheduled' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN status = 'implementing' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN status = 'rolled_back' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN change_type = 'standard' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN change_type = 'normal' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN change_type = 'emergency' THEN 1 ELSE 0 END)
+	FROM change_requests
+	WHERE workspace_id = ?`
+
+	var total, draft, submitted, cabReview, approved, scheduled, implementing, completed, failed, rolledBack, cancelled, standard, normal, emergency sql.NullInt64
+
+	err := r.db.QueryRow(query, workspaceID).Scan(
+		&total, &draft, &submitted, &cabReview, &approved, &scheduled,
+		&implementing, &completed, &failed, &rolledBack, &cancelled,
+		&standard, &normal, &emergency,
+	)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+
+	metrics.TotalChanges = int(total.Int64)
+	metrics.DraftCount = int(draft.Int64)
+	metrics.SubmittedCount = int(submitted.Int64)
+	metrics.CABReviewCount = int(cabReview.Int64)
+	metrics.ApprovedCount = int(approved.Int64)
+	metrics.ScheduledCount = int(scheduled.Int64)
+	metrics.ImplementingCount = int(implementing.Int64)
+	metrics.CompletedCount = int(completed.Int64)
+	metrics.FailedCount = int(failed.Int64)
+	metrics.RolledBackCount = int(rolledBack.Int64)
+	metrics.CancelledCount = int(cancelled.Int64)
+	metrics.StandardCount = int(standard.Int64)
+	metrics.NormalCount = int(normal.Int64)
+	metrics.EmergencyCount = int(emergency.Int64)
+
+	closedReleases := metrics.CompletedCount + metrics.FailedCount + metrics.RolledBackCount
+	if closedReleases > 0 {
+		metrics.SuccessRate = math.Round((float64(metrics.CompletedCount)/float64(closedReleases))*10000) / 100
+	} else {
+		metrics.SuccessRate = 0.0
+	}
+
+	if metrics.TotalChanges > 0 {
+		metrics.EmergencyRatio = math.Round((float64(metrics.EmergencyCount)/float64(metrics.TotalChanges))*10000) / 100
+	} else {
+		metrics.EmergencyRatio = 0.0
+	}
+
+	leadTimeQuery := `
+	SELECT AVG((julianday(actual_start_at) - julianday(created_at)) * 24.0)
+	FROM change_requests
+	WHERE workspace_id = ? AND actual_start_at IS NOT NULL AND status IN ('completed', 'implementing')`
+
+	var avgLeadTime sql.NullFloat64
+	if err := r.db.QueryRow(leadTimeQuery, workspaceID).Scan(&avgLeadTime); err == nil && avgLeadTime.Valid {
+		metrics.AverageLeadTimeHours = math.Round(avgLeadTime.Float64*100) / 100
+	}
+
+	return metrics, nil
 }
