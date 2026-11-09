@@ -282,3 +282,21 @@ type ChangeStatusRequest struct {
 	ActualStartAt *string `json:"actual_start_at,omitempty"`
 	ActualEndAt   *string `json:"actual_end_at,omitempty"`
 }
+
+// AddReviewerRequest payload for designating a CAB reviewer for a change
+type AddReviewerRequest struct {
+	ReviewerID string `json:"reviewer_id"`
+}
+
+// ChangeApprovalRequest payload for casting a CAB review vote
+type ChangeApprovalRequest struct {
+	Decision string `json:"decision"` // approved, rejected, abstained
+	Comments string `json:"comments,omitempty"`
+}
+
+// ChangePIRRequest payload for submitting a Post-Implementation Review
+type ChangePIRRequest struct {
+	Outcome        string `json:"outcome"` // successful, successful_with_issues, failed_rolled_back, cancelled
+	ReviewNotes    string `json:"review_notes"`
+	LessonsLearned string `json:"lessons_learned,omitempty"`
+}
