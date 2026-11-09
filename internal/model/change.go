@@ -322,3 +322,25 @@ type ChangeFilter struct {
 	Limit       int     `json:"limit,omitempty"`
 	Offset      int     `json:"offset,omitempty"`
 }
+
+// ChangeMetrics provides ITIL key performance indicators (KPIs) for release and change governance
+type ChangeMetrics struct {
+	WorkspaceID          int64   `json:"workspace_id"`
+	TotalChanges         int     `json:"total_changes"`
+	DraftCount           int     `json:"draft_count"`
+	SubmittedCount       int     `json:"submitted_count"`
+	CABReviewCount       int     `json:"cab_review_count"`
+	ApprovedCount        int     `json:"approved_count"`
+	ScheduledCount       int     `json:"scheduled_count"`
+	ImplementingCount    int     `json:"implementing_count"`
+	CompletedCount       int     `json:"completed_count"`
+	FailedCount          int     `json:"failed_count"`
+	RolledBackCount      int     `json:"rolled_back_count"`
+	CancelledCount       int     `json:"cancelled_count"`
+	StandardCount        int     `json:"standard_count"`
+	NormalCount          int     `json:"normal_count"`
+	EmergencyCount       int     `json:"emergency_count"`
+	SuccessRate          float64 `json:"success_rate"`          // percentage (0.0 - 100.0)
+	EmergencyRatio       float64 `json:"emergency_ratio"`       // percentage (0.0 - 100.0)
+	AverageLeadTimeHours float64 `json:"average_lead_time_hours"`
+}
