@@ -1559,6 +1559,25 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	changePIRsQuery := `
+	CREATE TABLE IF NOT EXISTS change_pirs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		change_id INTEGER NOT NULL UNIQUE,
+		outcome TEXT NOT NULL DEFAULT 'successful',
+		review_notes TEXT NOT NULL DEFAULT '',
+		lessons_learned TEXT NOT NULL DEFAULT '',
+		reviewed_by_user_id TEXT NOT NULL,
+		reviewed_at DATETIME NOT NULL,
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (change_id) REFERENCES change_requests(id) ON DELETE CASCADE,
+		FOREIGN KEY (reviewed_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(changePIRsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
