@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -230,7 +231,84 @@ func (r *changeRepositoryImpl) GetChangeByNumber(workspaceID int64, changeNumber
 }
 
 func (r *changeRepositoryImpl) ListChanges(filter model.ChangeFilter) ([]*model.ChangeRequest, error) {
-	return nil, nil
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID > 0 {
+		conditions = append(conditions, "c.workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.ProjectID != nil {
+		conditions = append(conditions, "c.project_id = ?")
+		args = append(args, *filter.ProjectID)
+	}
+	if filter.Status != nil && *filter.Status != "" {
+		conditions = append(conditions, "c.status = ?")
+		args = append(args, *filter.Status)
+	}
+	if filter.ChangeType != nil && *filter.ChangeType != "" {
+		conditions = append(conditions, "c.change_type = ?")
+		args = append(args, *filter.ChangeType)
+	}
+	if filter.RiskLevel != nil && *filter.RiskLevel != "" {
+		conditions = append(conditions, "c.risk_level = ?")
+		args = append(args, *filter.RiskLevel)
+	}
+	if filter.RequestedBy != nil && *filter.RequestedBy != "" {
+		conditions = append(conditions, "c.requested_by_user_id = ?")
+		args = append(args, *filter.RequestedBy)
+	}
+	if filter.AssignedTo != nil && *filter.AssignedTo != "" {
+		conditions = append(conditions, "c.assigned_to_user_id = ?")
+		args = append(args, *filter.AssignedTo)
+	}
+	if filter.Search != nil && *filter.Search != "" {
+		pattern := "%" + *filter.Search + "%"
+		conditions = append(conditions, "(c.title LIKE ? OR c.description LIKE ? OR c.change_number LIKE ?)")
+		args = append(args, pattern, pattern, pattern)
+	}
+	if filter.StartDate != nil && *filter.StartDate != "" {
+		conditions = append(conditions, "DATE(c.created_at) >= ?")
+		args = append(args, *filter.StartDate)
+	}
+	if filter.EndDate != nil && *filter.EndDate != "" {
+		conditions = append(conditions, "DATE(c.created_at) <= ?")
+		args = append(args, *filter.EndDate)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	query := baseChangeSelect + whereClause + " ORDER BY c.created_at DESC"
+	if filter.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, filter.Limit)
+		if filter.Offset > 0 {
+			query += " OFFSET ?"
+			args = append(args, filter.Offset)
+		}
+	}
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var changes []*model.ChangeRequest
+	for rows.Next() {
+		change, err := scanChange(rows)
+		if err != nil {
+			return nil, err
+		}
+		changes = append(changes, change)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return changes, nil
 }
 
 func (r *changeRepositoryImpl) UpdateChange(change *model.ChangeRequest) error {
