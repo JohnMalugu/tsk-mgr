@@ -1523,6 +1523,25 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	changeApprovalsQuery := `
+	CREATE TABLE IF NOT EXISTS change_approvals (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		change_id INTEGER NOT NULL,
+		reviewer_id TEXT NOT NULL,
+		decision TEXT NOT NULL DEFAULT 'pending',
+		comments TEXT NOT NULL DEFAULT '',
+		decided_at DATETIME,
+		created_at DATETIME NOT NULL,
+		UNIQUE(change_id, reviewer_id),
+		FOREIGN KEY (change_id) REFERENCES change_requests(id) ON DELETE CASCADE,
+		FOREIGN KEY (reviewer_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(changeApprovalsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
