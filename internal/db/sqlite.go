@@ -1724,6 +1724,18 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_audit_alerts_trigger ON audit_alerts(trigger_event_id);
 	CREATE INDEX IF NOT EXISTS idx_audit_exports_ws ON audit_exports(workspace_id, created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_audit_exports_user ON audit_exports(created_by_user_id);
+	CREATE INDEX IF NOT EXISTS idx_changes_ws_status ON change_requests(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_changes_ws_type ON change_requests(workspace_id, change_type);
+	CREATE INDEX IF NOT EXISTS idx_changes_ws_risk ON change_requests(workspace_id, risk_level);
+	CREATE INDEX IF NOT EXISTS idx_changes_ws_num ON change_requests(workspace_id, change_number);
+	CREATE INDEX IF NOT EXISTS idx_changes_proj ON change_requests(project_id);
+	CREATE INDEX IF NOT EXISTS idx_changes_requester ON change_requests(requested_by_user_id);
+	CREATE INDEX IF NOT EXISTS idx_changes_assignee ON change_requests(assigned_to_user_id);
+	CREATE INDEX IF NOT EXISTS idx_change_approvals_change ON change_approvals(change_id, decision);
+	CREATE INDEX IF NOT EXISTS idx_change_approvals_reviewer ON change_approvals(reviewer_id);
+	CREATE INDEX IF NOT EXISTS idx_change_task_links_change ON change_task_links(change_id);
+	CREATE INDEX IF NOT EXISTS idx_change_task_links_task ON change_task_links(task_id);
+	CREATE INDEX IF NOT EXISTS idx_change_pirs_change ON change_pirs(change_id);
 	`
 
 	_, err = db.Exec(indexQuery)
