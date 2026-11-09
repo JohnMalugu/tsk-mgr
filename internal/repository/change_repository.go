@@ -312,10 +312,75 @@ func (r *changeRepositoryImpl) ListChanges(filter model.ChangeFilter) ([]*model.
 }
 
 func (r *changeRepositoryImpl) UpdateChange(change *model.ChangeRequest) error {
+	now := time.Now().UTC()
+	change.UpdatedAt = now
+
+	query := `
+	UPDATE change_requests SET
+		project_id = ?,
+		title = ?,
+		description = ?,
+		change_type = ?,
+		risk_level = ?,
+		impact_level = ?,
+		status = ?,
+		reason_for_change = ?,
+		implementation_plan = ?,
+		rollback_plan = ?,
+		test_plan = ?,
+		assigned_to_user_id = ?,
+		planned_start_at = ?,
+		planned_end_at = ?,
+		actual_start_at = ?,
+		actual_end_at = ?,
+		updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query,
+		change.ProjectID,
+		change.Title,
+		change.Description,
+		change.ChangeType,
+		change.RiskLevel,
+		change.ImpactLevel,
+		change.Status,
+		change.ReasonForChange,
+		change.ImplementationPlan,
+		change.RollbackPlan,
+		change.TestPlan,
+		change.AssignedToUserID,
+		change.PlannedStartAt,
+		change.PlannedEndAt,
+		change.ActualStartAt,
+		change.ActualEndAt,
+		change.UpdatedAt,
+		change.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrChangeNotFound
+	}
 	return nil
 }
 
 func (r *changeRepositoryImpl) DeleteChange(id int64) error {
+	res, err := r.db.Exec("DELETE FROM change_requests WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrChangeNotFound
+	}
 	return nil
 }
 
