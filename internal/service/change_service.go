@@ -2,6 +2,9 @@ package service
 
 import (
 	"errors"
+	"fmt"
+	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -78,20 +81,138 @@ func NewChangeService(
 	}
 }
 
+func parseOptionalTime(s *string) (*time.Time, error) {
+	if s == nil || strings.TrimSpace(*s) == "" {
+		return nil, nil
+	}
+	str := strings.TrimSpace(*s)
+	t, err := time.Parse(time.RFC3339, str)
+	if err != nil {
+		t, err = time.Parse("2006-01-02T15:04:05", str)
+		if err != nil {
+			t, err = time.Parse("2006-01-02", str)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return &t, nil
+}
+
+func (s *changeServiceImpl) logAudit(actorID string, workspaceID int64, action, entityID, description string) {
+	if s.auditService != nil {
+		_, _ = s.auditService.RecordEvent(actorID, model.CreateAuditLogRequest{
+			WorkspaceID: workspaceID,
+			Action:      action,
+			Category:    "change",
+			Severity:    "info",
+			EntityType:  "change_request",
+			EntityID:    entityID,
+			Description: description,
+		})
+	}
+}
+
 func (s *changeServiceImpl) CreateChange(requesterID string, req model.CreateChangeRequest) (*model.ChangeRequest, error) {
-	return nil, nil
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		return nil, ErrChangeTitleRequired
+	}
+	if req.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	ws, err := s.workspaceRepo.GetByID(int(req.WorkspaceID))
+	if err != nil || ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+
+	changeType := strings.ToLower(strings.TrimSpace(req.ChangeType))
+	if changeType == "" {
+		changeType = model.ChangeTypeNormal
+	} else if err := model.ValidateChangeType(changeType); err != nil {
+		return nil, err
+	}
+
+	riskLevel := strings.ToLower(strings.TrimSpace(req.RiskLevel))
+	if riskLevel == "" {
+		riskLevel = model.ChangeRiskMedium
+	} else if err := model.ValidateChangeRiskLevel(riskLevel); err != nil {
+		return nil, err
+	}
+
+	impactLevel := strings.ToLower(strings.TrimSpace(req.ImpactLevel))
+	if impactLevel == "" {
+		impactLevel = model.ChangeImpactLow
+	}
+
+	plannedStart, err := parseOptionalTime(req.PlannedStartAt)
+	if err != nil {
+		return nil, errors.New("invalid planned_start_at timestamp")
+	}
+	plannedEnd, err := parseOptionalTime(req.PlannedEndAt)
+	if err != nil {
+		return nil, errors.New("invalid planned_end_at timestamp")
+	}
+
+	change := &model.ChangeRequest{
+		WorkspaceID:        req.WorkspaceID,
+		ProjectID:          req.ProjectID,
+		Title:              title,
+		Description:        strings.TrimSpace(req.Description),
+		ChangeType:         changeType,
+		RiskLevel:          riskLevel,
+		ImpactLevel:        impactLevel,
+		Status:             model.ChangeStatusDraft,
+		ReasonForChange:    strings.TrimSpace(req.ReasonForChange),
+		ImplementationPlan: strings.TrimSpace(req.ImplementationPlan),
+		RollbackPlan:       strings.TrimSpace(req.RollbackPlan),
+		TestPlan:           strings.TrimSpace(req.TestPlan),
+		RequestedByUserID:  requesterID,
+		AssignedToUserID:   strings.TrimSpace(req.AssignedToUserID),
+		PlannedStartAt:     plannedStart,
+		PlannedEndAt:       plannedEnd,
+	}
+
+	id, err := s.repo.CreateChange(change)
+	if err != nil {
+		return nil, err
+	}
+
+	s.logAudit(requesterID, req.WorkspaceID, "change_request.created", fmt.Sprintf("%d", id), fmt.Sprintf("Created change request %s (%s)", change.ChangeNumber, title))
+
+	return s.repo.GetChangeByID(id)
 }
 
 func (s *changeServiceImpl) GetChange(id int64) (*model.ChangeRequest, error) {
-	return nil, nil
+	change, err := s.repo.GetChangeByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrChangeNotFound) {
+			return nil, ErrChangeNotFound
+		}
+		return nil, err
+	}
+	return change, nil
 }
 
 func (s *changeServiceImpl) GetChangeByNumber(workspaceID int64, changeNumber int) (*model.ChangeRequest, error) {
-	return nil, nil
+	change, err := s.repo.GetChangeByNumber(workspaceID, changeNumber)
+	if err != nil {
+		if errors.Is(err, repository.ErrChangeNotFound) {
+			return nil, ErrChangeNotFound
+		}
+		return nil, err
+	}
+	return change, nil
 }
 
 func (s *changeServiceImpl) ListChanges(filter model.ChangeFilter) ([]*model.ChangeRequest, error) {
-	return nil, nil
+	if filter.Limit <= 0 || filter.Limit > 100 {
+		filter.Limit = 50
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+	return s.repo.ListChanges(filter)
 }
 
 func (s *changeServiceImpl) UpdateChange(id int64, userID string, req model.UpdateChangeRequest) (*model.ChangeRequest, error) {
