@@ -256,6 +256,16 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET|POST /v2/audit/exports` to list generated compliance exports or generate an immutable compliance export (`json`, `csv`) with content checksum verification and download support
 - `GET /v2/audit/metrics?workspace_id={id}` for audit log volume, severity distribution (`info`, `warning`, `critical`), security events, and open alert counts
 - `GET /v2/audit/compliance?workspace_id={id}` for workspace compliance summary, active frameworks (`soc2`, `gdpr`, `iso27001`, `hipaa`), audit trail integrity verification, and compliance score
+- `GET|POST /v2/changes` to list change requests with multi-criteria filters (`workspace_id`, `project_id`, `status`, `change_type`, `risk_level`, `requested_by`, `assigned_to`, `search`, `start_date`, `end_date`, `limit`, `offset`) or submit a formal ITIL change request (`standard`, `normal`, `emergency`) with risk and impact evaluation, sequential numbering (`CHG-1`), and implementation/rollback/test plans
+- `GET|PUT|PATCH|DELETE /v2/changes/{id}` to fetch change details (with enriched reviewer counts and linked task counters), update change plan attributes in draft/review state, or delete a draft/cancelled change request
+- `POST|PATCH /v2/changes/{id}/status` to transition change request lifecycle state (`draft`, `submitted`, `cab_review`, `approved`, `scheduled`, `implementing`, `completed`, `failed`, `rolled_back`, `cancelled`) with automated transition validation, actual start/end timestamp recording, and dissenting CAB vote enforcement
+- `GET|POST /v2/changes/{id}/approvals` to list formal CAB review records or add a designated CAB reviewer to a change proposal
+- `POST /v2/changes/{id}/review` to cast a formal CAB review vote (`approved`, `rejected`, `abstained`) with reviewer rationale and timestamping
+- `DELETE /v2/changes/approvals/{approvalId}` to remove a designated reviewer from a change request
+- `GET|POST /v2/changes/{id}/tasks` to view associated execution/verification tasks or link a task to a change request with phase designation (`pre_implementation`, `implementation`, `post_implementation`)
+- `DELETE /v2/changes/{id}/tasks/{taskId}` to unlink an execution task from a change request
+- `GET|POST|PUT /v2/changes/{id}/pir` to inspect or submit a Post-Implementation Review (PIR) examining release outcome (`successful`, `successful_with_issues`, `failed_rolled_back`, `cancelled`), root cause analysis, and lessons learned
+- `GET /v2/changes/metrics?workspace_id={id}` for ITIL change governance metrics, total change volume, status breakdown, change type distribution, release success rate percentage, emergency change ratio percentage, and average implementation lead time hours
 
 ## Current limitations
 

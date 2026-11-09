@@ -73,7 +73,9 @@ const baseChangeSelect = `
 	LEFT JOIN projects p ON c.project_id = p.id
 `
 
-func scanChange(scanner interface{ Scan(dest ...interface{}) error }) (*model.ChangeRequest, error) {
+func scanChange(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.ChangeRequest, error) {
 	var c model.ChangeRequest
 	var projectID sql.NullInt64
 	var assignedTo sql.NullString
@@ -394,7 +396,9 @@ const baseApprovalSelect = `
 	LEFT JOIN users u ON a.reviewer_id = u.id
 `
 
-func scanApproval(scanner interface{ Scan(dest ...interface{}) error }) (*model.ChangeApproval, error) {
+func scanApproval(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.ChangeApproval, error) {
 	var a model.ChangeApproval
 	var decidedAt sql.NullTime
 	var name, email sql.NullString
@@ -622,19 +626,18 @@ func (r *changeRepositoryImpl) UpsertPIR(pir *model.ChangePIR) (int64, error) {
 	query := `
 	INSERT INTO change_pirs (
 		change_id, outcome, review_notes, lessons_learned,
-		reviewed_by_user_id, reviewed_at, created_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		reviewed_by_user_id, reviewed_at, created_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(change_id) DO UPDATE SET
 		outcome = excluded.outcome,
 		review_notes = excluded.review_notes,
 		lessons_learned = excluded.lessons_learned,
 		reviewed_by_user_id = excluded.reviewed_by_user_id,
-		reviewed_at = excluded.reviewed_at,
-		updated_at = excluded.updated_at`
+		reviewed_at = excluded.reviewed_at`
 
 	res, err := r.db.Exec(query,
 		pir.ChangeID, pir.Outcome, pir.ReviewNotes, pir.LessonsLearned,
-		pir.ReviewedByUserID, pir.ReviewedAt, pir.CreatedAt, now,
+		pir.ReviewedByUserID, pir.ReviewedAt, pir.CreatedAt,
 	)
 	if err != nil {
 		return 0, err

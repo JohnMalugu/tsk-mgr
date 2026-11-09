@@ -7,11 +7,11 @@ import (
 )
 
 var (
-	ErrChangeTitleRequired      = errors.New("change request title is required")
-	ErrInvalidChangeType        = errors.New("invalid change type: must be standard, normal, or emergency")
-	ErrInvalidChangeRiskLevel   = errors.New("invalid change risk level: must be low, medium, high, or critical")
-	ErrInvalidChangeStatus      = errors.New("invalid change request status")
-	ErrInvalidChangeTransition  = errors.New("illegal change request status transition")
+	ErrChangeTitleRequired     = errors.New("change request title is required")
+	ErrInvalidChangeType       = errors.New("invalid change type: must be standard, normal, or emergency")
+	ErrInvalidChangeRiskLevel  = errors.New("invalid change risk level: must be low, medium, high, or critical")
+	ErrInvalidChangeStatus     = errors.New("invalid change request status")
+	ErrInvalidChangeTransition = errors.New("illegal change request status transition")
 )
 
 // Change status constants
@@ -246,8 +246,8 @@ type CreateChangeRequest struct {
 	ProjectID          *int64  `json:"project_id,omitempty"`
 	Title              string  `json:"title"`
 	Description        string  `json:"description,omitempty"`
-	ChangeType         string  `json:"change_type"` // standard, normal, emergency
-	RiskLevel          string  `json:"risk_level,omitempty"` // low, medium, high, critical
+	ChangeType         string  `json:"change_type"`            // standard, normal, emergency
+	RiskLevel          string  `json:"risk_level,omitempty"`   // low, medium, high, critical
 	ImpactLevel        string  `json:"impact_level,omitempty"` // low, medium, high
 	ReasonForChange    string  `json:"reason_for_change,omitempty"`
 	ImplementationPlan string  `json:"implementation_plan,omitempty"`
@@ -340,7 +340,7 @@ type ChangeMetrics struct {
 	StandardCount        int     `json:"standard_count"`
 	NormalCount          int     `json:"normal_count"`
 	EmergencyCount       int     `json:"emergency_count"`
-	SuccessRate          float64 `json:"success_rate"`          // percentage (0.0 - 100.0)
-	EmergencyRatio       float64 `json:"emergency_ratio"`       // percentage (0.0 - 100.0)
+	SuccessRate          float64 `json:"success_rate"`    // percentage (0.0 - 100.0)
+	EmergencyRatio       float64 `json:"emergency_ratio"` // percentage (0.0 - 100.0)
 	AverageLeadTimeHours float64 `json:"average_lead_time_hours"`
 }
