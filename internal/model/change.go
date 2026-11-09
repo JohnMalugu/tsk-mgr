@@ -7,10 +7,96 @@ import (
 )
 
 var (
-	ErrChangeTitleRequired    = errors.New("change request title is required")
-	ErrInvalidChangeType      = errors.New("invalid change type: must be standard, normal, or emergency")
-	ErrInvalidChangeRiskLevel = errors.New("invalid change risk level: must be low, medium, high, or critical")
+	ErrChangeTitleRequired      = errors.New("change request title is required")
+	ErrInvalidChangeType        = errors.New("invalid change type: must be standard, normal, or emergency")
+	ErrInvalidChangeRiskLevel   = errors.New("invalid change risk level: must be low, medium, high, or critical")
+	ErrInvalidChangeStatus      = errors.New("invalid change request status")
+	ErrInvalidChangeTransition  = errors.New("illegal change request status transition")
 )
+
+// Change status constants
+const (
+	ChangeStatusDraft        = "draft"
+	ChangeStatusSubmitted    = "submitted"
+	ChangeStatusCABReview    = "cab_review"
+	ChangeStatusApproved     = "approved"
+	ChangeStatusScheduled    = "scheduled"
+	ChangeStatusImplementing = "implementing"
+	ChangeStatusCompleted    = "completed"
+	ChangeStatusFailed       = "failed"
+	ChangeStatusRolledBack   = "rolled_back"
+	ChangeStatusCancelled    = "cancelled"
+)
+
+// ValidateChangeStatus checks if a status string is valid
+func ValidateChangeStatus(s string) error {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case ChangeStatusDraft, ChangeStatusSubmitted, ChangeStatusCABReview, ChangeStatusApproved,
+		ChangeStatusScheduled, ChangeStatusImplementing, ChangeStatusCompleted,
+		ChangeStatusFailed, ChangeStatusRolledBack, ChangeStatusCancelled:
+		return nil
+	default:
+		return ErrInvalidChangeStatus
+	}
+}
+
+// ValidateChangeTransition checks whether transition from current to target status is permitted
+func ValidateChangeTransition(current, target, changeType string) error {
+	current = strings.ToLower(strings.TrimSpace(current))
+	target = strings.ToLower(strings.TrimSpace(target))
+	changeType = strings.ToLower(strings.TrimSpace(changeType))
+
+	if current == target {
+		return nil
+	}
+
+	// Always allow cancelling unless already in a terminal state
+	if target == ChangeStatusCancelled {
+		if current == ChangeStatusCompleted || current == ChangeStatusRolledBack || current == ChangeStatusCancelled {
+			return ErrInvalidChangeTransition
+		}
+		return nil
+	}
+
+	switch current {
+	case ChangeStatusDraft:
+		if target == ChangeStatusSubmitted {
+			return nil
+		}
+	case ChangeStatusSubmitted:
+		if changeType == ChangeTypeStandard && (target == ChangeStatusApproved || target == ChangeStatusScheduled) {
+			return nil
+		}
+		if changeType == ChangeTypeEmergency && (target == ChangeStatusApproved || target == ChangeStatusImplementing) {
+			return nil
+		}
+		if target == ChangeStatusCABReview {
+			return nil
+		}
+	case ChangeStatusCABReview:
+		if target == ChangeStatusApproved || target == ChangeStatusDraft {
+			return nil
+		}
+	case ChangeStatusApproved:
+		if target == ChangeStatusScheduled || target == ChangeStatusImplementing {
+			return nil
+		}
+	case ChangeStatusScheduled:
+		if target == ChangeStatusImplementing {
+			return nil
+		}
+	case ChangeStatusImplementing:
+		if target == ChangeStatusCompleted || target == ChangeStatusFailed || target == ChangeStatusRolledBack {
+			return nil
+		}
+	case ChangeStatusFailed:
+		if target == ChangeStatusRolledBack {
+			return nil
+		}
+	}
+
+	return ErrInvalidChangeTransition
+}
 
 // Change types according to ITIL
 const (
