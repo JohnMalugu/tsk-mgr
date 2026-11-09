@@ -637,5 +637,12 @@ func (s *changeServiceImpl) GetPIR(changeID int64) (*model.ChangePIR, error) {
 }
 
 func (s *changeServiceImpl) GetChangeMetrics(workspaceID int64) (*model.ChangeMetrics, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	ws, err := s.workspaceRepo.GetByID(int(workspaceID))
+	if err != nil || ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+	return s.repo.GetChangeMetrics(workspaceID)
 }
