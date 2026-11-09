@@ -498,23 +498,142 @@ func (s *changeServiceImpl) DeleteReviewer(approvalID int64, userID string) erro
 }
 
 func (s *changeServiceImpl) LinkTask(changeID int64, req model.LinkChangeTaskRequest) (*model.ChangeTaskLink, error) {
-	return nil, nil
+	if req.TaskID <= 0 {
+		return nil, errors.New("task_id is required")
+	}
+
+	change, err := s.repo.GetChangeByID(changeID)
+	if err != nil {
+		if errors.Is(err, repository.ErrChangeNotFound) {
+			return nil, ErrChangeNotFound
+		}
+		return nil, err
+	}
+
+	if s.taskRepo != nil {
+		task, err := s.taskRepo.GetByID(req.TaskID)
+		if err != nil || task == nil {
+			return nil, errors.New("task not found")
+		}
+	}
+
+	phase := strings.ToLower(strings.TrimSpace(req.Phase))
+	if phase == "" {
+		phase = model.ChangePhaseImplementation
+	}
+	if phase != model.ChangePhasePreImplementation && phase != model.ChangePhaseImplementation && phase != model.ChangePhasePostImplementation {
+		return nil, ErrInvalidChangePhase
+	}
+
+	existingLinks, err := s.repo.ListLinkedTasks(changeID)
+	if err == nil {
+		for _, l := range existingLinks {
+			if l.TaskID == req.TaskID {
+				return nil, ErrTaskAlreadyLinked
+			}
+		}
+	}
+
+	link := &model.ChangeTaskLink{
+		ChangeID:  changeID,
+		TaskID:    req.TaskID,
+		Phase:     phase,
+		CreatedAt: time.Now().UTC(),
+	}
+
+	id, err := s.repo.LinkTask(link)
+	if err != nil {
+		return nil, err
+	}
+	link.ID = id
+
+	links, err := s.repo.ListLinkedTasks(changeID)
+	if err == nil {
+		for _, l := range links {
+			if l.ID == id {
+				return &l, nil
+			}
+		}
+	}
+
+	s.logAudit(change.RequestedByUserID, change.WorkspaceID, "change_task.linked", fmt.Sprintf("%d", id), fmt.Sprintf("Linked task %d to change %s", req.TaskID, change.ChangeNumber))
+	return link, nil
 }
 
 func (s *changeServiceImpl) UnlinkTask(changeID int64, taskID int) error {
-	return nil
+	if _, err := s.repo.GetChangeByID(changeID); err != nil {
+		if errors.Is(err, repository.ErrChangeNotFound) {
+			return ErrChangeNotFound
+		}
+		return err
+	}
+	return s.repo.UnlinkTask(changeID, taskID)
 }
 
 func (s *changeServiceImpl) ListLinkedTasks(changeID int64) ([]model.ChangeTaskLink, error) {
-	return nil, nil
+	if _, err := s.repo.GetChangeByID(changeID); err != nil {
+		if errors.Is(err, repository.ErrChangeNotFound) {
+			return nil, ErrChangeNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListLinkedTasks(changeID)
 }
 
 func (s *changeServiceImpl) SubmitPIR(changeID int64, reviewerID string, req model.ChangePIRRequest) (*model.ChangePIR, error) {
-	return nil, nil
+	change, err := s.repo.GetChangeByID(changeID)
+	if err != nil {
+		if errors.Is(err, repository.ErrChangeNotFound) {
+			return nil, ErrChangeNotFound
+		}
+		return nil, err
+	}
+
+	outcome := strings.ToLower(strings.TrimSpace(req.Outcome))
+	if outcome != model.PIROutcomeSuccessful && outcome != model.PIROutcomeSuccessfulWithIssues && outcome != model.PIROutcomeFailedRolledBack && outcome != model.PIROutcomeCancelled {
+		return nil, ErrInvalidPIROutcome
+	}
+
+	notes := strings.TrimSpace(req.ReviewNotes)
+	if notes == "" {
+		return nil, ErrPIRNotesRequired
+	}
+
+	pir := &model.ChangePIR{
+		ChangeID:         changeID,
+		Outcome:          outcome,
+		ReviewNotes:      notes,
+		LessonsLearned:   strings.TrimSpace(req.LessonsLearned),
+		ReviewedByUserID: reviewerID,
+		ReviewedAt:       time.Now().UTC(),
+	}
+
+	id, err := s.repo.UpsertPIR(pir)
+	if err != nil {
+		return nil, err
+	}
+
+	s.logAudit(reviewerID, change.WorkspaceID, "change_pir.submitted", fmt.Sprintf("%d", id), fmt.Sprintf("Submitted PIR for change %s (outcome: %s)", change.ChangeNumber, outcome))
+
+	return s.repo.GetPIR(changeID)
 }
 
 func (s *changeServiceImpl) GetPIR(changeID int64) (*model.ChangePIR, error) {
-	return nil, nil
+	if _, err := s.repo.GetChangeByID(changeID); err != nil {
+		if errors.Is(err, repository.ErrChangeNotFound) {
+			return nil, ErrChangeNotFound
+		}
+		return nil, err
+	}
+
+	pir, err := s.repo.GetPIR(changeID)
+	if err != nil {
+		if errors.Is(err, repository.ErrPIRNotFound) {
+			return nil, ErrPIRNotFound
+		}
+		return nil, err
+	}
+	return pir, nil
 }
 
 func (s *changeServiceImpl) GetChangeMetrics(workspaceID int64) (*model.ChangeMetrics, error) {
