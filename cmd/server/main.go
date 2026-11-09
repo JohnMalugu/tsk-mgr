@@ -147,6 +147,10 @@ func main() {
 	auditSvc := service.NewAuditService(auditRepo, workspaceRepo, userRepo)
 	handler.InitAuditHandler(auditSvc)
 
+	changeRepo := repository.NewChangeRepository(sqliteDB)
+	changeSvc := service.NewChangeService(changeRepo, workspaceRepo, projectRepo, taskRepo, userRepo, auditSvc)
+	handler.InitChangeHandler(changeSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 

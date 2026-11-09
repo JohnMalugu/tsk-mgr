@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
@@ -218,4 +219,277 @@ func (h *ChangeHandler) ChangeStatus(w http.ResponseWriter, r *http.Request, id 
 		return
 	}
 	writeChangeJSON(w, http.StatusOK, change)
+}
+
+// AddReviewer handles POST /v2/changes/{id}/approvals
+func (h *ChangeHandler) AddReviewer(w http.ResponseWriter, r *http.Request, changeID int64) {
+	var req model.AddReviewerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeChangeError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+	userID := getChangeUser(r)
+	approval, err := h.svc.AddReviewer(changeID, userID, req)
+	if err != nil {
+		handleChangeServiceError(w, err)
+		return
+	}
+	writeChangeJSON(w, http.StatusCreated, approval)
+}
+
+// ReviewChange handles POST /v2/changes/{id}/review
+func (h *ChangeHandler) ReviewChange(w http.ResponseWriter, r *http.Request, changeID int64) {
+	var req model.ChangeApprovalRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeChangeError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+	reviewerID := getChangeUser(r)
+	approval, err := h.svc.ReviewChange(changeID, reviewerID, req)
+	if err != nil {
+		handleChangeServiceError(w, err)
+		return
+	}
+	writeChangeJSON(w, http.StatusOK, approval)
+}
+
+// ListApprovals handles GET /v2/changes/{id}/approvals
+func (h *ChangeHandler) ListApprovals(w http.ResponseWriter, r *http.Request, changeID int64) {
+	approvals, err := h.svc.ListApprovals(changeID)
+	if err != nil {
+		handleChangeServiceError(w, err)
+		return
+	}
+	if approvals == nil {
+		approvals = []model.ChangeApproval{}
+	}
+	writeChangeJSON(w, http.StatusOK, approvals)
+}
+
+// DeleteReviewer handles DELETE /v2/changes/approvals/{approvalId}
+func (h *ChangeHandler) DeleteReviewer(w http.ResponseWriter, r *http.Request, approvalID int64) {
+	userID := getChangeUser(r)
+	if err := h.svc.DeleteReviewer(approvalID, userID); err != nil {
+		handleChangeServiceError(w, err)
+		return
+	}
+	writeChangeJSON(w, http.StatusOK, map[string]string{"message": "reviewer removed successfully"})
+}
+
+// LinkTask handles POST /v2/changes/{id}/tasks
+func (h *ChangeHandler) LinkTask(w http.ResponseWriter, r *http.Request, changeID int64) {
+	var req model.LinkChangeTaskRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeChangeError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+	link, err := h.svc.LinkTask(changeID, req)
+	if err != nil {
+		handleChangeServiceError(w, err)
+		return
+	}
+	writeChangeJSON(w, http.StatusCreated, link)
+}
+
+// UnlinkTask handles DELETE /v2/changes/{id}/tasks/{taskId}
+func (h *ChangeHandler) UnlinkTask(w http.ResponseWriter, r *http.Request, changeID int64, taskID int) {
+	if err := h.svc.UnlinkTask(changeID, taskID); err != nil {
+		handleChangeServiceError(w, err)
+		return
+	}
+	writeChangeJSON(w, http.StatusOK, map[string]string{"message": "task unlinked successfully"})
+}
+
+// ListLinkedTasks handles GET /v2/changes/{id}/tasks
+func (h *ChangeHandler) ListLinkedTasks(w http.ResponseWriter, r *http.Request, changeID int64) {
+	tasks, err := h.svc.ListLinkedTasks(changeID)
+	if err != nil {
+		handleChangeServiceError(w, err)
+		return
+	}
+	if tasks == nil {
+		tasks = []model.ChangeTaskLink{}
+	}
+	writeChangeJSON(w, http.StatusOK, tasks)
+}
+
+// SubmitPIR handles POST /v2/changes/{id}/pir
+func (h *ChangeHandler) SubmitPIR(w http.ResponseWriter, r *http.Request, changeID int64) {
+	var req model.ChangePIRRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeChangeError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+	reviewerID := getChangeUser(r)
+	pir, err := h.svc.SubmitPIR(changeID, reviewerID, req)
+	if err != nil {
+		handleChangeServiceError(w, err)
+		return
+	}
+	writeChangeJSON(w, http.StatusOK, pir)
+}
+
+// GetPIR handles GET /v2/changes/{id}/pir
+func (h *ChangeHandler) GetPIR(w http.ResponseWriter, r *http.Request, changeID int64) {
+	pir, err := h.svc.GetPIR(changeID)
+	if err != nil {
+		handleChangeServiceError(w, err)
+		return
+	}
+	writeChangeJSON(w, http.StatusOK, pir)
+}
+
+// GetMetrics handles GET /v2/changes/metrics?workspace_id=X
+func (h *ChangeHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
+	wsIDStr := r.URL.Query().Get("workspace_id")
+	if wsIDStr == "" {
+		writeChangeError(w, http.StatusBadRequest, "workspace_id query parameter is required")
+		return
+	}
+	wsID, err := strconv.ParseInt(wsIDStr, 10, 64)
+	if err != nil || wsID <= 0 {
+		writeChangeError(w, http.StatusBadRequest, "invalid workspace_id")
+		return
+	}
+	metrics, err := h.svc.GetChangeMetrics(wsID)
+	if err != nil {
+		handleChangeServiceError(w, err)
+		return
+	}
+	writeChangeJSON(w, http.StatusOK, metrics)
+}
+
+// ServeHTTP dispatches requests under /v2/changes
+func (h *ChangeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/changes")
+	path = strings.TrimPrefix(path, "/")
+	path = strings.TrimSuffix(path, "/")
+
+	if path == "" {
+		switch r.Method {
+		case http.MethodGet:
+			h.ListChanges(w, r)
+		case http.MethodPost:
+			h.CreateChange(w, r)
+		default:
+			writeChangeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if path == "metrics" {
+		if r.Method != http.MethodGet {
+			writeChangeError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		h.GetMetrics(w, r)
+		return
+	}
+
+	if strings.HasPrefix(path, "approvals/") {
+		parts := strings.Split(path, "/")
+		if len(parts) == 2 {
+			approvalID, err := strconv.ParseInt(parts[1], 10, 64)
+			if err != nil || approvalID <= 0 {
+				writeChangeError(w, http.StatusBadRequest, "invalid approval id")
+				return
+			}
+			if r.Method == http.MethodDelete {
+				h.DeleteReviewer(w, r, approvalID)
+				return
+			}
+			writeChangeError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+	}
+
+	parts := strings.Split(path, "/")
+	id, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || id <= 0 {
+		writeChangeError(w, http.StatusBadRequest, "invalid change id")
+		return
+	}
+
+	if len(parts) == 1 {
+		switch r.Method {
+		case http.MethodGet:
+			h.GetChange(w, r, id)
+		case http.MethodPut, http.MethodPatch:
+			h.UpdateChange(w, r, id)
+		case http.MethodDelete:
+			h.DeleteChange(w, r, id)
+		default:
+			writeChangeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if len(parts) == 2 {
+		switch parts[1] {
+		case "status":
+			if r.Method != http.MethodPost && r.Method != http.MethodPatch {
+				writeChangeError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.ChangeStatus(w, r, id)
+		case "approvals":
+			switch r.Method {
+			case http.MethodGet:
+				h.ListApprovals(w, r, id)
+			case http.MethodPost:
+				h.AddReviewer(w, r, id)
+			default:
+				writeChangeError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		case "review":
+			if r.Method != http.MethodPost {
+				writeChangeError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.ReviewChange(w, r, id)
+		case "tasks":
+			switch r.Method {
+			case http.MethodGet:
+				h.ListLinkedTasks(w, r, id)
+			case http.MethodPost:
+				h.LinkTask(w, r, id)
+			default:
+				writeChangeError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		case "pir":
+			switch r.Method {
+			case http.MethodGet:
+				h.GetPIR(w, r, id)
+			case http.MethodPost, http.MethodPut:
+				h.SubmitPIR(w, r, id)
+			default:
+				writeChangeError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		default:
+			writeChangeError(w, http.StatusNotFound, "not found")
+		}
+		return
+	}
+
+	if len(parts) == 3 {
+		switch parts[1] {
+		case "tasks":
+			taskID, err := strconv.Atoi(parts[2])
+			if err != nil || taskID <= 0 {
+				writeChangeError(w, http.StatusBadRequest, "invalid task id")
+				return
+			}
+			if r.Method != http.MethodDelete {
+				writeChangeError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.UnlinkTask(w, r, id, taskID)
+			return
+		default:
+			writeChangeError(w, http.StatusNotFound, "not found")
+			return
+		}
+	}
+
+	writeChangeError(w, http.StatusNotFound, "not found")
 }

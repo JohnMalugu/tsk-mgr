@@ -161,6 +161,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 ITIL Change Management & CAB Approval Workflows
+	if strings.HasPrefix(r.URL.Path, "/v2/changes") {
+		if handler.GlobalChangeHandler == nil {
+			http.Error(w, "Change handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalChangeHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return
