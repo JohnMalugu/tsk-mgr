@@ -173,3 +173,69 @@ type ChangeRequest struct {
 	ApprovedCount  int    `json:"approved_count,omitempty"`
 	TasksCount     int    `json:"tasks_count,omitempty"`
 }
+
+// Approval decision constants
+const (
+	ApprovalDecisionPending   = "pending"
+	ApprovalDecisionApproved  = "approved"
+	ApprovalDecisionRejected  = "rejected"
+	ApprovalDecisionAbstained = "abstained"
+)
+
+// ChangeApproval records a formal CAB voting review for a change request
+type ChangeApproval struct {
+	ID         int64      `json:"id"`
+	ChangeID   int64      `json:"change_id"`
+	ReviewerID string     `json:"reviewer_id"`
+	Decision   string     `json:"decision"` // pending, approved, rejected, abstained
+	Comments   string     `json:"comments,omitempty"`
+	DecidedAt  *time.Time `json:"decided_at,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+
+	// Enriched fields
+	ReviewerName  string `json:"reviewer_name,omitempty"`
+	ReviewerEmail string `json:"reviewer_email,omitempty"`
+}
+
+// Task implementation phases
+const (
+	ChangePhasePreImplementation  = "pre_implementation"
+	ChangePhaseImplementation     = "implementation"
+	ChangePhasePostImplementation = "post_implementation"
+)
+
+// ChangeTaskLink associates an execution or verification task with a change request
+type ChangeTaskLink struct {
+	ID        int64     `json:"id"`
+	ChangeID  int64     `json:"change_id"`
+	TaskID    int       `json:"task_id"`
+	Phase     string    `json:"phase"` // pre_implementation, implementation, post_implementation
+	CreatedAt time.Time `json:"created_at"`
+
+	// Enriched fields
+	TaskTitle  string `json:"task_title,omitempty"`
+	TaskStatus string `json:"task_status,omitempty"`
+}
+
+// PIR outcome constants
+const (
+	PIROutcomeSuccessful           = "successful"
+	PIROutcomeSuccessfulWithIssues = "successful_with_issues"
+	PIROutcomeFailedRolledBack     = "failed_rolled_back"
+	PIROutcomeCancelled            = "cancelled"
+)
+
+// ChangePIR represents a Post-Implementation Review examining deployment outcome and root cause
+type ChangePIR struct {
+	ID               int64     `json:"id"`
+	ChangeID         int64     `json:"change_id"`
+	Outcome          string    `json:"outcome"` // successful, successful_with_issues, failed_rolled_back, cancelled
+	ReviewNotes      string    `json:"review_notes"`
+	LessonsLearned   string    `json:"lessons_learned,omitempty"`
+	ReviewedByUserID string    `json:"reviewed_by_user_id"`
+	ReviewedAt       time.Time `json:"reviewed_at"`
+	CreatedAt        time.Time `json:"created_at"`
+
+	// Enriched fields
+	ReviewedByUsername string `json:"reviewed_by_username,omitempty"`
+}
