@@ -216,15 +216,172 @@ func (s *changeServiceImpl) ListChanges(filter model.ChangeFilter) ([]*model.Cha
 }
 
 func (s *changeServiceImpl) UpdateChange(id int64, userID string, req model.UpdateChangeRequest) (*model.ChangeRequest, error) {
-	return nil, nil
+	change, err := s.repo.GetChangeByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrChangeNotFound) {
+			return nil, ErrChangeNotFound
+		}
+		return nil, err
+	}
+
+	if change.Status != model.ChangeStatusDraft && change.Status != model.ChangeStatusSubmitted && change.Status != model.ChangeStatusCABReview {
+		return nil, ErrChangeNotEditable
+	}
+
+	if req.Title != nil {
+		t := strings.TrimSpace(*req.Title)
+		if t == "" {
+			return nil, ErrChangeTitleRequired
+		}
+		change.Title = t
+	}
+	if req.Description != nil {
+		change.Description = strings.TrimSpace(*req.Description)
+	}
+	if req.ProjectID != nil {
+		change.ProjectID = req.ProjectID
+	}
+	if req.ChangeType != nil {
+		ct := strings.ToLower(strings.TrimSpace(*req.ChangeType))
+		if err := model.ValidateChangeType(ct); err != nil {
+			return nil, err
+		}
+		change.ChangeType = ct
+	}
+	if req.RiskLevel != nil {
+		rl := strings.ToLower(strings.TrimSpace(*req.RiskLevel))
+		if err := model.ValidateChangeRiskLevel(rl); err != nil {
+			return nil, err
+		}
+		change.RiskLevel = rl
+	}
+	if req.ImpactLevel != nil {
+		change.ImpactLevel = strings.ToLower(strings.TrimSpace(*req.ImpactLevel))
+	}
+	if req.ReasonForChange != nil {
+		change.ReasonForChange = strings.TrimSpace(*req.ReasonForChange)
+	}
+	if req.ImplementationPlan != nil {
+		change.ImplementationPlan = strings.TrimSpace(*req.ImplementationPlan)
+	}
+	if req.RollbackPlan != nil {
+		change.RollbackPlan = strings.TrimSpace(*req.RollbackPlan)
+	}
+	if req.TestPlan != nil {
+		change.TestPlan = strings.TrimSpace(*req.TestPlan)
+	}
+	if req.AssignedToUserID != nil {
+		change.AssignedToUserID = strings.TrimSpace(*req.AssignedToUserID)
+	}
+	if req.PlannedStartAt != nil {
+		t, err := parseOptionalTime(req.PlannedStartAt)
+		if err != nil {
+			return nil, errors.New("invalid planned_start_at timestamp")
+		}
+		change.PlannedStartAt = t
+	}
+	if req.PlannedEndAt != nil {
+		t, err := parseOptionalTime(req.PlannedEndAt)
+		if err != nil {
+			return nil, errors.New("invalid planned_end_at timestamp")
+		}
+		change.PlannedEndAt = t
+	}
+
+	if err := s.repo.UpdateChange(change); err != nil {
+		return nil, err
+	}
+
+	s.logAudit(userID, change.WorkspaceID, "change_request.updated", fmt.Sprintf("%d", id), fmt.Sprintf("Updated change request %s (%s)", change.ChangeNumber, change.Title))
+
+	return s.repo.GetChangeByID(id)
 }
 
 func (s *changeServiceImpl) DeleteChange(id int64, userID string) error {
+	change, err := s.repo.GetChangeByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrChangeNotFound) {
+			return ErrChangeNotFound
+		}
+		return err
+	}
+
+	if change.Status != model.ChangeStatusDraft && change.Status != model.ChangeStatusCancelled {
+		return ErrChangeNotEditable
+	}
+
+	if err := s.repo.DeleteChange(id); err != nil {
+		return err
+	}
+
+	s.logAudit(userID, change.WorkspaceID, "change_request.deleted", fmt.Sprintf("%d", id), fmt.Sprintf("Deleted change request %s (%s)", change.ChangeNumber, change.Title))
 	return nil
 }
 
 func (s *changeServiceImpl) ChangeStatus(id int64, userID string, req model.ChangeStatusRequest) (*model.ChangeRequest, error) {
-	return nil, nil
+	targetStatus := strings.ToLower(strings.TrimSpace(req.Status))
+	if err := model.ValidateChangeStatus(targetStatus); err != nil {
+		return nil, ErrInvalidChangeStatus
+	}
+
+	change, err := s.repo.GetChangeByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrChangeNotFound) {
+			return nil, ErrChangeNotFound
+		}
+		return nil, err
+	}
+
+	if err := model.ValidateChangeTransition(change.Status, targetStatus, change.ChangeType); err != nil {
+		return nil, ErrInvalidChangeTransition
+	}
+
+	if targetStatus == model.ChangeStatusApproved {
+		approvals, err := s.repo.ListApprovals(id)
+		if err == nil {
+			for _, a := range approvals {
+				if a.Decision == model.ApprovalDecisionRejected {
+					return nil, errors.New("cannot approve change request with rejected CAB review")
+				}
+			}
+		}
+	}
+
+	if targetStatus == model.ChangeStatusImplementing {
+		if change.ActualStartAt == nil {
+			now := time.Now().UTC()
+			if req.ActualStartAt != nil {
+				parsed, err := parseOptionalTime(req.ActualStartAt)
+				if err == nil && parsed != nil {
+					now = *parsed
+				}
+			}
+			change.ActualStartAt = &now
+		}
+	}
+
+	if targetStatus == model.ChangeStatusCompleted || targetStatus == model.ChangeStatusFailed || targetStatus == model.ChangeStatusRolledBack {
+		if change.ActualEndAt == nil {
+			now := time.Now().UTC()
+			if req.ActualEndAt != nil {
+				parsed, err := parseOptionalTime(req.ActualEndAt)
+				if err == nil && parsed != nil {
+					now = *parsed
+				}
+			}
+			change.ActualEndAt = &now
+		}
+	}
+
+	change.Status = targetStatus
+
+	if err := s.repo.UpdateChange(change); err != nil {
+		return nil, err
+	}
+
+	s.logAudit(userID, change.WorkspaceID, "change_request.status_changed", fmt.Sprintf("%d", id), fmt.Sprintf("Changed status of %s to %s", change.ChangeNumber, targetStatus))
+
+	return s.repo.GetChangeByID(id)
 }
 
 func (s *changeServiceImpl) AddReviewer(changeID int64, userID string, req model.AddReviewerRequest) (*model.ChangeApproval, error) {
