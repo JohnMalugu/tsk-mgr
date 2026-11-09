@@ -384,27 +384,151 @@ func (r *changeRepositoryImpl) DeleteChange(id int64) error {
 	return nil
 }
 
+const baseApprovalSelect = `
+	SELECT 
+		a.id, a.change_id, a.reviewer_id, a.decision, a.comments, a.decided_at, a.created_at,
+		COALESCE(u.username, '') AS reviewer_name,
+		COALESCE(u.email, '') AS reviewer_email
+	FROM change_approvals a
+	LEFT JOIN users u ON a.reviewer_id = u.id
+`
+
+func scanApproval(scanner interface{ Scan(dest ...interface{}) error }) (*model.ChangeApproval, error) {
+	var a model.ChangeApproval
+	var decidedAt sql.NullTime
+	var name, email sql.NullString
+
+	err := scanner.Scan(
+		&a.ID, &a.ChangeID, &a.ReviewerID, &a.Decision, &a.Comments, &decidedAt, &a.CreatedAt,
+		&name, &email,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if decidedAt.Valid {
+		t := decidedAt.Time
+		a.DecidedAt = &t
+	}
+	if name.Valid {
+		a.ReviewerName = name.String
+	}
+	if email.Valid {
+		a.ReviewerEmail = email.String
+	}
+	return &a, nil
+}
+
 func (r *changeRepositoryImpl) AddReviewer(approval *model.ChangeApproval) (int64, error) {
-	return 0, nil
+	if approval.CreatedAt.IsZero() {
+		approval.CreatedAt = time.Now().UTC()
+	}
+	if approval.Decision == "" {
+		approval.Decision = model.ApprovalDecisionPending
+	}
+
+	query := `
+	INSERT INTO change_approvals (
+		change_id, reviewer_id, decision, comments, decided_at, created_at
+	) VALUES (?, ?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query,
+		approval.ChangeID, approval.ReviewerID, approval.Decision,
+		approval.Comments, approval.DecidedAt, approval.CreatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	approval.ID = id
+	return id, nil
 }
 
 func (r *changeRepositoryImpl) GetApprovalByID(id int64) (*model.ChangeApproval, error) {
-	return nil, nil
+	query := baseApprovalSelect + ` WHERE a.id = ?`
+	row := r.db.QueryRow(query, id)
+	approval, err := scanApproval(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrApprovalNotFound
+		}
+		return nil, err
+	}
+	return approval, nil
 }
 
 func (r *changeRepositoryImpl) GetApprovalByChangeAndReviewer(changeID int64, reviewerID string) (*model.ChangeApproval, error) {
-	return nil, nil
+	query := baseApprovalSelect + ` WHERE a.change_id = ? AND a.reviewer_id = ?`
+	row := r.db.QueryRow(query, changeID, reviewerID)
+	approval, err := scanApproval(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrApprovalNotFound
+		}
+		return nil, err
+	}
+	return approval, nil
 }
 
 func (r *changeRepositoryImpl) CastDecision(changeID int64, reviewerID string, decision string, comments string) error {
+	now := time.Now().UTC()
+	query := `
+	UPDATE change_approvals SET
+		decision = ?,
+		comments = ?,
+		decided_at = ?
+	WHERE change_id = ? AND reviewer_id = ?`
+
+	res, err := r.db.Exec(query, decision, comments, now, changeID, reviewerID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrApprovalNotFound
+	}
 	return nil
 }
 
 func (r *changeRepositoryImpl) ListApprovals(changeID int64) ([]model.ChangeApproval, error) {
-	return nil, nil
+	query := baseApprovalSelect + ` WHERE a.change_id = ? ORDER BY a.created_at ASC`
+	rows, err := r.db.Query(query, changeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var approvals []model.ChangeApproval
+	for rows.Next() {
+		appr, err := scanApproval(rows)
+		if err != nil {
+			return nil, err
+		}
+		approvals = append(approvals, *appr)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return approvals, nil
 }
 
 func (r *changeRepositoryImpl) DeleteReviewer(approvalID int64) error {
+	res, err := r.db.Exec("DELETE FROM change_approvals WHERE id = ?", approvalID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrApprovalNotFound
+	}
 	return nil
 }
 
