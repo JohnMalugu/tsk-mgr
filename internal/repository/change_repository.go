@@ -533,23 +533,149 @@ func (r *changeRepositoryImpl) DeleteReviewer(approvalID int64) error {
 }
 
 func (r *changeRepositoryImpl) LinkTask(link *model.ChangeTaskLink) (int64, error) {
-	return 0, nil
+	if link.CreatedAt.IsZero() {
+		link.CreatedAt = time.Now().UTC()
+	}
+	if link.Phase == "" {
+		link.Phase = model.ChangePhaseImplementation
+	}
+
+	query := `
+	INSERT INTO change_task_links (change_id, task_id, phase, created_at)
+	VALUES (?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query, link.ChangeID, link.TaskID, link.Phase, link.CreatedAt)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	link.ID = id
+	return id, nil
 }
 
 func (r *changeRepositoryImpl) UnlinkTask(changeID int64, taskID int) error {
+	res, err := r.db.Exec("DELETE FROM change_task_links WHERE change_id = ? AND task_id = ?", changeID, taskID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return errors.New("task link not found")
+	}
 	return nil
 }
 
 func (r *changeRepositoryImpl) ListLinkedTasks(changeID int64) ([]model.ChangeTaskLink, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		l.id, l.change_id, l.task_id, l.phase, l.created_at,
+		COALESCE(t.title, '') AS task_title,
+		COALESCE(t.status, '') AS task_status
+	FROM change_task_links l
+	LEFT JOIN tasks t ON l.task_id = t.id
+	WHERE l.change_id = ?
+	ORDER BY l.created_at ASC`
+
+	rows, err := r.db.Query(query, changeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var links []model.ChangeTaskLink
+	for rows.Next() {
+		var l model.ChangeTaskLink
+		var taskTitle, taskStatus sql.NullString
+		if err := rows.Scan(&l.ID, &l.ChangeID, &l.TaskID, &l.Phase, &l.CreatedAt, &taskTitle, &taskStatus); err != nil {
+			return nil, err
+		}
+		if taskTitle.Valid {
+			l.TaskTitle = taskTitle.String
+		}
+		if taskStatus.Valid {
+			l.TaskStatus = taskStatus.String
+		}
+		links = append(links, l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return links, nil
 }
 
 func (r *changeRepositoryImpl) UpsertPIR(pir *model.ChangePIR) (int64, error) {
-	return 0, nil
+	now := time.Now().UTC()
+	if pir.CreatedAt.IsZero() {
+		pir.CreatedAt = now
+	}
+	if pir.ReviewedAt.IsZero() {
+		pir.ReviewedAt = now
+	}
+
+	query := `
+	INSERT INTO change_pirs (
+		change_id, outcome, review_notes, lessons_learned,
+		reviewed_by_user_id, reviewed_at, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(change_id) DO UPDATE SET
+		outcome = excluded.outcome,
+		review_notes = excluded.review_notes,
+		lessons_learned = excluded.lessons_learned,
+		reviewed_by_user_id = excluded.reviewed_by_user_id,
+		reviewed_at = excluded.reviewed_at,
+		updated_at = excluded.updated_at`
+
+	res, err := r.db.Exec(query,
+		pir.ChangeID, pir.Outcome, pir.ReviewNotes, pir.LessonsLearned,
+		pir.ReviewedByUserID, pir.ReviewedAt, pir.CreatedAt, now,
+	)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	if id > 0 {
+		pir.ID = id
+	}
+	return pir.ID, nil
 }
 
 func (r *changeRepositoryImpl) GetPIR(changeID int64) (*model.ChangePIR, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		p.id, p.change_id, p.outcome, p.review_notes, p.lessons_learned,
+		p.reviewed_by_user_id, p.reviewed_at, p.created_at,
+		COALESCE(u.username, '') AS reviewed_by_username
+	FROM change_pirs p
+	LEFT JOIN users u ON p.reviewed_by_user_id = u.id
+	WHERE p.change_id = ?`
+
+	row := r.db.QueryRow(query, changeID)
+	var p model.ChangePIR
+	var username sql.NullString
+	err := row.Scan(
+		&p.ID, &p.ChangeID, &p.Outcome, &p.ReviewNotes, &p.LessonsLearned,
+		&p.ReviewedByUserID, &p.ReviewedAt, &p.CreatedAt,
+		&username,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrPIRNotFound
+		}
+		return nil, err
+	}
+	if username.Valid {
+		p.ReviewedByUsername = username.String
+	}
+	return &p, nil
 }
 
 func (r *changeRepositoryImpl) GetChangeMetrics(workspaceID int64) (*model.ChangeMetrics, error) {
