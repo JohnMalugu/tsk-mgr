@@ -1542,6 +1542,23 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	changeTaskLinksQuery := `
+	CREATE TABLE IF NOT EXISTS change_task_links (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		change_id INTEGER NOT NULL,
+		task_id INTEGER NOT NULL,
+		phase TEXT NOT NULL DEFAULT 'implementation',
+		created_at DATETIME NOT NULL,
+		UNIQUE(change_id, task_id),
+		FOREIGN KEY (change_id) REFERENCES change_requests(id) ON DELETE CASCADE,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(changeTaskLinksQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
