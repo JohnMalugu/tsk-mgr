@@ -300,3 +300,25 @@ type ChangePIRRequest struct {
 	ReviewNotes    string `json:"review_notes"`
 	LessonsLearned string `json:"lessons_learned,omitempty"`
 }
+
+// LinkChangeTaskRequest payload for associating an execution task to a change request
+type LinkChangeTaskRequest struct {
+	TaskID int    `json:"task_id"`
+	Phase  string `json:"phase,omitempty"` // pre_implementation, implementation, post_implementation
+}
+
+// ChangeFilter provides search, filtering, and pagination parameters across change requests
+type ChangeFilter struct {
+	WorkspaceID int64   `json:"workspace_id"`
+	ProjectID   *int64  `json:"project_id,omitempty"`
+	Status      *string `json:"status,omitempty"`
+	ChangeType  *string `json:"change_type,omitempty"`
+	RiskLevel   *string `json:"risk_level,omitempty"`
+	RequestedBy *string `json:"requested_by,omitempty"`
+	AssignedTo  *string `json:"assigned_to,omitempty"`
+	Search      *string `json:"search,omitempty"`
+	StartDate   *string `json:"start_date,omitempty"` // YYYY-MM-DD
+	EndDate     *string `json:"end_date,omitempty"`   // YYYY-MM-DD
+	Limit       int     `json:"limit,omitempty"`
+	Offset      int     `json:"offset,omitempty"`
+}
