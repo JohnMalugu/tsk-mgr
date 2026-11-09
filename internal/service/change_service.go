@@ -385,18 +385,115 @@ func (s *changeServiceImpl) ChangeStatus(id int64, userID string, req model.Chan
 }
 
 func (s *changeServiceImpl) AddReviewer(changeID int64, userID string, req model.AddReviewerRequest) (*model.ChangeApproval, error) {
-	return nil, nil
+	reviewerID := strings.TrimSpace(req.ReviewerID)
+	if reviewerID == "" {
+		return nil, ErrReviewerRequired
+	}
+
+	change, err := s.repo.GetChangeByID(changeID)
+	if err != nil {
+		if errors.Is(err, repository.ErrChangeNotFound) {
+			return nil, ErrChangeNotFound
+		}
+		return nil, err
+	}
+
+	existing, err := s.repo.GetApprovalByChangeAndReviewer(changeID, reviewerID)
+	if err == nil && existing != nil {
+		return existing, nil
+	}
+
+	appr := &model.ChangeApproval{
+		ChangeID:   changeID,
+		ReviewerID: reviewerID,
+		Decision:   model.ApprovalDecisionPending,
+		CreatedAt:  time.Now().UTC(),
+	}
+
+	id, err := s.repo.AddReviewer(appr)
+	if err != nil {
+		return nil, err
+	}
+
+	s.logAudit(userID, change.WorkspaceID, "change_approval.reviewer_added", fmt.Sprintf("%d", id), fmt.Sprintf("Added reviewer %s to change %s", reviewerID, change.ChangeNumber))
+
+	return s.repo.GetApprovalByID(id)
 }
 
 func (s *changeServiceImpl) ReviewChange(changeID int64, reviewerID string, req model.ChangeApprovalRequest) (*model.ChangeApproval, error) {
-	return nil, nil
+	decision := strings.ToLower(strings.TrimSpace(req.Decision))
+	if decision != model.ApprovalDecisionApproved && decision != model.ApprovalDecisionRejected && decision != model.ApprovalDecisionAbstained {
+		return nil, ErrInvalidCABDecision
+	}
+
+	change, err := s.repo.GetChangeByID(changeID)
+	if err != nil {
+		if errors.Is(err, repository.ErrChangeNotFound) {
+			return nil, ErrChangeNotFound
+		}
+		return nil, err
+	}
+
+	existing, err := s.repo.GetApprovalByChangeAndReviewer(changeID, reviewerID)
+	if err != nil {
+		if errors.Is(err, repository.ErrApprovalNotFound) {
+			now := time.Now().UTC()
+			appr := &model.ChangeApproval{
+				ChangeID:   changeID,
+				ReviewerID: reviewerID,
+				Decision:   decision,
+				Comments:   strings.TrimSpace(req.Comments),
+				DecidedAt:  &now,
+				CreatedAt:  now,
+			}
+			id, err := s.repo.AddReviewer(appr)
+			if err != nil {
+				return nil, err
+			}
+			s.logAudit(reviewerID, change.WorkspaceID, "change_approval.decision_cast", fmt.Sprintf("%d", id), fmt.Sprintf("Reviewer %s voted %s on change %s", reviewerID, decision, change.ChangeNumber))
+			return s.repo.GetApprovalByID(id)
+		}
+		return nil, err
+	}
+
+	if err := s.repo.CastDecision(changeID, reviewerID, decision, strings.TrimSpace(req.Comments)); err != nil {
+		return nil, err
+	}
+
+	s.logAudit(reviewerID, change.WorkspaceID, "change_approval.decision_cast", fmt.Sprintf("%d", existing.ID), fmt.Sprintf("Reviewer %s voted %s on change %s", reviewerID, decision, change.ChangeNumber))
+
+	return s.repo.GetApprovalByID(existing.ID)
 }
 
 func (s *changeServiceImpl) ListApprovals(changeID int64) ([]model.ChangeApproval, error) {
-	return nil, nil
+	if _, err := s.repo.GetChangeByID(changeID); err != nil {
+		if errors.Is(err, repository.ErrChangeNotFound) {
+			return nil, ErrChangeNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListApprovals(changeID)
 }
 
 func (s *changeServiceImpl) DeleteReviewer(approvalID int64, userID string) error {
+	approval, err := s.repo.GetApprovalByID(approvalID)
+	if err != nil {
+		if errors.Is(err, repository.ErrApprovalNotFound) {
+			return ErrApprovalNotFound
+		}
+		return err
+	}
+
+	change, err := s.repo.GetChangeByID(approval.ChangeID)
+	if err != nil {
+		return err
+	}
+
+	if err := s.repo.DeleteReviewer(approvalID); err != nil {
+		return err
+	}
+
+	s.logAudit(userID, change.WorkspaceID, "change_approval.reviewer_removed", fmt.Sprintf("%d", approvalID), fmt.Sprintf("Removed reviewer %s from change %s", approval.ReviewerID, change.ChangeNumber))
 	return nil
 }
 
