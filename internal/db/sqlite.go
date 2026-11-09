@@ -1487,6 +1487,42 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	changeRequestsQuery := `
+	CREATE TABLE IF NOT EXISTS change_requests (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		project_id INTEGER,
+		change_number TEXT NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		change_type TEXT NOT NULL DEFAULT 'normal',
+		risk_level TEXT NOT NULL DEFAULT 'low',
+		impact_level TEXT NOT NULL DEFAULT 'low',
+		status TEXT NOT NULL DEFAULT 'draft',
+		reason_for_change TEXT NOT NULL DEFAULT '',
+		implementation_plan TEXT NOT NULL DEFAULT '',
+		rollback_plan TEXT NOT NULL DEFAULT '',
+		test_plan TEXT NOT NULL DEFAULT '',
+		requested_by_user_id TEXT NOT NULL,
+		assigned_to_user_id TEXT,
+		planned_start_at DATETIME,
+		planned_end_at DATETIME,
+		actual_start_at DATETIME,
+		actual_end_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		UNIQUE(workspace_id, change_number),
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+		FOREIGN KEY (requested_by_user_id) REFERENCES users(id) ON DELETE CASCADE,
+		FOREIGN KEY (assigned_to_user_id) REFERENCES users(id) ON DELETE SET NULL
+	);`
+
+	_, err = db.Exec(changeRequestsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
