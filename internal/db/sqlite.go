@@ -1626,6 +1626,24 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	ciEntityLinksQuery := `
+	CREATE TABLE IF NOT EXISTS ci_entity_links (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		ci_id INTEGER NOT NULL,
+		entity_type TEXT NOT NULL,
+		entity_id INTEGER NOT NULL,
+		impact_level TEXT NOT NULL DEFAULT 'direct',
+		notes TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (ci_id) REFERENCES configuration_items(id) ON DELETE CASCADE,
+		UNIQUE(ci_id, entity_type, entity_id)
+	);`
+
+	_, err = db.Exec(ciEntityLinksQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
