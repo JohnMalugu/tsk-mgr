@@ -201,6 +201,39 @@ type CIMaintenanceSchedule struct {
 	CreatedByUsername string `json:"created_by_username,omitempty"`
 }
 
+// CreateCIRequest represents the request payload for registering a new Configuration Item
+type CreateCIRequest struct {
+	WorkspaceID  int64   `json:"workspace_id"`
+	ProjectID    *int64  `json:"project_id,omitempty"`
+	Name         string  `json:"name"`
+	CIType       string  `json:"ci_type"`
+	Status       string  `json:"status,omitempty"`
+	Criticality  string  `json:"criticality,omitempty"`
+	Environment  string  `json:"environment,omitempty"`
+	OwnerUserID  string  `json:"owner_user_id,omitempty"`
+	IPAddress    string  `json:"ip_address,omitempty"`
+	Hostname     string  `json:"hostname,omitempty"`
+	Version      string  `json:"version,omitempty"`
+	CostPerMonth float64 `json:"cost_per_month,omitempty"`
+	Attributes   string  `json:"attributes,omitempty"`
+}
+
+// UpdateCIRequest represents the request payload for updating an existing Configuration Item
+type UpdateCIRequest struct {
+	ProjectID    *int64   `json:"project_id,omitempty"`
+	Name         *string  `json:"name,omitempty"`
+	CIType       *string  `json:"ci_type,omitempty"`
+	Status       *string  `json:"status,omitempty"`
+	Criticality  *string  `json:"criticality,omitempty"`
+	Environment  *string  `json:"environment,omitempty"`
+	OwnerUserID  *string  `json:"owner_user_id,omitempty"`
+	IPAddress    *string  `json:"ip_address,omitempty"`
+	Hostname     *string  `json:"hostname,omitempty"`
+	Version      *string  `json:"version,omitempty"`
+	CostPerMonth *float64 `json:"cost_per_month,omitempty"`
+	Attributes   *string  `json:"attributes,omitempty"`
+}
+
 // ValidateCIType validates if a CI type string is supported
 func ValidateCIType(t string) error {
 	switch strings.ToLower(strings.TrimSpace(t)) {
