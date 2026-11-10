@@ -234,6 +234,27 @@ type UpdateCIRequest struct {
 	Attributes   *string  `json:"attributes,omitempty"`
 }
 
+// CreateCIRelationshipRequest represents payload to establish a relationship from a source CI to a target CI
+type CreateCIRelationshipRequest struct {
+	TargetCIID   int64  `json:"target_ci_id"`
+	RelationType string `json:"relation_type"`
+	Description  string `json:"description,omitempty"`
+}
+
+// CreateCIEntityLinkRequest represents payload to associate a CI with a task, change request, or incident
+type CreateCIEntityLinkRequest struct {
+	EntityType  string `json:"entity_type"` // task, change, incident
+	EntityID    int64  `json:"entity_id"`
+	ImpactLevel string `json:"impact_level,omitempty"` // direct, indirect, unaffected
+	Notes       string `json:"notes,omitempty"`
+}
+
+// UpdateCIStatusRequest represents payload to change the operational lifecycle status of a CI
+type UpdateCIStatusRequest struct {
+	Status string `json:"status"`
+	Reason string `json:"reason,omitempty"`
+}
+
 // ValidateCIType validates if a CI type string is supported
 func ValidateCIType(t string) error {
 	switch strings.ToLower(strings.TrimSpace(t)) {
