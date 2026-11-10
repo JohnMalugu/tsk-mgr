@@ -73,6 +73,45 @@ func ValidateCIEnvironment(e string) error {
 	}
 }
 
+// Configuration Item relationship types
+const (
+	CIRelationDependsOn  = "depends_on"
+	CIRelationRunsOn     = "runs_on"
+	CIRelationConnectsTo = "connects_to"
+	CIRelationHosts      = "hosts"
+	CIRelationContains   = "contains"
+	CIRelationBackedBy   = "backed_by"
+	CIRelationManagedBy  = "managed_by"
+)
+
+// ValidateCIRelationType validates if a CI relationship type is valid
+func ValidateCIRelationType(r string) error {
+	switch strings.ToLower(strings.TrimSpace(r)) {
+	case CIRelationDependsOn, CIRelationRunsOn, CIRelationConnectsTo, CIRelationHosts, CIRelationContains, CIRelationBackedBy, CIRelationManagedBy:
+		return nil
+	default:
+		return ErrInvalidRelationship
+	}
+}
+
+// CIRelationship represents a directional dependency or association between two Configuration Items
+type CIRelationship struct {
+	ID           int64     `json:"id"`
+	SourceCIID   int64     `json:"source_ci_id"` // parent/dependent CI
+	TargetCIID   int64     `json:"target_ci_id"` // prerequisite/underlying CI
+	RelationType string    `json:"relation_type"`
+	Description  string    `json:"description,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+
+	// Enriched fields
+	SourceCIName string `json:"source_ci_name,omitempty"`
+	SourceCICode string `json:"source_ci_code,omitempty"`
+	SourceCIType string `json:"source_ci_type,omitempty"`
+	TargetCIName string `json:"target_ci_name,omitempty"`
+	TargetCICode string `json:"target_ci_code,omitempty"`
+	TargetCIType string `json:"target_ci_type,omitempty"`
+}
+
 // ValidateCIType validates if a CI type string is supported
 func ValidateCIType(t string) error {
 	switch strings.ToLower(strings.TrimSpace(t)) {
