@@ -312,23 +312,181 @@ func (s *cmdbServiceImpl) UpdateCIStatus(id int64, updaterID string, req model.U
 }
 
 func (s *cmdbServiceImpl) CreateRelationship(ciID int64, req model.CreateCIRelationshipRequest) (*model.CIRelationship, error) {
-	return nil, nil
+	if ciID == req.TargetCIID {
+		return nil, ErrSelfRelationship
+	}
+
+	src, err := s.repo.GetCIByID(ciID)
+	if err != nil {
+		if errors.Is(err, repository.ErrCINotFound) {
+			return nil, ErrCINotFound
+		}
+		return nil, err
+	}
+
+	tgt, err := s.repo.GetCIByID(req.TargetCIID)
+	if err != nil {
+		if errors.Is(err, repository.ErrCINotFound) {
+			return nil, ErrCINotFound
+		}
+		return nil, err
+	}
+
+	relType := strings.ToLower(strings.TrimSpace(req.RelationType))
+	if relType == "" {
+		relType = model.CIRelationDependsOn
+	} else if err := model.ValidateCIRelationType(relType); err != nil {
+		return nil, err
+	}
+
+	existing, err := s.repo.ListRelationships(ciID)
+	if err == nil {
+		for _, r := range existing {
+			if r.SourceCIID == ciID && r.TargetCIID == req.TargetCIID && r.RelationType == relType {
+				return nil, ErrRelationshipExists
+			}
+		}
+	}
+
+	rel := &model.CIRelationship{
+		SourceCIID:   ciID,
+		TargetCIID:   req.TargetCIID,
+		RelationType: relType,
+		Description:  strings.TrimSpace(req.Description),
+	}
+
+	id, err := s.repo.CreateRelationship(rel)
+	if err != nil {
+		return nil, err
+	}
+
+	s.logAudit(src.OwnerUserID, src.WorkspaceID, "cmdb.relationship_created", fmt.Sprintf("%d", id), fmt.Sprintf("Linked %s (%s) %s -> %s (%s)", src.CICode, src.Name, relType, tgt.CICode, tgt.Name))
+
+	return s.repo.GetRelationship(id)
 }
 
 func (s *cmdbServiceImpl) ListRelationships(ciID int64) ([]model.CIRelationship, error) {
-	return nil, nil
+	if _, err := s.repo.GetCIByID(ciID); err != nil {
+		if errors.Is(err, repository.ErrCINotFound) {
+			return nil, ErrCINotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListRelationships(ciID)
 }
 
 func (s *cmdbServiceImpl) DeleteRelationship(id int64) error {
+	rel, err := s.repo.GetRelationship(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrRelationshipNotFound) {
+			return ErrRelationshipNotFound
+		}
+		return err
+	}
+
+	if err := s.repo.DeleteRelationship(id); err != nil {
+		return err
+	}
+
+	s.logAudit("", 0, "cmdb.relationship_deleted", fmt.Sprintf("%d", id), fmt.Sprintf("Deleted relationship %s -> %s", rel.SourceCICode, rel.TargetCICode))
 	return nil
 }
 
 func (s *cmdbServiceImpl) GetDependencyGraph(ciID int64, maxDepth int) (*model.CIDependencyGraph, error) {
-	return nil, nil
+	rootCI, err := s.repo.GetCIByID(ciID)
+	if err != nil {
+		if errors.Is(err, repository.ErrCINotFound) {
+			return nil, ErrCINotFound
+		}
+		return nil, err
+	}
+
+	if maxDepth <= 0 || maxDepth > 10 {
+		maxDepth = 5
+	}
+
+	upstream, err := s.repo.GetUpstreamDependencies(ciID, maxDepth)
+	if err != nil {
+		return nil, err
+	}
+	if upstream == nil {
+		upstream = []model.CIDependencyNode{}
+	}
+
+	downstream, err := s.repo.GetDownstreamDependencies(ciID, maxDepth)
+	if err != nil {
+		return nil, err
+	}
+	if downstream == nil {
+		downstream = []model.CIDependencyNode{}
+	}
+
+	computedMaxDepth := 0
+	for _, n := range upstream {
+		if n.Depth > computedMaxDepth {
+			computedMaxDepth = n.Depth
+		}
+	}
+	for _, n := range downstream {
+		if n.Depth > computedMaxDepth {
+			computedMaxDepth = n.Depth
+		}
+	}
+
+	return &model.CIDependencyGraph{
+		RootCI:     *rootCI,
+		Upstream:   upstream,
+		Downstream: downstream,
+		TotalNodes: len(upstream) + len(downstream),
+		MaxDepth:   computedMaxDepth,
+	}, nil
 }
 
 func (s *cmdbServiceImpl) AnalyzeBlastRadius(ciID int64) (*model.CIImpactAnalysis, error) {
-	return nil, nil
+	targetCI, err := s.repo.GetCIByID(ciID)
+	if err != nil {
+		if errors.Is(err, repository.ErrCINotFound) {
+			return nil, ErrCINotFound
+		}
+		return nil, err
+	}
+
+	downstream, err := s.repo.GetDownstreamDependencies(ciID, 10)
+	if err != nil {
+		return nil, err
+	}
+	if downstream == nil {
+		downstream = []model.CIDependencyNode{}
+	}
+
+	var directCount, indirectCount, srvCount, dbCount int
+	var hasTier1 bool
+
+	for _, n := range downstream {
+		if n.Depth == 1 {
+			directCount++
+		} else {
+			indirectCount++
+		}
+		if n.CI.CIType == model.CITypeService {
+			srvCount++
+		} else if n.CI.CIType == model.CITypeDatabase {
+			dbCount++
+		}
+		if n.CI.Criticality == model.CICriticalityTier1 {
+			hasTier1 = true
+		}
+	}
+
+	return &model.CIImpactAnalysis{
+		TargetCI:               *targetCI,
+		DirectImpactCount:      directCount,
+		IndirectImpactCount:    indirectCount,
+		ImpactedCIs:            downstream,
+		ImpactedServicesCount:  srvCount,
+		ImpactedDatabasesCount: dbCount,
+		HasTier1Impact:         hasTier1,
+	}, nil
 }
 
 func (s *cmdbServiceImpl) LinkEntity(ciID int64, req model.CreateCIEntityLinkRequest) (*model.CIEntityLink, error) {
