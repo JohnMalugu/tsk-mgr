@@ -335,28 +335,213 @@ func (r *cmdbRepositoryImpl) DeleteCI(id int64) error {
 	return nil
 }
 
+const baseRelSelect = `
+	SELECT 
+		r.id, r.source_ci_id, r.target_ci_id, r.relation_type, r.description, r.created_at,
+		COALESCE(src.name, '') AS source_ci_name,
+		COALESCE(src.ci_code, '') AS source_ci_code,
+		COALESCE(src.ci_type, '') AS source_ci_type,
+		COALESCE(tgt.name, '') AS target_ci_name,
+		COALESCE(tgt.ci_code, '') AS target_ci_code,
+		COALESCE(tgt.ci_type, '') AS target_ci_type
+	FROM ci_relationships r
+	LEFT JOIN configuration_items src ON r.source_ci_id = src.id
+	LEFT JOIN configuration_items tgt ON r.target_ci_id = tgt.id
+`
+
+func scanRel(scanner interface{ Scan(dest ...interface{}) error }) (*model.CIRelationship, error) {
+	var r model.CIRelationship
+	var srcName, srcCode, srcType, tgtName, tgtCode, tgtType sql.NullString
+	err := scanner.Scan(
+		&r.ID, &r.SourceCIID, &r.TargetCIID, &r.RelationType, &r.Description, &r.CreatedAt,
+		&srcName, &srcCode, &srcType, &tgtName, &tgtCode, &tgtType,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if srcName.Valid {
+		r.SourceCIName = srcName.String
+	}
+	if srcCode.Valid {
+		r.SourceCICode = srcCode.String
+	}
+	if srcType.Valid {
+		r.SourceCIType = srcType.String
+	}
+	if tgtName.Valid {
+		r.TargetCIName = tgtName.String
+	}
+	if tgtCode.Valid {
+		r.TargetCICode = tgtCode.String
+	}
+	if tgtType.Valid {
+		r.TargetCIType = tgtType.String
+	}
+	return &r, nil
+}
+
 func (r *cmdbRepositoryImpl) CreateRelationship(rel *model.CIRelationship) (int64, error) {
-	return 0, nil
+	if rel.CreatedAt.IsZero() {
+		rel.CreatedAt = time.Now().UTC()
+	}
+	if rel.RelationType == "" {
+		rel.RelationType = model.CIRelationDependsOn
+	}
+
+	query := `
+	INSERT INTO ci_relationships (source_ci_id, target_ci_id, relation_type, description, created_at)
+	VALUES (?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query, rel.SourceCIID, rel.TargetCIID, rel.RelationType, rel.Description, rel.CreatedAt)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	rel.ID = id
+	return id, nil
 }
 
 func (r *cmdbRepositoryImpl) GetRelationship(id int64) (*model.CIRelationship, error) {
-	return nil, nil
+	query := baseRelSelect + ` WHERE r.id = ?`
+	row := r.db.QueryRow(query, id)
+	rel, err := scanRel(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRelationshipNotFound
+		}
+		return nil, err
+	}
+	return rel, nil
 }
 
 func (r *cmdbRepositoryImpl) ListRelationships(ciID int64) ([]model.CIRelationship, error) {
-	return nil, nil
+	query := baseRelSelect + ` WHERE r.source_ci_id = ? OR r.target_ci_id = ? ORDER BY r.created_at ASC`
+	rows, err := r.db.Query(query, ciID, ciID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var rels []model.CIRelationship
+	for rows.Next() {
+		rel, err := scanRel(rows)
+		if err != nil {
+			return nil, err
+		}
+		rels = append(rels, *rel)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return rels, nil
 }
 
 func (r *cmdbRepositoryImpl) DeleteRelationship(id int64) error {
+	res, err := r.db.Exec("DELETE FROM ci_relationships WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrRelationshipNotFound
+	}
 	return nil
 }
 
 func (r *cmdbRepositoryImpl) GetUpstreamDependencies(ciID int64, maxDepth int) ([]model.CIDependencyNode, error) {
-	return nil, nil
+	if maxDepth <= 0 || maxDepth > 10 {
+		maxDepth = 5
+	}
+	visited := make(map[int64]bool)
+	visited[ciID] = true
+
+	var nodes []model.CIDependencyNode
+	currentLevel := []int64{ciID}
+
+	for depth := 1; depth <= maxDepth && len(currentLevel) > 0; depth++ {
+		var nextLevel []int64
+		for _, currID := range currentLevel {
+			rows, err := r.db.Query(`SELECT target_ci_id, relation_type FROM ci_relationships WHERE source_ci_id = ?`, currID)
+			if err != nil {
+				return nil, err
+			}
+			for rows.Next() {
+				var targetID int64
+				var relType string
+				if err := rows.Scan(&targetID, &relType); err != nil {
+					rows.Close()
+					return nil, err
+				}
+				if !visited[targetID] {
+					visited[targetID] = true
+					targetCI, err := r.GetCIByID(targetID)
+					if err == nil && targetCI != nil {
+						nodes = append(nodes, model.CIDependencyNode{
+							CI:           *targetCI,
+							RelationType: relType,
+							Depth:        depth,
+							Direction:    "upstream",
+						})
+						nextLevel = append(nextLevel, targetID)
+					}
+				}
+			}
+			rows.Close()
+		}
+		currentLevel = nextLevel
+	}
+	return nodes, nil
 }
 
 func (r *cmdbRepositoryImpl) GetDownstreamDependencies(ciID int64, maxDepth int) ([]model.CIDependencyNode, error) {
-	return nil, nil
+	if maxDepth <= 0 || maxDepth > 10 {
+		maxDepth = 5
+	}
+	visited := make(map[int64]bool)
+	visited[ciID] = true
+
+	var nodes []model.CIDependencyNode
+	currentLevel := []int64{ciID}
+
+	for depth := 1; depth <= maxDepth && len(currentLevel) > 0; depth++ {
+		var nextLevel []int64
+		for _, currID := range currentLevel {
+			rows, err := r.db.Query(`SELECT source_ci_id, relation_type FROM ci_relationships WHERE target_ci_id = ?`, currID)
+			if err != nil {
+				return nil, err
+			}
+			for rows.Next() {
+				var sourceID int64
+				var relType string
+				if err := rows.Scan(&sourceID, &relType); err != nil {
+					rows.Close()
+					return nil, err
+				}
+				if !visited[sourceID] {
+					visited[sourceID] = true
+					sourceCI, err := r.GetCIByID(sourceID)
+					if err == nil && sourceCI != nil {
+						nodes = append(nodes, model.CIDependencyNode{
+							CI:           *sourceCI,
+							RelationType: relType,
+							Depth:        depth,
+							Direction:    "downstream",
+						})
+						nextLevel = append(nextLevel, sourceID)
+					}
+				}
+			}
+			rows.Close()
+		}
+		currentLevel = nextLevel
+	}
+	return nodes, nil
 }
 
 func (r *cmdbRepositoryImpl) CreateEntityLink(link *model.CIEntityLink) (int64, error) {
