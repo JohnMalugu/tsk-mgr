@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -572,20 +573,105 @@ func (s *cmdbServiceImpl) UnlinkEntity(linkID int64) error {
 	return s.repo.DeleteEntityLink(linkID)
 }
 
+func parseMaintTime(str string) (time.Time, error) {
+	str = strings.TrimSpace(str)
+	t, err := time.Parse(time.RFC3339, str)
+	if err != nil {
+		t, err = time.Parse("2006-01-02T15:04:05", str)
+		if err != nil {
+			t, err = time.Parse("2006-01-02", str)
+			if err != nil {
+				return time.Time{}, err
+			}
+		}
+	}
+	return t, nil
+}
+
 func (s *cmdbServiceImpl) CreateMaintenance(ciID int64, creatorID string, req model.CreateCIMaintenanceRequest) (*model.CIMaintenanceSchedule, error) {
-	return nil, nil
+	ci, err := s.repo.GetCIByID(ciID)
+	if err != nil {
+		if errors.Is(err, repository.ErrCINotFound) {
+			return nil, ErrCINotFound
+		}
+		return nil, err
+	}
+
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		return nil, ErrMaintTitleRequired
+	}
+
+	start, err := parseMaintTime(req.WindowStartAt)
+	if err != nil {
+		return nil, errors.New("invalid window_start_at timestamp: must be RFC3339")
+	}
+
+	end, err := parseMaintTime(req.WindowEndAt)
+	if err != nil {
+		return nil, errors.New("invalid window_end_at timestamp: must be RFC3339")
+	}
+
+	if !end.After(start) {
+		return nil, ErrInvalidMaintDates
+	}
+
+	maint := &model.CIMaintenanceSchedule{
+		CIID:                    ciID,
+		Title:                   title,
+		Description:             strings.TrimSpace(req.Description),
+		WindowStartAt:           start,
+		WindowEndAt:             end,
+		ExpectedDowntimeMinutes: req.ExpectedDowntimeMinutes,
+		Status:                  model.CIMaintStatusScheduled,
+		CreatedByUserID:         creatorID,
+	}
+
+	id, err := s.repo.CreateMaintenance(maint)
+	if err != nil {
+		return nil, err
+	}
+
+	s.logAudit(creatorID, ci.WorkspaceID, "cmdb.maintenance_scheduled", fmt.Sprintf("%d", id), fmt.Sprintf("Scheduled maintenance '%s' on %s", title, ci.CICode))
+
+	return s.repo.GetMaintenanceByID(id)
 }
 
 func (s *cmdbServiceImpl) ListMaintenances(ciID int64) ([]model.CIMaintenanceSchedule, error) {
-	return nil, nil
+	if _, err := s.repo.GetCIByID(ciID); err != nil {
+		if errors.Is(err, repository.ErrCINotFound) {
+			return nil, ErrCINotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListMaintenancesByCI(ciID)
 }
 
 func (s *cmdbServiceImpl) UpdateMaintenanceStatus(id int64, req model.UpdateCIMaintenanceStatusRequest) (*model.CIMaintenanceSchedule, error) {
-	return nil, nil
+	st := strings.ToLower(strings.TrimSpace(req.Status))
+	if err := model.ValidateCIMaintStatus(st); err != nil {
+		return nil, err
+	}
+
+	maint, err := s.repo.GetMaintenanceByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrMaintenanceNotFound) {
+			return nil, ErrMaintenanceNotFound
+		}
+		return nil, err
+	}
+
+	if err := s.repo.UpdateMaintenanceStatus(id, st); err != nil {
+		return nil, err
+	}
+
+	s.logAudit("", 0, "cmdb.maintenance_status_changed", fmt.Sprintf("%d", id), fmt.Sprintf("Updated maintenance %d status to %s", id, st))
+
+	return s.repo.GetMaintenanceByID(maint.ID)
 }
 
 func (s *cmdbServiceImpl) DeleteMaintenance(id int64) error {
-	return nil
+	return s.repo.DeleteMaintenance(id)
 }
 
 func (s *cmdbServiceImpl) GetCMDBMetrics(workspaceID int64) (*model.CMDBMetrics, error) {
