@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
@@ -65,16 +66,136 @@ func (r *cmdbRepositoryImpl) GetNextCICode(workspaceID int64) (string, error) {
 	return fmt.Sprintf("CI-%d", nextNum), nil
 }
 
+const baseCISelect = `
+	SELECT 
+		c.id, c.workspace_id, c.project_id, c.ci_code, c.name, c.ci_type, c.status,
+		c.criticality, c.environment, c.owner_user_id, c.ip_address, c.hostname,
+		c.version, c.cost_per_month, c.attributes, c.created_at, c.updated_at,
+		COALESCE(u.username, u.email, '') AS owner_name,
+		COALESCE(p.name, '') AS project_name,
+		(SELECT COUNT(*) FROM ci_relationships WHERE source_ci_id = c.id) AS upstream_count,
+		(SELECT COUNT(*) FROM ci_relationships WHERE target_ci_id = c.id) AS downstream_count,
+		(SELECT COUNT(*) FROM ci_entity_links WHERE ci_id = c.id) AS linked_entities_count
+	FROM configuration_items c
+	LEFT JOIN users u ON c.owner_user_id = u.id
+	LEFT JOIN projects p ON c.project_id = p.id
+`
+
+func scanCI(scanner interface{ Scan(dest ...interface{}) error }) (*model.ConfigurationItem, error) {
+	var c model.ConfigurationItem
+	var projectID sql.NullInt64
+	var ownerName, projectName sql.NullString
+	var upstreamCount, downstreamCount, linkedCount sql.NullInt64
+
+	err := scanner.Scan(
+		&c.ID, &c.WorkspaceID, &projectID, &c.CICode, &c.Name, &c.CIType, &c.Status,
+		&c.Criticality, &c.Environment, &c.OwnerUserID, &c.IPAddress, &c.Hostname,
+		&c.Version, &c.CostPerMonth, &c.Attributes, &c.CreatedAt, &c.UpdatedAt,
+		&ownerName, &projectName,
+		&upstreamCount, &downstreamCount, &linkedCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if projectID.Valid {
+		c.ProjectID = &projectID.Int64
+	}
+	if ownerName.Valid {
+		c.OwnerName = ownerName.String
+	}
+	if projectName.Valid {
+		c.ProjectName = projectName.String
+	}
+	if upstreamCount.Valid {
+		c.UpstreamCount = int(upstreamCount.Int64)
+	}
+	if downstreamCount.Valid {
+		c.DownstreamCount = int(downstreamCount.Int64)
+	}
+	if linkedCount.Valid {
+		c.LinkedEntitiesCount = int(linkedCount.Int64)
+	}
+	return &c, nil
+}
+
 func (r *cmdbRepositoryImpl) CreateCI(ci *model.ConfigurationItem) (int64, error) {
-	return 0, nil
+	if ci.CICode == "" {
+		code, err := r.GetNextCICode(ci.WorkspaceID)
+		if err != nil {
+			return 0, err
+		}
+		ci.CICode = code
+	}
+	now := time.Now().UTC()
+	if ci.CreatedAt.IsZero() {
+		ci.CreatedAt = now
+	}
+	if ci.UpdatedAt.IsZero() {
+		ci.UpdatedAt = now
+	}
+	if ci.CIType == "" {
+		ci.CIType = model.CITypeService
+	}
+	if ci.Status == "" {
+		ci.Status = model.CIStatusActive
+	}
+	if ci.Criticality == "" {
+		ci.Criticality = model.CICriticalityTier2
+	}
+	if ci.Environment == "" {
+		ci.Environment = model.CIEnvProduction
+	}
+	if ci.Attributes == "" {
+		ci.Attributes = "{}"
+	}
+
+	query := `
+	INSERT INTO configuration_items (
+		workspace_id, project_id, ci_code, name, ci_type, status,
+		criticality, environment, owner_user_id, ip_address, hostname,
+		version, cost_per_month, attributes, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query,
+		ci.WorkspaceID, ci.ProjectID, ci.CICode, ci.Name, ci.CIType, ci.Status,
+		ci.Criticality, ci.Environment, ci.OwnerUserID, ci.IPAddress, ci.Hostname,
+		ci.Version, ci.CostPerMonth, ci.Attributes, ci.CreatedAt, ci.UpdatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	ci.ID = id
+	return id, nil
 }
 
 func (r *cmdbRepositoryImpl) GetCIByID(id int64) (*model.ConfigurationItem, error) {
-	return nil, nil
+	query := baseCISelect + ` WHERE c.id = ?`
+	row := r.db.QueryRow(query, id)
+	ci, err := scanCI(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrCINotFound
+		}
+		return nil, err
+	}
+	return ci, nil
 }
 
 func (r *cmdbRepositoryImpl) GetCIByCode(workspaceID int64, code string) (*model.ConfigurationItem, error) {
-	return nil, nil
+	query := baseCISelect + ` WHERE c.workspace_id = ? AND c.ci_code = ?`
+	row := r.db.QueryRow(query, workspaceID, code)
+	ci, err := scanCI(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrCINotFound
+		}
+		return nil, err
+	}
+	return ci, nil
 }
 
 func (r *cmdbRepositoryImpl) ListCIs(filter model.CIFilter) ([]*model.ConfigurationItem, error) {
