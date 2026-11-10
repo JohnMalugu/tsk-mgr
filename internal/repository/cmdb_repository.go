@@ -544,19 +544,132 @@ func (r *cmdbRepositoryImpl) GetDownstreamDependencies(ciID int64, maxDepth int)
 	return nodes, nil
 }
 
+const baseLinkSelect = `
+	SELECT 
+		l.id, l.ci_id, l.entity_type, l.entity_id, l.impact_level, l.notes, l.created_at,
+		COALESCE(c.name, '') AS ci_name,
+		COALESCE(c.ci_code, '') AS ci_code,
+		CASE 
+			WHEN l.entity_type = 'task' THEN (SELECT COALESCE(title, '') FROM tasks WHERE id = l.entity_id)
+			WHEN l.entity_type = 'change' THEN (SELECT COALESCE(title, '') FROM change_requests WHERE id = l.entity_id)
+			WHEN l.entity_type = 'incident' THEN (SELECT COALESCE(title, '') FROM incidents WHERE id = l.entity_id)
+			ELSE ''
+		END AS entity_title,
+		CASE 
+			WHEN l.entity_type = 'task' THEN (SELECT COALESCE(status, '') FROM tasks WHERE id = l.entity_id)
+			WHEN l.entity_type = 'change' THEN (SELECT COALESCE(status, '') FROM change_requests WHERE id = l.entity_id)
+			WHEN l.entity_type = 'incident' THEN (SELECT COALESCE(status, '') FROM incidents WHERE id = l.entity_id)
+			ELSE ''
+		END AS entity_status
+	FROM ci_entity_links l
+	LEFT JOIN configuration_items c ON l.ci_id = c.id
+`
+
+func scanLink(scanner interface{ Scan(dest ...interface{}) error }) (*model.CIEntityLink, error) {
+	var l model.CIEntityLink
+	var ciName, ciCode, entityTitle, entityStatus sql.NullString
+	err := scanner.Scan(
+		&l.ID, &l.CIID, &l.EntityType, &l.EntityID, &l.ImpactLevel, &l.Notes, &l.CreatedAt,
+		&ciName, &ciCode, &entityTitle, &entityStatus,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if ciName.Valid {
+		l.CIName = ciName.String
+	}
+	if ciCode.Valid {
+		l.CICode = ciCode.String
+	}
+	if entityTitle.Valid {
+		l.EntityTitle = entityTitle.String
+	}
+	if entityStatus.Valid {
+		l.EntityStatus = entityStatus.String
+	}
+	return &l, nil
+}
+
 func (r *cmdbRepositoryImpl) CreateEntityLink(link *model.CIEntityLink) (int64, error) {
-	return 0, nil
+	if link.CreatedAt.IsZero() {
+		link.CreatedAt = time.Now().UTC()
+	}
+	if link.ImpactLevel == "" {
+		link.ImpactLevel = model.CIImpactDirect
+	}
+
+	query := `
+	INSERT INTO ci_entity_links (ci_id, entity_type, entity_id, impact_level, notes, created_at)
+	VALUES (?, ?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query, link.CIID, link.EntityType, link.EntityID, link.ImpactLevel, link.Notes, link.CreatedAt)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	link.ID = id
+	return id, nil
 }
 
 func (r *cmdbRepositoryImpl) ListEntityLinksByCI(ciID int64) ([]model.CIEntityLink, error) {
-	return nil, nil
+	query := baseLinkSelect + ` WHERE l.ci_id = ? ORDER BY l.created_at ASC`
+	rows, err := r.db.Query(query, ciID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var links []model.CIEntityLink
+	for rows.Next() {
+		link, err := scanLink(rows)
+		if err != nil {
+			return nil, err
+		}
+		links = append(links, *link)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return links, nil
 }
 
 func (r *cmdbRepositoryImpl) ListCIsByEntity(entityType string, entityID int64) ([]model.CIEntityLink, error) {
-	return nil, nil
+	query := baseLinkSelect + ` WHERE l.entity_type = ? AND l.entity_id = ? ORDER BY l.created_at ASC`
+	rows, err := r.db.Query(query, entityType, entityID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var links []model.CIEntityLink
+	for rows.Next() {
+		link, err := scanLink(rows)
+		if err != nil {
+			return nil, err
+		}
+		links = append(links, *link)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return links, nil
 }
 
 func (r *cmdbRepositoryImpl) DeleteEntityLink(linkID int64) error {
+	res, err := r.db.Exec("DELETE FROM ci_entity_links WHERE id = ?", linkID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrLinkNotFound
+	}
 	return nil
 }
 
