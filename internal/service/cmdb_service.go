@@ -2,6 +2,8 @@ package service
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -74,20 +76,123 @@ func NewCMDBService(
 	}
 }
 
+func (s *cmdbServiceImpl) logAudit(actorID string, workspaceID int64, action, entityID, description string) {
+	if s.auditService != nil {
+		_, _ = s.auditService.RecordEvent(actorID, model.CreateAuditLogRequest{
+			WorkspaceID: workspaceID,
+			Action:      action,
+			Category:    "cmdb",
+			Severity:    "info",
+			EntityType:  "configuration_item",
+			EntityID:    entityID,
+			Description: description,
+		})
+	}
+}
+
 func (s *cmdbServiceImpl) CreateCI(creatorID string, req model.CreateCIRequest) (*model.ConfigurationItem, error) {
-	return nil, nil
+	if req.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	ws, err := s.workspaceRepo.GetByID(int(req.WorkspaceID))
+	if err != nil || ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, ErrCINameRequired
+	}
+
+	ciType := strings.ToLower(strings.TrimSpace(req.CIType))
+	if ciType == "" {
+		ciType = model.CITypeService
+	} else if err := model.ValidateCIType(ciType); err != nil {
+		return nil, err
+	}
+
+	criticality := strings.ToLower(strings.TrimSpace(req.Criticality))
+	if criticality == "" {
+		criticality = model.CICriticalityTier2
+	} else if err := model.ValidateCICriticality(criticality); err != nil {
+		return nil, err
+	}
+
+	status := strings.ToLower(strings.TrimSpace(req.Status))
+	if status == "" {
+		status = model.CIStatusActive
+	} else if err := model.ValidateCIStatus(status); err != nil {
+		return nil, err
+	}
+
+	env := strings.ToLower(strings.TrimSpace(req.Environment))
+	if env == "" {
+		env = model.CIEnvProduction
+	} else if err := model.ValidateCIEnvironment(env); err != nil {
+		return nil, err
+	}
+
+	owner := strings.TrimSpace(req.OwnerUserID)
+	if owner == "" {
+		owner = creatorID
+	}
+
+	ci := &model.ConfigurationItem{
+		WorkspaceID:  req.WorkspaceID,
+		ProjectID:    req.ProjectID,
+		Name:         name,
+		CIType:       ciType,
+		Status:       status,
+		Criticality:  criticality,
+		Environment:  env,
+		OwnerUserID:  owner,
+		IPAddress:    strings.TrimSpace(req.IPAddress),
+		Hostname:     strings.TrimSpace(req.Hostname),
+		Version:      strings.TrimSpace(req.Version),
+		CostPerMonth: req.CostPerMonth,
+		Attributes:   strings.TrimSpace(req.Attributes),
+	}
+
+	id, err := s.repo.CreateCI(ci)
+	if err != nil {
+		return nil, err
+	}
+
+	s.logAudit(creatorID, req.WorkspaceID, "cmdb.ci_created", fmt.Sprintf("%d", id), fmt.Sprintf("Created configuration item %s (%s)", ci.CICode, name))
+
+	return s.repo.GetCIByID(id)
 }
 
 func (s *cmdbServiceImpl) GetCI(id int64) (*model.ConfigurationItem, error) {
-	return nil, nil
+	ci, err := s.repo.GetCIByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrCINotFound) {
+			return nil, ErrCINotFound
+		}
+		return nil, err
+	}
+	return ci, nil
 }
 
 func (s *cmdbServiceImpl) GetCIByCode(workspaceID int64, code string) (*model.ConfigurationItem, error) {
-	return nil, nil
+	ci, err := s.repo.GetCIByCode(workspaceID, code)
+	if err != nil {
+		if errors.Is(err, repository.ErrCINotFound) {
+			return nil, ErrCINotFound
+		}
+		return nil, err
+	}
+	return ci, nil
 }
 
 func (s *cmdbServiceImpl) ListCIs(filter model.CIFilter) ([]*model.ConfigurationItem, error) {
-	return nil, nil
+	if filter.Limit <= 0 || filter.Limit > 100 {
+		filter.Limit = 50
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+	return s.repo.ListCIs(filter)
 }
 
 func (s *cmdbServiceImpl) UpdateCI(id int64, updaterID string, req model.UpdateCIRequest) (*model.ConfigurationItem, error) {
