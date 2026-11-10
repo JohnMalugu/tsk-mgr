@@ -283,6 +283,56 @@ type CIFilter struct {
 	Offset      int     `json:"offset,omitempty"`
 }
 
+// CIDependencyNode represents an interconnected Configuration Item in a dependency tree
+type CIDependencyNode struct {
+	CI           ConfigurationItem `json:"ci"`
+	RelationType string            `json:"relation_type"`
+	Depth        int               `json:"depth"`
+	Direction    string            `json:"direction"` // upstream or downstream
+}
+
+// CIDependencyGraph represents a full bidirectional dependency graph for a Configuration Item
+type CIDependencyGraph struct {
+	RootCI     ConfigurationItem  `json:"root_ci"`
+	Upstream   []CIDependencyNode `json:"upstream"`   // CIs that the root CI depends on
+	Downstream []CIDependencyNode `json:"downstream"` // CIs that depend on the root CI
+	TotalNodes int                `json:"total_nodes"`
+	MaxDepth   int                `json:"max_depth"`
+}
+
+// CIImpactAnalysis evaluates the blast radius if a Configuration Item fails or undergoes change
+type CIImpactAnalysis struct {
+	TargetCI               ConfigurationItem  `json:"target_ci"`
+	DirectImpactCount      int                `json:"direct_impact_count"`
+	IndirectImpactCount    int                `json:"indirect_impact_count"`
+	ImpactedCIs            []CIDependencyNode `json:"impacted_cis"`
+	ImpactedServicesCount  int                `json:"impacted_services_count"`
+	ImpactedDatabasesCount int                `json:"impacted_databases_count"`
+	HasTier1Impact         bool               `json:"has_tier1_impact"`
+}
+
+// CMDBMetrics provides enterprise ITIL configuration item analytics and health indicators
+type CMDBMetrics struct {
+	WorkspaceID           int64   `json:"workspace_id"`
+	TotalCIs              int     `json:"total_cis"`
+	ActiveCount           int     `json:"active_count"`
+	MaintenanceCount      int     `json:"maintenance_count"`
+	DegradedCount         int     `json:"degraded_count"`
+	DecommissionedCount   int     `json:"decommissioned_count"`
+	ServiceCount          int     `json:"service_count"`
+	ApplicationCount      int     `json:"application_count"`
+	DatabaseCount         int     `json:"database_count"`
+	ServerCount           int     `json:"server_count"`
+	ClusterCount          int     `json:"cluster_count"`
+	NetworkCount          int     `json:"network_count"`
+	CloudResourceCount    int     `json:"cloud_resource_count"`
+	Tier1Count            int     `json:"tier1_count"`
+	Tier2Count            int     `json:"tier2_count"`
+	TotalRelationships    int     `json:"total_relationships"`
+	ScheduledMaintenances int     `json:"scheduled_maintenances"`
+	TotalMonthlyCost      float64 `json:"total_monthly_cost"`
+}
+
 // ValidateCIType validates if a CI type string is supported
 func ValidateCIType(t string) error {
 	switch strings.ToLower(strings.TrimSpace(t)) {
