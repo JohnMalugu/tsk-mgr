@@ -675,5 +675,12 @@ func (s *cmdbServiceImpl) DeleteMaintenance(id int64) error {
 }
 
 func (s *cmdbServiceImpl) GetCMDBMetrics(workspaceID int64) (*model.CMDBMetrics, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	ws, err := s.workspaceRepo.GetByID(int(workspaceID))
+	if err != nil || ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+	return s.repo.GetCMDBMetrics(workspaceID)
 }
