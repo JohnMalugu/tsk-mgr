@@ -196,15 +196,119 @@ func (s *cmdbServiceImpl) ListCIs(filter model.CIFilter) ([]*model.Configuration
 }
 
 func (s *cmdbServiceImpl) UpdateCI(id int64, updaterID string, req model.UpdateCIRequest) (*model.ConfigurationItem, error) {
-	return nil, nil
+	ci, err := s.repo.GetCIByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrCINotFound) {
+			return nil, ErrCINotFound
+		}
+		return nil, err
+	}
+
+	if req.Name != nil {
+		name := strings.TrimSpace(*req.Name)
+		if name == "" {
+			return nil, ErrCINameRequired
+		}
+		ci.Name = name
+	}
+	if req.ProjectID != nil {
+		ci.ProjectID = req.ProjectID
+	}
+	if req.CIType != nil {
+		t := strings.ToLower(strings.TrimSpace(*req.CIType))
+		if err := model.ValidateCIType(t); err != nil {
+			return nil, err
+		}
+		ci.CIType = t
+	}
+	if req.Status != nil {
+		st := strings.ToLower(strings.TrimSpace(*req.Status))
+		if err := model.ValidateCIStatus(st); err != nil {
+			return nil, err
+		}
+		ci.Status = st
+	}
+	if req.Criticality != nil {
+		cr := strings.ToLower(strings.TrimSpace(*req.Criticality))
+		if err := model.ValidateCICriticality(cr); err != nil {
+			return nil, err
+		}
+		ci.Criticality = cr
+	}
+	if req.Environment != nil {
+		env := strings.ToLower(strings.TrimSpace(*req.Environment))
+		if err := model.ValidateCIEnvironment(env); err != nil {
+			return nil, err
+		}
+		ci.Environment = env
+	}
+	if req.OwnerUserID != nil {
+		ci.OwnerUserID = strings.TrimSpace(*req.OwnerUserID)
+	}
+	if req.IPAddress != nil {
+		ci.IPAddress = strings.TrimSpace(*req.IPAddress)
+	}
+	if req.Hostname != nil {
+		ci.Hostname = strings.TrimSpace(*req.Hostname)
+	}
+	if req.Version != nil {
+		ci.Version = strings.TrimSpace(*req.Version)
+	}
+	if req.CostPerMonth != nil {
+		ci.CostPerMonth = *req.CostPerMonth
+	}
+	if req.Attributes != nil {
+		ci.Attributes = strings.TrimSpace(*req.Attributes)
+	}
+
+	if err := s.repo.UpdateCI(ci); err != nil {
+		return nil, err
+	}
+
+	s.logAudit(updaterID, ci.WorkspaceID, "cmdb.ci_updated", fmt.Sprintf("%d", id), fmt.Sprintf("Updated configuration item %s (%s)", ci.CICode, ci.Name))
+
+	return s.repo.GetCIByID(id)
 }
 
 func (s *cmdbServiceImpl) DeleteCI(id int64, deleterID string) error {
+	ci, err := s.repo.GetCIByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrCINotFound) {
+			return ErrCINotFound
+		}
+		return err
+	}
+
+	if err := s.repo.DeleteCI(id); err != nil {
+		return err
+	}
+
+	s.logAudit(deleterID, ci.WorkspaceID, "cmdb.ci_deleted", fmt.Sprintf("%d", id), fmt.Sprintf("Deleted configuration item %s (%s)", ci.CICode, ci.Name))
 	return nil
 }
 
 func (s *cmdbServiceImpl) UpdateCIStatus(id int64, updaterID string, req model.UpdateCIStatusRequest) (*model.ConfigurationItem, error) {
-	return nil, nil
+	st := strings.ToLower(strings.TrimSpace(req.Status))
+	if err := model.ValidateCIStatus(st); err != nil {
+		return nil, err
+	}
+
+	ci, err := s.repo.GetCIByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrCINotFound) {
+			return nil, ErrCINotFound
+		}
+		return nil, err
+	}
+
+	ci.Status = st
+	if err := s.repo.UpdateCI(ci); err != nil {
+		return nil, err
+	}
+
+	s.logAudit(updaterID, ci.WorkspaceID, "cmdb.ci_status_changed", fmt.Sprintf("%d", id), fmt.Sprintf("Changed status of %s to %s (reason: %s)", ci.CICode, st, req.Reason))
+
+	return s.repo.GetCIByID(id)
 }
 
 func (s *cmdbServiceImpl) CreateRelationship(ciID int64, req model.CreateCIRelationshipRequest) (*model.CIRelationship, error) {
