@@ -1578,6 +1578,36 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	configurationItemsQuery := `
+	CREATE TABLE IF NOT EXISTS configuration_items (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		project_id INTEGER,
+		ci_code TEXT NOT NULL,
+		name TEXT NOT NULL,
+		ci_type TEXT NOT NULL DEFAULT 'service',
+		status TEXT NOT NULL DEFAULT 'active',
+		criticality TEXT NOT NULL DEFAULT 'tier_2_business_critical',
+		environment TEXT NOT NULL DEFAULT 'production',
+		owner_user_id TEXT NOT NULL,
+		ip_address TEXT NOT NULL DEFAULT '',
+		hostname TEXT NOT NULL DEFAULT '',
+		version TEXT NOT NULL DEFAULT '',
+		cost_per_month REAL NOT NULL DEFAULT 0.0,
+		attributes TEXT NOT NULL DEFAULT '{}',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+		FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
+		UNIQUE(workspace_id, ci_code)
+	);`
+
+	_, err = db.Exec(configurationItemsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
