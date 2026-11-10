@@ -11,16 +11,20 @@ import (
 )
 
 var (
-	ErrCINotFound          = repository.ErrCINotFound
-	ErrRelationshipNotFound= repository.ErrRelationshipNotFound
-	ErrLinkNotFound        = repository.ErrLinkNotFound
-	ErrMaintenanceNotFound = repository.ErrMaintenanceNotFound
-	ErrCINameRequired      = errors.New("configuration item name is required")
-	ErrSelfRelationship    = errors.New("cannot create relationship to the same configuration item")
-	ErrRelationshipExists  = errors.New("relationship already exists between these configuration items")
-	ErrLinkAlreadyExists   = errors.New("entity is already linked to this configuration item")
-	ErrMaintTitleRequired  = errors.New("maintenance schedule title is required")
-	ErrInvalidMaintDates   = errors.New("maintenance window end time must be after start time")
+	ErrCINotFound           = repository.ErrCINotFound
+	ErrRelationshipNotFound = repository.ErrRelationshipNotFound
+	ErrLinkNotFound         = repository.ErrLinkNotFound
+	ErrMaintenanceNotFound  = repository.ErrMaintenanceNotFound
+	ErrCINameRequired       = errors.New("configuration item name is required")
+	ErrInvalidCIType        = model.ErrInvalidCIType
+	ErrInvalidCICriticality = model.ErrInvalidCICriticality
+	ErrInvalidCIStatus      = model.ErrInvalidCIStatus
+	ErrInvalidCIEnvironment = model.ErrInvalidCIEnvironment
+	ErrSelfRelationship     = errors.New("cannot create relationship to the same configuration item")
+	ErrRelationshipExists   = errors.New("relationship already exists between these configuration items")
+	ErrLinkAlreadyExists    = errors.New("entity is already linked to this configuration item")
+	ErrMaintTitleRequired   = errors.New("maintenance schedule title is required")
+	ErrInvalidMaintDates    = errors.New("maintenance window end time must be after start time")
 )
 
 // CMDBService manages ITIL Configuration Items, dependencies, blast-radius analysis, and maintenance schedules
