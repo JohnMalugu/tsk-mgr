@@ -808,5 +808,79 @@ func (r *cmdbRepositoryImpl) DeleteMaintenance(id int64) error {
 }
 
 func (r *cmdbRepositoryImpl) GetCMDBMetrics(workspaceID int64) (*model.CMDBMetrics, error) {
-	return nil, nil
+	metrics := &model.CMDBMetrics{
+		WorkspaceID: workspaceID,
+	}
+
+	query := `
+	SELECT 
+		COUNT(*),
+		SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN status = 'maintenance' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN status = 'degraded' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN status = 'decommissioned' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN ci_type = 'service' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN ci_type = 'application' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN ci_type = 'database' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN ci_type = 'server' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN ci_type = 'cluster' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN ci_type = 'network' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN ci_type = 'cloud_resource' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN criticality = 'tier_1_mission_critical' THEN 1 ELSE 0 END),
+		SUM(CASE WHEN criticality = 'tier_2_business_critical' THEN 1 ELSE 0 END),
+		COALESCE(SUM(cost_per_month), 0.0)
+	FROM configuration_items
+	WHERE workspace_id = ?`
+
+	var total, active, maint, degraded, decomm, srvc, app, db, server, cluster, net, cloud, t1, t2 sql.NullInt64
+	var totalCost sql.NullFloat64
+
+	err := r.db.QueryRow(query, workspaceID).Scan(
+		&total, &active, &maint, &degraded, &decomm,
+		&srvc, &app, &db, &server, &cluster, &net, &cloud,
+		&t1, &t2, &totalCost,
+	)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+
+	metrics.TotalCIs = int(total.Int64)
+	metrics.ActiveCount = int(active.Int64)
+	metrics.MaintenanceCount = int(maint.Int64)
+	metrics.DegradedCount = int(degraded.Int64)
+	metrics.DecommissionedCount = int(decomm.Int64)
+	metrics.ServiceCount = int(srvc.Int64)
+	metrics.ApplicationCount = int(app.Int64)
+	metrics.DatabaseCount = int(db.Int64)
+	metrics.ServerCount = int(server.Int64)
+	metrics.ClusterCount = int(cluster.Int64)
+	metrics.NetworkCount = int(net.Int64)
+	metrics.CloudResourceCount = int(cloud.Int64)
+	metrics.Tier1Count = int(t1.Int64)
+	metrics.Tier2Count = int(t2.Int64)
+	if totalCost.Valid {
+		metrics.TotalMonthlyCost = totalCost.Float64
+	}
+
+	relQuery := `
+	SELECT COUNT(*) 
+	FROM ci_relationships r
+	JOIN configuration_items c ON r.source_ci_id = c.id
+	WHERE c.workspace_id = ?`
+	var totalRels sql.NullInt64
+	if err := r.db.QueryRow(relQuery, workspaceID).Scan(&totalRels); err == nil && totalRels.Valid {
+		metrics.TotalRelationships = int(totalRels.Int64)
+	}
+
+	maintQuery := `
+	SELECT COUNT(*)
+	FROM ci_maintenance_schedules m
+	JOIN configuration_items c ON m.ci_id = c.id
+	WHERE c.workspace_id = ? AND m.status = 'scheduled'`
+	var scheduledMaint sql.NullInt64
+	if err := r.db.QueryRow(maintQuery, workspaceID).Scan(&scheduledMaint); err == nil && scheduledMaint.Valid {
+		metrics.ScheduledMaintenances = int(scheduledMaint.Int64)
+	}
+
+	return metrics, nil
 }
