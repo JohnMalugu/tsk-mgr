@@ -1608,6 +1608,24 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	ciRelationshipsQuery := `
+	CREATE TABLE IF NOT EXISTS ci_relationships (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		source_ci_id INTEGER NOT NULL,
+		target_ci_id INTEGER NOT NULL,
+		relation_type TEXT NOT NULL DEFAULT 'depends_on',
+		description TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (source_ci_id) REFERENCES configuration_items(id) ON DELETE CASCADE,
+		FOREIGN KEY (target_ci_id) REFERENCES configuration_items(id) ON DELETE CASCADE,
+		UNIQUE(source_ci_id, target_ci_id, relation_type)
+	);`
+
+	_, err = db.Exec(ciRelationshipsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
