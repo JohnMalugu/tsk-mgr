@@ -211,3 +211,180 @@ func (h *CMDBHandler) UpdateCIStatus(w http.ResponseWriter, r *http.Request, id 
 	}
 	writeCMDBJSON(w, http.StatusOK, ci)
 }
+
+// CreateRelationship handles POST /v2/cmdb/items/{id}/relationships
+func (h *CMDBHandler) CreateRelationship(w http.ResponseWriter, r *http.Request, ciID int64) {
+	var req model.CreateCIRelationshipRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeCMDBError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+	rel, err := h.svc.CreateRelationship(ciID, req)
+	if err != nil {
+		handleCMDBServiceError(w, err)
+		return
+	}
+	writeCMDBJSON(w, http.StatusCreated, rel)
+}
+
+// ListRelationships handles GET /v2/cmdb/items/{id}/relationships
+func (h *CMDBHandler) ListRelationships(w http.ResponseWriter, r *http.Request, ciID int64) {
+	rels, err := h.svc.ListRelationships(ciID)
+	if err != nil {
+		handleCMDBServiceError(w, err)
+		return
+	}
+	if rels == nil {
+		rels = []model.CIRelationship{}
+	}
+	writeCMDBJSON(w, http.StatusOK, rels)
+}
+
+// DeleteRelationship handles DELETE /v2/cmdb/relationships/{id}
+func (h *CMDBHandler) DeleteRelationship(w http.ResponseWriter, r *http.Request, relID int64) {
+	if err := h.svc.DeleteRelationship(relID); err != nil {
+		handleCMDBServiceError(w, err)
+		return
+	}
+	writeCMDBJSON(w, http.StatusOK, map[string]string{"message": "relationship deleted successfully"})
+}
+
+// GetDependencyGraph handles GET /v2/cmdb/items/{id}/graph
+func (h *CMDBHandler) GetDependencyGraph(w http.ResponseWriter, r *http.Request, ciID int64) {
+	maxDepth := 5
+	if dStr := r.URL.Query().Get("max_depth"); dStr != "" {
+		if d, err := strconv.Atoi(dStr); err == nil && d > 0 {
+			maxDepth = d
+		}
+	}
+	graph, err := h.svc.GetDependencyGraph(ciID, maxDepth)
+	if err != nil {
+		handleCMDBServiceError(w, err)
+		return
+	}
+	writeCMDBJSON(w, http.StatusOK, graph)
+}
+
+// AnalyzeBlastRadius handles GET /v2/cmdb/items/{id}/blast-radius
+func (h *CMDBHandler) AnalyzeBlastRadius(w http.ResponseWriter, r *http.Request, ciID int64) {
+	analysis, err := h.svc.AnalyzeBlastRadius(ciID)
+	if err != nil {
+		handleCMDBServiceError(w, err)
+		return
+	}
+	writeCMDBJSON(w, http.StatusOK, analysis)
+}
+
+// LinkEntity handles POST /v2/cmdb/items/{id}/links
+func (h *CMDBHandler) LinkEntity(w http.ResponseWriter, r *http.Request, ciID int64) {
+	var req model.CreateCIEntityLinkRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeCMDBError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+	link, err := h.svc.LinkEntity(ciID, req)
+	if err != nil {
+		handleCMDBServiceError(w, err)
+		return
+	}
+	writeCMDBJSON(w, http.StatusCreated, link)
+}
+
+// ListEntityLinks handles GET /v2/cmdb/items/{id}/links
+func (h *CMDBHandler) ListEntityLinks(w http.ResponseWriter, r *http.Request, ciID int64) {
+	links, err := h.svc.ListEntityLinks(ciID)
+	if err != nil {
+		handleCMDBServiceError(w, err)
+		return
+	}
+	if links == nil {
+		links = []model.CIEntityLink{}
+	}
+	writeCMDBJSON(w, http.StatusOK, links)
+}
+
+// ListCIsForEntity handles GET /v2/cmdb/links?entity_type=X&entity_id=Y
+func (h *CMDBHandler) ListCIsForEntity(w http.ResponseWriter, r *http.Request) {
+	entityType := r.URL.Query().Get("entity_type")
+	entityIDStr := r.URL.Query().Get("entity_id")
+	if entityType == "" || entityIDStr == "" {
+		writeCMDBError(w, http.StatusBadRequest, "entity_type and entity_id query parameters are required")
+		return
+	}
+	entityID, err := strconv.ParseInt(entityIDStr, 10, 64)
+	if err != nil || entityID <= 0 {
+		writeCMDBError(w, http.StatusBadRequest, "invalid entity_id")
+		return
+	}
+	links, err := h.svc.ListCIsForEntity(entityType, entityID)
+	if err != nil {
+		handleCMDBServiceError(w, err)
+		return
+	}
+	if links == nil {
+		links = []model.CIEntityLink{}
+	}
+	writeCMDBJSON(w, http.StatusOK, links)
+}
+
+// UnlinkEntity handles DELETE /v2/cmdb/links/{id}
+func (h *CMDBHandler) UnlinkEntity(w http.ResponseWriter, r *http.Request, linkID int64) {
+	if err := h.svc.UnlinkEntity(linkID); err != nil {
+		handleCMDBServiceError(w, err)
+		return
+	}
+	writeCMDBJSON(w, http.StatusOK, map[string]string{"message": "entity link deleted successfully"})
+}
+
+// CreateMaintenance handles POST /v2/cmdb/items/{id}/maintenance
+func (h *CMDBHandler) CreateMaintenance(w http.ResponseWriter, r *http.Request, ciID int64) {
+	var req model.CreateCIMaintenanceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeCMDBError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+	userID := getCMDBUser(r)
+	maint, err := h.svc.CreateMaintenance(ciID, userID, req)
+	if err != nil {
+		handleCMDBServiceError(w, err)
+		return
+	}
+	writeCMDBJSON(w, http.StatusCreated, maint)
+}
+
+// ListMaintenances handles GET /v2/cmdb/items/{id}/maintenance
+func (h *CMDBHandler) ListMaintenances(w http.ResponseWriter, r *http.Request, ciID int64) {
+	maints, err := h.svc.ListMaintenances(ciID)
+	if err != nil {
+		handleCMDBServiceError(w, err)
+		return
+	}
+	if maints == nil {
+		maints = []model.CIMaintenanceSchedule{}
+	}
+	writeCMDBJSON(w, http.StatusOK, maints)
+}
+
+// UpdateMaintenanceStatus handles POST /v2/cmdb/maintenance/{id}/status
+func (h *CMDBHandler) UpdateMaintenanceStatus(w http.ResponseWriter, r *http.Request, maintID int64) {
+	var req model.UpdateCIMaintenanceStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeCMDBError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+	maint, err := h.svc.UpdateMaintenanceStatus(maintID, req)
+	if err != nil {
+		handleCMDBServiceError(w, err)
+		return
+	}
+	writeCMDBJSON(w, http.StatusOK, maint)
+}
+
+// DeleteMaintenance handles DELETE /v2/cmdb/maintenance/{id}
+func (h *CMDBHandler) DeleteMaintenance(w http.ResponseWriter, r *http.Request, maintID int64) {
+	if err := h.svc.DeleteMaintenance(maintID); err != nil {
+		handleCMDBServiceError(w, err)
+		return
+	}
+	writeCMDBJSON(w, http.StatusOK, map[string]string{"message": "maintenance schedule deleted successfully"})
+}
