@@ -1824,6 +1824,19 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_change_task_links_change ON change_task_links(change_id);
 	CREATE INDEX IF NOT EXISTS idx_change_task_links_task ON change_task_links(task_id);
 	CREATE INDEX IF NOT EXISTS idx_change_pirs_change ON change_pirs(change_id);
+	CREATE INDEX IF NOT EXISTS idx_ci_ws_status ON configuration_items(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_ci_ws_type ON configuration_items(workspace_id, ci_type);
+	CREATE INDEX IF NOT EXISTS idx_ci_ws_criticality ON configuration_items(workspace_id, criticality);
+	CREATE INDEX IF NOT EXISTS idx_ci_ws_env ON configuration_items(workspace_id, environment);
+	CREATE INDEX IF NOT EXISTS idx_ci_ws_code ON configuration_items(workspace_id, ci_code);
+	CREATE INDEX IF NOT EXISTS idx_ci_proj ON configuration_items(project_id);
+	CREATE INDEX IF NOT EXISTS idx_ci_owner ON configuration_items(owner_user_id);
+	CREATE INDEX IF NOT EXISTS idx_ci_rel_source ON ci_relationships(source_ci_id, relation_type);
+	CREATE INDEX IF NOT EXISTS idx_ci_rel_target ON ci_relationships(target_ci_id, relation_type);
+	CREATE INDEX IF NOT EXISTS idx_ci_links_ci ON ci_entity_links(ci_id, entity_type);
+	CREATE INDEX IF NOT EXISTS idx_ci_links_entity ON ci_entity_links(entity_type, entity_id);
+	CREATE INDEX IF NOT EXISTS idx_ci_maint_ci ON ci_maintenance_schedules(ci_id, status);
+	CREATE INDEX IF NOT EXISTS idx_ci_maint_dates ON ci_maintenance_schedules(window_start_at, window_end_at);
 	`
 
 	_, err = db.Exec(indexQuery)
