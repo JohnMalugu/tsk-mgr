@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -199,7 +200,76 @@ func (r *cmdbRepositoryImpl) GetCIByCode(workspaceID int64, code string) (*model
 }
 
 func (r *cmdbRepositoryImpl) ListCIs(filter model.CIFilter) ([]*model.ConfigurationItem, error) {
-	return nil, nil
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID > 0 {
+		conditions = append(conditions, "c.workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.ProjectID != nil {
+		conditions = append(conditions, "c.project_id = ?")
+		args = append(args, *filter.ProjectID)
+	}
+	if filter.CIType != nil && *filter.CIType != "" {
+		conditions = append(conditions, "c.ci_type = ?")
+		args = append(args, *filter.CIType)
+	}
+	if filter.Status != nil && *filter.Status != "" {
+		conditions = append(conditions, "c.status = ?")
+		args = append(args, *filter.Status)
+	}
+	if filter.Criticality != nil && *filter.Criticality != "" {
+		conditions = append(conditions, "c.criticality = ?")
+		args = append(args, *filter.Criticality)
+	}
+	if filter.Environment != nil && *filter.Environment != "" {
+		conditions = append(conditions, "c.environment = ?")
+		args = append(args, *filter.Environment)
+	}
+	if filter.OwnerUserID != nil && *filter.OwnerUserID != "" {
+		conditions = append(conditions, "c.owner_user_id = ?")
+		args = append(args, *filter.OwnerUserID)
+	}
+	if filter.Search != nil && *filter.Search != "" {
+		pattern := "%" + *filter.Search + "%"
+		conditions = append(conditions, "(c.name LIKE ? OR c.hostname LIKE ? OR c.ip_address LIKE ? OR c.ci_code LIKE ?)")
+		args = append(args, pattern, pattern, pattern, pattern)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	query := baseCISelect + whereClause + " ORDER BY c.created_at DESC"
+	if filter.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, filter.Limit)
+		if filter.Offset > 0 {
+			query += " OFFSET ?"
+			args = append(args, filter.Offset)
+		}
+	}
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []*model.ConfigurationItem
+	for rows.Next() {
+		ci, err := scanCI(rows)
+		if err != nil {
+			return nil, err
+		}
+		list = append(list, ci)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
 func (r *cmdbRepositoryImpl) UpdateCI(ci *model.ConfigurationItem) error {
