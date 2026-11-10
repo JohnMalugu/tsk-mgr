@@ -171,6 +171,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 ITIL Configuration Management Database (CMDB) & Service Assets
+	if strings.HasPrefix(r.URL.Path, "/v2/cmdb") {
+		if handler.GlobalCMDBHandler == nil {
+			http.Error(w, "CMDB handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalCMDBHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return

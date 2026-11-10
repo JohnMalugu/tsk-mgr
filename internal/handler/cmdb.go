@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
@@ -387,4 +388,208 @@ func (h *CMDBHandler) DeleteMaintenance(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	writeCMDBJSON(w, http.StatusOK, map[string]string{"message": "maintenance schedule deleted successfully"})
+}
+
+// GetMetrics handles GET /v2/cmdb/metrics?workspace_id=X
+func (h *CMDBHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
+	wsIDStr := r.URL.Query().Get("workspace_id")
+	if wsIDStr == "" {
+		writeCMDBError(w, http.StatusBadRequest, "workspace_id query parameter is required")
+		return
+	}
+	wsID, err := strconv.ParseInt(wsIDStr, 10, 64)
+	if err != nil || wsID <= 0 {
+		writeCMDBError(w, http.StatusBadRequest, "invalid workspace_id")
+		return
+	}
+	metrics, err := h.svc.GetCMDBMetrics(wsID)
+	if err != nil {
+		handleCMDBServiceError(w, err)
+		return
+	}
+	writeCMDBJSON(w, http.StatusOK, metrics)
+}
+
+// ServeHTTP dispatches HTTP requests under /v2/cmdb
+func (h *CMDBHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/cmdb")
+	path = strings.TrimPrefix(path, "/")
+	path = strings.TrimSuffix(path, "/")
+
+	if path == "metrics" {
+		if r.Method != http.MethodGet {
+			writeCMDBError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		h.GetMetrics(w, r)
+		return
+	}
+
+	if path == "links" {
+		if r.Method != http.MethodGet {
+			writeCMDBError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		h.ListCIsForEntity(w, r)
+		return
+	}
+
+	if strings.HasPrefix(path, "links/") {
+		parts := strings.Split(path, "/")
+		if len(parts) == 2 {
+			linkID, err := strconv.ParseInt(parts[1], 10, 64)
+			if err != nil || linkID <= 0 {
+				writeCMDBError(w, http.StatusBadRequest, "invalid link id")
+				return
+			}
+			if r.Method == http.MethodDelete {
+				h.UnlinkEntity(w, r, linkID)
+				return
+			}
+			writeCMDBError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+	}
+
+	if strings.HasPrefix(path, "relationships/") {
+		parts := strings.Split(path, "/")
+		if len(parts) == 2 {
+			relID, err := strconv.ParseInt(parts[1], 10, 64)
+			if err != nil || relID <= 0 {
+				writeCMDBError(w, http.StatusBadRequest, "invalid relationship id")
+				return
+			}
+			if r.Method == http.MethodDelete {
+				h.DeleteRelationship(w, r, relID)
+				return
+			}
+			writeCMDBError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+	}
+
+	if strings.HasPrefix(path, "maintenance/") {
+		parts := strings.Split(path, "/")
+		if len(parts) == 2 {
+			maintID, err := strconv.ParseInt(parts[1], 10, 64)
+			if err != nil || maintID <= 0 {
+				writeCMDBError(w, http.StatusBadRequest, "invalid maintenance id")
+				return
+			}
+			if r.Method == http.MethodDelete {
+				h.DeleteMaintenance(w, r, maintID)
+				return
+			}
+			writeCMDBError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		if len(parts) == 3 && parts[2] == "status" {
+			maintID, err := strconv.ParseInt(parts[1], 10, 64)
+			if err != nil || maintID <= 0 {
+				writeCMDBError(w, http.StatusBadRequest, "invalid maintenance id")
+				return
+			}
+			if r.Method == http.MethodPost || r.Method == http.MethodPatch {
+				h.UpdateMaintenanceStatus(w, r, maintID)
+				return
+			}
+			writeCMDBError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+	}
+
+	// Routes under /v2/cmdb/items or /v2/cmdb
+	itemPath := path
+	if strings.HasPrefix(itemPath, "items") {
+		itemPath = strings.TrimPrefix(itemPath, "items")
+		itemPath = strings.TrimPrefix(itemPath, "/")
+	}
+
+	if itemPath == "" {
+		switch r.Method {
+		case http.MethodGet:
+			h.ListCIs(w, r)
+		case http.MethodPost:
+			h.CreateCI(w, r)
+		default:
+			writeCMDBError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	parts := strings.Split(itemPath, "/")
+	id, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || id <= 0 {
+		writeCMDBError(w, http.StatusBadRequest, "invalid configuration item id")
+		return
+	}
+
+	if len(parts) == 1 {
+		switch r.Method {
+		case http.MethodGet:
+			h.GetCI(w, r, id)
+		case http.MethodPut, http.MethodPatch:
+			h.UpdateCI(w, r, id)
+		case http.MethodDelete:
+			h.DeleteCI(w, r, id)
+		default:
+			writeCMDBError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if len(parts) == 2 {
+		switch parts[1] {
+		case "status":
+			if r.Method != http.MethodPost && r.Method != http.MethodPatch {
+				writeCMDBError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.UpdateCIStatus(w, r, id)
+		case "relationships":
+			switch r.Method {
+			case http.MethodGet:
+				h.ListRelationships(w, r, id)
+			case http.MethodPost:
+				h.CreateRelationship(w, r, id)
+			default:
+				writeCMDBError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		case "graph":
+			if r.Method != http.MethodGet {
+				writeCMDBError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.GetDependencyGraph(w, r, id)
+		case "blast-radius":
+			if r.Method != http.MethodGet {
+				writeCMDBError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.AnalyzeBlastRadius(w, r, id)
+		case "links":
+			switch r.Method {
+			case http.MethodGet:
+				h.ListEntityLinks(w, r, id)
+			case http.MethodPost:
+				h.LinkEntity(w, r, id)
+			default:
+				writeCMDBError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		case "maintenance":
+			switch r.Method {
+			case http.MethodGet:
+				h.ListMaintenances(w, r, id)
+			case http.MethodPost:
+				h.CreateMaintenance(w, r, id)
+			default:
+				writeCMDBError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		default:
+			writeCMDBError(w, http.StatusNotFound, "not found")
+		}
+		return
+	}
+
+	writeCMDBError(w, http.StatusNotFound, "not found")
 }

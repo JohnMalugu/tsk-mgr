@@ -151,6 +151,10 @@ func main() {
 	changeSvc := service.NewChangeService(changeRepo, workspaceRepo, projectRepo, taskRepo, userRepo, auditSvc)
 	handler.InitChangeHandler(changeSvc)
 
+	cmdbRepo := repository.NewCMDBRepository(sqliteDB)
+	cmdbSvc := service.NewCMDBService(cmdbRepo, workspaceRepo, projectRepo, taskRepo, auditSvc)
+	handler.InitCMDBHandler(cmdbSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
