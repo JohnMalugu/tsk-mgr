@@ -112,6 +112,57 @@ type CIRelationship struct {
 	TargetCIType string `json:"target_ci_type,omitempty"`
 }
 
+// CI Link target entity types
+const (
+	CILinkEntityTask     = "task"
+	CILinkEntityChange   = "change"
+	CILinkEntityIncident = "incident"
+)
+
+// CI Link impact levels
+const (
+	CIImpactDirect     = "direct"
+	CIImpactIndirect   = "indirect"
+	CIImpactUnaffected = "unaffected"
+)
+
+// ValidateCILinkEntityType validates if an entity type is supported for CI linkage
+func ValidateCILinkEntityType(t string) error {
+	switch strings.ToLower(strings.TrimSpace(t)) {
+	case CILinkEntityTask, CILinkEntityChange, CILinkEntityIncident:
+		return nil
+	default:
+		return errors.New("invalid CI entity link type: must be task, change, or incident")
+	}
+}
+
+// ValidateCIImpactLevel validates if an impact level is valid
+func ValidateCIImpactLevel(l string) error {
+	switch strings.ToLower(strings.TrimSpace(l)) {
+	case CIImpactDirect, CIImpactIndirect, CIImpactUnaffected:
+		return nil
+	default:
+		return ErrInvalidImpactLevel
+	}
+}
+
+// CIEntityLink represents a link between a Configuration Item and a Task, Change Request, or Incident
+type CIEntityLink struct {
+	ID          int64     `json:"id"`
+	CIID        int64     `json:"ci_id"`
+	EntityType  string    `json:"entity_type"` // task, change, incident
+	EntityID    int64     `json:"entity_id"`
+	ImpactLevel string    `json:"impact_level"` // direct, indirect, unaffected
+	Notes       string    `json:"notes,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+
+	// Enriched fields
+	CIName       string `json:"ci_name,omitempty"`
+	CICode       string `json:"ci_code,omitempty"`
+	EntityTitle  string `json:"entity_title,omitempty"`
+	EntityStatus string `json:"entity_status,omitempty"`
+}
+
 // ValidateCIType validates if a CI type string is supported
 func ValidateCIType(t string) error {
 	switch strings.ToLower(strings.TrimSpace(t)) {
