@@ -255,6 +255,34 @@ type UpdateCIStatusRequest struct {
 	Reason string `json:"reason,omitempty"`
 }
 
+// CreateCIMaintenanceRequest represents payload to schedule a maintenance window on a CI
+type CreateCIMaintenanceRequest struct {
+	Title                   string `json:"title"`
+	Description             string `json:"description,omitempty"`
+	WindowStartAt           string `json:"window_start_at"` // RFC3339
+	WindowEndAt             string `json:"window_end_at"`   // RFC3339
+	ExpectedDowntimeMinutes int    `json:"expected_downtime_minutes,omitempty"`
+}
+
+// UpdateCIMaintenanceStatusRequest represents payload to update a maintenance window status
+type UpdateCIMaintenanceStatusRequest struct {
+	Status string `json:"status"` // scheduled, in_progress, completed, cancelled
+}
+
+// CIFilter provides multi-criteria filtering, search, and pagination for Configuration Items
+type CIFilter struct {
+	WorkspaceID int64   `json:"workspace_id"`
+	ProjectID   *int64  `json:"project_id,omitempty"`
+	CIType      *string `json:"ci_type,omitempty"`
+	Status      *string `json:"status,omitempty"`
+	Criticality *string `json:"criticality,omitempty"`
+	Environment *string `json:"environment,omitempty"`
+	OwnerUserID *string `json:"owner_user_id,omitempty"`
+	Search      *string `json:"search,omitempty"`
+	Limit       int     `json:"limit,omitempty"`
+	Offset      int     `json:"offset,omitempty"`
+}
+
 // ValidateCIType validates if a CI type string is supported
 func ValidateCIType(t string) error {
 	switch strings.ToLower(strings.TrimSpace(t)) {
