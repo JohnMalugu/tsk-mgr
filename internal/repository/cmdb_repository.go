@@ -273,10 +273,65 @@ func (r *cmdbRepositoryImpl) ListCIs(filter model.CIFilter) ([]*model.Configurat
 }
 
 func (r *cmdbRepositoryImpl) UpdateCI(ci *model.ConfigurationItem) error {
+	ci.UpdatedAt = time.Now().UTC()
+	query := `
+	UPDATE configuration_items SET
+		project_id = ?,
+		name = ?,
+		ci_type = ?,
+		status = ?,
+		criticality = ?,
+		environment = ?,
+		owner_user_id = ?,
+		ip_address = ?,
+		hostname = ?,
+		version = ?,
+		cost_per_month = ?,
+		attributes = ?,
+		updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query,
+		ci.ProjectID,
+		ci.Name,
+		ci.CIType,
+		ci.Status,
+		ci.Criticality,
+		ci.Environment,
+		ci.OwnerUserID,
+		ci.IPAddress,
+		ci.Hostname,
+		ci.Version,
+		ci.CostPerMonth,
+		ci.Attributes,
+		ci.UpdatedAt,
+		ci.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrCINotFound
+	}
 	return nil
 }
 
 func (r *cmdbRepositoryImpl) DeleteCI(id int64) error {
+	res, err := r.db.Exec("DELETE FROM configuration_items WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrCINotFound
+	}
 	return nil
 }
 
