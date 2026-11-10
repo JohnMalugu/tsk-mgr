@@ -163,6 +163,44 @@ type CIEntityLink struct {
 	EntityStatus string `json:"entity_status,omitempty"`
 }
 
+// CI Maintenance statuses
+const (
+	CIMaintStatusScheduled  = "scheduled"
+	CIMaintStatusInProgress = "in_progress"
+	CIMaintStatusCompleted  = "completed"
+	CIMaintStatusCancelled  = "cancelled"
+)
+
+// ValidateCIMaintStatus validates if a maintenance schedule status is supported
+func ValidateCIMaintStatus(s string) error {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case CIMaintStatusScheduled, CIMaintStatusInProgress, CIMaintStatusCompleted, CIMaintStatusCancelled:
+		return nil
+	default:
+		return ErrInvalidMaintStatus
+	}
+}
+
+// CIMaintenanceSchedule represents a planned or active maintenance window for a Configuration Item
+type CIMaintenanceSchedule struct {
+	ID                      int64     `json:"id"`
+	CIID                    int64     `json:"ci_id"`
+	Title                   string    `json:"title"`
+	Description             string    `json:"description,omitempty"`
+	WindowStartAt           time.Time `json:"window_start_at"`
+	WindowEndAt             time.Time `json:"window_end_at"`
+	ExpectedDowntimeMinutes int       `json:"expected_downtime_minutes"`
+	Status                  string    `json:"status"` // scheduled, in_progress, completed, cancelled
+	CreatedByUserID         string    `json:"created_by_user_id"`
+	CreatedAt               time.Time `json:"created_at"`
+	UpdatedAt               time.Time `json:"updated_at"`
+
+	// Enriched fields
+	CIName            string `json:"ci_name,omitempty"`
+	CICode            string `json:"ci_code,omitempty"`
+	CreatedByUsername string `json:"created_by_username,omitempty"`
+}
+
 // ValidateCIType validates if a CI type string is supported
 func ValidateCIType(t string) error {
 	switch strings.ToLower(strings.TrimSpace(t)) {
