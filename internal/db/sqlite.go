@@ -1644,6 +1644,28 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	ciMaintenanceSchedulesQuery := `
+	CREATE TABLE IF NOT EXISTS ci_maintenance_schedules (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		ci_id INTEGER NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		window_start_at DATETIME NOT NULL,
+		window_end_at DATETIME NOT NULL,
+		expected_downtime_minutes INTEGER NOT NULL DEFAULT 0,
+		status TEXT NOT NULL DEFAULT 'scheduled',
+		created_by_user_id TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (ci_id) REFERENCES configuration_items(id) ON DELETE CASCADE,
+		FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(ciMaintenanceSchedulesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
