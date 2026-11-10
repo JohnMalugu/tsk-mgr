@@ -35,6 +35,44 @@ const (
 	CICriticalityTier4 = "tier_4_non_critical"
 )
 
+// Configuration Item lifecycle statuses
+const (
+	CIStatusPlanning       = "planning"
+	CIStatusActive         = "active"
+	CIStatusMaintenance    = "maintenance"
+	CIStatusDegraded       = "degraded"
+	CIStatusDecommissioned = "decommissioned"
+	CIStatusRetired        = "retired"
+)
+
+// Configuration Item environment types
+const (
+	CIEnvProduction  = "production"
+	CIEnvStaging     = "staging"
+	CIEnvTesting     = "testing"
+	CIEnvDevelopment = "development"
+)
+
+// ValidateCIStatus validates if a CI status string is supported
+func ValidateCIStatus(s string) error {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case CIStatusPlanning, CIStatusActive, CIStatusMaintenance, CIStatusDegraded, CIStatusDecommissioned, CIStatusRetired:
+		return nil
+	default:
+		return ErrInvalidCIStatus
+	}
+}
+
+// ValidateCIEnvironment validates if a CI environment string is supported
+func ValidateCIEnvironment(e string) error {
+	switch strings.ToLower(strings.TrimSpace(e)) {
+	case CIEnvProduction, CIEnvStaging, CIEnvTesting, CIEnvDevelopment:
+		return nil
+	default:
+		return ErrInvalidCIEnvironment
+	}
+}
+
 // ValidateCIType validates if a CI type string is supported
 func ValidateCIType(t string) error {
 	switch strings.ToLower(strings.TrimSpace(t)) {
