@@ -266,6 +266,20 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `DELETE /v2/changes/{id}/tasks/{taskId}` to unlink an execution task from a change request
 - `GET|POST|PUT /v2/changes/{id}/pir` to inspect or submit a Post-Implementation Review (PIR) examining release outcome (`successful`, `successful_with_issues`, `failed_rolled_back`, `cancelled`), root cause analysis, and lessons learned
 - `GET /v2/changes/metrics?workspace_id={id}` for ITIL change governance metrics, total change volume, status breakdown, change type distribution, release success rate percentage, emergency change ratio percentage, and average implementation lead time hours
+- `GET|POST /v2/cmdb/items` to list Configuration Items (CIs) with multi-criteria filters (`workspace_id`, `project_id`, `ci_type`, `status`, `criticality`, `environment`, `owner_user_id`, `search`, `limit`, `offset`) or register a new CI with automatic sequential identification (`CI-1`), type validation (`service`, `application`, `database`, `server`, `cluster`, `network`, `cloud_resource`), criticality tiering (`tier_1_mission_critical` to `tier_4_non_critical`), and environment tagging
+- `GET|PUT|PATCH|DELETE /v2/cmdb/items/{id}` to fetch CI profile details (with upstream/downstream dependency counts and linked entities), update configuration attributes, or delete a CI with relationship and link cascade cleanup
+- `POST|PATCH /v2/cmdb/items/{id}/status` to transition CI operational lifecycle state (`planning`, `active`, `maintenance`, `degraded`, `decommissioned`, `retired`) with audit event tracking
+- `GET|POST /v2/cmdb/items/{id}/relationships` to list inbound/outbound CI dependencies or create a directed relationship (`depends_on`, `runs_on`, `connects_to`, `contains`, `hosted_on`, `backs_up`, `monitors`) with self-reference prevention and duplicate guards
+- `DELETE /v2/cmdb/relationships/{id}` to remove an asset dependency relationship
+- `GET /v2/cmdb/items/{id}/graph?depth={1..10}` for bidirectional dependency graph traversal with upstream dependencies and downstream dependents
+- `GET /v2/cmdb/items/{id}/blast-radius` for automated failure impact analysis calculating direct and indirect dependent counts, affected tier 1 mission-critical assets, and overall blast radius risk level (`low`, `medium`, `high`, `critical`)
+- `GET|POST /v2/cmdb/items/{id}/links` to list entities linked to a CI or associate a CI with execution tasks, change requests (`/v2/changes`), or incidents (`/v2/incidents`) with impact severity levels (`low`, `medium`, `high`, `critical`)
+- `GET /v2/cmdb/links?entity_type={task|change|incident}&entity_id={id}` to reverse-lookup all configuration items linked to a specific work entity
+- `DELETE /v2/cmdb/links/{id}` to unlink an entity from a configuration item
+- `GET|POST /v2/cmdb/items/{id}/maintenance` to list scheduled maintenance windows or register a new maintenance window with start/end timestamps and operational impact descriptions
+- `POST|PATCH /v2/cmdb/maintenance/{id}/status` to transition maintenance window status (`scheduled`, `in_progress`, `completed`, `cancelled`) with automated CI status synchronization
+- `DELETE /v2/cmdb/maintenance/{id}` to remove a scheduled maintenance window
+- `GET /v2/cmdb/metrics?workspace_id={id}` for ITIL CMDB governance metrics, total CI inventory, status distribution, type breakdown, criticality tiers, active maintenance windows, unattached orphan CIs count, and high-impact Tier 1 dependency counts
 
 ## Current limitations
 

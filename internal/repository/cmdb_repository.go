@@ -11,10 +11,10 @@ import (
 )
 
 var (
-	ErrCINotFound            = errors.New("configuration item not found")
-	ErrRelationshipNotFound  = errors.New("ci relationship not found")
-	ErrLinkNotFound          = errors.New("ci entity link not found")
-	ErrMaintenanceNotFound   = errors.New("ci maintenance schedule not found")
+	ErrCINotFound           = errors.New("configuration item not found")
+	ErrRelationshipNotFound = errors.New("ci relationship not found")
+	ErrLinkNotFound         = errors.New("ci entity link not found")
+	ErrMaintenanceNotFound  = errors.New("ci maintenance schedule not found")
 )
 
 // CMDBRepository manages database persistence for Configuration Items, relationships, entity links, and maintenance schedules
@@ -82,7 +82,9 @@ const baseCISelect = `
 	LEFT JOIN projects p ON c.project_id = p.id
 `
 
-func scanCI(scanner interface{ Scan(dest ...interface{}) error }) (*model.ConfigurationItem, error) {
+func scanCI(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.ConfigurationItem, error) {
 	var c model.ConfigurationItem
 	var projectID sql.NullInt64
 	var ownerName, projectName sql.NullString
@@ -349,7 +351,9 @@ const baseRelSelect = `
 	LEFT JOIN configuration_items tgt ON r.target_ci_id = tgt.id
 `
 
-func scanRel(scanner interface{ Scan(dest ...interface{}) error }) (*model.CIRelationship, error) {
+func scanRel(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.CIRelationship, error) {
 	var r model.CIRelationship
 	var srcName, srcCode, srcType, tgtName, tgtCode, tgtType sql.NullString
 	err := scanner.Scan(
@@ -464,6 +468,11 @@ func (r *cmdbRepositoryImpl) GetUpstreamDependencies(ciID int64, maxDepth int) (
 	var nodes []model.CIDependencyNode
 	currentLevel := []int64{ciID}
 
+	type relItem struct {
+		targetID int64
+		relType  string
+	}
+
 	for depth := 1; depth <= maxDepth && len(currentLevel) > 0; depth++ {
 		var nextLevel []int64
 		for _, currID := range currentLevel {
@@ -471,28 +480,33 @@ func (r *cmdbRepositoryImpl) GetUpstreamDependencies(ciID int64, maxDepth int) (
 			if err != nil {
 				return nil, err
 			}
+			var items []relItem
 			for rows.Next() {
-				var targetID int64
-				var relType string
-				if err := rows.Scan(&targetID, &relType); err != nil {
+				var it relItem
+				if err := rows.Scan(&it.targetID, &it.relType); err != nil {
 					rows.Close()
 					return nil, err
 				}
-				if !visited[targetID] {
-					visited[targetID] = true
-					targetCI, err := r.GetCIByID(targetID)
-					if err == nil && targetCI != nil {
-						nodes = append(nodes, model.CIDependencyNode{
-							CI:           *targetCI,
-							RelationType: relType,
-							Depth:        depth,
-							Direction:    "upstream",
-						})
-						nextLevel = append(nextLevel, targetID)
-					}
-				}
+				items = append(items, it)
 			}
 			rows.Close()
+
+			for _, it := range items {
+				if !visited[it.targetID] {
+					visited[it.targetID] = true
+					targetCI, err := r.GetCIByID(it.targetID)
+					if err != nil {
+						return nil, err
+					}
+					nodes = append(nodes, model.CIDependencyNode{
+						CI:           *targetCI,
+						RelationType: it.relType,
+						Depth:        depth,
+						Direction:    "upstream",
+					})
+					nextLevel = append(nextLevel, it.targetID)
+				}
+			}
 		}
 		currentLevel = nextLevel
 	}
@@ -509,6 +523,11 @@ func (r *cmdbRepositoryImpl) GetDownstreamDependencies(ciID int64, maxDepth int)
 	var nodes []model.CIDependencyNode
 	currentLevel := []int64{ciID}
 
+	type relItem struct {
+		sourceID int64
+		relType  string
+	}
+
 	for depth := 1; depth <= maxDepth && len(currentLevel) > 0; depth++ {
 		var nextLevel []int64
 		for _, currID := range currentLevel {
@@ -516,28 +535,33 @@ func (r *cmdbRepositoryImpl) GetDownstreamDependencies(ciID int64, maxDepth int)
 			if err != nil {
 				return nil, err
 			}
+			var items []relItem
 			for rows.Next() {
-				var sourceID int64
-				var relType string
-				if err := rows.Scan(&sourceID, &relType); err != nil {
+				var it relItem
+				if err := rows.Scan(&it.sourceID, &it.relType); err != nil {
 					rows.Close()
 					return nil, err
 				}
-				if !visited[sourceID] {
-					visited[sourceID] = true
-					sourceCI, err := r.GetCIByID(sourceID)
-					if err == nil && sourceCI != nil {
-						nodes = append(nodes, model.CIDependencyNode{
-							CI:           *sourceCI,
-							RelationType: relType,
-							Depth:        depth,
-							Direction:    "downstream",
-						})
-						nextLevel = append(nextLevel, sourceID)
-					}
-				}
+				items = append(items, it)
 			}
 			rows.Close()
+
+			for _, it := range items {
+				if !visited[it.sourceID] {
+					visited[it.sourceID] = true
+					sourceCI, err := r.GetCIByID(it.sourceID)
+					if err != nil {
+						return nil, err
+					}
+					nodes = append(nodes, model.CIDependencyNode{
+						CI:           *sourceCI,
+						RelationType: it.relType,
+						Depth:        depth,
+						Direction:    "downstream",
+					})
+					nextLevel = append(nextLevel, it.sourceID)
+				}
+			}
 		}
 		currentLevel = nextLevel
 	}
@@ -565,7 +589,9 @@ const baseLinkSelect = `
 	LEFT JOIN configuration_items c ON l.ci_id = c.id
 `
 
-func scanLink(scanner interface{ Scan(dest ...interface{}) error }) (*model.CIEntityLink, error) {
+func scanLink(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.CIEntityLink, error) {
 	var l model.CIEntityLink
 	var ciName, ciCode, entityTitle, entityStatus sql.NullString
 	err := scanner.Scan(
@@ -685,7 +711,9 @@ const baseMaintSelect = `
 	LEFT JOIN users u ON m.created_by_user_id = u.id
 `
 
-func scanMaint(scanner interface{ Scan(dest ...interface{}) error }) (*model.CIMaintenanceSchedule, error) {
+func scanMaint(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.CIMaintenanceSchedule, error) {
 	var m model.CIMaintenanceSchedule
 	var ciName, ciCode, username sql.NullString
 	err := scanner.Scan(
