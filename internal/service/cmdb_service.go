@@ -490,19 +490,86 @@ func (s *cmdbServiceImpl) AnalyzeBlastRadius(ciID int64) (*model.CIImpactAnalysi
 }
 
 func (s *cmdbServiceImpl) LinkEntity(ciID int64, req model.CreateCIEntityLinkRequest) (*model.CIEntityLink, error) {
-	return nil, nil
+	ci, err := s.repo.GetCIByID(ciID)
+	if err != nil {
+		if errors.Is(err, repository.ErrCINotFound) {
+			return nil, ErrCINotFound
+		}
+		return nil, err
+	}
+
+	entityType := strings.ToLower(strings.TrimSpace(req.EntityType))
+	if err := model.ValidateCILinkEntityType(entityType); err != nil {
+		return nil, err
+	}
+
+	if req.EntityID <= 0 {
+		return nil, errors.New("entity_id is required")
+	}
+
+	impact := strings.ToLower(strings.TrimSpace(req.ImpactLevel))
+	if impact == "" {
+		impact = model.CIImpactDirect
+	} else if err := model.ValidateCIImpactLevel(impact); err != nil {
+		return nil, err
+	}
+
+	existing, err := s.repo.ListEntityLinksByCI(ciID)
+	if err == nil {
+		for _, l := range existing {
+			if l.EntityType == entityType && l.EntityID == req.EntityID {
+				return nil, ErrLinkAlreadyExists
+			}
+		}
+	}
+
+	link := &model.CIEntityLink{
+		CIID:        ciID,
+		EntityType:  entityType,
+		EntityID:    req.EntityID,
+		ImpactLevel: impact,
+		Notes:       strings.TrimSpace(req.Notes),
+	}
+
+	id, err := s.repo.CreateEntityLink(link)
+	if err != nil {
+		return nil, err
+	}
+
+	s.logAudit("", ci.WorkspaceID, "cmdb.entity_linked", fmt.Sprintf("%d", id), fmt.Sprintf("Linked %s to %s #%d (impact: %s)", ci.CICode, entityType, req.EntityID, impact))
+
+	links, err := s.repo.ListEntityLinksByCI(ciID)
+	if err == nil {
+		for _, l := range links {
+			if l.ID == id {
+				return &l, nil
+			}
+		}
+	}
+	link.ID = id
+	return link, nil
 }
 
 func (s *cmdbServiceImpl) ListEntityLinks(ciID int64) ([]model.CIEntityLink, error) {
-	return nil, nil
+	if _, err := s.repo.GetCIByID(ciID); err != nil {
+		if errors.Is(err, repository.ErrCINotFound) {
+			return nil, ErrCINotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListEntityLinksByCI(ciID)
 }
 
 func (s *cmdbServiceImpl) ListCIsForEntity(entityType string, entityID int64) ([]model.CIEntityLink, error) {
-	return nil, nil
+	et := strings.ToLower(strings.TrimSpace(entityType))
+	if err := model.ValidateCILinkEntityType(et); err != nil {
+		return nil, err
+	}
+	return s.repo.ListCIsByEntity(et, entityID)
 }
 
 func (s *cmdbServiceImpl) UnlinkEntity(linkID int64) error {
-	return nil
+	return s.repo.DeleteEntityLink(linkID)
 }
 
 func (s *cmdbServiceImpl) CreateMaintenance(ciID int64, creatorID string, req model.CreateCIMaintenanceRequest) (*model.CIMaintenanceSchedule, error) {
