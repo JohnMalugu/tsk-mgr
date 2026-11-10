@@ -673,23 +673,137 @@ func (r *cmdbRepositoryImpl) DeleteEntityLink(linkID int64) error {
 	return nil
 }
 
+const baseMaintSelect = `
+	SELECT 
+		m.id, m.ci_id, m.title, m.description, m.window_start_at, m.window_end_at,
+		m.expected_downtime_minutes, m.status, m.created_by_user_id, m.created_at, m.updated_at,
+		COALESCE(c.name, '') AS ci_name,
+		COALESCE(c.ci_code, '') AS ci_code,
+		COALESCE(u.username, u.email, '') AS created_by_username
+	FROM ci_maintenance_schedules m
+	LEFT JOIN configuration_items c ON m.ci_id = c.id
+	LEFT JOIN users u ON m.created_by_user_id = u.id
+`
+
+func scanMaint(scanner interface{ Scan(dest ...interface{}) error }) (*model.CIMaintenanceSchedule, error) {
+	var m model.CIMaintenanceSchedule
+	var ciName, ciCode, username sql.NullString
+	err := scanner.Scan(
+		&m.ID, &m.CIID, &m.Title, &m.Description, &m.WindowStartAt, &m.WindowEndAt,
+		&m.ExpectedDowntimeMinutes, &m.Status, &m.CreatedByUserID, &m.CreatedAt, &m.UpdatedAt,
+		&ciName, &ciCode, &username,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if ciName.Valid {
+		m.CIName = ciName.String
+	}
+	if ciCode.Valid {
+		m.CICode = ciCode.String
+	}
+	if username.Valid {
+		m.CreatedByUsername = username.String
+	}
+	return &m, nil
+}
+
 func (r *cmdbRepositoryImpl) CreateMaintenance(maint *model.CIMaintenanceSchedule) (int64, error) {
-	return 0, nil
+	now := time.Now().UTC()
+	if maint.CreatedAt.IsZero() {
+		maint.CreatedAt = now
+	}
+	if maint.UpdatedAt.IsZero() {
+		maint.UpdatedAt = now
+	}
+	if maint.Status == "" {
+		maint.Status = model.CIMaintStatusScheduled
+	}
+
+	query := `
+	INSERT INTO ci_maintenance_schedules (
+		ci_id, title, description, window_start_at, window_end_at,
+		expected_downtime_minutes, status, created_by_user_id, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query,
+		maint.CIID, maint.Title, maint.Description, maint.WindowStartAt, maint.WindowEndAt,
+		maint.ExpectedDowntimeMinutes, maint.Status, maint.CreatedByUserID, maint.CreatedAt, maint.UpdatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	maint.ID = id
+	return id, nil
 }
 
 func (r *cmdbRepositoryImpl) GetMaintenanceByID(id int64) (*model.CIMaintenanceSchedule, error) {
-	return nil, nil
+	query := baseMaintSelect + ` WHERE m.id = ?`
+	row := r.db.QueryRow(query, id)
+	maint, err := scanMaint(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrMaintenanceNotFound
+		}
+		return nil, err
+	}
+	return maint, nil
 }
 
 func (r *cmdbRepositoryImpl) ListMaintenancesByCI(ciID int64) ([]model.CIMaintenanceSchedule, error) {
-	return nil, nil
+	query := baseMaintSelect + ` WHERE m.ci_id = ? ORDER BY m.window_start_at DESC`
+	rows, err := r.db.Query(query, ciID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []model.CIMaintenanceSchedule
+	for rows.Next() {
+		maint, err := scanMaint(rows)
+		if err != nil {
+			return nil, err
+		}
+		list = append(list, *maint)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
 func (r *cmdbRepositoryImpl) UpdateMaintenanceStatus(id int64, status string) error {
+	now := time.Now().UTC()
+	res, err := r.db.Exec(`UPDATE ci_maintenance_schedules SET status = ?, updated_at = ? WHERE id = ?`, status, now, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrMaintenanceNotFound
+	}
 	return nil
 }
 
 func (r *cmdbRepositoryImpl) DeleteMaintenance(id int64) error {
+	res, err := r.db.Exec("DELETE FROM ci_maintenance_schedules WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrMaintenanceNotFound
+	}
 	return nil
 }
 
