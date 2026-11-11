@@ -2,6 +2,9 @@ package service
 
 import (
 	"errors"
+	"fmt"
+	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -116,19 +119,138 @@ func (s *problemServiceImpl) logAudit(actorID string, workspaceID int64, action,
 }
 
 func (s *problemServiceImpl) CreateProblem(creatorID string, req model.CreateProblemRequest) (*model.Problem, error) {
-	return nil, nil
+	if req.WorkspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	ws, err := s.workspaceRepo.GetByID(int(req.WorkspaceID))
+	if err != nil || ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+
+	if req.ProjectID != nil && *req.ProjectID > 0 {
+		proj, err := s.projectRepo.GetByID(int(*req.ProjectID))
+		if err != nil || proj == nil {
+			return nil, ErrProjectNotFound
+		}
+	}
+
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		return nil, ErrProblemTitleRequired
+	}
+
+	cat := strings.ToLower(strings.TrimSpace(req.Category))
+	if cat == "" {
+		cat = model.ProblemCategorySoftware
+	} else if err := model.ValidateProblemCategory(cat); err != nil {
+		return nil, err
+	}
+
+	pri := strings.ToLower(strings.TrimSpace(req.Priority))
+	if pri == "" {
+		pri = model.ProblemPriorityMedium
+	} else if err := model.ValidateProblemPriority(pri); err != nil {
+		return nil, err
+	}
+
+	urg := strings.ToLower(strings.TrimSpace(req.Urgency))
+	if urg == "" {
+		urg = model.ProblemUrgencyMedium
+	} else if err := model.ValidateProblemUrgency(urg); err != nil {
+		return nil, err
+	}
+
+	imp := strings.ToLower(strings.TrimSpace(req.Impact))
+	if imp == "" {
+		imp = model.ProblemImpactMedium
+	} else if err := model.ValidateProblemImpact(imp); err != nil {
+		return nil, err
+	}
+
+	rcaMethod := strings.ToLower(strings.TrimSpace(req.RCAMethod))
+	if err := model.ValidateRCAMethod(rcaMethod); err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	prob := &model.Problem{
+		WorkspaceID:  req.WorkspaceID,
+		ProjectID:    req.ProjectID,
+		ProblemCode:  strings.ToUpper(strings.TrimSpace(req.ProblemCode)),
+		Title:        title,
+		Description:  strings.TrimSpace(req.Description),
+		Status:       model.ProblemStatusLogged,
+		Category:     cat,
+		Priority:     pri,
+		Urgency:      urg,
+		Impact:       imp,
+		AssignedTo:   req.AssignedTo,
+		AssignedTeam: strings.TrimSpace(req.AssignedTeam),
+		RCAMethod:    rcaMethod,
+		CreatedByID:  creatorID,
+		StartedAt:    &now,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+
+	id, err := s.repo.CreateProblem(prob)
+	if err != nil {
+		return nil, err
+	}
+
+	// Link initial incidents if provided
+	for _, incID := range req.IncidentIDs {
+		_, _ = s.repo.LinkIncident(&model.ProblemIncidentLink{
+			ProblemID:  id,
+			IncidentID: incID,
+			Notes:      "Initial incident association upon problem registration",
+			LinkedAt:   now,
+		})
+	}
+
+	// Link initial CIs if provided
+	for _, ciID := range req.CIIDs {
+		_, _ = s.repo.LinkCI(&model.ProblemCILink{
+			ProblemID:    id,
+			CIID:         ciID,
+			Relationship: model.ProblemCIRelImpacted,
+			Notes:        "Initial configuration item association upon problem registration",
+			LinkedAt:     now,
+		})
+	}
+
+	s.logAudit(creatorID, req.WorkspaceID, "problem.created", fmt.Sprintf("%d", id), fmt.Sprintf("Registered problem %s (%s)", prob.ProblemCode, title))
+
+	return s.repo.GetProblemByID(id)
 }
 
 func (s *problemServiceImpl) GetProblem(id int64) (*model.Problem, error) {
-	return nil, nil
+	p, err := s.repo.GetProblemByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return nil, ErrProblemNotFound
+		}
+		return nil, err
+	}
+	return p, nil
 }
 
 func (s *problemServiceImpl) GetProblemByCode(workspaceID int64, code string) (*model.Problem, error) {
-	return nil, nil
+	p, err := s.repo.GetProblemByCode(workspaceID, code)
+	if err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return nil, ErrProblemNotFound
+		}
+		return nil, err
+	}
+	return p, nil
 }
 
 func (s *problemServiceImpl) ListProblems(filter model.ProblemFilter) ([]model.Problem, int, error) {
-	return nil, 0, nil
+	if filter.WorkspaceID <= 0 {
+		return nil, 0, ErrWorkspaceRequired
+	}
+	return s.repo.ListProblems(filter)
 }
 
 func (s *problemServiceImpl) UpdateProblem(id int64, updaterID string, req model.UpdateProblemRequest) (*model.Problem, error) {
