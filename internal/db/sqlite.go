@@ -1666,6 +1666,46 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	problemsQuery := `
+	CREATE TABLE IF NOT EXISTS problems (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		project_id INTEGER,
+		problem_code TEXT NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'logged',
+		category TEXT NOT NULL DEFAULT 'software',
+		priority TEXT NOT NULL DEFAULT 'medium',
+		urgency TEXT NOT NULL DEFAULT 'medium',
+		impact TEXT NOT NULL DEFAULT 'medium',
+		assigned_to TEXT,
+		assigned_team TEXT NOT NULL DEFAULT '',
+		root_cause_category TEXT NOT NULL DEFAULT '',
+		root_cause_summary TEXT NOT NULL DEFAULT '',
+		workaround TEXT NOT NULL DEFAULT '',
+		permanent_solution TEXT NOT NULL DEFAULT '',
+		is_known_error INTEGER NOT NULL DEFAULT 0,
+		known_error_published_at DATETIME,
+		rca_method TEXT NOT NULL DEFAULT '',
+		created_by_id TEXT NOT NULL,
+		started_at DATETIME,
+		resolved_at DATETIME,
+		closed_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		UNIQUE(workspace_id, problem_code),
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+		FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
+		FOREIGN KEY (created_by_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(problemsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
