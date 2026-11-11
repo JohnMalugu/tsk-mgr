@@ -812,15 +812,70 @@ func (s *problemServiceImpl) ListRCASteps(problemID int64) ([]model.ProblemRCASt
 }
 
 func (s *problemServiceImpl) PublishKnownError(problemID int64, publisherID string, req model.PublishKnownErrorRequest) (*model.Problem, error) {
-	return nil, nil
+	prob, err := s.repo.GetProblemByID(problemID)
+	if err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return nil, ErrProblemNotFound
+		}
+		return nil, err
+	}
+
+	workaround := strings.TrimSpace(req.Workaround)
+	if workaround == "" {
+		workaround = prob.Workaround
+	}
+	if workaround == "" && prob.RootCauseSummary == "" && req.RootCauseSummary == "" {
+		return nil, ErrKnownErrorRequiresWorkaround
+	}
+
+	if workaround != "" {
+		prob.Workaround = workaround
+	}
+	if req.PermanentSolution != "" {
+		prob.PermanentSolution = strings.TrimSpace(req.PermanentSolution)
+	}
+	if req.RootCauseSummary != "" {
+		prob.RootCauseSummary = strings.TrimSpace(req.RootCauseSummary)
+	}
+
+	now := time.Now().UTC()
+	prob.IsKnownError = true
+	prob.KnownErrorPublishedAt = &now
+	prob.Status = model.ProblemStatusKnownError
+
+	if err := s.repo.UpdateProblem(prob); err != nil {
+		return nil, err
+	}
+
+	s.logAudit(publisherID, prob.WorkspaceID, "problem.known_error_published", fmt.Sprintf("%d", problemID), fmt.Sprintf("Published known error for %s (%s)", prob.ProblemCode, prob.Title))
+
+	return s.repo.GetProblemByID(problemID)
 }
 
 func (s *problemServiceImpl) RetireKnownError(problemID int64, actorID string) (*model.Problem, error) {
-	return nil, nil
+	prob, err := s.repo.GetProblemByID(problemID)
+	if err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return nil, ErrProblemNotFound
+		}
+		return nil, err
+	}
+
+	prob.IsKnownError = false
+	if err := s.repo.UpdateProblem(prob); err != nil {
+		return nil, err
+	}
+
+	s.logAudit(actorID, prob.WorkspaceID, "problem.known_error_retired", fmt.Sprintf("%d", problemID), fmt.Sprintf("Retired known error for %s (%s)", prob.ProblemCode, prob.Title))
+
+	return s.repo.GetProblemByID(problemID)
 }
 
 func (s *problemServiceImpl) ListKnownErrors(filter model.KnownErrorFilter) ([]model.Problem, int, error) {
-	return nil, 0, nil
+	if filter.WorkspaceID <= 0 {
+		return nil, 0, ErrWorkspaceRequired
+	}
+	return s.repo.ListKnownErrors(filter)
 }
 
 func (s *problemServiceImpl) GetProblemMetrics(workspaceID int64) (*model.ProblemMetrics, error) {
