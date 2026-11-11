@@ -7,15 +7,15 @@ import (
 )
 
 var (
-	ErrProblemTitleRequired    = errors.New("problem title is required")
-	ErrProblemNotFound         = errors.New("problem not found")
-	ErrInvalidProblemStatus    = errors.New("invalid problem status")
-	ErrInvalidProblemCategory  = errors.New("invalid problem category")
-	ErrInvalidProblemPriority  = errors.New("invalid problem priority")
-	ErrInvalidProblemUrgency   = errors.New("invalid problem urgency")
-	ErrInvalidProblemImpact    = errors.New("invalid problem impact")
-	ErrInvalidRCAMethod        = errors.New("invalid root cause analysis method")
-	ErrInvalidStatusTransition = errors.New("illegal problem status transition")
+	ErrProblemTitleRequired         = errors.New("problem title is required")
+	ErrProblemNotFound              = errors.New("problem not found")
+	ErrInvalidProblemStatus         = errors.New("invalid problem status")
+	ErrInvalidProblemCategory       = errors.New("invalid problem category")
+	ErrInvalidProblemPriority       = errors.New("invalid problem priority")
+	ErrInvalidProblemUrgency        = errors.New("invalid problem urgency")
+	ErrInvalidProblemImpact         = errors.New("invalid problem impact")
+	ErrInvalidRCAMethod             = errors.New("invalid root cause analysis method")
+	ErrInvalidStatusTransition      = errors.New("illegal problem status transition")
 	ErrKnownErrorRequiresWorkaround = errors.New("known error requires an approved workaround or root cause description")
 )
 
@@ -66,11 +66,11 @@ const (
 
 // Root Cause Analysis (RCA) methodologies
 const (
-	RCAMethod5Whys      = "5_whys"
-	RCAMethodFishbone   = "fishbone"
-	RCAMethodFaultTree  = "fault_tree"
-	RCAMethodTimeline   = "timeline"
-	RCAMethodOther      = "other"
+	RCAMethod5Whys     = "5_whys"
+	RCAMethodFishbone  = "fishbone"
+	RCAMethodFaultTree = "fault_tree"
+	RCAMethodTimeline  = "timeline"
+	RCAMethodOther     = "other"
 )
 
 // ValidateProblemStatus validates whether the problem status is recognized
@@ -189,32 +189,32 @@ func ValidateProblemTransition(current, target string) error {
 
 // Problem represents an ITIL Problem investigation record for identifying and resolving root causes
 type Problem struct {
-	ID                     int64      `json:"id"`
-	WorkspaceID            int64      `json:"workspace_id"`
-	ProjectID              *int64     `json:"project_id,omitempty"`
-	ProblemCode            string     `json:"problem_code"`
-	Title                  string     `json:"title"`
-	Description            string     `json:"description"`
-	Status                 string     `json:"status"`
-	Category               string     `json:"category"`
-	Priority               string     `json:"priority"`
-	Urgency                string     `json:"urgency"`
-	Impact                 string     `json:"impact"`
-	AssignedTo             *string    `json:"assigned_to,omitempty"`
-	AssignedTeam           string     `json:"assigned_team,omitempty"`
-	RootCauseCategory      string     `json:"root_cause_category,omitempty"`
-	RootCauseSummary       string     `json:"root_cause_summary,omitempty"`
-	Workaround             string     `json:"workaround,omitempty"`
-	PermanentSolution      string     `json:"permanent_solution,omitempty"`
-	IsKnownError           bool       `json:"is_known_error"`
-	KnownErrorPublishedAt  *time.Time `json:"known_error_published_at,omitempty"`
-	RCAMethod              string     `json:"rca_method,omitempty"`
-	CreatedByID            string     `json:"created_by_id"`
-	StartedAt              *time.Time `json:"started_at,omitempty"`
-	ResolvedAt             *time.Time `json:"resolved_at,omitempty"`
-	ClosedAt               *time.Time `json:"closed_at,omitempty"`
-	CreatedAt              time.Time  `json:"created_at"`
-	UpdatedAt              time.Time  `json:"updated_at"`
+	ID                    int64      `json:"id"`
+	WorkspaceID           int64      `json:"workspace_id"`
+	ProjectID             *int64     `json:"project_id,omitempty"`
+	ProblemCode           string     `json:"problem_code"`
+	Title                 string     `json:"title"`
+	Description           string     `json:"description"`
+	Status                string     `json:"status"`
+	Category              string     `json:"category"`
+	Priority              string     `json:"priority"`
+	Urgency               string     `json:"urgency"`
+	Impact                string     `json:"impact"`
+	AssignedTo            *string    `json:"assigned_to,omitempty"`
+	AssignedTeam          string     `json:"assigned_team,omitempty"`
+	RootCauseCategory     string     `json:"root_cause_category,omitempty"`
+	RootCauseSummary      string     `json:"root_cause_summary,omitempty"`
+	Workaround            string     `json:"workaround,omitempty"`
+	PermanentSolution     string     `json:"permanent_solution,omitempty"`
+	IsKnownError          bool       `json:"is_known_error"`
+	KnownErrorPublishedAt *time.Time `json:"known_error_published_at,omitempty"`
+	RCAMethod             string     `json:"rca_method,omitempty"`
+	CreatedByID           string     `json:"created_by_id"`
+	StartedAt             *time.Time `json:"started_at,omitempty"`
+	ResolvedAt            *time.Time `json:"resolved_at,omitempty"`
+	ClosedAt              *time.Time `json:"closed_at,omitempty"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
 
 	// Enriched audit & relation counts
 	ProjectName          string `json:"project_name,omitempty"`
@@ -270,18 +270,18 @@ type ProblemCILink struct {
 	LinkedAt     time.Time `json:"linked_at"`
 
 	// Enriched CI fields
-	CICode       string `json:"ci_code,omitempty"`
-	CIName       string `json:"ci_name,omitempty"`
-	CIType       string `json:"ci_type,omitempty"`
-	Criticality  string `json:"criticality,omitempty"`
-	CIStatus     string `json:"ci_status,omitempty"`
+	CICode      string `json:"ci_code,omitempty"`
+	CIName      string `json:"ci_name,omitempty"`
+	CIType      string `json:"ci_type,omitempty"`
+	Criticality string `json:"criticality,omitempty"`
+	CIStatus    string `json:"ci_status,omitempty"`
 }
 
 // Problem Change relationship roles
 const (
-	ProblemChangeRelPermanentFix    = "permanent_fix"
-	ProblemChangeRelWorkaround      = "workaround_deployment"
-	ProblemChangeRelInvestigation   = "investigation_infrastructure"
+	ProblemChangeRelPermanentFix  = "permanent_fix"
+	ProblemChangeRelWorkaround    = "workaround_deployment"
+	ProblemChangeRelInvestigation = "investigation_infrastructure"
 )
 
 // Problem Task relationship roles
@@ -363,20 +363,20 @@ type ProblemRCAStep struct {
 
 // CreateProblemRequest represents payload for creating a new ITIL problem
 type CreateProblemRequest struct {
-	WorkspaceID  int64    `json:"workspace_id"`
-	ProjectID    *int64   `json:"project_id,omitempty"`
-	ProblemCode  string   `json:"problem_code,omitempty"`
-	Title        string   `json:"title"`
-	Description  string   `json:"description,omitempty"`
-	Category     string   `json:"category,omitempty"`
-	Priority     string   `json:"priority,omitempty"`
-	Urgency      string   `json:"urgency,omitempty"`
-	Impact       string   `json:"impact,omitempty"`
-	AssignedTo   *string  `json:"assigned_to,omitempty"`
-	AssignedTeam string   `json:"assigned_team,omitempty"`
-	RCAMethod    string   `json:"rca_method,omitempty"`
-	IncidentIDs  []int64  `json:"incident_ids,omitempty"`
-	CIIDs        []int64  `json:"ci_ids,omitempty"`
+	WorkspaceID  int64   `json:"workspace_id"`
+	ProjectID    *int64  `json:"project_id,omitempty"`
+	ProblemCode  string  `json:"problem_code,omitempty"`
+	Title        string  `json:"title"`
+	Description  string  `json:"description,omitempty"`
+	Category     string  `json:"category,omitempty"`
+	Priority     string  `json:"priority,omitempty"`
+	Urgency      string  `json:"urgency,omitempty"`
+	Impact       string  `json:"impact,omitempty"`
+	AssignedTo   *string `json:"assigned_to,omitempty"`
+	AssignedTeam string  `json:"assigned_team,omitempty"`
+	RCAMethod    string  `json:"rca_method,omitempty"`
+	IncidentIDs  []int64 `json:"incident_ids,omitempty"`
+	CIIDs        []int64 `json:"ci_ids,omitempty"`
 }
 
 // UpdateProblemRequest represents payload for updating existing problem attributes
@@ -479,16 +479,16 @@ type KnownErrorFilter struct {
 
 // ProblemMetrics provides ITIL problem management governance and root cause metrics
 type ProblemMetrics struct {
-	TotalProblems           int            `json:"total_problems"`
-	ActiveProblems          int            `json:"active_problems"`
-	KnownErrorsCount        int            `json:"known_errors_count"`
-	ResolvedProblems        int            `json:"resolved_problems"`
-	ClosedProblems          int            `json:"closed_problems"`
-	StatusCounts            map[string]int `json:"status_counts"`
-	CategoryCounts          map[string]int `json:"category_counts"`
-	PriorityCounts          map[string]int `json:"priority_counts"`
-	MeanTimeToRCAHours      float64        `json:"mean_time_to_rca_hours"`
-	MeanTimeToResolveHours  float64        `json:"mean_time_to_resolve_hours"`
-	TotalIncidentsCaused    int            `json:"total_incidents_caused"`
-	TopRootCauseCategories  map[string]int `json:"top_root_cause_categories"`
+	TotalProblems          int            `json:"total_problems"`
+	ActiveProblems         int            `json:"active_problems"`
+	KnownErrorsCount       int            `json:"known_errors_count"`
+	ResolvedProblems       int            `json:"resolved_problems"`
+	ClosedProblems         int            `json:"closed_problems"`
+	StatusCounts           map[string]int `json:"status_counts"`
+	CategoryCounts         map[string]int `json:"category_counts"`
+	PriorityCounts         map[string]int `json:"priority_counts"`
+	MeanTimeToRCAHours     float64        `json:"mean_time_to_rca_hours"`
+	MeanTimeToResolveHours float64        `json:"mean_time_to_resolve_hours"`
+	TotalIncidentsCaused   int            `json:"total_incidents_caused"`
+	TopRootCauseCategories map[string]int `json:"top_root_cause_categories"`
 }

@@ -280,6 +280,23 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `POST|PATCH /v2/cmdb/maintenance/{id}/status` to transition maintenance window status (`scheduled`, `in_progress`, `completed`, `cancelled`) with automated CI status synchronization
 - `DELETE /v2/cmdb/maintenance/{id}` to remove a scheduled maintenance window
 - `GET /v2/cmdb/metrics?workspace_id={id}` for ITIL CMDB governance metrics, total CI inventory, status distribution, type breakdown, criticality tiers, active maintenance windows, unattached orphan CIs count, and high-impact Tier 1 dependency counts
+- `GET|POST /v2/problems` to list Problems with multi-criteria filters (`workspace_id`, `project_id`, `status`, `category`, `priority`, `assigned_to`, `assigned_team`, `is_known_error`, `search`, `limit`, `offset`) or register a new Problem with automatic sequential numbering (`PRB-1`), category categorization (`infrastructure`, `software`, `network`, `database`, `security`, `third_party`, `process`), and initial incident/CI linkage
+- `GET|PUT|PATCH|DELETE /v2/problems/{id}` to fetch problem details (with linked incident, CI, change, task, and RCA step counts), update problem attributes, or delete a problem with cascade cleanup
+- `POST|PATCH /v2/problems/{id}/status` to transition problem lifecycle status (`logged`, `investigating`, `workaround_found`, `known_error`, `resolved`, `closed`) with automated timestamp recording (`started_at`, `resolved_at`, `closed_at`) and audit logging
+- `GET|POST /v2/problems/{id}/incidents` to list linked incidents or associate a recurring incident with a problem
+- `DELETE /v2/problems/{id}/incidents/{incidentId}` to unlink an incident from a problem
+- `GET|POST /v2/problems/{id}/cis` to list affected Configuration Items or associate a CI (`root_cause_asset`, `impacted_asset`, `workaround_applied`, `monitoring_target`)
+- `DELETE /v2/problems/{id}/cis/{linkId}` to unlink a configuration item from a problem
+- `GET|POST /v2/problems/{id}/changes` to view associated change requests or link an ITIL Change Request (`permanent_fix`, `workaround_deployment`, `investigation_infrastructure`)
+- `DELETE /v2/problems/{id}/changes/{linkId}` to unlink a change request from a problem
+- `GET|POST /v2/problems/{id}/tasks` to view associated action tasks or link a workspace task (`investigation`, `workaround_execution`, `remediation`, `verification`)
+- `DELETE /v2/problems/{id}/tasks/{linkId}` to unlink a task from a problem
+- `GET|POST /v2/problems/{id}/rca` to view 5-Whys root cause investigation steps or record a new sequential question/answer/evidence step
+- `PUT|PATCH|DELETE /v2/problems/rca-steps/{id}` to update RCA question/answer/evidence or delete an RCA step
+- `POST|PATCH /v2/problems/{id}/known-error` to publish a problem into the Known Error Database (KEDB) with an approved workaround, permanent solution, and root cause summary
+- `DELETE /v2/problems/{id}/known-error` to retire a problem entry from the Known Error Database
+- `GET /v2/kedb?workspace_id={id}&category={category}&search={search}` for cross-workspace Known Error Database search providing instant access to symptoms, workarounds, and resolutions
+- `GET /v2/problems/metrics?workspace_id={id}` for ITIL Problem Management metrics, active problems count, known errors count, status and category breakdowns, MTTR (Mean Time to Resolve), and MTTRCA (Mean Time to Root Cause Analysis)
 
 ## Current limitations
 
