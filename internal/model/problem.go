@@ -410,3 +410,45 @@ type PublishKnownErrorRequest struct {
 	PermanentSolution string `json:"permanent_solution,omitempty"`
 	RootCauseSummary  string `json:"root_cause_summary,omitempty"`
 }
+
+// LinkIncidentRequest represents payload to associate an incident with a problem
+type LinkIncidentRequest struct {
+	IncidentID int64  `json:"incident_id"`
+	Notes      string `json:"notes,omitempty"`
+}
+
+// LinkCIRequest represents payload to associate a Configuration Item with a problem
+type LinkCIRequest struct {
+	CIID         int64  `json:"ci_id"`
+	Relationship string `json:"relationship,omitempty"`
+	Notes        string `json:"notes,omitempty"`
+}
+
+// LinkChangeRequest represents payload to associate an ITIL change request with a problem
+type LinkChangeRequest struct {
+	ChangeID     int64  `json:"change_id"`
+	Relationship string `json:"relationship,omitempty"`
+	Notes        string `json:"notes,omitempty"`
+}
+
+// LinkTaskRequest represents payload to associate a workspace task with a problem
+type LinkTaskRequest struct {
+	TaskID       int    `json:"task_id"`
+	Relationship string `json:"relationship,omitempty"`
+	Notes        string `json:"notes,omitempty"`
+}
+
+// CreateRCAStepRequest represents payload to append a 5-Whys root cause analysis step
+type CreateRCAStepRequest struct {
+	StepNumber int    `json:"step_number,omitempty"`
+	Question   string `json:"question"`
+	Answer     string `json:"answer"`
+	Evidence   string `json:"evidence,omitempty"`
+}
+
+// UpdateRCAStepRequest represents payload to modify an existing RCA step
+type UpdateRCAStepRequest struct {
+	Question *string `json:"question,omitempty"`
+	Answer   *string `json:"answer,omitempty"`
+	Evidence *string `json:"evidence,omitempty"`
+}
