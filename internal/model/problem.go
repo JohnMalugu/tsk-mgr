@@ -39,6 +39,39 @@ const (
 	ProblemCategoryProcess        = "process"
 )
 
+// Problem priority levels
+const (
+	ProblemPriorityCritical = "critical"
+	ProblemPriorityHigh     = "high"
+	ProblemPriorityMedium   = "medium"
+	ProblemPriorityLow      = "low"
+)
+
+// Problem urgency levels
+const (
+	ProblemUrgencyCritical = "critical"
+	ProblemUrgencyHigh     = "high"
+	ProblemUrgencyMedium   = "medium"
+	ProblemUrgencyLow      = "low"
+)
+
+// Problem impact levels
+const (
+	ProblemImpactCritical = "critical"
+	ProblemImpactHigh     = "high"
+	ProblemImpactMedium   = "medium"
+	ProblemImpactLow      = "low"
+)
+
+// Root Cause Analysis (RCA) methodologies
+const (
+	RCAMethod5Whys      = "5_whys"
+	RCAMethodFishbone   = "fishbone"
+	RCAMethodFaultTree  = "fault_tree"
+	RCAMethodTimeline   = "timeline"
+	RCAMethodOther      = "other"
+)
+
 // Problem represents an ITIL Problem investigation record for identifying and resolving root causes
 type Problem struct {
 	ID                     int64      `json:"id"`
