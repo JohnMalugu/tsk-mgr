@@ -254,15 +254,151 @@ func (s *problemServiceImpl) ListProblems(filter model.ProblemFilter) ([]model.P
 }
 
 func (s *problemServiceImpl) UpdateProblem(id int64, updaterID string, req model.UpdateProblemRequest) (*model.Problem, error) {
-	return nil, nil
+	prob, err := s.repo.GetProblemByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return nil, ErrProblemNotFound
+		}
+		return nil, err
+	}
+
+	if req.Title != nil {
+		t := strings.TrimSpace(*req.Title)
+		if t == "" {
+			return nil, ErrProblemTitleRequired
+		}
+		prob.Title = t
+	}
+	if req.Description != nil {
+		prob.Description = strings.TrimSpace(*req.Description)
+	}
+	if req.Category != nil {
+		cat := strings.ToLower(strings.TrimSpace(*req.Category))
+		if err := model.ValidateProblemCategory(cat); err != nil {
+			return nil, err
+		}
+		prob.Category = cat
+	}
+	if req.Priority != nil {
+		pri := strings.ToLower(strings.TrimSpace(*req.Priority))
+		if err := model.ValidateProblemPriority(pri); err != nil {
+			return nil, err
+		}
+		prob.Priority = pri
+	}
+	if req.Urgency != nil {
+		urg := strings.ToLower(strings.TrimSpace(*req.Urgency))
+		if err := model.ValidateProblemUrgency(urg); err != nil {
+			return nil, err
+		}
+		prob.Urgency = urg
+	}
+	if req.Impact != nil {
+		imp := strings.ToLower(strings.TrimSpace(*req.Impact))
+		if err := model.ValidateProblemImpact(imp); err != nil {
+			return nil, err
+		}
+		prob.Impact = imp
+	}
+	if req.AssignedTo != nil {
+		prob.AssignedTo = req.AssignedTo
+	}
+	if req.AssignedTeam != nil {
+		prob.AssignedTeam = strings.TrimSpace(*req.AssignedTeam)
+	}
+	if req.RootCauseCategory != nil {
+		prob.RootCauseCategory = strings.TrimSpace(*req.RootCauseCategory)
+	}
+	if req.RootCauseSummary != nil {
+		prob.RootCauseSummary = strings.TrimSpace(*req.RootCauseSummary)
+	}
+	if req.Workaround != nil {
+		prob.Workaround = strings.TrimSpace(*req.Workaround)
+	}
+	if req.PermanentSolution != nil {
+		prob.PermanentSolution = strings.TrimSpace(*req.PermanentSolution)
+	}
+	if req.RCAMethod != nil {
+		m := strings.ToLower(strings.TrimSpace(*req.RCAMethod))
+		if err := model.ValidateRCAMethod(m); err != nil {
+			return nil, err
+		}
+		prob.RCAMethod = m
+	}
+
+	if err := s.repo.UpdateProblem(prob); err != nil {
+		return nil, err
+	}
+
+	s.logAudit(updaterID, prob.WorkspaceID, "problem.updated", fmt.Sprintf("%d", id), fmt.Sprintf("Updated problem %s (%s)", prob.ProblemCode, prob.Title))
+
+	return s.repo.GetProblemByID(id)
 }
 
 func (s *problemServiceImpl) DeleteProblem(id int64, deleterID string) error {
+	prob, err := s.repo.GetProblemByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return ErrProblemNotFound
+		}
+		return err
+	}
+
+	if err := s.repo.DeleteProblem(id); err != nil {
+		return err
+	}
+
+	s.logAudit(deleterID, prob.WorkspaceID, "problem.deleted", fmt.Sprintf("%d", id), fmt.Sprintf("Deleted problem %s (%s)", prob.ProblemCode, prob.Title))
 	return nil
 }
 
 func (s *problemServiceImpl) UpdateProblemStatus(id int64, updaterID string, req model.UpdateProblemStatusRequest) (*model.Problem, error) {
-	return nil, nil
+	prob, err := s.repo.GetProblemByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return nil, ErrProblemNotFound
+		}
+		return nil, err
+	}
+
+	targetStatus := strings.ToLower(strings.TrimSpace(req.Status))
+	if err := model.ValidateProblemTransition(prob.Status, targetStatus); err != nil {
+		return nil, ErrInvalidProblemTransition
+	}
+
+	if req.Workaround != "" {
+		prob.Workaround = strings.TrimSpace(req.Workaround)
+	}
+	if req.PermanentSolution != "" {
+		prob.PermanentSolution = strings.TrimSpace(req.PermanentSolution)
+	}
+
+	now := time.Now().UTC()
+	switch targetStatus {
+	case model.ProblemStatusKnownError:
+		if prob.Workaround == "" && prob.RootCauseSummary == "" {
+			return nil, ErrKnownErrorRequiresWorkaround
+		}
+		prob.IsKnownError = true
+		prob.KnownErrorPublishedAt = &now
+	case model.ProblemStatusResolved:
+		prob.ResolvedAt = &now
+	case model.ProblemStatusClosed:
+		prob.ClosedAt = &now
+	case model.ProblemStatusInvestigating:
+		// Re-opening clears resolved and closed timestamps
+		prob.ResolvedAt = nil
+		prob.ClosedAt = nil
+	}
+
+	prob.Status = targetStatus
+	if err := s.repo.UpdateProblem(prob); err != nil {
+		return nil, err
+	}
+
+	s.logAudit(updaterID, prob.WorkspaceID, "problem.status_changed", fmt.Sprintf("%d", id), fmt.Sprintf("Transitioned problem %s status to %s (reason: %s)", prob.ProblemCode, targetStatus, req.Reason))
+
+	return s.repo.GetProblemByID(id)
 }
 
 func (s *problemServiceImpl) LinkIncident(problemID int64, linkerID string, req model.LinkIncidentRequest) (*model.ProblemIncidentLink, error) {
