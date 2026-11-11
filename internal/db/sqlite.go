@@ -1706,6 +1706,41 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	problemIncidentLinksQuery := `
+	CREATE TABLE IF NOT EXISTS problem_incident_links (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		problem_id INTEGER NOT NULL,
+		incident_id INTEGER NOT NULL,
+		notes TEXT NOT NULL DEFAULT '',
+		linked_at DATETIME NOT NULL,
+		UNIQUE(problem_id, incident_id),
+		FOREIGN KEY (problem_id) REFERENCES problems(id) ON DELETE CASCADE,
+		FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(problemIncidentLinksQuery)
+	if err != nil {
+		return err
+	}
+
+	problemCILinksQuery := `
+	CREATE TABLE IF NOT EXISTS problem_ci_links (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		problem_id INTEGER NOT NULL,
+		ci_id INTEGER NOT NULL,
+		relationship TEXT NOT NULL DEFAULT 'root_cause_asset',
+		notes TEXT NOT NULL DEFAULT '',
+		linked_at DATETIME NOT NULL,
+		UNIQUE(problem_id, ci_id, relationship),
+		FOREIGN KEY (problem_id) REFERENCES problems(id) ON DELETE CASCADE,
+		FOREIGN KEY (ci_id) REFERENCES configuration_items(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(problemCILinksQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
