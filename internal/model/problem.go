@@ -226,3 +226,53 @@ type Problem struct {
 	LinkedTasksCount     int    `json:"linked_tasks_count"`
 	RCAStepsCount        int    `json:"rca_steps_count"`
 }
+
+// Problem CI relationship roles
+const (
+	ProblemCIRelRootCause  = "root_cause_asset"
+	ProblemCIRelImpacted   = "impacted_asset"
+	ProblemCIRelWorkaround = "workaround_applied"
+	ProblemCIRelMonitoring = "monitoring_target"
+)
+
+// ValidateProblemCIRelation validates whether the problem-CI relationship role is valid
+func ValidateProblemCIRelation(rel string) error {
+	switch strings.ToLower(strings.TrimSpace(rel)) {
+	case ProblemCIRelRootCause, ProblemCIRelImpacted, ProblemCIRelWorkaround, ProblemCIRelMonitoring, "":
+		return nil
+	default:
+		return errors.New("invalid problem configuration item relationship")
+	}
+}
+
+// ProblemIncidentLink represents an association between an underlying Problem and an Incident caused by it
+type ProblemIncidentLink struct {
+	ID         int64     `json:"id"`
+	ProblemID  int64     `json:"problem_id"`
+	IncidentID int64     `json:"incident_id"`
+	Notes      string    `json:"notes,omitempty"`
+	LinkedAt   time.Time `json:"linked_at"`
+
+	// Enriched incident fields
+	IncidentNumber   int    `json:"incident_number,omitempty"`
+	IncidentTitle    string `json:"incident_title,omitempty"`
+	IncidentSeverity string `json:"incident_severity,omitempty"`
+	IncidentStatus   string `json:"incident_status,omitempty"`
+}
+
+// ProblemCILink represents an association between a Problem and an affected or root-cause Configuration Item
+type ProblemCILink struct {
+	ID           int64     `json:"id"`
+	ProblemID    int64     `json:"problem_id"`
+	CIID         int64     `json:"ci_id"`
+	Relationship string    `json:"relationship"` // root_cause_asset, impacted_asset, workaround_applied, monitoring_target
+	Notes        string    `json:"notes,omitempty"`
+	LinkedAt     time.Time `json:"linked_at"`
+
+	// Enriched CI fields
+	CICode       string `json:"ci_code,omitempty"`
+	CIName       string `json:"ci_name,omitempty"`
+	CIType       string `json:"ci_type,omitempty"`
+	Criticality  string `json:"criticality,omitempty"`
+	CIStatus     string `json:"ci_status,omitempty"`
+}
