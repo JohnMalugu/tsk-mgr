@@ -452,3 +452,43 @@ type UpdateRCAStepRequest struct {
 	Answer   *string `json:"answer,omitempty"`
 	Evidence *string `json:"evidence,omitempty"`
 }
+
+// ProblemFilter specifies search and filtering criteria when listing problems
+type ProblemFilter struct {
+	WorkspaceID  int64  `json:"workspace_id"`
+	ProjectID    *int64 `json:"project_id,omitempty"`
+	Status       string `json:"status,omitempty"`
+	Category     string `json:"category,omitempty"`
+	Priority     string `json:"priority,omitempty"`
+	AssignedTo   string `json:"assigned_to,omitempty"`
+	AssignedTeam string `json:"assigned_team,omitempty"`
+	IsKnownError *bool  `json:"is_known_error,omitempty"`
+	Search       string `json:"search,omitempty"`
+	Limit        int    `json:"limit,omitempty"`
+	Offset       int    `json:"offset,omitempty"`
+}
+
+// KnownErrorFilter specifies filtering criteria when searching the Known Error Database (KEDB)
+type KnownErrorFilter struct {
+	WorkspaceID int64  `json:"workspace_id"`
+	Category    string `json:"category,omitempty"`
+	Search      string `json:"search,omitempty"`
+	Limit       int    `json:"limit,omitempty"`
+	Offset      int    `json:"offset,omitempty"`
+}
+
+// ProblemMetrics provides ITIL problem management governance and root cause metrics
+type ProblemMetrics struct {
+	TotalProblems           int            `json:"total_problems"`
+	ActiveProblems          int            `json:"active_problems"`
+	KnownErrorsCount        int            `json:"known_errors_count"`
+	ResolvedProblems        int            `json:"resolved_problems"`
+	ClosedProblems          int            `json:"closed_problems"`
+	StatusCounts            map[string]int `json:"status_counts"`
+	CategoryCounts          map[string]int `json:"category_counts"`
+	PriorityCounts          map[string]int `json:"priority_counts"`
+	MeanTimeToRCAHours      float64        `json:"mean_time_to_rca_hours"`
+	MeanTimeToResolveHours  float64        `json:"mean_time_to_resolve_hours"`
+	TotalIncidentsCaused    int            `json:"total_incidents_caused"`
+	TopRootCauseCategories  map[string]int `json:"top_root_cause_categories"`
+}
