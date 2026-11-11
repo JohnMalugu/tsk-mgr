@@ -704,23 +704,111 @@ func (s *problemServiceImpl) ListProblemTasks(problemID int64) ([]model.ProblemT
 }
 
 func (s *problemServiceImpl) AddRCAStep(problemID int64, authorID string, req model.CreateRCAStepRequest) (*model.ProblemRCAStep, error) {
-	return nil, nil
+	prob, err := s.repo.GetProblemByID(problemID)
+	if err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return nil, ErrProblemNotFound
+		}
+		return nil, err
+	}
+
+	q := strings.TrimSpace(req.Question)
+	a := strings.TrimSpace(req.Answer)
+	if q == "" || a == "" {
+		return nil, errors.New("RCA question and answer are required")
+	}
+
+	step := &model.ProblemRCAStep{
+		ProblemID:   problemID,
+		StepNumber:  req.StepNumber,
+		Question:    q,
+		Answer:      a,
+		Evidence:    strings.TrimSpace(req.Evidence),
+		CreatedByID: authorID,
+	}
+
+	id, err := s.repo.AddRCAStep(step)
+	if err != nil {
+		return nil, err
+	}
+
+	s.logAudit(authorID, prob.WorkspaceID, "problem.rca_step_added", fmt.Sprintf("%d", id), fmt.Sprintf("Added RCA step #%d to problem %s", step.StepNumber, prob.ProblemCode))
+
+	return s.repo.GetRCAStep(id)
 }
 
 func (s *problemServiceImpl) GetRCAStep(id int64) (*model.ProblemRCAStep, error) {
-	return nil, nil
+	step, err := s.repo.GetRCAStep(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrRCAStepNotFound) {
+			return nil, ErrRCAStepNotFound
+		}
+		return nil, err
+	}
+	return step, nil
 }
 
 func (s *problemServiceImpl) UpdateRCAStep(id int64, updaterID string, req model.UpdateRCAStepRequest) (*model.ProblemRCAStep, error) {
-	return nil, nil
+	step, err := s.repo.GetRCAStep(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrRCAStepNotFound) {
+			return nil, ErrRCAStepNotFound
+		}
+		return nil, err
+	}
+
+	if req.Question != nil {
+		q := strings.TrimSpace(*req.Question)
+		if q == "" {
+			return nil, errors.New("RCA question cannot be empty")
+		}
+		step.Question = q
+	}
+	if req.Answer != nil {
+		a := strings.TrimSpace(*req.Answer)
+		if a == "" {
+			return nil, errors.New("RCA answer cannot be empty")
+		}
+		step.Answer = a
+	}
+	if req.Evidence != nil {
+		step.Evidence = strings.TrimSpace(*req.Evidence)
+	}
+
+	if err := s.repo.UpdateRCAStep(step); err != nil {
+		return nil, err
+	}
+
+	s.logAudit(updaterID, 0, "problem.rca_step_updated", fmt.Sprintf("%d", id), fmt.Sprintf("Updated RCA step #%d", step.StepNumber))
+
+	return s.repo.GetRCAStep(id)
 }
 
 func (s *problemServiceImpl) DeleteRCAStep(id int64, deleterID string) error {
+	step, err := s.repo.GetRCAStep(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrRCAStepNotFound) {
+			return ErrRCAStepNotFound
+		}
+		return err
+	}
+
+	if err := s.repo.DeleteRCAStep(id); err != nil {
+		return err
+	}
+
+	s.logAudit(deleterID, 0, "problem.rca_step_deleted", fmt.Sprintf("%d", id), fmt.Sprintf("Deleted RCA step #%d", step.StepNumber))
 	return nil
 }
 
 func (s *problemServiceImpl) ListRCASteps(problemID int64) ([]model.ProblemRCAStep, error) {
-	return nil, nil
+	if _, err := s.repo.GetProblemByID(problemID); err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return nil, ErrProblemNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListRCASteps(problemID)
 }
 
 func (s *problemServiceImpl) PublishKnownError(problemID int64, publisherID string, req model.PublishKnownErrorRequest) (*model.Problem, error) {
