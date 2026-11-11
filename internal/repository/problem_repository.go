@@ -280,7 +280,105 @@ func (r *problemRepositoryImpl) GetProblemByCode(workspaceID int64, code string)
 }
 
 func (r *problemRepositoryImpl) ListProblems(filter model.ProblemFilter) ([]model.Problem, int, error) {
-	return nil, 0, nil
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID > 0 {
+		conditions = append(conditions, "p.workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+
+	if filter.ProjectID != nil {
+		conditions = append(conditions, "p.project_id = ?")
+		args = append(args, *filter.ProjectID)
+	}
+
+	if filter.Status != "" {
+		conditions = append(conditions, "p.status = ?")
+		args = append(args, strings.ToLower(strings.TrimSpace(filter.Status)))
+	}
+
+	if filter.Category != "" {
+		conditions = append(conditions, "p.category = ?")
+		args = append(args, strings.ToLower(strings.TrimSpace(filter.Category)))
+	}
+
+	if filter.Priority != "" {
+		conditions = append(conditions, "p.priority = ?")
+		args = append(args, strings.ToLower(strings.TrimSpace(filter.Priority)))
+	}
+
+	if filter.AssignedTo != "" {
+		conditions = append(conditions, "p.assigned_to = ?")
+		args = append(args, strings.TrimSpace(filter.AssignedTo))
+	}
+
+	if filter.AssignedTeam != "" {
+		conditions = append(conditions, "p.assigned_team = ?")
+		args = append(args, strings.TrimSpace(filter.AssignedTeam))
+	}
+
+	if filter.IsKnownError != nil {
+		if *filter.IsKnownError {
+			conditions = append(conditions, "p.is_known_error = 1")
+		} else {
+			conditions = append(conditions, "p.is_known_error = 0")
+		}
+	}
+
+	if search := strings.TrimSpace(filter.Search); search != "" {
+		pattern := "%" + search + "%"
+		conditions = append(conditions, "(p.title LIKE ? OR p.problem_code LIKE ? OR p.description LIKE ? OR p.workaround LIKE ? OR p.root_cause_summary LIKE ?)")
+		args = append(args, pattern, pattern, pattern, pattern, pattern)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := `SELECT COUNT(*) FROM problems p` + whereClause
+	var total int
+	if err := r.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	} else if limit > 100 {
+		limit = 100
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	dataQuery := baseProblemSelect + whereClause + ` ORDER BY p.id DESC LIMIT ? OFFSET ?`
+	queryArgs := append(args, limit, offset)
+
+	rows, err := r.db.Query(dataQuery, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var problems []model.Problem
+	for rows.Next() {
+		p, err := scanProblem(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		problems = append(problems, *p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	if problems == nil {
+		problems = []model.Problem{}
+	}
+	return problems, total, nil
 }
 
 func (r *problemRepositoryImpl) UpdateProblem(p *model.Problem) error {
