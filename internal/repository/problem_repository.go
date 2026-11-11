@@ -894,28 +894,156 @@ func (r *problemRepositoryImpl) GetProblemsForTask(taskID int) ([]model.Problem,
 	return problems, nil
 }
 
+func (r *problemRepositoryImpl) GetNextRCAStepNumber(problemID int64) (int, error) {
+	query := `SELECT COALESCE(MAX(step_number), 0) + 1 FROM problem_rca_steps WHERE problem_id = ?`
+	var nextNum int
+	if err := r.db.QueryRow(query, problemID).Scan(&nextNum); err != nil {
+		return 1, err
+	}
+	return nextNum, nil
+}
+
 func (r *problemRepositoryImpl) AddRCAStep(step *model.ProblemRCAStep) (int64, error) {
-	return 0, nil
+	if step.StepNumber <= 0 {
+		nextNum, err := r.GetNextRCAStepNumber(step.ProblemID)
+		if err != nil {
+			return 0, err
+		}
+		step.StepNumber = nextNum
+	}
+	now := time.Now().UTC()
+	if step.CreatedAt.IsZero() {
+		step.CreatedAt = now
+	}
+	if step.UpdatedAt.IsZero() {
+		step.UpdatedAt = now
+	}
+
+	query := `
+	INSERT INTO problem_rca_steps (problem_id, step_number, question, answer, evidence, created_by_id, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query,
+		step.ProblemID, step.StepNumber, step.Question, step.Answer, step.Evidence,
+		step.CreatedByID, step.CreatedAt, step.UpdatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	step.ID = id
+	return id, nil
 }
 
 func (r *problemRepositoryImpl) GetRCAStep(id int64) (*model.ProblemRCAStep, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		s.id, s.problem_id, s.step_number, s.question, s.answer, s.evidence,
+		s.created_by_id, s.created_at, s.updated_at,
+		COALESCE(u.username, u.email, '') AS creator_name
+	FROM problem_rca_steps s
+	LEFT JOIN users u ON s.created_by_id = u.id
+	WHERE s.id = ?`
+
+	var s model.ProblemRCAStep
+	var creatorName sql.NullString
+	err := r.db.QueryRow(query, id).Scan(
+		&s.ID, &s.ProblemID, &s.StepNumber, &s.Question, &s.Answer, &s.Evidence,
+		&s.CreatedByID, &s.CreatedAt, &s.UpdatedAt, &creatorName,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRCAStepNotFound
+		}
+		return nil, err
+	}
+	if creatorName.Valid {
+		s.CreatorName = creatorName.String
+	}
+	return &s, nil
 }
 
 func (r *problemRepositoryImpl) UpdateRCAStep(step *model.ProblemRCAStep) error {
+	step.UpdatedAt = time.Now().UTC()
+	query := `
+	UPDATE problem_rca_steps SET
+		question = ?,
+		answer = ?,
+		evidence = ?,
+		updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query, step.Question, step.Answer, step.Evidence, step.UpdatedAt, step.ID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrRCAStepNotFound
+	}
 	return nil
 }
 
 func (r *problemRepositoryImpl) DeleteRCAStep(id int64) error {
+	res, err := r.db.Exec("DELETE FROM problem_rca_steps WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrRCAStepNotFound
+	}
 	return nil
 }
 
 func (r *problemRepositoryImpl) ListRCASteps(problemID int64) ([]model.ProblemRCAStep, error) {
-	return nil, nil
-}
+	query := `
+	SELECT 
+		s.id, s.problem_id, s.step_number, s.question, s.answer, s.evidence,
+		s.created_by_id, s.created_at, s.updated_at,
+		COALESCE(u.username, u.email, '') AS creator_name
+	FROM problem_rca_steps s
+	LEFT JOIN users u ON s.created_by_id = u.id
+	WHERE s.problem_id = ?
+	ORDER BY s.step_number ASC`
 
-func (r *problemRepositoryImpl) GetNextRCAStepNumber(problemID int64) (int, error) {
-	return 0, nil
+	rows, err := r.db.Query(query, problemID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var steps []model.ProblemRCAStep
+	for rows.Next() {
+		var s model.ProblemRCAStep
+		var creatorName sql.NullString
+		if err := rows.Scan(
+			&s.ID, &s.ProblemID, &s.StepNumber, &s.Question, &s.Answer, &s.Evidence,
+			&s.CreatedByID, &s.CreatedAt, &s.UpdatedAt, &creatorName,
+		); err != nil {
+			return nil, err
+		}
+		if creatorName.Valid {
+			s.CreatorName = creatorName.String
+		}
+		steps = append(steps, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if steps == nil {
+		steps = []model.ProblemRCAStep{}
+	}
+	return steps, nil
 }
 
 func (r *problemRepositoryImpl) ListKnownErrors(filter model.KnownErrorFilter) ([]model.Problem, int, error) {
