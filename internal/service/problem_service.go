@@ -879,5 +879,12 @@ func (s *problemServiceImpl) ListKnownErrors(filter model.KnownErrorFilter) ([]m
 }
 
 func (s *problemServiceImpl) GetProblemMetrics(workspaceID int64) (*model.ProblemMetrics, error) {
-	return nil, nil
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceRequired
+	}
+	ws, err := s.workspaceRepo.GetByID(int(workspaceID))
+	if err != nil || ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+	return s.repo.GetProblemMetrics(workspaceID)
 }
