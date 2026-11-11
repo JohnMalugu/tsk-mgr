@@ -276,3 +276,71 @@ type ProblemCILink struct {
 	Criticality  string `json:"criticality,omitempty"`
 	CIStatus     string `json:"ci_status,omitempty"`
 }
+
+// Problem Change relationship roles
+const (
+	ProblemChangeRelPermanentFix    = "permanent_fix"
+	ProblemChangeRelWorkaround      = "workaround_deployment"
+	ProblemChangeRelInvestigation   = "investigation_infrastructure"
+)
+
+// Problem Task relationship roles
+const (
+	ProblemTaskRelInvestigation = "investigation"
+	ProblemTaskRelWorkaround    = "workaround_execution"
+	ProblemTaskRelRemediation   = "remediation"
+	ProblemTaskRelVerification  = "verification"
+)
+
+// ValidateProblemChangeRelation validates whether the problem-change relationship role is valid
+func ValidateProblemChangeRelation(rel string) error {
+	switch strings.ToLower(strings.TrimSpace(rel)) {
+	case ProblemChangeRelPermanentFix, ProblemChangeRelWorkaround, ProblemChangeRelInvestigation, "":
+		return nil
+	default:
+		return errors.New("invalid problem change relationship")
+	}
+}
+
+// ValidateProblemTaskRelation validates whether the problem-task relationship role is valid
+func ValidateProblemTaskRelation(rel string) error {
+	switch strings.ToLower(strings.TrimSpace(rel)) {
+	case ProblemTaskRelInvestigation, ProblemTaskRelWorkaround, ProblemTaskRelRemediation, ProblemTaskRelVerification, "":
+		return nil
+	default:
+		return errors.New("invalid problem task relationship")
+	}
+}
+
+// ProblemChangeLink associates a Problem with an ITIL Change Request implementing a permanent fix or workaround
+type ProblemChangeLink struct {
+	ID           int64     `json:"id"`
+	ProblemID    int64     `json:"problem_id"`
+	ChangeID     int64     `json:"change_id"`
+	Relationship string    `json:"relationship"` // permanent_fix, workaround_deployment, investigation_infrastructure
+	Notes        string    `json:"notes,omitempty"`
+	LinkedAt     time.Time `json:"linked_at"`
+
+	// Enriched Change fields
+	ChangeCode   string `json:"change_code,omitempty"`
+	ChangeTitle  string `json:"change_title,omitempty"`
+	ChangeType   string `json:"change_type,omitempty"`
+	ChangeStatus string `json:"change_status,omitempty"`
+	RiskLevel    string `json:"risk_level,omitempty"`
+}
+
+// ProblemTaskLink associates a Problem with an action task in the workspace
+type ProblemTaskLink struct {
+	ID           int64     `json:"id"`
+	ProblemID    int64     `json:"problem_id"`
+	TaskID       int       `json:"task_id"`
+	Relationship string    `json:"relationship"` // investigation, workaround_execution, remediation, verification
+	Notes        string    `json:"notes,omitempty"`
+	LinkedAt     time.Time `json:"linked_at"`
+
+	// Enriched Task fields
+	TaskTitle     string `json:"task_title,omitempty"`
+	TaskStatus    string `json:"task_status,omitempty"`
+	TaskPriority  string `json:"task_priority,omitempty"`
+	TaskCompleted bool   `json:"task_completed"`
+}
