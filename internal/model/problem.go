@@ -360,3 +360,53 @@ type ProblemRCAStep struct {
 	// Enriched creator field
 	CreatorName string `json:"creator_name,omitempty"`
 }
+
+// CreateProblemRequest represents payload for creating a new ITIL problem
+type CreateProblemRequest struct {
+	WorkspaceID  int64    `json:"workspace_id"`
+	ProjectID    *int64   `json:"project_id,omitempty"`
+	ProblemCode  string   `json:"problem_code,omitempty"`
+	Title        string   `json:"title"`
+	Description  string   `json:"description,omitempty"`
+	Category     string   `json:"category,omitempty"`
+	Priority     string   `json:"priority,omitempty"`
+	Urgency      string   `json:"urgency,omitempty"`
+	Impact       string   `json:"impact,omitempty"`
+	AssignedTo   *string  `json:"assigned_to,omitempty"`
+	AssignedTeam string   `json:"assigned_team,omitempty"`
+	RCAMethod    string   `json:"rca_method,omitempty"`
+	IncidentIDs  []int64  `json:"incident_ids,omitempty"`
+	CIIDs        []int64  `json:"ci_ids,omitempty"`
+}
+
+// UpdateProblemRequest represents payload for updating existing problem attributes
+type UpdateProblemRequest struct {
+	Title             *string `json:"title,omitempty"`
+	Description       *string `json:"description,omitempty"`
+	Category          *string `json:"category,omitempty"`
+	Priority          *string `json:"priority,omitempty"`
+	Urgency           *string `json:"urgency,omitempty"`
+	Impact            *string `json:"impact,omitempty"`
+	AssignedTo        *string `json:"assigned_to,omitempty"`
+	AssignedTeam      *string `json:"assigned_team,omitempty"`
+	RootCauseCategory *string `json:"root_cause_category,omitempty"`
+	RootCauseSummary  *string `json:"root_cause_summary,omitempty"`
+	Workaround        *string `json:"workaround,omitempty"`
+	PermanentSolution *string `json:"permanent_solution,omitempty"`
+	RCAMethod         *string `json:"rca_method,omitempty"`
+}
+
+// UpdateProblemStatusRequest represents payload for transitioning problem lifecycle status
+type UpdateProblemStatusRequest struct {
+	Status            string `json:"status"`
+	Reason            string `json:"reason,omitempty"`
+	Workaround        string `json:"workaround,omitempty"`
+	PermanentSolution string `json:"permanent_solution,omitempty"`
+}
+
+// PublishKnownErrorRequest represents payload for publishing problem to Known Error Database (KEDB)
+type PublishKnownErrorRequest struct {
+	Workaround        string `json:"workaround"`
+	PermanentSolution string `json:"permanent_solution,omitempty"`
+	RootCauseSummary  string `json:"root_cause_summary,omitempty"`
+}
