@@ -181,6 +181,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 ITIL Problem Management & Known Error Database (KEDB)
+	if strings.HasPrefix(r.URL.Path, "/v2/problems") || strings.HasPrefix(r.URL.Path, "/v2/kedb") {
+		if handler.GlobalProblemHandler == nil {
+			http.Error(w, "Problem handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalProblemHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return
