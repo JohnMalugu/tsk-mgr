@@ -402,51 +402,305 @@ func (s *problemServiceImpl) UpdateProblemStatus(id int64, updaterID string, req
 }
 
 func (s *problemServiceImpl) LinkIncident(problemID int64, linkerID string, req model.LinkIncidentRequest) (*model.ProblemIncidentLink, error) {
-	return nil, nil
+	prob, err := s.repo.GetProblemByID(problemID)
+	if err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return nil, ErrProblemNotFound
+		}
+		return nil, err
+	}
+
+	inc, err := s.incidentRepo.GetIncidentByID(req.IncidentID)
+	if err != nil || inc == nil {
+		return nil, ErrIncidentNotFound
+	}
+
+	link := &model.ProblemIncidentLink{
+		ProblemID:  problemID,
+		IncidentID: req.IncidentID,
+		Notes:      strings.TrimSpace(req.Notes),
+		LinkedAt:   time.Now().UTC(),
+	}
+
+	id, err := s.repo.LinkIncident(link)
+	if err != nil {
+		if errors.Is(err, repository.ErrProblemLinkExists) {
+			return nil, ErrProblemLinkExists
+		}
+		return nil, err
+	}
+	link.ID = id
+	link.IncidentNumber = inc.IncidentNumber
+	link.IncidentTitle = inc.Title
+	link.IncidentSeverity = inc.Severity
+	link.IncidentStatus = inc.Status
+
+	s.logAudit(linkerID, prob.WorkspaceID, "problem.incident_linked", fmt.Sprintf("%d", id), fmt.Sprintf("Linked incident #%d to problem %s", inc.IncidentNumber, prob.ProblemCode))
+
+	return link, nil
 }
 
 func (s *problemServiceImpl) UnlinkIncident(problemID, incidentID int64, unlinkerID string) error {
+	prob, err := s.repo.GetProblemByID(problemID)
+	if err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return ErrProblemNotFound
+		}
+		return err
+	}
+
+	if err := s.repo.UnlinkIncident(problemID, incidentID); err != nil {
+		if errors.Is(err, repository.ErrProblemLinkNotFound) {
+			return ErrProblemLinkNotFound
+		}
+		return err
+	}
+
+	s.logAudit(unlinkerID, prob.WorkspaceID, "problem.incident_unlinked", fmt.Sprintf("%d", incidentID), fmt.Sprintf("Unlinked incident %d from problem %s", incidentID, prob.ProblemCode))
 	return nil
 }
 
 func (s *problemServiceImpl) ListProblemIncidents(problemID int64) ([]model.ProblemIncidentLink, error) {
-	return nil, nil
+	if _, err := s.repo.GetProblemByID(problemID); err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return nil, ErrProblemNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListProblemIncidents(problemID)
 }
 
 func (s *problemServiceImpl) LinkCI(problemID int64, linkerID string, req model.LinkCIRequest) (*model.ProblemCILink, error) {
-	return nil, nil
+	prob, err := s.repo.GetProblemByID(problemID)
+	if err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return nil, ErrProblemNotFound
+		}
+		return nil, err
+	}
+
+	ci, err := s.cmdbRepo.GetCIByID(req.CIID)
+	if err != nil || ci == nil {
+		return nil, ErrCINotFound
+	}
+
+	rel := strings.ToLower(strings.TrimSpace(req.Relationship))
+	if rel == "" {
+		rel = model.ProblemCIRelRootCause
+	} else if err := model.ValidateProblemCIRelation(rel); err != nil {
+		return nil, err
+	}
+
+	link := &model.ProblemCILink{
+		ProblemID:    problemID,
+		CIID:         req.CIID,
+		Relationship: rel,
+		Notes:        strings.TrimSpace(req.Notes),
+		LinkedAt:     time.Now().UTC(),
+	}
+
+	id, err := s.repo.LinkCI(link)
+	if err != nil {
+		if errors.Is(err, repository.ErrProblemLinkExists) {
+			return nil, ErrProblemLinkExists
+		}
+		return nil, err
+	}
+	link.ID = id
+	link.CICode = ci.CICode
+	link.CIName = ci.Name
+	link.CIType = ci.CIType
+	link.Criticality = ci.Criticality
+	link.CIStatus = ci.Status
+
+	s.logAudit(linkerID, prob.WorkspaceID, "problem.ci_linked", fmt.Sprintf("%d", id), fmt.Sprintf("Linked configuration item %s to problem %s", ci.CICode, prob.ProblemCode))
+
+	return link, nil
 }
 
 func (s *problemServiceImpl) UnlinkCI(problemID, linkID int64, unlinkerID string) error {
+	prob, err := s.repo.GetProblemByID(problemID)
+	if err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return ErrProblemNotFound
+		}
+		return err
+	}
+
+	if err := s.repo.UnlinkCI(linkID); err != nil {
+		if errors.Is(err, repository.ErrProblemLinkNotFound) {
+			return ErrProblemLinkNotFound
+		}
+		return err
+	}
+
+	s.logAudit(unlinkerID, prob.WorkspaceID, "problem.ci_unlinked", fmt.Sprintf("%d", linkID), fmt.Sprintf("Unlinked configuration item relation %d from problem %s", linkID, prob.ProblemCode))
 	return nil
 }
 
 func (s *problemServiceImpl) ListProblemCIs(problemID int64) ([]model.ProblemCILink, error) {
-	return nil, nil
+	if _, err := s.repo.GetProblemByID(problemID); err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return nil, ErrProblemNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListProblemCIs(problemID)
 }
 
 func (s *problemServiceImpl) LinkChange(problemID int64, linkerID string, req model.LinkChangeRequest) (*model.ProblemChangeLink, error) {
-	return nil, nil
+	prob, err := s.repo.GetProblemByID(problemID)
+	if err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return nil, ErrProblemNotFound
+		}
+		return nil, err
+	}
+
+	chg, err := s.changeRepo.GetChangeByID(req.ChangeID)
+	if err != nil || chg == nil {
+		return nil, ErrChangeNotFound
+	}
+
+	rel := strings.ToLower(strings.TrimSpace(req.Relationship))
+	if rel == "" {
+		rel = model.ProblemChangeRelPermanentFix
+	} else if err := model.ValidateProblemChangeRelation(rel); err != nil {
+		return nil, err
+	}
+
+	link := &model.ProblemChangeLink{
+		ProblemID:    problemID,
+		ChangeID:     req.ChangeID,
+		Relationship: rel,
+		Notes:        strings.TrimSpace(req.Notes),
+		LinkedAt:     time.Now().UTC(),
+	}
+
+	id, err := s.repo.LinkChange(link)
+	if err != nil {
+		if errors.Is(err, repository.ErrProblemLinkExists) {
+			return nil, ErrProblemLinkExists
+		}
+		return nil, err
+	}
+	link.ID = id
+	link.ChangeCode = chg.ChangeNumber
+	link.ChangeTitle = chg.Title
+	link.ChangeType = chg.ChangeType
+	link.ChangeStatus = chg.Status
+	link.RiskLevel = chg.RiskLevel
+
+	s.logAudit(linkerID, prob.WorkspaceID, "problem.change_linked", fmt.Sprintf("%d", id), fmt.Sprintf("Linked change request %s to problem %s", chg.ChangeNumber, prob.ProblemCode))
+
+	return link, nil
 }
 
 func (s *problemServiceImpl) UnlinkChange(problemID, linkID int64, unlinkerID string) error {
+	prob, err := s.repo.GetProblemByID(problemID)
+	if err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return ErrProblemNotFound
+		}
+		return err
+	}
+
+	if err := s.repo.UnlinkChange(linkID); err != nil {
+		if errors.Is(err, repository.ErrProblemLinkNotFound) {
+			return ErrProblemLinkNotFound
+		}
+		return err
+	}
+
+	s.logAudit(unlinkerID, prob.WorkspaceID, "problem.change_unlinked", fmt.Sprintf("%d", linkID), fmt.Sprintf("Unlinked change request link %d from problem %s", linkID, prob.ProblemCode))
 	return nil
 }
 
 func (s *problemServiceImpl) ListProblemChanges(problemID int64) ([]model.ProblemChangeLink, error) {
-	return nil, nil
+	if _, err := s.repo.GetProblemByID(problemID); err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return nil, ErrProblemNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListProblemChanges(problemID)
 }
 
 func (s *problemServiceImpl) LinkTask(problemID int64, linkerID string, req model.LinkTaskRequest) (*model.ProblemTaskLink, error) {
-	return nil, nil
+	prob, err := s.repo.GetProblemByID(problemID)
+	if err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return nil, ErrProblemNotFound
+		}
+		return nil, err
+	}
+
+	tsk, err := s.taskRepo.GetByID(req.TaskID)
+	if err != nil || tsk == nil {
+		return nil, ErrTaskNotFound
+	}
+
+	rel := strings.ToLower(strings.TrimSpace(req.Relationship))
+	if rel == "" {
+		rel = model.ProblemTaskRelInvestigation
+	} else if err := model.ValidateProblemTaskRelation(rel); err != nil {
+		return nil, err
+	}
+
+	link := &model.ProblemTaskLink{
+		ProblemID:    problemID,
+		TaskID:       req.TaskID,
+		Relationship: rel,
+		Notes:        strings.TrimSpace(req.Notes),
+		LinkedAt:     time.Now().UTC(),
+	}
+
+	id, err := s.repo.LinkTask(link)
+	if err != nil {
+		if errors.Is(err, repository.ErrProblemLinkExists) {
+			return nil, ErrProblemLinkExists
+		}
+		return nil, err
+	}
+	link.ID = id
+	link.TaskTitle = tsk.Title
+	link.TaskStatus = tsk.Status
+	link.TaskPriority = tsk.Priority
+	link.TaskCompleted = tsk.Completed
+
+	s.logAudit(linkerID, prob.WorkspaceID, "problem.task_linked", fmt.Sprintf("%d", id), fmt.Sprintf("Linked task #%d to problem %s", tsk.ID, prob.ProblemCode))
+
+	return link, nil
 }
 
 func (s *problemServiceImpl) UnlinkTask(problemID, linkID int64, unlinkerID string) error {
+	prob, err := s.repo.GetProblemByID(problemID)
+	if err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return ErrProblemNotFound
+		}
+		return err
+	}
+
+	if err := s.repo.UnlinkTask(linkID); err != nil {
+		if errors.Is(err, repository.ErrProblemLinkNotFound) {
+			return ErrProblemLinkNotFound
+		}
+		return err
+	}
+
+	s.logAudit(unlinkerID, prob.WorkspaceID, "problem.task_unlinked", fmt.Sprintf("%d", linkID), fmt.Sprintf("Unlinked task link %d from problem %s", linkID, prob.ProblemCode))
 	return nil
 }
 
 func (s *problemServiceImpl) ListProblemTasks(problemID int64) ([]model.ProblemTaskLink, error) {
-	return nil, nil
+	if _, err := s.repo.GetProblemByID(problemID); err != nil {
+		if errors.Is(err, repository.ErrProblemNotFound) {
+			return nil, ErrProblemNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListProblemTasks(problemID)
 }
 
 func (s *problemServiceImpl) AddRCAStep(problemID int64, authorID string, req model.CreateRCAStepRequest) (*model.ProblemRCAStep, error) {
