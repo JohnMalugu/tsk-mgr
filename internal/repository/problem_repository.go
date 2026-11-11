@@ -1047,9 +1047,189 @@ func (r *problemRepositoryImpl) ListRCASteps(problemID int64) ([]model.ProblemRC
 }
 
 func (r *problemRepositoryImpl) ListKnownErrors(filter model.KnownErrorFilter) ([]model.Problem, int, error) {
-	return nil, 0, nil
+	var conditions []string
+	var args []interface{}
+
+	conditions = append(conditions, "p.is_known_error = 1")
+
+	if filter.WorkspaceID > 0 {
+		conditions = append(conditions, "p.workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+
+	if filter.Category != "" {
+		conditions = append(conditions, "p.category = ?")
+		args = append(args, strings.ToLower(strings.TrimSpace(filter.Category)))
+	}
+
+	if search := strings.TrimSpace(filter.Search); search != "" {
+		pattern := "%" + search + "%"
+		conditions = append(conditions, "(p.title LIKE ? OR p.problem_code LIKE ? OR p.workaround LIKE ? OR p.permanent_solution LIKE ? OR p.root_cause_summary LIKE ?)")
+		args = append(args, pattern, pattern, pattern, pattern, pattern)
+	}
+
+	whereClause := " WHERE " + strings.Join(conditions, " AND ")
+
+	countQuery := `SELECT COUNT(*) FROM problems p` + whereClause
+	var total int
+	if err := r.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	} else if limit > 100 {
+		limit = 100
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	dataQuery := baseProblemSelect + whereClause + ` ORDER BY p.known_error_published_at DESC, p.id DESC LIMIT ? OFFSET ?`
+	queryArgs := append(args, limit, offset)
+
+	rows, err := r.db.Query(dataQuery, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var problems []model.Problem
+	for rows.Next() {
+		p, err := scanProblem(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		problems = append(problems, *p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	if problems == nil {
+		problems = []model.Problem{}
+	}
+	return problems, total, nil
 }
 
 func (r *problemRepositoryImpl) GetProblemMetrics(workspaceID int64) (*model.ProblemMetrics, error) {
-	return nil, nil
+	metrics := &model.ProblemMetrics{
+		StatusCounts:           make(map[string]int),
+		CategoryCounts:         make(map[string]int),
+		PriorityCounts:         make(map[string]int),
+		TopRootCauseCategories: make(map[string]int),
+	}
+
+	// 1. Total and Active counts
+	statusQuery := `
+	SELECT status, COUNT(*) 
+	FROM problems 
+	WHERE workspace_id = ? 
+	GROUP BY status`
+
+	statusRows, err := r.db.Query(statusQuery, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer statusRows.Close()
+
+	for statusRows.Next() {
+		var st string
+		var cnt int
+		if err := statusRows.Scan(&st, &cnt); err != nil {
+			return nil, err
+		}
+		metrics.StatusCounts[st] = cnt
+		metrics.TotalProblems += cnt
+		switch st {
+		case model.ProblemStatusLogged, model.ProblemStatusInvestigating, model.ProblemStatusWorkaroundFound:
+			metrics.ActiveProblems += cnt
+		case model.ProblemStatusResolved:
+			metrics.ResolvedProblems += cnt
+		case model.ProblemStatusClosed:
+			metrics.ClosedProblems += cnt
+		}
+	}
+
+	// 2. Known Errors count
+	kedbQuery := `SELECT COUNT(*) FROM problems WHERE workspace_id = ? AND is_known_error = 1`
+	_ = r.db.QueryRow(kedbQuery, workspaceID).Scan(&metrics.KnownErrorsCount)
+
+	// 3. Category counts
+	catQuery := `SELECT category, COUNT(*) FROM problems WHERE workspace_id = ? GROUP BY category`
+	catRows, err := r.db.Query(catQuery, workspaceID)
+	if err == nil {
+		defer catRows.Close()
+		for catRows.Next() {
+			var cat string
+			var cnt int
+			if err := catRows.Scan(&cat, &cnt); err == nil {
+				metrics.CategoryCounts[cat] = cnt
+			}
+		}
+	}
+
+	// 4. Priority counts
+	priQuery := `SELECT priority, COUNT(*) FROM problems WHERE workspace_id = ? GROUP BY priority`
+	priRows, err := r.db.Query(priQuery, workspaceID)
+	if err == nil {
+		defer priRows.Close()
+		for priRows.Next() {
+			var pri string
+			var cnt int
+			if err := priRows.Scan(&pri, &cnt); err == nil {
+				metrics.PriorityCounts[pri] = cnt
+			}
+		}
+	}
+
+	// 5. Top Root Cause Categories
+	rcaQuery := `
+	SELECT root_cause_category, COUNT(*) 
+	FROM problems 
+	WHERE workspace_id = ? AND root_cause_category != '' 
+	GROUP BY root_cause_category 
+	ORDER BY COUNT(*) DESC LIMIT 5`
+	rcaRows, err := r.db.Query(rcaQuery, workspaceID)
+	if err == nil {
+		defer rcaRows.Close()
+		for rcaRows.Next() {
+			var rcat string
+			var cnt int
+			if err := rcaRows.Scan(&rcat, &cnt); err == nil {
+				metrics.TopRootCauseCategories[rcat] = cnt
+			}
+		}
+	}
+
+	// 6. Total incidents caused by problems
+	incQuery := `
+	SELECT COUNT(*) 
+	FROM problem_incident_links pil
+	INNER JOIN problems p ON pil.problem_id = p.id
+	WHERE p.workspace_id = ?`
+	_ = r.db.QueryRow(incQuery, workspaceID).Scan(&metrics.TotalIncidentsCaused)
+
+	// 7. MTTR (Mean time to resolve in hours)
+	resolveQuery := `
+	SELECT AVG((julianday(resolved_at) - julianday(created_at)) * 24.0)
+	FROM problems
+	WHERE workspace_id = ? AND resolved_at IS NOT NULL`
+	var avgResolve sql.NullFloat64
+	if err := r.db.QueryRow(resolveQuery, workspaceID).Scan(&avgResolve); err == nil && avgResolve.Valid {
+		metrics.MeanTimeToResolveHours = avgResolve.Float64
+	}
+
+	// 8. Mean time to RCA in hours (when workaround or root_cause_summary is determined)
+	rcaTimeQuery := `
+	SELECT AVG((julianday(COALESCE(known_error_published_at, resolved_at)) - julianday(created_at)) * 24.0)
+	FROM problems
+	WHERE workspace_id = ? AND (known_error_published_at IS NOT NULL OR resolved_at IS NOT NULL)`
+	var avgRCA sql.NullFloat64
+	if err := r.db.QueryRow(rcaTimeQuery, workspaceID).Scan(&avgRCA); err == nil && avgRCA.Valid {
+		metrics.MeanTimeToRCAHours = avgRCA.Float64
+	}
+
+	return metrics, nil
 }
