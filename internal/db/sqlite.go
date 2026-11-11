@@ -1969,6 +1969,23 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_ci_links_entity ON ci_entity_links(entity_type, entity_id);
 	CREATE INDEX IF NOT EXISTS idx_ci_maint_ci ON ci_maintenance_schedules(ci_id, status);
 	CREATE INDEX IF NOT EXISTS idx_ci_maint_dates ON ci_maintenance_schedules(window_start_at, window_end_at);
+	CREATE INDEX IF NOT EXISTS idx_problems_ws_status ON problems(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_problems_ws_cat ON problems(workspace_id, category);
+	CREATE INDEX IF NOT EXISTS idx_problems_ws_pri ON problems(workspace_id, priority);
+	CREATE INDEX IF NOT EXISTS idx_problems_ws_code ON problems(workspace_id, problem_code);
+	CREATE INDEX IF NOT EXISTS idx_problems_ws_kedb ON problems(workspace_id, is_known_error);
+	CREATE INDEX IF NOT EXISTS idx_problems_proj ON problems(project_id);
+	CREATE INDEX IF NOT EXISTS idx_problems_assignee ON problems(assigned_to);
+	CREATE INDEX IF NOT EXISTS idx_problems_creator ON problems(created_by_id);
+	CREATE INDEX IF NOT EXISTS idx_problem_inc_prb ON problem_incident_links(problem_id);
+	CREATE INDEX IF NOT EXISTS idx_problem_inc_inc ON problem_incident_links(incident_id);
+	CREATE INDEX IF NOT EXISTS idx_problem_ci_prb ON problem_ci_links(problem_id);
+	CREATE INDEX IF NOT EXISTS idx_problem_ci_ci ON problem_ci_links(ci_id);
+	CREATE INDEX IF NOT EXISTS idx_problem_chg_prb ON problem_change_links(problem_id);
+	CREATE INDEX IF NOT EXISTS idx_problem_chg_chg ON problem_change_links(change_id);
+	CREATE INDEX IF NOT EXISTS idx_problem_tsk_prb ON problem_task_links(problem_id);
+	CREATE INDEX IF NOT EXISTS idx_problem_tsk_tsk ON problem_task_links(task_id);
+	CREATE INDEX IF NOT EXISTS idx_problem_rca_prb ON problem_rca_steps(problem_id, step_number);
 	`
 
 	_, err = db.Exec(indexQuery)
