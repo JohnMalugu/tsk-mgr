@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -71,6 +72,120 @@ const (
 	RCAMethodTimeline   = "timeline"
 	RCAMethodOther      = "other"
 )
+
+// ValidateProblemStatus validates whether the problem status is recognized
+func ValidateProblemStatus(status string) error {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case ProblemStatusLogged, ProblemStatusInvestigating, ProblemStatusWorkaroundFound,
+		ProblemStatusKnownError, ProblemStatusResolved, ProblemStatusClosed:
+		return nil
+	default:
+		return ErrInvalidProblemStatus
+	}
+}
+
+// ValidateProblemCategory validates whether the problem category is recognized
+func ValidateProblemCategory(cat string) error {
+	switch strings.ToLower(strings.TrimSpace(cat)) {
+	case ProblemCategoryInfrastructure, ProblemCategorySoftware, ProblemCategoryNetwork,
+		ProblemCategoryDatabase, ProblemCategorySecurity, ProblemCategoryThirdParty, ProblemCategoryProcess:
+		return nil
+	default:
+		return ErrInvalidProblemCategory
+	}
+}
+
+// ValidateProblemPriority validates whether the priority level is recognized
+func ValidateProblemPriority(p string) error {
+	switch strings.ToLower(strings.TrimSpace(p)) {
+	case ProblemPriorityCritical, ProblemPriorityHigh, ProblemPriorityMedium, ProblemPriorityLow:
+		return nil
+	default:
+		return ErrInvalidProblemPriority
+	}
+}
+
+// ValidateProblemUrgency validates whether the urgency level is recognized
+func ValidateProblemUrgency(u string) error {
+	switch strings.ToLower(strings.TrimSpace(u)) {
+	case ProblemUrgencyCritical, ProblemUrgencyHigh, ProblemUrgencyMedium, ProblemUrgencyLow:
+		return nil
+	default:
+		return ErrInvalidProblemUrgency
+	}
+}
+
+// ValidateProblemImpact validates whether the impact level is recognized
+func ValidateProblemImpact(i string) error {
+	switch strings.ToLower(strings.TrimSpace(i)) {
+	case ProblemImpactCritical, ProblemImpactHigh, ProblemImpactMedium, ProblemImpactLow:
+		return nil
+	default:
+		return ErrInvalidProblemImpact
+	}
+}
+
+// ValidateRCAMethod validates whether the RCA methodology is recognized
+func ValidateRCAMethod(m string) error {
+	switch strings.ToLower(strings.TrimSpace(m)) {
+	case RCAMethod5Whys, RCAMethodFishbone, RCAMethodFaultTree, RCAMethodTimeline, RCAMethodOther, "":
+		return nil
+	default:
+		return ErrInvalidRCAMethod
+	}
+}
+
+// ValidateProblemTransition validates whether transitioning from current to target status is permitted by ITIL workflow
+func ValidateProblemTransition(current, target string) error {
+	current = strings.ToLower(strings.TrimSpace(current))
+	target = strings.ToLower(strings.TrimSpace(target))
+
+	if current == target {
+		return nil
+	}
+
+	if err := ValidateProblemStatus(target); err != nil {
+		return err
+	}
+
+	switch current {
+	case ProblemStatusLogged:
+		// From logged can go to investigating or directly closed if duplicate/not a problem
+		if target == ProblemStatusInvestigating || target == ProblemStatusClosed {
+			return nil
+		}
+	case ProblemStatusInvestigating:
+		// From investigating can identify workaround, publish known error, resolve, or close
+		if target == ProblemStatusWorkaroundFound || target == ProblemStatusKnownError ||
+			target == ProblemStatusResolved || target == ProblemStatusClosed {
+			return nil
+		}
+	case ProblemStatusWorkaroundFound:
+		// Can publish to KEDB, resolve with permanent fix, continue investigating, or close
+		if target == ProblemStatusKnownError || target == ProblemStatusResolved ||
+			target == ProblemStatusInvestigating || target == ProblemStatusClosed {
+			return nil
+		}
+	case ProblemStatusKnownError:
+		// Known error can be resolved when permanent fix is ready, updated in investigation, or closed
+		if target == ProblemStatusResolved || target == ProblemStatusInvestigating ||
+			target == ProblemStatusWorkaroundFound || target == ProblemStatusClosed {
+			return nil
+		}
+	case ProblemStatusResolved:
+		// Resolved can be verified and closed, or re-opened into investigating if recurrence happens
+		if target == ProblemStatusClosed || target == ProblemStatusInvestigating {
+			return nil
+		}
+	case ProblemStatusClosed:
+		// Closed is terminal; re-opening requires moving back to investigating
+		if target == ProblemStatusInvestigating {
+			return nil
+		}
+	}
+
+	return ErrInvalidStatusTransition
+}
 
 // Problem represents an ITIL Problem investigation record for identifying and resolving root causes
 type Problem struct {
