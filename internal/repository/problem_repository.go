@@ -382,10 +382,86 @@ func (r *problemRepositoryImpl) ListProblems(filter model.ProblemFilter) ([]mode
 }
 
 func (r *problemRepositoryImpl) UpdateProblem(p *model.Problem) error {
+	p.UpdatedAt = time.Now().UTC()
+	isKnownInt := 0
+	if p.IsKnownError {
+		isKnownInt = 1
+	}
+
+	query := `
+	UPDATE problems SET
+		project_id = ?,
+		title = ?,
+		description = ?,
+		status = ?,
+		category = ?,
+		priority = ?,
+		urgency = ?,
+		impact = ?,
+		assigned_to = ?,
+		assigned_team = ?,
+		root_cause_category = ?,
+		root_cause_summary = ?,
+		workaround = ?,
+		permanent_solution = ?,
+		is_known_error = ?,
+		known_error_published_at = ?,
+		rca_method = ?,
+		started_at = ?,
+		resolved_at = ?,
+		closed_at = ?,
+		updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.Exec(query,
+		p.ProjectID,
+		p.Title,
+		p.Description,
+		p.Status,
+		p.Category,
+		p.Priority,
+		p.Urgency,
+		p.Impact,
+		p.AssignedTo,
+		p.AssignedTeam,
+		p.RootCauseCategory,
+		p.RootCauseSummary,
+		p.Workaround,
+		p.PermanentSolution,
+		isKnownInt,
+		p.KnownErrorPublishedAt,
+		p.RCAMethod,
+		p.StartedAt,
+		p.ResolvedAt,
+		p.ClosedAt,
+		p.UpdatedAt,
+		p.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrProblemNotFound
+	}
 	return nil
 }
 
 func (r *problemRepositoryImpl) DeleteProblem(id int64) error {
+	res, err := r.db.Exec("DELETE FROM problems WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrProblemNotFound
+	}
 	return nil
 }
 
