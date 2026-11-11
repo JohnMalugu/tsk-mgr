@@ -676,35 +676,222 @@ func (r *problemRepositoryImpl) GetProblemsForCI(ciID int64) ([]model.Problem, e
 }
 
 func (r *problemRepositoryImpl) LinkChange(link *model.ProblemChangeLink) (int64, error) {
-	return 0, nil
+	if link.LinkedAt.IsZero() {
+		link.LinkedAt = time.Now().UTC()
+	}
+	if link.Relationship == "" {
+		link.Relationship = model.ProblemChangeRelPermanentFix
+	}
+
+	query := `
+	INSERT INTO problem_change_links (problem_id, change_id, relationship, notes, linked_at)
+	VALUES (?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query, link.ProblemID, link.ChangeID, link.Relationship, link.Notes, link.LinkedAt)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return 0, ErrProblemLinkExists
+		}
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	link.ID = id
+	return id, nil
 }
 
 func (r *problemRepositoryImpl) UnlinkChange(id int64) error {
+	res, err := r.db.Exec("DELETE FROM problem_change_links WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrProblemLinkNotFound
+	}
 	return nil
 }
 
 func (r *problemRepositoryImpl) ListProblemChanges(problemID int64) ([]model.ProblemChangeLink, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		l.id, l.problem_id, l.change_id, l.relationship, l.notes, l.linked_at,
+		COALESCE(c.change_number, 0) AS change_number,
+		COALESCE(c.title, '') AS change_title,
+		COALESCE(c.change_type, '') AS change_type,
+		COALESCE(c.status, '') AS change_status,
+		COALESCE(c.risk_level, '') AS risk_level
+	FROM problem_change_links l
+	LEFT JOIN change_requests c ON l.change_id = c.id
+	WHERE l.problem_id = ?
+	ORDER BY l.linked_at DESC`
+
+	rows, err := r.db.Query(query, problemID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var links []model.ProblemChangeLink
+	for rows.Next() {
+		var l model.ProblemChangeLink
+		var changeNum int
+		if err := rows.Scan(
+			&l.ID, &l.ProblemID, &l.ChangeID, &l.Relationship, &l.Notes, &l.LinkedAt,
+			&changeNum, &l.ChangeTitle, &l.ChangeType, &l.ChangeStatus, &l.RiskLevel,
+		); err != nil {
+			return nil, err
+		}
+		if changeNum > 0 {
+			l.ChangeCode = fmt.Sprintf("CHG-%d", changeNum)
+		}
+		links = append(links, l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if links == nil {
+		links = []model.ProblemChangeLink{}
+	}
+	return links, nil
 }
 
 func (r *problemRepositoryImpl) GetProblemsForChange(changeID int64) ([]model.Problem, error) {
-	return nil, nil
+	query := baseProblemSelect + ` INNER JOIN problem_change_links pcl ON p.id = pcl.problem_id WHERE pcl.change_id = ? ORDER BY p.id DESC`
+	rows, err := r.db.Query(query, changeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var problems []model.Problem
+	for rows.Next() {
+		p, err := scanProblem(rows)
+		if err != nil {
+			return nil, err
+		}
+		problems = append(problems, *p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if problems == nil {
+		problems = []model.Problem{}
+	}
+	return problems, nil
 }
 
 func (r *problemRepositoryImpl) LinkTask(link *model.ProblemTaskLink) (int64, error) {
-	return 0, nil
+	if link.LinkedAt.IsZero() {
+		link.LinkedAt = time.Now().UTC()
+	}
+	if link.Relationship == "" {
+		link.Relationship = model.ProblemTaskRelInvestigation
+	}
+
+	query := `
+	INSERT INTO problem_task_links (problem_id, task_id, relationship, notes, linked_at)
+	VALUES (?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query, link.ProblemID, link.TaskID, link.Relationship, link.Notes, link.LinkedAt)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return 0, ErrProblemLinkExists
+		}
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	link.ID = id
+	return id, nil
 }
 
 func (r *problemRepositoryImpl) UnlinkTask(id int64) error {
+	res, err := r.db.Exec("DELETE FROM problem_task_links WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrProblemLinkNotFound
+	}
 	return nil
 }
 
 func (r *problemRepositoryImpl) ListProblemTasks(problemID int64) ([]model.ProblemTaskLink, error) {
-	return nil, nil
+	query := `
+	SELECT 
+		l.id, l.problem_id, l.task_id, l.relationship, l.notes, l.linked_at,
+		COALESCE(t.title, '') AS task_title,
+		COALESCE(t.status, '') AS task_status,
+		COALESCE(t.priority, '') AS task_priority,
+		COALESCE(t.completed, 0) AS task_completed
+	FROM problem_task_links l
+	LEFT JOIN tasks t ON l.task_id = t.id
+	WHERE l.problem_id = ?
+	ORDER BY l.linked_at DESC`
+
+	rows, err := r.db.Query(query, problemID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var links []model.ProblemTaskLink
+	for rows.Next() {
+		var l model.ProblemTaskLink
+		var completedInt int
+		if err := rows.Scan(
+			&l.ID, &l.ProblemID, &l.TaskID, &l.Relationship, &l.Notes, &l.LinkedAt,
+			&l.TaskTitle, &l.TaskStatus, &l.TaskPriority, &completedInt,
+		); err != nil {
+			return nil, err
+		}
+		l.TaskCompleted = completedInt == 1
+		links = append(links, l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if links == nil {
+		links = []model.ProblemTaskLink{}
+	}
+	return links, nil
 }
 
 func (r *problemRepositoryImpl) GetProblemsForTask(taskID int) ([]model.Problem, error) {
-	return nil, nil
+	query := baseProblemSelect + ` INNER JOIN problem_task_links ptl ON p.id = ptl.problem_id WHERE ptl.task_id = ? ORDER BY p.id DESC`
+	rows, err := r.db.Query(query, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var problems []model.Problem
+	for rows.Next() {
+		p, err := scanProblem(rows)
+		if err != nil {
+			return nil, err
+		}
+		problems = append(problems, *p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if problems == nil {
+		problems = []model.Problem{}
+	}
+	return problems, nil
 }
 
 func (r *problemRepositoryImpl) AddRCAStep(step *model.ProblemRCAStep) (int64, error) {
