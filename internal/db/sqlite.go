@@ -1777,6 +1777,27 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	problemRCAStepsQuery := `
+	CREATE TABLE IF NOT EXISTS problem_rca_steps (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		problem_id INTEGER NOT NULL,
+		step_number INTEGER NOT NULL,
+		question TEXT NOT NULL,
+		answer TEXT NOT NULL,
+		evidence TEXT NOT NULL DEFAULT '',
+		created_by_id TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		UNIQUE(problem_id, step_number),
+		FOREIGN KEY (problem_id) REFERENCES problems(id) ON DELETE CASCADE,
+		FOREIGN KEY (created_by_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(problemRCAStepsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
