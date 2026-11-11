@@ -344,3 +344,19 @@ type ProblemTaskLink struct {
 	TaskPriority  string `json:"task_priority,omitempty"`
 	TaskCompleted bool   `json:"task_completed"`
 }
+
+// ProblemRCAStep represents a single sequential step in a 5-Whys or causal chain root cause analysis investigation
+type ProblemRCAStep struct {
+	ID          int64     `json:"id"`
+	ProblemID   int64     `json:"problem_id"`
+	StepNumber  int       `json:"step_number"`
+	Question    string    `json:"question"`
+	Answer      string    `json:"answer"`
+	Evidence    string    `json:"evidence,omitempty"`
+	CreatedByID string    `json:"created_by_id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+
+	// Enriched creator field
+	CreatorName string `json:"creator_name,omitempty"`
+}
