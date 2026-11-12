@@ -159,6 +159,10 @@ func main() {
 	problemSvc := service.NewProblemService(problemRepo, workspaceRepo, projectRepo, taskRepo, incidentRepo, cmdbRepo, changeRepo, auditSvc)
 	handler.InitProblemHandler(problemSvc)
 
+	oncallRepo := repository.NewOnCallRepository(sqliteDB)
+	oncallSvc := service.NewOnCallService(oncallRepo, projectRepo, userRepo)
+	handler.InitOnCallHandler(oncallSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
@@ -173,6 +177,9 @@ func main() {
 	fmt.Printf("   GET    http://localhost:8080/time/report?taskId={id}&from={timestamp}&to={timestamp}\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/summary\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/oncall/schedules?workspace_id={id}\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/oncall/policies?workspace_id={id}\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/oncall/metrics?workspace_id={id}\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/ready\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/blocked\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/upcoming?days=7\n")

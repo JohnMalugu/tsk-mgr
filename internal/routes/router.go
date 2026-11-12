@@ -191,6 +191,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 On-Call Schedules, Rotations & Incident Escalation Policies
+	if strings.HasPrefix(r.URL.Path, "/v2/oncall") {
+		if handler.GlobalOnCallHandler == nil {
+			http.Error(w, "OnCall handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalOnCallHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return
