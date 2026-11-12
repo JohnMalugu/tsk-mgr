@@ -769,42 +769,401 @@ func (r *oncallRepositoryImpl) ListEscalationSteps(policyID int64) ([]model.Esca
 	return steps, nil
 }
 
+func scanOverride(scanner interface{ Scan(dest ...interface{}) error }, now time.Time) (*model.OnCallOverride, error) {
+	var o model.OnCallOverride
+	var origUserID sql.NullString
+	var origUserName, overUserName, schedName sql.NullString
+
+	err := scanner.Scan(
+		&o.ID, &o.ScheduleID, &origUserID, &o.OverrideUserID,
+		&o.StartTime, &o.EndTime, &o.Reason, &o.CreatedByID, &o.CreatedAt,
+		&origUserName, &overUserName, &schedName,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if origUserID.Valid {
+		uid := origUserID.String
+		o.OriginalUserID = &uid
+	}
+	if origUserName.Valid {
+		o.OriginalUserName = origUserName.String
+	}
+	if overUserName.Valid {
+		o.OverrideUserName = overUserName.String
+	}
+	if schedName.Valid {
+		o.ScheduleName = schedName.String
+	}
+	o.IsActiveNow = now.After(o.StartTime) && now.Before(o.EndTime)
+	return &o, nil
+}
+
 func (r *oncallRepositoryImpl) CreateOverride(o *model.OnCallOverride) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if o.CreatedAt.IsZero() {
+		o.CreatedAt = now
+	}
+	res, err := r.db.Exec(`
+		INSERT INTO oncall_overrides (
+			schedule_id, original_user_id, override_user_id, start_time, end_time, reason, created_by_id, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, o.ScheduleID, o.OriginalUserID, o.OverrideUserID, o.StartTime, o.EndTime, o.Reason, o.CreatedByID, o.CreatedAt)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	o.ID = id
+	return id, nil
 }
 
 func (r *oncallRepositoryImpl) GetOverrideByID(id int64) (*model.OnCallOverride, error) {
-	return nil, nil
+	query := `
+		SELECT o.id, o.schedule_id, o.original_user_id, o.override_user_id,
+		       o.start_time, o.end_time, o.reason, o.created_by_id, o.created_at,
+		       COALESCE(u_orig.name, ''), COALESCE(u_over.name, ''), COALESCE(s.name, '')
+		FROM oncall_overrides o
+		LEFT JOIN users u_orig ON o.original_user_id = u_orig.id
+		LEFT JOIN users u_over ON o.override_user_id = u_over.id
+		LEFT JOIN oncall_schedules s ON o.schedule_id = s.id
+		WHERE o.id = ?
+	`
+	o, err := scanOverride(r.db.QueryRow(query, id), time.Now())
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrOnCallOverrideNotFound
+		}
+		return nil, err
+	}
+	return o, nil
 }
 
 func (r *oncallRepositoryImpl) ListOverrides(scheduleID int64) ([]model.OnCallOverride, error) {
-	return nil, nil
+	now := time.Now()
+	query := `
+		SELECT o.id, o.schedule_id, o.original_user_id, o.override_user_id,
+		       o.start_time, o.end_time, o.reason, o.created_by_id, o.created_at,
+		       COALESCE(u_orig.name, ''), COALESCE(u_over.name, ''), COALESCE(s.name, '')
+		FROM oncall_overrides o
+		LEFT JOIN users u_orig ON o.original_user_id = u_orig.id
+		LEFT JOIN users u_over ON o.override_user_id = u_over.id
+		LEFT JOIN oncall_schedules s ON o.schedule_id = s.id
+		WHERE o.schedule_id = ?
+		ORDER BY o.start_time DESC
+	`
+	rows, err := r.db.Query(query, scheduleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var overrides []model.OnCallOverride
+	for rows.Next() {
+		o, err := scanOverride(rows, now)
+		if err != nil {
+			return nil, err
+		}
+		overrides = append(overrides, *o)
+	}
+	return overrides, nil
 }
 
 func (r *oncallRepositoryImpl) DeleteOverride(id int64) error {
+	res, err := r.db.Exec(`DELETE FROM oncall_overrides WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return ErrOnCallOverrideNotFound
+	}
 	return nil
 }
 
 func (r *oncallRepositoryImpl) GetActiveOverride(scheduleID int64, now time.Time) (*model.OnCallOverride, error) {
-	return nil, nil
+	query := `
+		SELECT o.id, o.schedule_id, o.original_user_id, o.override_user_id,
+		       o.start_time, o.end_time, o.reason, o.created_by_id, o.created_at,
+		       COALESCE(u_orig.name, ''), COALESCE(u_over.name, ''), COALESCE(s.name, '')
+		FROM oncall_overrides o
+		LEFT JOIN users u_orig ON o.original_user_id = u_orig.id
+		LEFT JOIN users u_over ON o.override_user_id = u_over.id
+		LEFT JOIN oncall_schedules s ON o.schedule_id = s.id
+		WHERE o.schedule_id = ? AND o.start_time <= ? AND o.end_time > ?
+		ORDER BY o.id DESC
+		LIMIT 1
+	`
+	o, err := scanOverride(r.db.QueryRow(query, scheduleID, now, now), now)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return o, nil
+}
+
+func scanPage(scanner interface{ Scan(dest ...interface{}) error }) (*model.OnCallPage, error) {
+	var page model.OnCallPage
+	var incidentID sql.NullInt64
+	var pagedUserID, ackBy sql.NullString
+	var ackAt, resAt sql.NullTime
+	var policyName, incTitle, pagedUserName, ackUserName sql.NullString
+	var incNumber sql.NullInt64
+
+	err := scanner.Scan(
+		&page.ID, &page.WorkspaceID, &page.PolicyID, &incidentID,
+		&page.Title, &page.Summary, &page.Status, &page.CurrentStepOrder,
+		&pagedUserID, &ackBy, &ackAt, &resAt, &page.TriggerSource,
+		&page.CreatedByID, &page.CreatedAt, &page.UpdatedAt,
+		&policyName, &incNumber, &incTitle, &pagedUserName, &ackUserName,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if incidentID.Valid {
+		iid := incidentID.Int64
+		page.IncidentID = &iid
+	}
+	if pagedUserID.Valid {
+		puid := pagedUserID.String
+		page.PagedUserID = &puid
+	}
+	if ackBy.Valid {
+		ab := ackBy.String
+		page.AcknowledgedBy = &ab
+	}
+	if ackAt.Valid {
+		at := ackAt.Time
+		page.AcknowledgedAt = &at
+	}
+	if resAt.Valid {
+		rt := resAt.Time
+		page.ResolvedAt = &rt
+	}
+
+	if policyName.Valid {
+		page.PolicyName = policyName.String
+	}
+	if incNumber.Valid {
+		page.IncidentNumber = int(incNumber.Int64)
+	}
+	if incTitle.Valid {
+		page.IncidentTitle = incTitle.String
+	}
+	if pagedUserName.Valid {
+		page.PagedUserName = pagedUserName.String
+	}
+	if ackUserName.Valid {
+		page.AcknowledgedUserName = ackUserName.String
+	}
+	return &page, nil
 }
 
 func (r *oncallRepositoryImpl) CreatePage(page *model.OnCallPage) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if page.CreatedAt.IsZero() {
+		page.CreatedAt = now
+	}
+	if page.UpdatedAt.IsZero() {
+		page.UpdatedAt = now
+	}
+	if page.Status == "" {
+		page.Status = model.PageStatusTriggered
+	}
+	if page.CurrentStepOrder <= 0 {
+		page.CurrentStepOrder = 1
+	}
+	if page.TriggerSource == "" {
+		page.TriggerSource = model.PageTriggerManual
+	}
+
+	res, err := r.db.Exec(`
+		INSERT INTO oncall_pages (
+			workspace_id, policy_id, incident_id, title, summary, status,
+			current_step_order, paged_user_id, acknowledged_by, acknowledged_at, resolved_at,
+			trigger_source, created_by_id, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, page.WorkspaceID, page.PolicyID, page.IncidentID, page.Title, page.Summary, page.Status,
+		page.CurrentStepOrder, page.PagedUserID, page.AcknowledgedBy, page.AcknowledgedAt, page.ResolvedAt,
+		page.TriggerSource, page.CreatedByID, page.CreatedAt, page.UpdatedAt)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	page.ID = id
+	return id, nil
 }
 
 func (r *oncallRepositoryImpl) GetPageByID(id int64) (*model.OnCallPage, error) {
-	return nil, nil
+	query := `
+		SELECT p.id, p.workspace_id, p.policy_id, p.incident_id,
+		       p.title, p.summary, p.status, p.current_step_order,
+		       p.paged_user_id, p.acknowledged_by, p.acknowledged_at, p.resolved_at,
+		       p.trigger_source, p.created_by_id, p.created_at, p.updated_at,
+		       COALESCE(ep.name, ''), inc.incident_number, COALESCE(inc.title, ''),
+		       COALESCE(u_paged.name, ''), COALESCE(u_ack.name, '')
+		FROM oncall_pages p
+		LEFT JOIN escalation_policies ep ON p.policy_id = ep.id
+		LEFT JOIN incidents inc ON p.incident_id = inc.id
+		LEFT JOIN users u_paged ON p.paged_user_id = u_paged.id
+		LEFT JOIN users u_ack ON p.acknowledged_by = u_ack.id
+		WHERE p.id = ?
+	`
+	page, err := scanPage(r.db.QueryRow(query, id))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrOnCallPageNotFound
+		}
+		return nil, err
+	}
+	return page, nil
 }
 
 func (r *oncallRepositoryImpl) ListPages(workspaceID int64, status string, limit, offset int) ([]model.OnCallPage, int, error) {
-	return nil, 0, nil
+	var conditions []string
+	var args []interface{}
+
+	conditions = append(conditions, "p.workspace_id = ?")
+	args = append(args, workspaceID)
+
+	if strings.TrimSpace(status) != "" {
+		conditions = append(conditions, "p.status = ?")
+		args = append(args, strings.TrimSpace(status))
+	}
+
+	whereClause := " WHERE " + strings.Join(conditions, " AND ")
+
+	countQuery := `SELECT COUNT(*) FROM oncall_pages p` + whereClause
+	var totalCount int
+	if err := r.db.QueryRow(countQuery, args...).Scan(&totalCount); err != nil {
+		return nil, 0, err
+	}
+
+	dataQuery := `
+		SELECT p.id, p.workspace_id, p.policy_id, p.incident_id,
+		       p.title, p.summary, p.status, p.current_step_order,
+		       p.paged_user_id, p.acknowledged_by, p.acknowledged_at, p.resolved_at,
+		       p.trigger_source, p.created_by_id, p.created_at, p.updated_at,
+		       COALESCE(ep.name, ''), inc.incident_number, COALESCE(inc.title, ''),
+		       COALESCE(u_paged.name, ''), COALESCE(u_ack.name, '')
+		FROM oncall_pages p
+		LEFT JOIN escalation_policies ep ON p.policy_id = ep.id
+		LEFT JOIN incidents inc ON p.incident_id = inc.id
+		LEFT JOIN users u_paged ON p.paged_user_id = u_paged.id
+		LEFT JOIN users u_ack ON p.acknowledged_by = u_ack.id
+	` + whereClause + " ORDER BY p.id DESC"
+
+	if limit > 0 {
+		dataQuery += " LIMIT ?"
+		args = append(args, limit)
+		if offset > 0 {
+			dataQuery += " OFFSET ?"
+			args = append(args, offset)
+		}
+	}
+
+	rows, err := r.db.Query(dataQuery, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var pages []model.OnCallPage
+	for rows.Next() {
+		pg, err := scanPage(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		pages = append(pages, *pg)
+	}
+	return pages, totalCount, nil
 }
 
 func (r *oncallRepositoryImpl) UpdatePage(page *model.OnCallPage) error {
+	page.UpdatedAt = time.Now()
+	res, err := r.db.Exec(`
+		UPDATE oncall_pages
+		SET status = ?, current_step_order = ?, paged_user_id = ?,
+		    acknowledged_by = ?, acknowledged_at = ?, resolved_at = ?, updated_at = ?
+		WHERE id = ?
+	`, page.Status, page.CurrentStepOrder, page.PagedUserID,
+		page.AcknowledgedBy, page.AcknowledgedAt, page.ResolvedAt, page.UpdatedAt, page.ID)
+	if err != nil {
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return ErrOnCallPageNotFound
+	}
 	return nil
 }
 
 func (r *oncallRepositoryImpl) GetOnCallMetrics(workspaceID int64) (*model.OnCallMetrics, error) {
-	return nil, nil
+	metrics := &model.OnCallMetrics{
+		PagesByStatus: make(map[string]int),
+	}
+
+	now := time.Now()
+
+	// Total and active schedules
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM oncall_schedules WHERE workspace_id = ?`, workspaceID).Scan(&metrics.TotalSchedules)
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM oncall_schedules WHERE workspace_id = ? AND is_active = 1`, workspaceID).Scan(&metrics.ActiveSchedules)
+
+	// Total policies
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM escalation_policies WHERE workspace_id = ?`, workspaceID).Scan(&metrics.TotalPolicies)
+
+	// Active overrides
+	_ = r.db.QueryRow(`
+		SELECT COUNT(*)
+		FROM oncall_overrides o
+		JOIN oncall_schedules s ON o.schedule_id = s.id
+		WHERE s.workspace_id = ? AND o.start_time <= ? AND o.end_time > ?
+	`, workspaceID, now, now).Scan(&metrics.ActiveOverrides)
+
+	// Pages stats
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM oncall_pages WHERE workspace_id = ?`, workspaceID).Scan(&metrics.TotalPagesTriggered)
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM oncall_pages WHERE workspace_id = ? AND acknowledged_at IS NOT NULL`, workspaceID).Scan(&metrics.AcknowledgedPages)
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM oncall_pages WHERE workspace_id = ? AND resolved_at IS NOT NULL`, workspaceID).Scan(&metrics.ResolvedPages)
+
+	// Mean times
+	_ = r.db.QueryRow(`
+		SELECT COALESCE(AVG((julianday(acknowledged_at) - julianday(created_at)) * 1440.0), 0.0)
+		FROM oncall_pages
+		WHERE workspace_id = ? AND acknowledged_at IS NOT NULL
+	`, workspaceID).Scan(&metrics.MeanTimeToAcknowledgeMinutes)
+
+	_ = r.db.QueryRow(`
+		SELECT COALESCE(AVG((julianday(resolved_at) - julianday(created_at)) * 1440.0), 0.0)
+		FROM oncall_pages
+		WHERE workspace_id = ? AND resolved_at IS NOT NULL
+	`, workspaceID).Scan(&metrics.MeanTimeToResolveMinutes)
+
+	// Breakdown by status
+	rows, err := r.db.Query(`SELECT status, COUNT(*) FROM oncall_pages WHERE workspace_id = ? GROUP BY status`, workspaceID)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var st string
+			var count int
+			if err := rows.Scan(&st, &count); err == nil {
+				metrics.PagesByStatus[st] = count
+			}
+		}
+	}
+
+	return metrics, nil
 }
