@@ -1798,6 +1798,70 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	oncallSchedulesQuery := `
+	CREATE TABLE IF NOT EXISTS oncall_schedules (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		project_id INTEGER,
+		name TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		timezone TEXT NOT NULL DEFAULT 'UTC',
+		rotation_type TEXT NOT NULL DEFAULT 'weekly',
+		rotation_interval_days INTEGER NOT NULL DEFAULT 7,
+		shift_start_time TEXT NOT NULL DEFAULT '09:00',
+		shift_duration_hours INTEGER NOT NULL DEFAULT 24,
+		handover_day_of_week INTEGER NOT NULL DEFAULT 1,
+		start_date DATETIME NOT NULL,
+		end_date DATETIME,
+		is_active INTEGER NOT NULL DEFAULT 1,
+		created_by_id TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+		FOREIGN KEY (created_by_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(oncallSchedulesQuery)
+	if err != nil {
+		return err
+	}
+
+	oncallParticipantsQuery := `
+	CREATE TABLE IF NOT EXISTS oncall_participants (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		schedule_id INTEGER NOT NULL,
+		user_id TEXT NOT NULL,
+		position_order INTEGER NOT NULL DEFAULT 1,
+		created_at DATETIME NOT NULL,
+		UNIQUE(schedule_id, user_id),
+		FOREIGN KEY (schedule_id) REFERENCES oncall_schedules(id) ON DELETE CASCADE,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(oncallParticipantsQuery)
+	if err != nil {
+		return err
+	}
+
+	oncallShiftsQuery := `
+	CREATE TABLE IF NOT EXISTS oncall_shifts (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		schedule_id INTEGER NOT NULL,
+		user_id TEXT NOT NULL,
+		start_time DATETIME NOT NULL,
+		end_time DATETIME NOT NULL,
+		created_at DATETIME NOT NULL,
+		UNIQUE(schedule_id, user_id, start_time),
+		FOREIGN KEY (schedule_id) REFERENCES oncall_schedules(id) ON DELETE CASCADE,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(oncallShiftsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
