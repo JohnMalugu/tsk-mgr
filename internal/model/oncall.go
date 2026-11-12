@@ -135,3 +135,46 @@ type OnCallOverride struct {
 	ScheduleName     string `json:"schedule_name,omitempty"`
 	IsActiveNow      bool   `json:"is_active_now"`
 }
+
+// On-call page status constants
+const (
+	PageStatusTriggered    = "triggered"
+	PageStatusAcknowledged = "acknowledged"
+	PageStatusEscalated    = "escalated"
+	PageStatusResolved     = "resolved"
+)
+
+// On-call page trigger sources
+const (
+	PageTriggerIncident = "incident"
+	PageTriggerSLA      = "sla_breach"
+	PageTriggerManual   = "manual"
+	PageTriggerWebhook  = "webhook"
+)
+
+// OnCallPage represents an incident alert dispatched to an on-call escalation policy
+type OnCallPage struct {
+	ID               int64      `json:"id"`
+	WorkspaceID      int64      `json:"workspace_id"`
+	PolicyID         int64      `json:"policy_id"`
+	IncidentID       *int64     `json:"incident_id,omitempty"`
+	Title            string     `json:"title"`
+	Summary          string     `json:"summary,omitempty"`
+	Status           string     `json:"status"` // triggered, acknowledged, escalated, resolved
+	CurrentStepOrder int        `json:"current_step_order"`
+	PagedUserID      *string    `json:"paged_user_id,omitempty"`
+	AcknowledgedBy   *string    `json:"acknowledged_by,omitempty"`
+	AcknowledgedAt   *time.Time `json:"acknowledged_at,omitempty"`
+	ResolvedAt       *time.Time `json:"resolved_at,omitempty"`
+	TriggerSource    string     `json:"trigger_source"` // incident, sla_breach, manual, webhook
+	CreatedByID      string     `json:"created_by_id"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+
+	// Enriched fields
+	PolicyName           string `json:"policy_name,omitempty"`
+	IncidentNumber       int    `json:"incident_number,omitempty"`
+	IncidentTitle        string `json:"incident_title,omitempty"`
+	PagedUserName        string `json:"paged_user_name,omitempty"`
+	AcknowledgedUserName string `json:"acknowledged_user_name,omitempty"`
+}
