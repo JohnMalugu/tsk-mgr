@@ -482,26 +482,141 @@ func (s *oncallServiceImpl) GetActiveResponder(scheduleID int64) (*model.ActiveR
 }
 
 func (s *oncallServiceImpl) CreateEscalationPolicy(req model.CreateEscalationPolicyRequest) (*model.EscalationPolicy, error) {
-	return nil, nil
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, ErrEscalationPolicyNameReq
+	}
+
+	var steps []model.EscalationStep
+	for i, stepReq := range req.Steps {
+		if err := model.ValidateTargetType(stepReq.TargetType); err != nil {
+			return nil, ErrInvalidEscalationTarget
+		}
+		targetID := strings.TrimSpace(stepReq.TargetID)
+		if targetID == "" {
+			return nil, errors.New("escalation step target ID is required")
+		}
+		delay := stepReq.DelayMinutes
+		if delay <= 0 {
+			delay = 5
+		}
+		steps = append(steps, model.EscalationStep{
+			StepOrder:    i + 1,
+			TargetType:   strings.ToLower(strings.TrimSpace(stepReq.TargetType)),
+			TargetID:     targetID,
+			DelayMinutes: delay,
+		})
+	}
+
+	policy := &model.EscalationPolicy{
+		WorkspaceID: req.WorkspaceID,
+		ProjectID:   req.ProjectID,
+		Name:        name,
+		Description: strings.TrimSpace(req.Description),
+		RepeatCount: req.RepeatCount,
+		IsDefault:   req.IsDefault,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	policyID, err := s.repo.CreateEscalationPolicy(policy, steps)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.GetEscalationPolicy(policyID)
 }
 
 func (s *oncallServiceImpl) GetEscalationPolicy(id int64) (*model.EscalationPolicy, error) {
-	return nil, nil
+	policy, err := s.repo.GetEscalationPolicyByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrEscalationPolicyNotFound) {
+			return nil, ErrEscalationPolicyNotFound
+		}
+		return nil, err
+	}
+	return policy, nil
 }
 
 func (s *oncallServiceImpl) GetDefaultEscalationPolicy(workspaceID int64) (*model.EscalationPolicy, error) {
-	return nil, nil
+	policy, err := s.repo.GetDefaultEscalationPolicy(workspaceID)
+	if err != nil {
+		if errors.Is(err, repository.ErrEscalationPolicyNotFound) {
+			return nil, ErrEscalationPolicyNotFound
+		}
+		return nil, err
+	}
+	return policy, nil
 }
 
 func (s *oncallServiceImpl) ListEscalationPolicies(workspaceID int64) ([]model.EscalationPolicy, error) {
-	return nil, nil
+	return s.repo.ListEscalationPolicies(workspaceID)
 }
 
 func (s *oncallServiceImpl) UpdateEscalationPolicy(id int64, req model.CreateEscalationPolicyRequest) (*model.EscalationPolicy, error) {
-	return nil, nil
+	existing, err := s.repo.GetEscalationPolicyByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrEscalationPolicyNotFound) {
+			return nil, ErrEscalationPolicyNotFound
+		}
+		return nil, err
+	}
+
+	if name := strings.TrimSpace(req.Name); name != "" {
+		existing.Name = name
+	}
+	existing.Description = strings.TrimSpace(req.Description)
+	existing.RepeatCount = req.RepeatCount
+	existing.IsDefault = req.IsDefault
+	if req.ProjectID != nil {
+		existing.ProjectID = req.ProjectID
+	}
+
+	if err := s.repo.UpdateEscalationPolicy(existing); err != nil {
+		if errors.Is(err, repository.ErrEscalationPolicyNotFound) {
+			return nil, ErrEscalationPolicyNotFound
+		}
+		return nil, err
+	}
+
+	if len(req.Steps) > 0 {
+		var steps []model.EscalationStep
+		for i, stepReq := range req.Steps {
+			if err := model.ValidateTargetType(stepReq.TargetType); err != nil {
+				return nil, ErrInvalidEscalationTarget
+			}
+			targetID := strings.TrimSpace(stepReq.TargetID)
+			if targetID == "" {
+				return nil, errors.New("escalation step target ID is required")
+			}
+			delay := stepReq.DelayMinutes
+			if delay <= 0 {
+				delay = 5
+			}
+			steps = append(steps, model.EscalationStep{
+				PolicyID:     id,
+				StepOrder:    i + 1,
+				TargetType:   strings.ToLower(strings.TrimSpace(stepReq.TargetType)),
+				TargetID:     targetID,
+				DelayMinutes: delay,
+			})
+		}
+		if err := s.repo.SetEscalationSteps(id, steps); err != nil {
+			return nil, err
+		}
+	}
+
+	return s.GetEscalationPolicy(id)
 }
 
 func (s *oncallServiceImpl) DeleteEscalationPolicy(id int64) error {
+	err := s.repo.DeleteEscalationPolicy(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrEscalationPolicyNotFound) {
+			return ErrEscalationPolicyNotFound
+		}
+		return err
+	}
 	return nil
 }
 
