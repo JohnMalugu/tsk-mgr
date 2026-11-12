@@ -234,3 +234,104 @@ type ActiveResponder struct {
 	ShiftStartTime time.Time `json:"shift_start_time"`
 	ShiftEndTime   time.Time `json:"shift_end_time"`
 }
+
+// CreateScheduleRequest represents payload for creating an on-call schedule
+type CreateScheduleRequest struct {
+	WorkspaceID          int64      `json:"workspace_id"`
+	ProjectID            *int64     `json:"project_id,omitempty"`
+	Name                 string     `json:"name"`
+	Description          string     `json:"description,omitempty"`
+	Timezone             string     `json:"timezone,omitempty"`
+	RotationType         string     `json:"rotation_type"`
+	RotationIntervalDays int        `json:"rotation_interval_days,omitempty"`
+	ShiftStartTime       string     `json:"shift_start_time,omitempty"`
+	ShiftDurationHours   int        `json:"shift_duration_hours,omitempty"`
+	HandoverDayOfWeek    int        `json:"handover_day_of_week,omitempty"`
+	StartDate            time.Time  `json:"start_date"`
+	EndDate              *time.Time `json:"end_date,omitempty"`
+	ParticipantUserIDs   []string   `json:"participant_user_ids,omitempty"`
+}
+
+// UpdateScheduleRequest represents payload for updating an on-call schedule
+type UpdateScheduleRequest struct {
+	Name                 *string `json:"name,omitempty"`
+	Description          *string `json:"description,omitempty"`
+	Timezone             *string `json:"timezone,omitempty"`
+	RotationType         *string `json:"rotation_type,omitempty"`
+	RotationIntervalDays *int    `json:"rotation_interval_days,omitempty"`
+	ShiftStartTime       *string `json:"shift_start_time,omitempty"`
+	ShiftDurationHours   *int    `json:"shift_duration_hours,omitempty"`
+	HandoverDayOfWeek    *int    `json:"handover_day_of_week,omitempty"`
+	IsActive             *bool   `json:"is_active,omitempty"`
+}
+
+// CreateEscalationPolicyRequest represents payload for defining an escalation policy
+type CreateEscalationPolicyRequest struct {
+	WorkspaceID int64                         `json:"workspace_id"`
+	ProjectID   *int64                        `json:"project_id,omitempty"`
+	Name        string                        `json:"name"`
+	Description string                        `json:"description,omitempty"`
+	RepeatCount int                           `json:"repeat_count,omitempty"`
+	IsDefault   bool                          `json:"is_default,omitempty"`
+	Steps       []CreateEscalationStepRequest `json:"steps,omitempty"`
+}
+
+// CreateEscalationStepRequest represents payload for an escalation policy step
+type CreateEscalationStepRequest struct {
+	TargetType   string `json:"target_type"`
+	TargetID     string `json:"target_id"`
+	DelayMinutes int    `json:"delay_minutes"`
+}
+
+// CreateOverrideRequest represents payload for scheduling an on-call shift override
+type CreateOverrideRequest struct {
+	OriginalUserID *string   `json:"original_user_id,omitempty"`
+	OverrideUserID string    `json:"override_user_id"`
+	StartTime      time.Time `json:"start_time"`
+	EndTime        time.Time `json:"end_time"`
+	Reason         string    `json:"reason,omitempty"`
+}
+
+// TriggerPageRequest represents payload for triggering an on-call page
+type TriggerPageRequest struct {
+	WorkspaceID   int64  `json:"workspace_id"`
+	PolicyID      int64  `json:"policy_id"`
+	IncidentID    *int64 `json:"incident_id,omitempty"`
+	Title         string `json:"title"`
+	Summary       string `json:"summary,omitempty"`
+	TriggerSource string `json:"trigger_source,omitempty"`
+}
+
+// AcknowledgePageRequest represents payload for acknowledging an active page
+type AcknowledgePageRequest struct {
+	Notes string `json:"notes,omitempty"`
+}
+
+// ResolvePageRequest represents payload for resolving an active page
+type ResolvePageRequest struct {
+	ResolutionNotes string `json:"resolution_notes,omitempty"`
+}
+
+// OnCallFilter defines search and filtering criteria for listing schedules
+type OnCallFilter struct {
+	WorkspaceID int64  `json:"workspace_id"`
+	ProjectID   *int64 `json:"project_id,omitempty"`
+	IsActive    *bool  `json:"is_active,omitempty"`
+	Search      string `json:"search,omitempty"`
+	Limit       int    `json:"limit,omitempty"`
+	Offset      int    `json:"offset,omitempty"`
+}
+
+// OnCallMetrics provides aggregated operational statistics for on-call response
+type OnCallMetrics struct {
+	TotalSchedules               int            `json:"total_schedules"`
+	ActiveSchedules              int            `json:"active_schedules"`
+	TotalPolicies                int            `json:"total_policies"`
+	ActiveOverrides              int            `json:"active_overrides"`
+	TotalPagesTriggered          int            `json:"total_pages_triggered"`
+	AcknowledgedPages            int            `json:"acknowledged_pages"`
+	ResolvedPages                int            `json:"resolved_pages"`
+	MeanTimeToAcknowledgeMinutes float64        `json:"mean_time_to_acknowledge_minutes"`
+	MeanTimeToResolveMinutes     float64        `json:"mean_time_to_resolve_minutes"`
+	PagesByStatus                map[string]int `json:"pages_by_status"`
+}
