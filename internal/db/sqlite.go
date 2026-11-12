@@ -1862,6 +1862,44 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	escalationPoliciesQuery := `
+	CREATE TABLE IF NOT EXISTS escalation_policies (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		project_id INTEGER,
+		name TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		repeat_count INTEGER NOT NULL DEFAULT 0,
+		is_default INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
+	);`
+
+	_, err = db.Exec(escalationPoliciesQuery)
+	if err != nil {
+		return err
+	}
+
+	escalationStepsQuery := `
+	CREATE TABLE IF NOT EXISTS escalation_steps (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		policy_id INTEGER NOT NULL,
+		step_order INTEGER NOT NULL,
+		target_type TEXT NOT NULL,
+		target_id TEXT NOT NULL,
+		delay_minutes INTEGER NOT NULL DEFAULT 5,
+		created_at DATETIME NOT NULL,
+		UNIQUE(policy_id, step_order),
+		FOREIGN KEY (policy_id) REFERENCES escalation_policies(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(escalationStepsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
