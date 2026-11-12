@@ -621,45 +621,245 @@ func (s *oncallServiceImpl) DeleteEscalationPolicy(id int64) error {
 }
 
 func (s *oncallServiceImpl) CreateOverride(creatorID string, scheduleID int64, req model.CreateOverrideRequest) (*model.OnCallOverride, error) {
-	return nil, nil
+	_, err := s.repo.GetScheduleByID(scheduleID)
+	if err != nil {
+		if errors.Is(err, repository.ErrScheduleNotFound) {
+			return nil, ErrScheduleNotFound
+		}
+		return nil, err
+	}
+
+	overrideUserID := strings.TrimSpace(req.OverrideUserID)
+	if overrideUserID == "" {
+		return nil, ErrOverrideUserRequired
+	}
+
+	if req.StartTime.IsZero() || req.EndTime.IsZero() || !req.StartTime.Before(req.EndTime) {
+		return nil, ErrInvalidOverrideTimeRange
+	}
+
+	override := &model.OnCallOverride{
+		ScheduleID:     scheduleID,
+		OriginalUserID: req.OriginalUserID,
+		OverrideUserID: overrideUserID,
+		StartTime:      req.StartTime.UTC(),
+		EndTime:        req.EndTime.UTC(),
+		Reason:         strings.TrimSpace(req.Reason),
+		CreatedByID:    creatorID,
+		CreatedAt:      time.Now(),
+	}
+
+	overrideID, err := s.repo.CreateOverride(override)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.GetOverride(overrideID)
 }
 
 func (s *oncallServiceImpl) GetOverride(id int64) (*model.OnCallOverride, error) {
-	return nil, nil
+	override, err := s.repo.GetOverrideByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrOnCallOverrideNotFound) {
+			return nil, ErrOnCallOverrideNotFound
+		}
+		return nil, err
+	}
+	return override, nil
 }
 
 func (s *oncallServiceImpl) ListOverrides(scheduleID int64) ([]model.OnCallOverride, error) {
-	return nil, nil
+	_, err := s.repo.GetScheduleByID(scheduleID)
+	if err != nil {
+		if errors.Is(err, repository.ErrScheduleNotFound) {
+			return nil, ErrScheduleNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListOverrides(scheduleID)
 }
 
 func (s *oncallServiceImpl) DeleteOverride(id int64) error {
+	err := s.repo.DeleteOverride(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrOnCallOverrideNotFound) {
+			return ErrOnCallOverrideNotFound
+		}
+		return err
+	}
 	return nil
 }
 
 func (s *oncallServiceImpl) TriggerPage(creatorID string, req model.TriggerPageRequest) (*model.OnCallPage, error) {
-	return nil, nil
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		return nil, ErrPageTitleRequired
+	}
+
+	var policy *model.EscalationPolicy
+	var err error
+
+	if req.PolicyID > 0 {
+		policy, err = s.repo.GetEscalationPolicyByID(req.PolicyID)
+	}
+	if policy == nil || err != nil {
+		policy, err = s.repo.GetDefaultEscalationPolicy(req.WorkspaceID)
+		if err != nil {
+			return nil, ErrEscalationPolicyNotFound
+		}
+	}
+
+	var pagedUserID *string
+	if len(policy.Steps) > 0 {
+		step1 := policy.Steps[0]
+		switch step1.TargetType {
+		case model.TargetUser:
+			uid := step1.TargetID
+			pagedUserID = &uid
+		case model.TargetSchedule:
+			schedID, _ := strconv.ParseInt(step1.TargetID, 10, 64)
+			if schedID > 0 {
+				if resp, err := s.GetActiveResponder(schedID); err == nil && resp != nil {
+					pagedUserID = &resp.UserID
+				}
+			}
+		}
+	}
+
+	triggerSource := strings.TrimSpace(req.TriggerSource)
+	if triggerSource == "" {
+		triggerSource = model.PageTriggerManual
+	}
+
+	page := &model.OnCallPage{
+		WorkspaceID:      req.WorkspaceID,
+		PolicyID:         policy.ID,
+		IncidentID:       req.IncidentID,
+		Title:            title,
+		Summary:          strings.TrimSpace(req.Summary),
+		Status:           model.PageStatusTriggered,
+		CurrentStepOrder: 1,
+		PagedUserID:      pagedUserID,
+		TriggerSource:    triggerSource,
+		CreatedByID:      creatorID,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
+	}
+
+	pageID, err := s.repo.CreatePage(page)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.GetPage(pageID)
 }
 
 func (s *oncallServiceImpl) AcknowledgePage(pageID int64, userID string, req model.AcknowledgePageRequest) (*model.OnCallPage, error) {
-	return nil, nil
+	page, err := s.repo.GetPageByID(pageID)
+	if err != nil {
+		if errors.Is(err, repository.ErrOnCallPageNotFound) {
+			return nil, ErrOnCallPageNotFound
+		}
+		return nil, err
+	}
+
+	if page.Status == model.PageStatusResolved {
+		return page, nil
+	}
+
+	now := time.Now()
+	page.Status = model.PageStatusAcknowledged
+	page.AcknowledgedBy = &userID
+	page.AcknowledgedAt = &now
+
+	if err := s.repo.UpdatePage(page); err != nil {
+		return nil, err
+	}
+
+	return s.GetPage(pageID)
 }
 
 func (s *oncallServiceImpl) ResolvePage(pageID int64, req model.ResolvePageRequest) (*model.OnCallPage, error) {
-	return nil, nil
+	page, err := s.repo.GetPageByID(pageID)
+	if err != nil {
+		if errors.Is(err, repository.ErrOnCallPageNotFound) {
+			return nil, ErrOnCallPageNotFound
+		}
+		return nil, err
+	}
+
+	now := time.Now()
+	page.Status = model.PageStatusResolved
+	page.ResolvedAt = &now
+
+	if err := s.repo.UpdatePage(page); err != nil {
+		return nil, err
+	}
+
+	return s.GetPage(pageID)
 }
 
 func (s *oncallServiceImpl) EscalatePage(pageID int64) (*model.OnCallPage, error) {
-	return nil, nil
+	page, err := s.repo.GetPageByID(pageID)
+	if err != nil {
+		if errors.Is(err, repository.ErrOnCallPageNotFound) {
+			return nil, ErrOnCallPageNotFound
+		}
+		return nil, err
+	}
+
+	if page.Status == model.PageStatusResolved {
+		return page, nil
+	}
+
+	policy, err := s.repo.GetEscalationPolicyByID(page.PolicyID)
+	if err == nil && policy != nil {
+		nextStepOrder := page.CurrentStepOrder + 1
+		if nextStepOrder <= len(policy.Steps) {
+			step := policy.Steps[nextStepOrder-1]
+			page.CurrentStepOrder = nextStepOrder
+			page.Status = model.PageStatusEscalated
+			switch step.TargetType {
+			case model.TargetUser:
+				uid := step.TargetID
+				page.PagedUserID = &uid
+			case model.TargetSchedule:
+				schedID, _ := strconv.ParseInt(step.TargetID, 10, 64)
+				if schedID > 0 {
+					if resp, err := s.GetActiveResponder(schedID); err == nil && resp != nil {
+						page.PagedUserID = &resp.UserID
+					}
+				}
+			}
+		} else {
+			page.Status = model.PageStatusEscalated
+		}
+	} else {
+		page.Status = model.PageStatusEscalated
+	}
+
+	if err := s.repo.UpdatePage(page); err != nil {
+		return nil, err
+	}
+
+	return s.GetPage(pageID)
 }
 
 func (s *oncallServiceImpl) GetPage(id int64) (*model.OnCallPage, error) {
-	return nil, nil
+	page, err := s.repo.GetPageByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrOnCallPageNotFound) {
+			return nil, ErrOnCallPageNotFound
+		}
+		return nil, err
+	}
+	return page, nil
 }
 
 func (s *oncallServiceImpl) ListPages(workspaceID int64, status string, limit, offset int) ([]model.OnCallPage, int, error) {
-	return nil, 0, nil
+	return s.repo.ListPages(workspaceID, status, limit, offset)
 }
 
 func (s *oncallServiceImpl) GetOnCallMetrics(workspaceID int64) (*model.OnCallMetrics, error) {
-	return nil, nil
+	return s.repo.GetOnCallMetrics(workspaceID)
 }
