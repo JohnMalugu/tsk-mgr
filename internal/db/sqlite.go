@@ -2141,6 +2141,20 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_problem_tsk_prb ON problem_task_links(problem_id);
 	CREATE INDEX IF NOT EXISTS idx_problem_tsk_tsk ON problem_task_links(task_id);
 	CREATE INDEX IF NOT EXISTS idx_problem_rca_prb ON problem_rca_steps(problem_id, step_number);
+	CREATE INDEX IF NOT EXISTS idx_oncall_sched_ws_active ON oncall_schedules(workspace_id, is_active);
+	CREATE INDEX IF NOT EXISTS idx_oncall_sched_proj ON oncall_schedules(project_id);
+	CREATE INDEX IF NOT EXISTS idx_oncall_part_sched ON oncall_participants(schedule_id, position_order);
+	CREATE INDEX IF NOT EXISTS idx_oncall_part_user ON oncall_participants(user_id);
+	CREATE INDEX IF NOT EXISTS idx_oncall_shifts_sched_dates ON oncall_shifts(schedule_id, start_time, end_time);
+	CREATE INDEX IF NOT EXISTS idx_oncall_shifts_user ON oncall_shifts(user_id);
+	CREATE INDEX IF NOT EXISTS idx_escalation_pol_ws ON escalation_policies(workspace_id, is_default);
+	CREATE INDEX IF NOT EXISTS idx_escalation_steps_policy ON escalation_steps(policy_id, step_order);
+	CREATE INDEX IF NOT EXISTS idx_oncall_overrides_sched_dates ON oncall_overrides(schedule_id, start_time, end_time);
+	CREATE INDEX IF NOT EXISTS idx_oncall_overrides_user ON oncall_overrides(override_user_id);
+	CREATE INDEX IF NOT EXISTS idx_oncall_pages_ws_status ON oncall_pages(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_oncall_pages_policy ON oncall_pages(policy_id);
+	CREATE INDEX IF NOT EXISTS idx_oncall_pages_inc ON oncall_pages(incident_id);
+	CREATE INDEX IF NOT EXISTS idx_oncall_pages_paged ON oncall_pages(paged_user_id);
 	`
 
 	_, err = db.Exec(indexQuery)
