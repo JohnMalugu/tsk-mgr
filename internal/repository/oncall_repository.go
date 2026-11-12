@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -68,44 +69,385 @@ func NewOnCallRepository(db *sql.DB) OnCallRepository {
 	return &oncallRepositoryImpl{db: db}
 }
 
+func scanSchedule(scanner interface{ Scan(dest ...interface{}) error }) (*model.OnCallSchedule, error) {
+	var s model.OnCallSchedule
+	var projectID sql.NullInt64
+	var endDate sql.NullTime
+	var isActive int
+	var projectName, creatorName sql.NullString
+	var partCount int
+
+	err := scanner.Scan(
+		&s.ID, &s.WorkspaceID, &projectID, &s.Name, &s.Description,
+		&s.Timezone, &s.RotationType, &s.RotationIntervalDays,
+		&s.ShiftStartTime, &s.ShiftDurationHours, &s.HandoverDayOfWeek,
+		&s.StartDate, &endDate, &isActive, &s.CreatedByID,
+		&s.CreatedAt, &s.UpdatedAt,
+		&projectName, &creatorName, &partCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if projectID.Valid {
+		pid := projectID.Int64
+		s.ProjectID = &pid
+	}
+	if endDate.Valid {
+		ed := endDate.Time
+		s.EndDate = &ed
+	}
+	s.IsActive = (isActive == 1)
+	if projectName.Valid {
+		s.ProjectName = projectName.String
+	}
+	if creatorName.Valid {
+		s.CreatorName = creatorName.String
+	}
+	s.ParticipantsCount = partCount
+	return &s, nil
+}
+
 func (r *oncallRepositoryImpl) CreateSchedule(s *model.OnCallSchedule, participantIDs []string) (int64, error) {
-	return 0, nil
+	tx, err := r.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	isActiveInt := 0
+	if s.IsActive {
+		isActiveInt = 1
+	}
+
+	now := time.Now()
+	if s.CreatedAt.IsZero() {
+		s.CreatedAt = now
+	}
+	if s.UpdatedAt.IsZero() {
+		s.UpdatedAt = now
+	}
+	if s.Timezone == "" {
+		s.Timezone = "UTC"
+	}
+	if s.RotationType == "" {
+		s.RotationType = model.RotationWeekly
+	}
+	if s.RotationIntervalDays <= 0 {
+		s.RotationIntervalDays = 7
+	}
+	if s.ShiftStartTime == "" {
+		s.ShiftStartTime = "09:00"
+	}
+	if s.ShiftDurationHours <= 0 {
+		s.ShiftDurationHours = 24
+	}
+
+	res, err := tx.Exec(`
+		INSERT INTO oncall_schedules (
+			workspace_id, project_id, name, description, timezone, rotation_type,
+			rotation_interval_days, shift_start_time, shift_duration_hours, handover_day_of_week,
+			start_date, end_date, is_active, created_by_id, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, s.WorkspaceID, s.ProjectID, s.Name, s.Description, s.Timezone, s.RotationType,
+		s.RotationIntervalDays, s.ShiftStartTime, s.ShiftDurationHours, s.HandoverDayOfWeek,
+		s.StartDate, s.EndDate, isActiveInt, s.CreatedByID, s.CreatedAt, s.UpdatedAt)
+	if err != nil {
+		return 0, err
+	}
+
+	scheduleID, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	s.ID = scheduleID
+
+	for i, uid := range participantIDs {
+		_, err = tx.Exec(`
+			INSERT INTO oncall_participants (schedule_id, user_id, position_order, created_at)
+			VALUES (?, ?, ?, ?)
+		`, scheduleID, uid, i+1, now)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return scheduleID, nil
 }
 
 func (r *oncallRepositoryImpl) GetScheduleByID(id int64) (*model.OnCallSchedule, error) {
-	return nil, nil
+	query := `
+		SELECT s.id, s.workspace_id, s.project_id, s.name, s.description,
+		       s.timezone, s.rotation_type, s.rotation_interval_days,
+		       s.shift_start_time, s.shift_duration_hours, s.handover_day_of_week,
+		       s.start_date, s.end_date, s.is_active, s.created_by_id,
+		       s.created_at, s.updated_at,
+		       COALESCE(p.name, ''), COALESCE(u.name, ''),
+		       (SELECT COUNT(*) FROM oncall_participants WHERE schedule_id = s.id)
+		FROM oncall_schedules s
+		LEFT JOIN projects p ON s.project_id = p.id
+		LEFT JOIN users u ON s.created_by_id = u.id
+		WHERE s.id = ?
+	`
+	sc, err := scanSchedule(r.db.QueryRow(query, id))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrScheduleNotFound
+		}
+		return nil, err
+	}
+	return sc, nil
 }
 
 func (r *oncallRepositoryImpl) ListSchedules(filter model.OnCallFilter) ([]model.OnCallSchedule, int, error) {
-	return nil, 0, nil
+	var conditions []string
+	var args []interface{}
+
+	conditions = append(conditions, "s.workspace_id = ?")
+	args = append(args, filter.WorkspaceID)
+
+	if filter.ProjectID != nil {
+		conditions = append(conditions, "s.project_id = ?")
+		args = append(args, *filter.ProjectID)
+	}
+	if filter.IsActive != nil {
+		act := 0
+		if *filter.IsActive {
+			act = 1
+		}
+		conditions = append(conditions, "s.is_active = ?")
+		args = append(args, act)
+	}
+	if filter.Search != "" {
+		conditions = append(conditions, "(s.name LIKE ? OR s.description LIKE ?)")
+		pattern := "%" + filter.Search + "%"
+		args = append(args, pattern, pattern)
+	}
+
+	whereClause := " WHERE " + strings.Join(conditions, " AND ")
+
+	countQuery := `SELECT COUNT(*) FROM oncall_schedules s` + whereClause
+	var totalCount int
+	if err := r.db.QueryRow(countQuery, args...).Scan(&totalCount); err != nil {
+		return nil, 0, err
+	}
+
+	dataQuery := `
+		SELECT s.id, s.workspace_id, s.project_id, s.name, s.description,
+		       s.timezone, s.rotation_type, s.rotation_interval_days,
+		       s.shift_start_time, s.shift_duration_hours, s.handover_day_of_week,
+		       s.start_date, s.end_date, s.is_active, s.created_by_id,
+		       s.created_at, s.updated_at,
+		       COALESCE(p.name, ''), COALESCE(u.name, ''),
+		       (SELECT COUNT(*) FROM oncall_participants WHERE schedule_id = s.id)
+		FROM oncall_schedules s
+		LEFT JOIN projects p ON s.project_id = p.id
+		LEFT JOIN users u ON s.created_by_id = u.id
+	` + whereClause + " ORDER BY s.id DESC"
+
+	if filter.Limit > 0 {
+		dataQuery += " LIMIT ?"
+		args = append(args, filter.Limit)
+		if filter.Offset > 0 {
+			dataQuery += " OFFSET ?"
+			args = append(args, filter.Offset)
+		}
+	}
+
+	rows, err := r.db.Query(dataQuery, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var schedules []model.OnCallSchedule
+	for rows.Next() {
+		sc, err := scanSchedule(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		schedules = append(schedules, *sc)
+	}
+	return schedules, totalCount, nil
 }
 
 func (r *oncallRepositoryImpl) UpdateSchedule(s *model.OnCallSchedule) error {
+	isActiveInt := 0
+	if s.IsActive {
+		isActiveInt = 1
+	}
+	s.UpdatedAt = time.Now()
+	res, err := r.db.Exec(`
+		UPDATE oncall_schedules
+		SET name = ?, description = ?, timezone = ?, rotation_type = ?,
+		    rotation_interval_days = ?, shift_start_time = ?, shift_duration_hours = ?,
+		    handover_day_of_week = ?, start_date = ?, end_date = ?, is_active = ?,
+		    updated_at = ?
+		WHERE id = ?
+	`, s.Name, s.Description, s.Timezone, s.RotationType, s.RotationIntervalDays,
+		s.ShiftStartTime, s.ShiftDurationHours, s.HandoverDayOfWeek, s.StartDate,
+		s.EndDate, isActiveInt, s.UpdatedAt, s.ID)
+	if err != nil {
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return ErrScheduleNotFound
+	}
 	return nil
 }
 
 func (r *oncallRepositoryImpl) DeleteSchedule(id int64) error {
+	res, err := r.db.Exec(`DELETE FROM oncall_schedules WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return ErrScheduleNotFound
+	}
 	return nil
 }
 
 func (r *oncallRepositoryImpl) SetParticipants(scheduleID int64, userIDs []string) error {
-	return nil
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(`DELETE FROM oncall_participants WHERE schedule_id = ?`, scheduleID)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	for i, uid := range userIDs {
+		_, err = tx.Exec(`
+			INSERT INTO oncall_participants (schedule_id, user_id, position_order, created_at)
+			VALUES (?, ?, ?, ?)
+		`, scheduleID, uid, i+1, now)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 func (r *oncallRepositoryImpl) ListParticipants(scheduleID int64) ([]model.OnCallParticipant, error) {
-	return nil, nil
+	rows, err := r.db.Query(`
+		SELECT p.id, p.schedule_id, p.user_id, p.position_order, p.created_at,
+		       COALESCE(u.name, ''), COALESCE(u.email, '')
+		FROM oncall_participants p
+		LEFT JOIN users u ON p.user_id = u.id
+		WHERE p.schedule_id = ?
+		ORDER BY p.position_order ASC
+	`, scheduleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var participants []model.OnCallParticipant
+	for rows.Next() {
+		var p model.OnCallParticipant
+		var name, email sql.NullString
+		if err := rows.Scan(&p.ID, &p.ScheduleID, &p.UserID, &p.PositionOrder, &p.CreatedAt, &name, &email); err != nil {
+			return nil, err
+		}
+		p.UserName = name.String
+		p.UserEmail = email.String
+		participants = append(participants, p)
+	}
+	return participants, nil
 }
 
 func (r *oncallRepositoryImpl) SaveShifts(scheduleID int64, shifts []model.OnCallShift) error {
-	return nil
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(`DELETE FROM oncall_shifts WHERE schedule_id = ?`, scheduleID)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	for _, shift := range shifts {
+		_, err = tx.Exec(`
+			INSERT INTO oncall_shifts (schedule_id, user_id, start_time, end_time, created_at)
+			VALUES (?, ?, ?, ?, ?)
+		`, scheduleID, shift.UserID, shift.StartTime, shift.EndTime, now)
+		if err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (r *oncallRepositoryImpl) ListShifts(scheduleID int64, startTime, endTime time.Time) ([]model.OnCallShift, error) {
-	return nil, nil
+	now := time.Now()
+	rows, err := r.db.Query(`
+		SELECT s.schedule_id, s.user_id, s.start_time, s.end_time,
+		       COALESCE(u.name, ''), COALESCE(u.email, '')
+		FROM oncall_shifts s
+		LEFT JOIN users u ON s.user_id = u.id
+		WHERE s.schedule_id = ? AND s.end_time >= ? AND s.start_time <= ?
+		ORDER BY s.start_time ASC
+	`, scheduleID, startTime, endTime)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var shifts []model.OnCallShift
+	for rows.Next() {
+		var s model.OnCallShift
+		var name, email sql.NullString
+		if err := rows.Scan(&s.ScheduleID, &s.UserID, &s.StartTime, &s.EndTime, &name, &email); err != nil {
+			return nil, err
+		}
+		s.UserName = name.String
+		s.UserEmail = email.String
+		s.IsActiveNow = now.After(s.StartTime) && now.Before(s.EndTime)
+		shifts = append(shifts, s)
+	}
+	return shifts, nil
 }
 
 func (r *oncallRepositoryImpl) GetCurrentShift(scheduleID int64, now time.Time) (*model.OnCallShift, error) {
-	return nil, nil
+	var s model.OnCallShift
+	var name, email sql.NullString
+	err := r.db.QueryRow(`
+		SELECT s.schedule_id, s.user_id, s.start_time, s.end_time,
+		       COALESCE(u.name, ''), COALESCE(u.email, '')
+		FROM oncall_shifts s
+		LEFT JOIN users u ON s.user_id = u.id
+		WHERE s.schedule_id = ? AND s.start_time <= ? AND s.end_time > ?
+		ORDER BY s.start_time ASC
+		LIMIT 1
+	`, scheduleID, now, now).Scan(&s.ScheduleID, &s.UserID, &s.StartTime, &s.EndTime, &name, &email)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	s.UserName = name.String
+	s.UserEmail = email.String
+	s.IsActiveNow = true
+	return &s, nil
 }
 
 func (r *oncallRepositoryImpl) CreateEscalationPolicy(p *model.EscalationPolicy, steps []model.EscalationStep) (int64, error) {
