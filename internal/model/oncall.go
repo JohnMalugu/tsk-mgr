@@ -116,3 +116,22 @@ type EscalationStep struct {
 	// Enriched fields
 	TargetName string `json:"target_name,omitempty"`
 }
+
+// OnCallOverride represents a temporary shift swap or coverage takeover on an on-call schedule
+type OnCallOverride struct {
+	ID             int64     `json:"id"`
+	ScheduleID     int64     `json:"schedule_id"`
+	OriginalUserID *string   `json:"original_user_id,omitempty"` // User being covered (optional)
+	OverrideUserID string    `json:"override_user_id"`           // User covering the shift
+	StartTime      time.Time `json:"start_time"`
+	EndTime        time.Time `json:"end_time"`
+	Reason         string    `json:"reason,omitempty"`
+	CreatedByID    string    `json:"created_by_id"`
+	CreatedAt      time.Time `json:"created_at"`
+
+	// Enriched fields
+	OriginalUserName string `json:"original_user_name,omitempty"`
+	OverrideUserName string `json:"override_user_name,omitempty"`
+	ScheduleName     string `json:"schedule_name,omitempty"`
+	IsActiveNow      bool   `json:"is_active_now"`
+}
