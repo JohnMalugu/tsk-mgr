@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -177,4 +178,59 @@ type OnCallPage struct {
 	IncidentTitle        string `json:"incident_title,omitempty"`
 	PagedUserName        string `json:"paged_user_name,omitempty"`
 	AcknowledgedUserName string `json:"acknowledged_user_name,omitempty"`
+}
+
+// ValidateRotationType validates whether a schedule rotation type is supported
+func ValidateRotationType(rot string) error {
+	switch strings.ToLower(strings.TrimSpace(rot)) {
+	case RotationDaily, RotationWeekly, RotationCustom:
+		return nil
+	default:
+		return ErrInvalidRotationType
+	}
+}
+
+// ValidateTargetType validates whether an escalation target type is supported
+func ValidateTargetType(target string) error {
+	switch strings.ToLower(strings.TrimSpace(target)) {
+	case TargetUser, TargetSchedule, TargetWebhook:
+		return nil
+	default:
+		return ErrInvalidEscalationTarget
+	}
+}
+
+// ValidatePageStatus validates whether an on-call page status is recognized
+func ValidatePageStatus(status string) error {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case PageStatusTriggered, PageStatusAcknowledged, PageStatusEscalated, PageStatusResolved:
+		return nil
+	default:
+		return errors.New("invalid on-call page status")
+	}
+}
+
+// ValidateTimezone validates whether a timezone string can be loaded
+func ValidateTimezone(tz string) error {
+	trimmed := strings.TrimSpace(tz)
+	if trimmed == "" {
+		return nil
+	}
+	_, err := time.LoadLocation(trimmed)
+	if err != nil {
+		return ErrInvalidTimezone
+	}
+	return nil
+}
+
+// ActiveResponder represents the currently active on-call engineer resolved in real time
+type ActiveResponder struct {
+	UserID         string    `json:"user_id"`
+	UserName       string    `json:"user_name,omitempty"`
+	UserEmail      string    `json:"user_email,omitempty"`
+	ScheduleID     int64     `json:"schedule_id"`
+	ScheduleName   string    `json:"schedule_name,omitempty"`
+	IsOverride     bool      `json:"is_override"`
+	ShiftStartTime time.Time `json:"shift_start_time"`
+	ShiftEndTime   time.Time `json:"shift_end_time"`
 }
