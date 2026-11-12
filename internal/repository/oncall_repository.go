@@ -450,36 +450,323 @@ func (r *oncallRepositoryImpl) GetCurrentShift(scheduleID int64, now time.Time) 
 	return &s, nil
 }
 
+func scanEscalationPolicy(scanner interface{ Scan(dest ...interface{}) error }) (*model.EscalationPolicy, error) {
+	var p model.EscalationPolicy
+	var projectID sql.NullInt64
+	var projectName sql.NullString
+	var isDefaultInt int
+	var stepsCount int
+
+	err := scanner.Scan(
+		&p.ID, &p.WorkspaceID, &projectID, &p.Name, &p.Description,
+		&p.RepeatCount, &isDefaultInt, &p.CreatedAt, &p.UpdatedAt,
+		&projectName, &stepsCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if projectID.Valid {
+		pid := projectID.Int64
+		p.ProjectID = &pid
+	}
+	p.IsDefault = (isDefaultInt == 1)
+	if projectName.Valid {
+		p.ProjectName = projectName.String
+	}
+	p.StepsCount = stepsCount
+	return &p, nil
+}
+
 func (r *oncallRepositoryImpl) CreateEscalationPolicy(p *model.EscalationPolicy, steps []model.EscalationStep) (int64, error) {
-	return 0, nil
+	tx, err := r.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	isDefaultInt := 0
+	if p.IsDefault {
+		isDefaultInt = 1
+		_, err = tx.Exec(`UPDATE escalation_policies SET is_default = 0 WHERE workspace_id = ?`, p.WorkspaceID)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	now := time.Now()
+	if p.CreatedAt.IsZero() {
+		p.CreatedAt = now
+	}
+	if p.UpdatedAt.IsZero() {
+		p.UpdatedAt = now
+	}
+
+	res, err := tx.Exec(`
+		INSERT INTO escalation_policies (
+			workspace_id, project_id, name, description, repeat_count, is_default, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, p.WorkspaceID, p.ProjectID, p.Name, p.Description, p.RepeatCount, isDefaultInt, p.CreatedAt, p.UpdatedAt)
+	if err != nil {
+		return 0, err
+	}
+
+	policyID, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	p.ID = policyID
+
+	for i, step := range steps {
+		stepOrder := step.StepOrder
+		if stepOrder <= 0 {
+			stepOrder = i + 1
+		}
+		delay := step.DelayMinutes
+		if delay <= 0 {
+			delay = 5
+		}
+		_, err = tx.Exec(`
+			INSERT INTO escalation_steps (policy_id, step_order, target_type, target_id, delay_minutes, created_at)
+			VALUES (?, ?, ?, ?, ?, ?)
+		`, policyID, stepOrder, step.TargetType, step.TargetID, delay, now)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return policyID, nil
 }
 
 func (r *oncallRepositoryImpl) GetEscalationPolicyByID(id int64) (*model.EscalationPolicy, error) {
-	return nil, nil
+	query := `
+		SELECT p.id, p.workspace_id, p.project_id, p.name, p.description,
+		       p.repeat_count, p.is_default, p.created_at, p.updated_at,
+		       COALESCE(proj.name, ''),
+		       (SELECT COUNT(*) FROM escalation_steps WHERE policy_id = p.id)
+		FROM escalation_policies p
+		LEFT JOIN projects proj ON p.project_id = proj.id
+		WHERE p.id = ?
+	`
+	policy, err := scanEscalationPolicy(r.db.QueryRow(query, id))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrEscalationPolicyNotFound
+		}
+		return nil, err
+	}
+
+	steps, err := r.ListEscalationSteps(id)
+	if err != nil {
+		return nil, err
+	}
+	policy.Steps = steps
+	policy.StepsCount = len(steps)
+	return policy, nil
 }
 
 func (r *oncallRepositoryImpl) GetDefaultEscalationPolicy(workspaceID int64) (*model.EscalationPolicy, error) {
-	return nil, nil
+	query := `
+		SELECT p.id, p.workspace_id, p.project_id, p.name, p.description,
+		       p.repeat_count, p.is_default, p.created_at, p.updated_at,
+		       COALESCE(proj.name, ''),
+		       (SELECT COUNT(*) FROM escalation_steps WHERE policy_id = p.id)
+		FROM escalation_policies p
+		LEFT JOIN projects proj ON p.project_id = proj.id
+		WHERE p.workspace_id = ? AND p.is_default = 1
+		LIMIT 1
+	`
+	policy, err := scanEscalationPolicy(r.db.QueryRow(query, workspaceID))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			fallbackQuery := `
+				SELECT p.id, p.workspace_id, p.project_id, p.name, p.description,
+				       p.repeat_count, p.is_default, p.created_at, p.updated_at,
+				       COALESCE(proj.name, ''),
+				       (SELECT COUNT(*) FROM escalation_steps WHERE policy_id = p.id)
+				FROM escalation_policies p
+				LEFT JOIN projects proj ON p.project_id = proj.id
+				WHERE p.workspace_id = ?
+				ORDER BY p.id ASC
+				LIMIT 1
+			`
+			policy, err = scanEscalationPolicy(r.db.QueryRow(fallbackQuery, workspaceID))
+			if err != nil {
+				if err == sql.ErrNoRows {
+					return nil, ErrEscalationPolicyNotFound
+				}
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
+	}
+
+	steps, err := r.ListEscalationSteps(policy.ID)
+	if err != nil {
+		return nil, err
+	}
+	policy.Steps = steps
+	policy.StepsCount = len(steps)
+	return policy, nil
 }
 
 func (r *oncallRepositoryImpl) ListEscalationPolicies(workspaceID int64) ([]model.EscalationPolicy, error) {
-	return nil, nil
+	query := `
+		SELECT p.id, p.workspace_id, p.project_id, p.name, p.description,
+		       p.repeat_count, p.is_default, p.created_at, p.updated_at,
+		       COALESCE(proj.name, ''),
+		       (SELECT COUNT(*) FROM escalation_steps WHERE policy_id = p.id)
+		FROM escalation_policies p
+		LEFT JOIN projects proj ON p.project_id = proj.id
+		WHERE p.workspace_id = ?
+		ORDER BY p.is_default DESC, p.id ASC
+	`
+	rows, err := r.db.Query(query, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var policies []model.EscalationPolicy
+	for rows.Next() {
+		p, err := scanEscalationPolicy(rows)
+		if err != nil {
+			return nil, err
+		}
+		policies = append(policies, *p)
+	}
+	return policies, nil
 }
 
 func (r *oncallRepositoryImpl) UpdateEscalationPolicy(p *model.EscalationPolicy) error {
-	return nil
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	isDefaultInt := 0
+	if p.IsDefault {
+		isDefaultInt = 1
+		_, err = tx.Exec(`UPDATE escalation_policies SET is_default = 0 WHERE workspace_id = ? AND id != ?`, p.WorkspaceID, p.ID)
+		if err != nil {
+			return err
+		}
+	}
+
+	p.UpdatedAt = time.Now()
+	res, err := tx.Exec(`
+		UPDATE escalation_policies
+		SET name = ?, description = ?, repeat_count = ?, is_default = ?, updated_at = ?
+		WHERE id = ?
+	`, p.Name, p.Description, p.RepeatCount, isDefaultInt, p.UpdatedAt, p.ID)
+	if err != nil {
+		return err
+	}
+
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return ErrEscalationPolicyNotFound
+	}
+
+	return tx.Commit()
 }
 
 func (r *oncallRepositoryImpl) DeleteEscalationPolicy(id int64) error {
+	res, err := r.db.Exec(`DELETE FROM escalation_policies WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return ErrEscalationPolicyNotFound
+	}
 	return nil
 }
 
 func (r *oncallRepositoryImpl) SetEscalationSteps(policyID int64, steps []model.EscalationStep) error {
-	return nil
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(`DELETE FROM escalation_steps WHERE policy_id = ?`, policyID)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	for i, step := range steps {
+		stepOrder := step.StepOrder
+		if stepOrder <= 0 {
+			stepOrder = i + 1
+		}
+		delay := step.DelayMinutes
+		if delay <= 0 {
+			delay = 5
+		}
+		_, err = tx.Exec(`
+			INSERT INTO escalation_steps (policy_id, step_order, target_type, target_id, delay_minutes, created_at)
+			VALUES (?, ?, ?, ?, ?, ?)
+		`, policyID, stepOrder, step.TargetType, step.TargetID, delay, now)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 func (r *oncallRepositoryImpl) ListEscalationSteps(policyID int64) ([]model.EscalationStep, error) {
-	return nil, nil
+	rows, err := r.db.Query(`
+		SELECT id, policy_id, step_order, target_type, target_id, delay_minutes, created_at
+		FROM escalation_steps
+		WHERE policy_id = ?
+		ORDER BY step_order ASC
+	`, policyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var steps []model.EscalationStep
+	for rows.Next() {
+		var s model.EscalationStep
+		if err := rows.Scan(&s.ID, &s.PolicyID, &s.StepOrder, &s.TargetType, &s.TargetID, &s.DelayMinutes, &s.CreatedAt); err != nil {
+			return nil, err
+		}
+		steps = append(steps, s)
+	}
+
+	for i := range steps {
+		switch steps[i].TargetType {
+		case model.TargetUser:
+			var uname sql.NullString
+			_ = r.db.QueryRow(`SELECT name FROM users WHERE id = ?`, steps[i].TargetID).Scan(&uname)
+			if uname.Valid {
+				steps[i].TargetName = uname.String
+			}
+		case model.TargetSchedule:
+			var sname sql.NullString
+			_ = r.db.QueryRow(`SELECT name FROM oncall_schedules WHERE id = ?`, steps[i].TargetID).Scan(&sname)
+			if sname.Valid {
+				steps[i].TargetName = sname.String
+			}
+		case model.TargetWebhook:
+			steps[i].TargetName = "Webhook Endpoint"
+		}
+	}
+	return steps, nil
 }
 
 func (r *oncallRepositoryImpl) CreateOverride(o *model.OnCallOverride) (int64, error) {
