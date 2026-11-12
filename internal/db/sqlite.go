@@ -1900,6 +1900,59 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	oncallOverridesQuery := `
+	CREATE TABLE IF NOT EXISTS oncall_overrides (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		schedule_id INTEGER NOT NULL,
+		original_user_id TEXT,
+		override_user_id TEXT NOT NULL,
+		start_time DATETIME NOT NULL,
+		end_time DATETIME NOT NULL,
+		reason TEXT NOT NULL DEFAULT '',
+		created_by_id TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (schedule_id) REFERENCES oncall_schedules(id) ON DELETE CASCADE,
+		FOREIGN KEY (original_user_id) REFERENCES users(id) ON DELETE SET NULL,
+		FOREIGN KEY (override_user_id) REFERENCES users(id) ON DELETE CASCADE,
+		FOREIGN KEY (created_by_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(oncallOverridesQuery)
+	if err != nil {
+		return err
+	}
+
+	oncallPagesQuery := `
+	CREATE TABLE IF NOT EXISTS oncall_pages (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		policy_id INTEGER NOT NULL,
+		incident_id INTEGER,
+		title TEXT NOT NULL,
+		summary TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'triggered',
+		current_step_order INTEGER NOT NULL DEFAULT 1,
+		paged_user_id TEXT,
+		acknowledged_by TEXT,
+		acknowledged_at DATETIME,
+		resolved_at DATETIME,
+		trigger_source TEXT NOT NULL DEFAULT 'manual',
+		created_by_id TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (policy_id) REFERENCES escalation_policies(id) ON DELETE CASCADE,
+		FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE SET NULL,
+		FOREIGN KEY (paged_user_id) REFERENCES users(id) ON DELETE SET NULL,
+		FOREIGN KEY (acknowledged_by) REFERENCES users(id) ON DELETE SET NULL,
+		FOREIGN KEY (created_by_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(oncallPagesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
