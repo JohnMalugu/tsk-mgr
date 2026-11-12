@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	ErrScheduleNotFound        = errors.New("on-call schedule not found")
+	ErrScheduleNotFound         = errors.New("on-call schedule not found")
 	ErrScheduleNameRequired     = errors.New("on-call schedule name is required")
 	ErrInvalidRotationType      = errors.New("invalid rotation type: must be daily, weekly, or custom")
 	ErrInvalidTimezone          = errors.New("invalid timezone specification")

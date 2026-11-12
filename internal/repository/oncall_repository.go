@@ -69,7 +69,9 @@ func NewOnCallRepository(db *sql.DB) OnCallRepository {
 	return &oncallRepositoryImpl{db: db}
 }
 
-func scanSchedule(scanner interface{ Scan(dest ...interface{}) error }) (*model.OnCallSchedule, error) {
+func scanSchedule(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.OnCallSchedule, error) {
 	var s model.OnCallSchedule
 	var projectID sql.NullInt64
 	var endDate sql.NullTime
@@ -184,7 +186,7 @@ func (r *oncallRepositoryImpl) GetScheduleByID(id int64) (*model.OnCallSchedule,
 		       s.shift_start_time, s.shift_duration_hours, s.handover_day_of_week,
 		       s.start_date, s.end_date, s.is_active, s.created_by_id,
 		       s.created_at, s.updated_at,
-		       COALESCE(p.name, ''), COALESCE(u.name, ''),
+		       COALESCE(p.name, ''), COALESCE(u.username, ''),
 		       (SELECT COUNT(*) FROM oncall_participants WHERE schedule_id = s.id)
 		FROM oncall_schedules s
 		LEFT JOIN projects p ON s.project_id = p.id
@@ -240,7 +242,7 @@ func (r *oncallRepositoryImpl) ListSchedules(filter model.OnCallFilter) ([]model
 		       s.shift_start_time, s.shift_duration_hours, s.handover_day_of_week,
 		       s.start_date, s.end_date, s.is_active, s.created_by_id,
 		       s.created_at, s.updated_at,
-		       COALESCE(p.name, ''), COALESCE(u.name, ''),
+		       COALESCE(p.name, ''), COALESCE(u.username, ''),
 		       (SELECT COUNT(*) FROM oncall_participants WHERE schedule_id = s.id)
 		FROM oncall_schedules s
 		LEFT JOIN projects p ON s.project_id = p.id
@@ -346,7 +348,7 @@ func (r *oncallRepositoryImpl) SetParticipants(scheduleID int64, userIDs []strin
 func (r *oncallRepositoryImpl) ListParticipants(scheduleID int64) ([]model.OnCallParticipant, error) {
 	rows, err := r.db.Query(`
 		SELECT p.id, p.schedule_id, p.user_id, p.position_order, p.created_at,
-		       COALESCE(u.name, ''), COALESCE(u.email, '')
+		       COALESCE(u.username, ''), COALESCE(u.email, '')
 		FROM oncall_participants p
 		LEFT JOIN users u ON p.user_id = u.id
 		WHERE p.schedule_id = ?
@@ -400,7 +402,7 @@ func (r *oncallRepositoryImpl) ListShifts(scheduleID int64, startTime, endTime t
 	now := time.Now()
 	rows, err := r.db.Query(`
 		SELECT s.schedule_id, s.user_id, s.start_time, s.end_time,
-		       COALESCE(u.name, ''), COALESCE(u.email, '')
+		       COALESCE(u.username, ''), COALESCE(u.email, '')
 		FROM oncall_shifts s
 		LEFT JOIN users u ON s.user_id = u.id
 		WHERE s.schedule_id = ? AND s.end_time >= ? AND s.start_time <= ?
@@ -431,7 +433,7 @@ func (r *oncallRepositoryImpl) GetCurrentShift(scheduleID int64, now time.Time) 
 	var name, email sql.NullString
 	err := r.db.QueryRow(`
 		SELECT s.schedule_id, s.user_id, s.start_time, s.end_time,
-		       COALESCE(u.name, ''), COALESCE(u.email, '')
+		       COALESCE(u.username, ''), COALESCE(u.email, '')
 		FROM oncall_shifts s
 		LEFT JOIN users u ON s.user_id = u.id
 		WHERE s.schedule_id = ? AND s.start_time <= ? AND s.end_time > ?
@@ -450,7 +452,9 @@ func (r *oncallRepositoryImpl) GetCurrentShift(scheduleID int64, now time.Time) 
 	return &s, nil
 }
 
-func scanEscalationPolicy(scanner interface{ Scan(dest ...interface{}) error }) (*model.EscalationPolicy, error) {
+func scanEscalationPolicy(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.EscalationPolicy, error) {
 	var p model.EscalationPolicy
 	var projectID sql.NullInt64
 	var projectName sql.NullString
@@ -752,7 +756,7 @@ func (r *oncallRepositoryImpl) ListEscalationSteps(policyID int64) ([]model.Esca
 		switch steps[i].TargetType {
 		case model.TargetUser:
 			var uname sql.NullString
-			_ = r.db.QueryRow(`SELECT name FROM users WHERE id = ?`, steps[i].TargetID).Scan(&uname)
+			_ = r.db.QueryRow(`SELECT username FROM users WHERE id = ?`, steps[i].TargetID).Scan(&uname)
 			if uname.Valid {
 				steps[i].TargetName = uname.String
 			}
@@ -769,7 +773,9 @@ func (r *oncallRepositoryImpl) ListEscalationSteps(policyID int64) ([]model.Esca
 	return steps, nil
 }
 
-func scanOverride(scanner interface{ Scan(dest ...interface{}) error }, now time.Time) (*model.OnCallOverride, error) {
+func scanOverride(scanner interface {
+	Scan(dest ...interface{}) error
+}, now time.Time) (*model.OnCallOverride, error) {
 	var o model.OnCallOverride
 	var origUserID sql.NullString
 	var origUserName, overUserName, schedName sql.NullString
@@ -824,7 +830,7 @@ func (r *oncallRepositoryImpl) GetOverrideByID(id int64) (*model.OnCallOverride,
 	query := `
 		SELECT o.id, o.schedule_id, o.original_user_id, o.override_user_id,
 		       o.start_time, o.end_time, o.reason, o.created_by_id, o.created_at,
-		       COALESCE(u_orig.name, ''), COALESCE(u_over.name, ''), COALESCE(s.name, '')
+		       COALESCE(u_orig.username, ''), COALESCE(u_over.username, ''), COALESCE(s.name, '')
 		FROM oncall_overrides o
 		LEFT JOIN users u_orig ON o.original_user_id = u_orig.id
 		LEFT JOIN users u_over ON o.override_user_id = u_over.id
@@ -846,7 +852,7 @@ func (r *oncallRepositoryImpl) ListOverrides(scheduleID int64) ([]model.OnCallOv
 	query := `
 		SELECT o.id, o.schedule_id, o.original_user_id, o.override_user_id,
 		       o.start_time, o.end_time, o.reason, o.created_by_id, o.created_at,
-		       COALESCE(u_orig.name, ''), COALESCE(u_over.name, ''), COALESCE(s.name, '')
+		       COALESCE(u_orig.username, ''), COALESCE(u_over.username, ''), COALESCE(s.name, '')
 		FROM oncall_overrides o
 		LEFT JOIN users u_orig ON o.original_user_id = u_orig.id
 		LEFT JOIN users u_over ON o.override_user_id = u_over.id
@@ -890,7 +896,7 @@ func (r *oncallRepositoryImpl) GetActiveOverride(scheduleID int64, now time.Time
 	query := `
 		SELECT o.id, o.schedule_id, o.original_user_id, o.override_user_id,
 		       o.start_time, o.end_time, o.reason, o.created_by_id, o.created_at,
-		       COALESCE(u_orig.name, ''), COALESCE(u_over.name, ''), COALESCE(s.name, '')
+		       COALESCE(u_orig.username, ''), COALESCE(u_over.username, ''), COALESCE(s.name, '')
 		FROM oncall_overrides o
 		LEFT JOIN users u_orig ON o.original_user_id = u_orig.id
 		LEFT JOIN users u_over ON o.override_user_id = u_over.id
@@ -909,7 +915,9 @@ func (r *oncallRepositoryImpl) GetActiveOverride(scheduleID int64, now time.Time
 	return o, nil
 }
 
-func scanPage(scanner interface{ Scan(dest ...interface{}) error }) (*model.OnCallPage, error) {
+func scanPage(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.OnCallPage, error) {
 	var page model.OnCallPage
 	var incidentID sql.NullInt64
 	var pagedUserID, ackBy sql.NullString
@@ -1012,7 +1020,7 @@ func (r *oncallRepositoryImpl) GetPageByID(id int64) (*model.OnCallPage, error) 
 		       p.paged_user_id, p.acknowledged_by, p.acknowledged_at, p.resolved_at,
 		       p.trigger_source, p.created_by_id, p.created_at, p.updated_at,
 		       COALESCE(ep.name, ''), inc.incident_number, COALESCE(inc.title, ''),
-		       COALESCE(u_paged.name, ''), COALESCE(u_ack.name, '')
+		       COALESCE(u_paged.username, ''), COALESCE(u_ack.username, '')
 		FROM oncall_pages p
 		LEFT JOIN escalation_policies ep ON p.policy_id = ep.id
 		LEFT JOIN incidents inc ON p.incident_id = inc.id
@@ -1056,7 +1064,7 @@ func (r *oncallRepositoryImpl) ListPages(workspaceID int64, status string, limit
 		       p.paged_user_id, p.acknowledged_by, p.acknowledged_at, p.resolved_at,
 		       p.trigger_source, p.created_by_id, p.created_at, p.updated_at,
 		       COALESCE(ep.name, ''), inc.incident_number, COALESCE(inc.title, ''),
-		       COALESCE(u_paged.name, ''), COALESCE(u_ack.name, '')
+		       COALESCE(u_paged.username, ''), COALESCE(u_ack.username, '')
 		FROM oncall_pages p
 		LEFT JOIN escalation_policies ep ON p.policy_id = ep.id
 		LEFT JOIN incidents inc ON p.incident_id = inc.id

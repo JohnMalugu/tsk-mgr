@@ -7,17 +7,17 @@ import (
 )
 
 var (
-	ErrScheduleNameRequired      = errors.New("on-call schedule name is required")
-	ErrInvalidRotationType       = errors.New("invalid rotation type: must be daily, weekly, or custom")
-	ErrInvalidTimezone           = errors.New("invalid timezone specification")
-	ErrScheduleNotFound          = errors.New("on-call schedule not found")
-	ErrEscalationPolicyNotFound  = errors.New("escalation policy not found")
-	ErrEscalationStepNotFound    = errors.New("escalation step not found")
-	ErrOnCallOverrideNotFound    = errors.New("on-call override not found")
-	ErrOnCallPageNotFound        = errors.New("on-call page not found")
-	ErrNoOnCallResponders        = errors.New("no active on-call responders available")
-	ErrInvalidOverrideTimeRange  = errors.New("override start time must be before end time")
-	ErrInvalidEscalationTarget   = errors.New("invalid escalation target type: must be user, schedule, or webhook")
+	ErrScheduleNameRequired     = errors.New("on-call schedule name is required")
+	ErrInvalidRotationType      = errors.New("invalid rotation type: must be daily, weekly, or custom")
+	ErrInvalidTimezone          = errors.New("invalid timezone specification")
+	ErrScheduleNotFound         = errors.New("on-call schedule not found")
+	ErrEscalationPolicyNotFound = errors.New("escalation policy not found")
+	ErrEscalationStepNotFound   = errors.New("escalation step not found")
+	ErrOnCallOverrideNotFound   = errors.New("on-call override not found")
+	ErrOnCallPageNotFound       = errors.New("on-call page not found")
+	ErrNoOnCallResponders       = errors.New("no active on-call responders available")
+	ErrInvalidOverrideTimeRange = errors.New("override start time must be before end time")
+	ErrInvalidEscalationTarget  = errors.New("invalid escalation target type: must be user, schedule, or webhook")
 )
 
 // Rotation types for on-call schedules
@@ -88,15 +88,15 @@ const (
 
 // EscalationPolicy defines multi-tiered paging and alert escalation rules for incidents
 type EscalationPolicy struct {
-	ID          int64      `json:"id"`
-	WorkspaceID int64      `json:"workspace_id"`
-	ProjectID   *int64     `json:"project_id,omitempty"`
-	Name        string     `json:"name"`
-	Description string     `json:"description,omitempty"`
-	RepeatCount int        `json:"repeat_count"` // 0 = no loop, 1..9 = loop N times
-	IsDefault   bool       `json:"is_default"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID          int64     `json:"id"`
+	WorkspaceID int64     `json:"workspace_id"`
+	ProjectID   *int64    `json:"project_id,omitempty"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+	RepeatCount int       `json:"repeat_count"` // 0 = no loop, 1..9 = loop N times
+	IsDefault   bool      `json:"is_default"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 
 	// Enriched fields
 	ProjectName string           `json:"project_name,omitempty"`
@@ -109,8 +109,8 @@ type EscalationStep struct {
 	ID           int64     `json:"id"`
 	PolicyID     int64     `json:"policy_id"`
 	StepOrder    int       `json:"step_order"`
-	TargetType   string    `json:"target_type"` // user, schedule, webhook
-	TargetID     string    `json:"target_id"`   // UserID, ScheduleID, or webhook URL
+	TargetType   string    `json:"target_type"`   // user, schedule, webhook
+	TargetID     string    `json:"target_id"`     // UserID, ScheduleID, or webhook URL
 	DelayMinutes int       `json:"delay_minutes"` // minutes before escalating to next step
 	CreatedAt    time.Time `json:"created_at"`
 

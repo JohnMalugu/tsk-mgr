@@ -297,6 +297,23 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `DELETE /v2/problems/{id}/known-error` to retire a problem entry from the Known Error Database
 - `GET /v2/kedb?workspace_id={id}&category={category}&search={search}` for cross-workspace Known Error Database search providing instant access to symptoms, workarounds, and resolutions
 - `GET /v2/problems/metrics?workspace_id={id}` for ITIL Problem Management metrics, active problems count, known errors count, status and category breakdowns, MTTR (Mean Time to Resolve), and MTTRCA (Mean Time to Root Cause Analysis)
+- `GET|POST /v2/oncall/schedules` to list on-call schedules with multi-criteria filters (`workspace_id`, `project_id`, `is_active`, `search`, `limit`, `offset`) or create an on-call schedule with rotation configurations (`daily`, `weekly`, `custom`), timezone specification, and initial rotating participant ordering
+- `GET|PUT|DELETE /v2/oncall/schedules/{id}` to fetch schedule details (enriched with creator, project, participant counts, and active responder), update rotation interval, shift duration, handover day, or delete schedule
+- `GET /v2/oncall/schedules/{id}/active` for real-time resolution of currently active on-call engineer with active shift override evaluation
+- `GET /v2/oncall/schedules/{id}/shifts?start_time={iso}&end_time={iso}` to list computed on-call shifts within a target timeframe
+- `POST /v2/oncall/schedules/{id}/shifts/generate?horizon_days={days}` to calculate and persist future shift windows across rotating participants
+- `GET|PUT /v2/oncall/schedules/{id}/participants` to inspect or reorder rotation participants
+- `GET|POST /v2/oncall/schedules/{id}/overrides` to view scheduled shift coverage swaps or schedule a temporary on-call shift override with reason and start/end timestamps
+- `GET|DELETE /v2/oncall/overrides/{id}` to fetch or cancel a scheduled on-call shift override
+- `GET|POST /v2/oncall/policies` to list escalation policies for a workspace or create a multi-tiered escalation policy with target levels (`user`, `schedule`, `webhook`) and delay minutes
+- `GET /v2/oncall/policies/default?workspace_id={id}` to fetch the primary default escalation policy for a workspace
+- `GET|PUT|DELETE /v2/oncall/policies/{id}` to fetch, update, or remove an escalation policy
+- `GET|POST /v2/oncall/pages` to list incident alert pages (`workspace_id`, `status`, `limit`, `offset`) or trigger an on-call page correlated with an incident (`/v2/incidents`) or webhook
+- `GET /v2/oncall/pages/{id}` to fetch page details with acknowledged/resolved timestamps and target responder profile
+- `POST /v2/oncall/pages/{id}/acknowledge` to acknowledge an active page and halt escalation delays
+- `POST /v2/oncall/pages/{id}/escalate` to manually escalate an alert page to the next policy tier
+- `POST /v2/oncall/pages/{id}/resolve` to mark an incident page as resolved with resolution notes
+- `GET /v2/oncall/metrics?workspace_id={id}` for aggregated on-call operational metrics, total/active schedules, active overrides, triggered alert counts, mean time to acknowledge (MTTA), mean time to resolve (MTTR), and status breakdown
 
 ## Current limitations
 
