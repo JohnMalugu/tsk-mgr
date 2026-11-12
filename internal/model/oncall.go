@@ -77,3 +77,42 @@ type OnCallShift struct {
 	UserEmail   string    `json:"user_email,omitempty"`
 	IsActiveNow bool      `json:"is_active_now"`
 }
+
+// Escalation step target types
+const (
+	TargetUser     = "user"
+	TargetSchedule = "schedule"
+	TargetWebhook  = "webhook"
+)
+
+// EscalationPolicy defines multi-tiered paging and alert escalation rules for incidents
+type EscalationPolicy struct {
+	ID          int64      `json:"id"`
+	WorkspaceID int64      `json:"workspace_id"`
+	ProjectID   *int64     `json:"project_id,omitempty"`
+	Name        string     `json:"name"`
+	Description string     `json:"description,omitempty"`
+	RepeatCount int        `json:"repeat_count"` // 0 = no loop, 1..9 = loop N times
+	IsDefault   bool       `json:"is_default"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+
+	// Enriched fields
+	ProjectName string           `json:"project_name,omitempty"`
+	StepsCount  int              `json:"steps_count"`
+	Steps       []EscalationStep `json:"steps,omitempty"`
+}
+
+// EscalationStep represents a discrete notification level within an escalation policy
+type EscalationStep struct {
+	ID           int64     `json:"id"`
+	PolicyID     int64     `json:"policy_id"`
+	StepOrder    int       `json:"step_order"`
+	TargetType   string    `json:"target_type"` // user, schedule, webhook
+	TargetID     string    `json:"target_id"`   // UserID, ScheduleID, or webhook URL
+	DelayMinutes int       `json:"delay_minutes"` // minutes before escalating to next step
+	CreatedAt    time.Time `json:"created_at"`
+
+	// Enriched fields
+	TargetName string `json:"target_name,omitempty"`
+}
