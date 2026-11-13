@@ -159,3 +159,32 @@ type StatusIncidentUpdate struct {
 	// Enriched fields
 	PosterName string `json:"poster_name,omitempty"`
 }
+
+// Maintenance window status constants
+const (
+	MaintenanceStatusScheduled  = "scheduled"
+	MaintenanceStatusInProgress = "in_progress"
+	MaintenanceStatusCompleted  = "completed"
+	MaintenanceStatusCancelled  = "cancelled"
+)
+
+// StatusMaintenanceWindow represents a scheduled maintenance window published on a status page
+type StatusMaintenanceWindow struct {
+	ID                     int64      `json:"id"`
+	PageID                 int64      `json:"page_id"`
+	Title                  string     `json:"title"`
+	Description            string     `json:"description,omitempty"`
+	Status                 string     `json:"status"` // scheduled, in_progress, completed, cancelled
+	ScheduledStartAt       time.Time  `json:"scheduled_start_at"`
+	ScheduledEndAt         time.Time  `json:"scheduled_end_at"`
+	ActualStartAt          *time.Time `json:"actual_start_at,omitempty"`
+	ActualEndAt            *time.Time `json:"actual_end_at,omitempty"`
+	AffectedComponentsJSON string     `json:"affected_components_json,omitempty"`
+	CreatedByID            string     `json:"created_by_id"`
+	CreatedAt              time.Time  `json:"created_at"`
+	UpdatedAt              time.Time  `json:"updated_at"`
+
+	// Enriched fields
+	AffectedComponentIDs   []int64  `json:"affected_component_ids,omitempty"`
+	AffectedComponentNames []string `json:"affected_component_names,omitempty"`
+}
