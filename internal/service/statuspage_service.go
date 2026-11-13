@@ -702,22 +702,182 @@ func (s *statusPageServiceImpl) DeleteIncident(id int64) error {
 }
 
 func (s *statusPageServiceImpl) CreateMaintenance(creatorID string, pageID int64, req model.CreateMaintenanceRequest) (*model.StatusMaintenanceWindow, error) {
-	return nil, nil
+	_, err := s.repo.GetPageByID(pageID)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusPageNotFound) {
+			return nil, ErrStatusPageNotFound
+		}
+		return nil, err
+	}
+
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		return nil, ErrMaintenanceTitleReq
+	}
+
+	if req.ScheduledStartAt.IsZero() || req.ScheduledEndAt.IsZero() || !req.ScheduledStartAt.Before(req.ScheduledEndAt) {
+		return nil, ErrInvalidMaintenanceTimes
+	}
+
+	affectedBytes, err := json.Marshal(req.AffectedComponentIDs)
+	if err != nil {
+		affectedBytes = []byte("[]")
+	}
+
+	maint := &model.StatusMaintenanceWindow{
+		PageID:                 pageID,
+		Title:                  title,
+		Description:            strings.TrimSpace(req.Description),
+		Status:                 model.MaintenanceStatusScheduled,
+		ScheduledStartAt:       req.ScheduledStartAt,
+		ScheduledEndAt:         req.ScheduledEndAt,
+		AffectedComponentsJSON: string(affectedBytes),
+		CreatedByID:            creatorID,
+		CreatedAt:              time.Now(),
+		UpdatedAt:              time.Now(),
+	}
+
+	id, err := s.repo.CreateMaintenance(maint)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.GetMaintenance(id)
 }
 
 func (s *statusPageServiceImpl) GetMaintenance(id int64) (*model.StatusMaintenanceWindow, error) {
-	return nil, nil
+	m, err := s.repo.GetMaintenanceByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusMaintenanceNotFound) {
+			return nil, ErrStatusMaintenanceNotFound
+		}
+		return nil, err
+	}
+
+	if m.AffectedComponentsJSON != "" {
+		var ids []int64
+		if err := json.Unmarshal([]byte(m.AffectedComponentsJSON), &ids); err == nil {
+			m.AffectedComponentIDs = ids
+		}
+	}
+
+	return m, nil
 }
 
 func (s *statusPageServiceImpl) ListMaintenances(pageID int64, limit, offset int) ([]model.StatusMaintenanceWindow, int, error) {
-	return nil, 0, nil
+	_, err := s.repo.GetPageByID(pageID)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusPageNotFound) {
+			return nil, 0, ErrStatusPageNotFound
+		}
+		return nil, 0, err
+	}
+
+	maintenances, total, err := s.repo.ListMaintenances(pageID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	for i := range maintenances {
+		if maintenances[i].AffectedComponentsJSON != "" {
+			var ids []int64
+			if err := json.Unmarshal([]byte(maintenances[i].AffectedComponentsJSON), &ids); err == nil {
+				maintenances[i].AffectedComponentIDs = ids
+			}
+		}
+	}
+
+	return maintenances, total, nil
 }
 
 func (s *statusPageServiceImpl) UpdateMaintenance(id int64, req model.UpdateMaintenanceRequest) (*model.StatusMaintenanceWindow, error) {
-	return nil, nil
+	existing, err := s.repo.GetMaintenanceByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusMaintenanceNotFound) {
+			return nil, ErrStatusMaintenanceNotFound
+		}
+		return nil, err
+	}
+
+	if req.Title != nil {
+		t := strings.TrimSpace(*req.Title)
+		if t == "" {
+			return nil, ErrMaintenanceTitleReq
+		}
+		existing.Title = t
+	}
+	if req.Description != nil {
+		existing.Description = strings.TrimSpace(*req.Description)
+	}
+
+	newStart := existing.ScheduledStartAt
+	newEnd := existing.ScheduledEndAt
+	if req.ScheduledStartAt != nil {
+		newStart = *req.ScheduledStartAt
+	}
+	if req.ScheduledEndAt != nil {
+		newEnd = *req.ScheduledEndAt
+	}
+	if !newStart.Before(newEnd) {
+		return nil, ErrInvalidMaintenanceTimes
+	}
+	existing.ScheduledStartAt = newStart
+	existing.ScheduledEndAt = newEnd
+
+	if req.Status != nil {
+		st := strings.ToLower(strings.TrimSpace(*req.Status))
+		switch st {
+		case model.MaintenanceStatusScheduled, model.MaintenanceStatusInProgress,
+			model.MaintenanceStatusCompleted, model.MaintenanceStatusCancelled:
+			existing.Status = st
+		default:
+			return nil, errors.New("invalid maintenance status")
+		}
+
+		now := time.Now()
+		if st == model.MaintenanceStatusInProgress && existing.ActualStartAt == nil {
+			existing.ActualStartAt = &now
+			// Mark affected components as under maintenance
+			if existing.AffectedComponentsJSON != "" {
+				var ids []int64
+				if err := json.Unmarshal([]byte(existing.AffectedComponentsJSON), &ids); err == nil {
+					for _, compID := range ids {
+						_ = s.SetComponentStatus(compID, model.StatusUnderMaintenance)
+					}
+				}
+			}
+		} else if (st == model.MaintenanceStatusCompleted || st == model.MaintenanceStatusCancelled) && existing.ActualEndAt == nil {
+			existing.ActualEndAt = &now
+			// Return affected components to operational
+			if existing.AffectedComponentsJSON != "" {
+				var ids []int64
+				if err := json.Unmarshal([]byte(existing.AffectedComponentsJSON), &ids); err == nil {
+					for _, compID := range ids {
+						_ = s.SetComponentStatus(compID, model.StatusOperational)
+					}
+				}
+			}
+		}
+	}
+
+	if err := s.repo.UpdateMaintenance(existing); err != nil {
+		if errors.Is(err, repository.ErrStatusMaintenanceNotFound) {
+			return nil, ErrStatusMaintenanceNotFound
+		}
+		return nil, err
+	}
+
+	return s.GetMaintenance(id)
 }
 
 func (s *statusPageServiceImpl) DeleteMaintenance(id int64) error {
+	err := s.repo.DeleteMaintenance(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusMaintenanceNotFound) {
+			return ErrStatusMaintenanceNotFound
+		}
+		return err
+	}
 	return nil
 }
 
