@@ -275,3 +275,69 @@ func ValidateSubscriberType(subType string) error {
 		return ErrInvalidSubscriberType
 	}
 }
+
+// CreateStatusPageRequest payload for creating a status page
+type CreateStatusPageRequest struct {
+	WorkspaceID  int64  `json:"workspace_id"`
+	ProjectID    *int64 `json:"project_id,omitempty"`
+	Name         string `json:"name"`
+	Slug         string `json:"slug,omitempty"`
+	Description  string `json:"description,omitempty"`
+	Headline     string `json:"headline,omitempty"`
+	Visibility   string `json:"visibility,omitempty"` // public, private
+	CustomDomain string `json:"custom_domain,omitempty"`
+	Theme        string `json:"theme,omitempty"`
+}
+
+// UpdateStatusPageRequest payload for modifying an existing status page
+type UpdateStatusPageRequest struct {
+	Name         *string `json:"name,omitempty"`
+	Slug         *string `json:"slug,omitempty"`
+	Description  *string `json:"description,omitempty"`
+	Headline     *string `json:"headline,omitempty"`
+	Visibility   *string `json:"visibility,omitempty"`
+	CustomDomain *string `json:"custom_domain,omitempty"`
+	Theme        *string `json:"theme,omitempty"`
+	CurrentStatus *string `json:"current_status,omitempty"`
+	IsActive     *bool   `json:"is_active,omitempty"`
+}
+
+// CreateComponentGroupRequest payload for defining a component group
+type CreateComponentGroupRequest struct {
+	Name         string `json:"name"`
+	Description  string `json:"description,omitempty"`
+	DisplayOrder int    `json:"display_order,omitempty"`
+	Collapsed    bool   `json:"collapsed,omitempty"`
+}
+
+// CreateComponentRequest payload for creating a status component
+type CreateComponentRequest struct {
+	GroupID      *int64 `json:"group_id,omitempty"`
+	CIID         *int64 `json:"ci_id,omitempty"`
+	Name         string `json:"name"`
+	Description  string `json:"description,omitempty"`
+	Status       string `json:"status,omitempty"`
+	DisplayOrder int    `json:"display_order,omitempty"`
+	IsMonitored  bool   `json:"is_monitored,omitempty"`
+}
+
+// UpdateComponentRequest payload for modifying a status component
+type UpdateComponentRequest struct {
+	GroupID      *int64  `json:"group_id,omitempty"`
+	CIID         *int64  `json:"ci_id,omitempty"`
+	Name         *string `json:"name,omitempty"`
+	Description  *string `json:"description,omitempty"`
+	Status       *string `json:"status,omitempty"`
+	DisplayOrder *int    `json:"display_order,omitempty"`
+	IsMonitored  *bool   `json:"is_monitored,omitempty"`
+}
+
+// StatusPageFilter defines querying criteria for listing status pages
+type StatusPageFilter struct {
+	WorkspaceID int64  `json:"workspace_id"`
+	ProjectID   *int64 `json:"project_id,omitempty"`
+	Visibility  string `json:"visibility,omitempty"`
+	Search      string `json:"search,omitempty"`
+	Limit       int    `json:"limit,omitempty"`
+	Offset      int    `json:"offset,omitempty"`
+}
