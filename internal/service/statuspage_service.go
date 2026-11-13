@@ -882,21 +882,129 @@ func (s *statusPageServiceImpl) DeleteMaintenance(id int64) error {
 }
 
 func (s *statusPageServiceImpl) CreateSubscriber(pageID int64, req model.CreateSubscriberRequest) (*model.StatusSubscriber, error) {
-	return nil, nil
+	_, err := s.repo.GetPageByID(pageID)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusPageNotFound) {
+			return nil, ErrStatusPageNotFound
+		}
+		return nil, err
+	}
+
+	target := strings.TrimSpace(req.TargetEndpoint)
+	if target == "" {
+		return nil, ErrSubscriberTargetRequired
+	}
+
+	subType := strings.ToLower(strings.TrimSpace(req.SubscriberType))
+	if subType == "" {
+		subType = model.SubscriberTypeEmail
+	} else if err := model.ValidateSubscriberType(subType); err != nil {
+		return nil, err
+	}
+
+	componentsBytes, err := json.Marshal(req.SubscribedComponentIDs)
+	if err != nil {
+		componentsBytes = []byte("[]")
+	}
+
+	sub := &model.StatusSubscriber{
+		PageID:                   pageID,
+		SubscriberType:           subType,
+		TargetEndpoint:           target,
+		IsVerified:               true,
+		SubscribedComponentsJSON: string(componentsBytes),
+		CreatedAt:                time.Now(),
+		UpdatedAt:                time.Now(),
+	}
+
+	id, err := s.repo.CreateSubscriber(sub)
+	if err != nil {
+		return nil, err
+	}
+
+	created, err := s.repo.GetSubscriberByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if created.SubscribedComponentsJSON != "" {
+		var ids []int64
+		if err := json.Unmarshal([]byte(created.SubscribedComponentsJSON), &ids); err == nil {
+			created.SubscribedComponentIDs = ids
+		}
+	}
+
+	return created, nil
 }
 
 func (s *statusPageServiceImpl) ListSubscribers(pageID int64) ([]model.StatusSubscriber, error) {
-	return nil, nil
+	_, err := s.repo.GetPageByID(pageID)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusPageNotFound) {
+			return nil, ErrStatusPageNotFound
+		}
+		return nil, err
+	}
+
+	subs, err := s.repo.ListSubscribers(pageID)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range subs {
+		if subs[i].SubscribedComponentsJSON != "" {
+			var ids []int64
+			if err := json.Unmarshal([]byte(subs[i].SubscribedComponentsJSON), &ids); err == nil {
+				subs[i].SubscribedComponentIDs = ids
+			}
+		}
+	}
+
+	return subs, nil
 }
 
 func (s *statusPageServiceImpl) DeleteSubscriber(id int64) error {
+	err := s.repo.DeleteSubscriber(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrSubscriberNotFound) {
+			return ErrSubscriberNotFound
+		}
+		return err
+	}
 	return nil
 }
 
 func (s *statusPageServiceImpl) GetPageMetrics(pageID int64) (*model.StatusPageMetrics, error) {
-	return nil, nil
+	_, err := s.repo.GetPageByID(pageID)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusPageNotFound) {
+			return nil, ErrStatusPageNotFound
+		}
+		return nil, err
+	}
+
+	return s.repo.GetPageMetrics(pageID)
 }
 
 func (s *statusPageServiceImpl) GetPublicStatusOverview(slug string) (*model.StatusPage, []model.ComponentGroup, []model.StatusIncident, error) {
-	return nil, nil, nil, nil
+	page, err := s.GetPageBySlug(slug)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if !page.IsActive {
+		return nil, nil, nil, ErrStatusPageNotFound
+	}
+
+	groups, err := s.ListComponentGroups(page.ID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	incidents, _, err := s.ListIncidents(page.ID, 10, 0)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return page, groups, incidents, nil
 }
