@@ -447,28 +447,248 @@ func (r *statusPageRepositoryImpl) DeleteComponentGroup(id int64) error {
 	return nil
 }
 
+func scanStatusComponent(scanner interface{ Scan(dest ...interface{}) error }) (*model.StatusComponent, error) {
+	var c model.StatusComponent
+	var groupID, ciID sql.NullInt64
+	var groupName, ciName, ciCode sql.NullString
+	var isMonitoredInt int
+
+	err := scanner.Scan(
+		&c.ID, &c.PageID, &groupID, &ciID, &c.Name, &c.Description,
+		&c.Status, &c.DisplayOrder, &isMonitoredInt, &c.CreatedAt, &c.UpdatedAt,
+		&groupName, &ciName, &ciCode,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if groupID.Valid {
+		gid := groupID.Int64
+		c.GroupID = &gid
+	}
+	if ciID.Valid {
+		cid := ciID.Int64
+		c.CIID = &cid
+	}
+	c.IsMonitored = (isMonitoredInt == 1)
+	if groupName.Valid {
+		c.GroupName = groupName.String
+	}
+	if ciName.Valid {
+		c.CIName = ciName.String
+	}
+	if ciCode.Valid {
+		c.CICode = ciCode.String
+	}
+	return &c, nil
+}
+
 func (r *statusPageRepositoryImpl) CreateComponent(comp *model.StatusComponent) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if comp.CreatedAt.IsZero() {
+		comp.CreatedAt = now
+	}
+	if comp.UpdatedAt.IsZero() {
+		comp.UpdatedAt = now
+	}
+	if comp.Status == "" {
+		comp.Status = model.StatusOperational
+	}
+
+	isMonitoredInt := 0
+	if comp.IsMonitored {
+		isMonitoredInt = 1
+	}
+
+	res, err := r.db.Exec(`
+		INSERT INTO status_components (
+			page_id, group_id, ci_id, name, description, status,
+			display_order, is_monitored, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, comp.PageID, comp.GroupID, comp.CIID, comp.Name, comp.Description,
+		comp.Status, comp.DisplayOrder, isMonitoredInt, comp.CreatedAt, comp.UpdatedAt)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	comp.ID = id
+
+	_, _ = r.ComputeOverallStatus(comp.PageID)
+	return id, nil
 }
 
 func (r *statusPageRepositoryImpl) GetComponentByID(id int64) (*model.StatusComponent, error) {
-	return nil, nil
+	query := `
+		SELECT c.id, c.page_id, c.group_id, c.ci_id, c.name, c.description,
+		       c.status, c.display_order, c.is_monitored, c.created_at, c.updated_at,
+		       COALESCE(g.name, ''), COALESCE(ci.name, ''), COALESCE(ci.ci_code, '')
+		FROM status_components c
+		LEFT JOIN status_component_groups g ON c.group_id = g.id
+		LEFT JOIN configuration_items ci ON c.ci_id = ci.id
+		WHERE c.id = ?
+	`
+	comp, err := scanStatusComponent(r.db.QueryRow(query, id))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrComponentNotFound
+		}
+		return nil, err
+	}
+	return comp, nil
 }
 
 func (r *statusPageRepositoryImpl) ListComponents(pageID int64) ([]model.StatusComponent, error) {
-	return nil, nil
+	query := `
+		SELECT c.id, c.page_id, c.group_id, c.ci_id, c.name, c.description,
+		       c.status, c.display_order, c.is_monitored, c.created_at, c.updated_at,
+		       COALESCE(g.name, ''), COALESCE(ci.name, ''), COALESCE(ci.ci_code, '')
+		FROM status_components c
+		LEFT JOIN status_component_groups g ON c.group_id = g.id
+		LEFT JOIN configuration_items ci ON c.ci_id = ci.id
+		WHERE c.page_id = ?
+		ORDER BY c.display_order ASC, c.id ASC
+	`
+	rows, err := r.db.Query(query, pageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var components []model.StatusComponent
+	for rows.Next() {
+		comp, err := scanStatusComponent(rows)
+		if err != nil {
+			return nil, err
+		}
+		components = append(components, *comp)
+	}
+	return components, nil
 }
 
 func (r *statusPageRepositoryImpl) UpdateComponent(comp *model.StatusComponent) error {
+	comp.UpdatedAt = time.Now()
+	isMonitoredInt := 0
+	if comp.IsMonitored {
+		isMonitoredInt = 1
+	}
+
+	res, err := r.db.Exec(`
+		UPDATE status_components
+		SET group_id = ?, ci_id = ?, name = ?, description = ?, status = ?,
+		    display_order = ?, is_monitored = ?, updated_at = ?
+		WHERE id = ?
+	`, comp.GroupID, comp.CIID, comp.Name, comp.Description, comp.Status,
+		comp.DisplayOrder, isMonitoredInt, comp.UpdatedAt, comp.ID)
+	if err != nil {
+		return err
+	}
+
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return ErrComponentNotFound
+	}
+
+	_, _ = r.ComputeOverallStatus(comp.PageID)
 	return nil
 }
 
 func (r *statusPageRepositoryImpl) DeleteComponent(id int64) error {
+	var pageID int64
+	_ = r.db.QueryRow(`SELECT page_id FROM status_components WHERE id = ?`, id).Scan(&pageID)
+
+	res, err := r.db.Exec(`DELETE FROM status_components WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return ErrComponentNotFound
+	}
+
+	if pageID > 0 {
+		_, _ = r.ComputeOverallStatus(pageID)
+	}
 	return nil
 }
 
 func (r *statusPageRepositoryImpl) UpdateComponentStatus(id int64, status string) error {
+	var pageID int64
+	err := r.db.QueryRow(`SELECT page_id FROM status_components WHERE id = ?`, id).Scan(&pageID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return ErrComponentNotFound
+		}
+		return err
+	}
+
+	now := time.Now()
+	res, err := r.db.Exec(`UPDATE status_components SET status = ?, updated_at = ? WHERE id = ?`, status, now, id)
+	if err != nil {
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return ErrComponentNotFound
+	}
+
+	_, _ = r.ComputeOverallStatus(pageID)
 	return nil
+}
+
+func (r *statusPageRepositoryImpl) ComputeOverallStatus(pageID int64) (string, error) {
+	rows, err := r.db.Query(`SELECT status FROM status_components WHERE page_id = ? AND is_monitored = 1`, pageID)
+	if err != nil {
+		return model.StatusOperational, err
+	}
+	defer rows.Close()
+
+	hasMajorOutage := false
+	hasPartialOutage := false
+	hasDegraded := false
+	hasMaintenance := false
+
+	for rows.Next() {
+		var st string
+		if err := rows.Scan(&st); err == nil {
+			switch st {
+			case model.StatusMajorOutage:
+				hasMajorOutage = true
+			case model.StatusPartialOutage:
+				hasPartialOutage = true
+			case model.StatusDegradedPerformance:
+				hasDegraded = true
+			case model.StatusUnderMaintenance:
+				hasMaintenance = true
+			}
+		}
+	}
+
+	overall := model.StatusOperational
+	if hasMajorOutage {
+		overall = model.StatusMajorOutage
+	} else if hasPartialOutage {
+		overall = model.StatusPartialOutage
+	} else if hasDegraded {
+		overall = model.StatusDegradedPerformance
+	} else if hasMaintenance {
+		overall = model.StatusUnderMaintenance
+	}
+
+	now := time.Now()
+	_, _ = r.db.Exec(`UPDATE status_pages SET current_status = ?, updated_at = ? WHERE id = ?`, overall, now, pageID)
+	return overall, nil
 }
 
 func (r *statusPageRepositoryImpl) CreateIncident(inc *model.StatusIncident) (int64, error) {
@@ -537,8 +757,4 @@ func (r *statusPageRepositoryImpl) DeleteSubscriber(id int64) error {
 
 func (r *statusPageRepositoryImpl) GetPageMetrics(pageID int64) (*model.StatusPageMetrics, error) {
 	return nil, nil
-}
-
-func (r *statusPageRepositoryImpl) ComputeOverallStatus(pageID int64) (string, error) {
-	return "", nil
 }
