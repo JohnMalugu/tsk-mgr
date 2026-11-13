@@ -257,38 +257,219 @@ func (s *statusPageServiceImpl) DeletePage(id int64) error {
 }
 
 func (s *statusPageServiceImpl) CreateComponentGroup(pageID int64, req model.CreateComponentGroupRequest) (*model.ComponentGroup, error) {
-	return nil, nil
+	_, err := s.repo.GetPageByID(pageID)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusPageNotFound) {
+			return nil, ErrStatusPageNotFound
+		}
+		return nil, err
+	}
+
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, errors.New("component group name is required")
+	}
+
+	group := &model.ComponentGroup{
+		PageID:       pageID,
+		Name:         name,
+		Description:  strings.TrimSpace(req.Description),
+		DisplayOrder: req.DisplayOrder,
+		Collapsed:    req.Collapsed,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+
+	id, err := s.repo.CreateComponentGroup(group)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetComponentGroupByID(id)
 }
 
 func (s *statusPageServiceImpl) ListComponentGroups(pageID int64) ([]model.ComponentGroup, error) {
-	return nil, nil
+	_, err := s.repo.GetPageByID(pageID)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusPageNotFound) {
+			return nil, ErrStatusPageNotFound
+		}
+		return nil, err
+	}
+
+	groups, err := s.repo.ListComponentGroups(pageID)
+	if err != nil {
+		return nil, err
+	}
+
+	allComps, err := s.repo.ListComponents(pageID)
+	if err == nil {
+		for i := range groups {
+			for _, comp := range allComps {
+				if comp.GroupID != nil && *comp.GroupID == groups[i].ID {
+					groups[i].Components = append(groups[i].Components, comp)
+				}
+			}
+			groups[i].ComponentsCount = len(groups[i].Components)
+		}
+	}
+
+	return groups, nil
 }
 
 func (s *statusPageServiceImpl) DeleteComponentGroup(id int64) error {
+	err := s.repo.DeleteComponentGroup(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrComponentGroupNotFound) {
+			return errors.New("component group not found")
+		}
+		return err
+	}
 	return nil
 }
 
 func (s *statusPageServiceImpl) CreateComponent(pageID int64, req model.CreateComponentRequest) (*model.StatusComponent, error) {
-	return nil, nil
+	_, err := s.repo.GetPageByID(pageID)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusPageNotFound) {
+			return nil, ErrStatusPageNotFound
+		}
+		return nil, err
+	}
+
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, ErrComponentNameRequired
+	}
+
+	status := strings.ToLower(strings.TrimSpace(req.Status))
+	if status == "" {
+		status = model.StatusOperational
+	} else if err := model.ValidateComponentStatus(status); err != nil {
+		return nil, err
+	}
+
+	if req.GroupID != nil {
+		if _, err := s.repo.GetComponentGroupByID(*req.GroupID); err != nil {
+			return nil, errors.New("specified component group does not exist")
+		}
+	}
+
+	comp := &model.StatusComponent{
+		PageID:       pageID,
+		GroupID:      req.GroupID,
+		CIID:         req.CIID,
+		Name:         name,
+		Description:  strings.TrimSpace(req.Description),
+		Status:       status,
+		DisplayOrder: req.DisplayOrder,
+		IsMonitored:  req.IsMonitored,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+
+	id, err := s.repo.CreateComponent(comp)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.GetComponent(id)
 }
 
 func (s *statusPageServiceImpl) GetComponent(id int64) (*model.StatusComponent, error) {
-	return nil, nil
+	comp, err := s.repo.GetComponentByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrComponentNotFound) {
+			return nil, ErrComponentNotFound
+		}
+		return nil, err
+	}
+	return comp, nil
 }
 
 func (s *statusPageServiceImpl) ListComponents(pageID int64) ([]model.StatusComponent, error) {
-	return nil, nil
+	_, err := s.repo.GetPageByID(pageID)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusPageNotFound) {
+			return nil, ErrStatusPageNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListComponents(pageID)
 }
 
 func (s *statusPageServiceImpl) UpdateComponent(id int64, req model.UpdateComponentRequest) (*model.StatusComponent, error) {
-	return nil, nil
+	existing, err := s.repo.GetComponentByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrComponentNotFound) {
+			return nil, ErrComponentNotFound
+		}
+		return nil, err
+	}
+
+	if req.Name != nil {
+		name := strings.TrimSpace(*req.Name)
+		if name == "" {
+			return nil, ErrComponentNameRequired
+		}
+		existing.Name = name
+	}
+	if req.Status != nil {
+		st := strings.ToLower(strings.TrimSpace(*req.Status))
+		if err := model.ValidateComponentStatus(st); err != nil {
+			return nil, err
+		}
+		existing.Status = st
+	}
+	if req.Description != nil {
+		existing.Description = strings.TrimSpace(*req.Description)
+	}
+	if req.GroupID != nil {
+		existing.GroupID = req.GroupID
+	}
+	if req.CIID != nil {
+		existing.CIID = req.CIID
+	}
+	if req.DisplayOrder != nil {
+		existing.DisplayOrder = *req.DisplayOrder
+	}
+	if req.IsMonitored != nil {
+		existing.IsMonitored = *req.IsMonitored
+	}
+
+	if err := s.repo.UpdateComponent(existing); err != nil {
+		if errors.Is(err, repository.ErrComponentNotFound) {
+			return nil, ErrComponentNotFound
+		}
+		return nil, err
+	}
+
+	return s.GetComponent(id)
 }
 
 func (s *statusPageServiceImpl) DeleteComponent(id int64) error {
+	err := s.repo.DeleteComponent(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrComponentNotFound) {
+			return ErrComponentNotFound
+		}
+		return err
+	}
 	return nil
 }
 
 func (s *statusPageServiceImpl) SetComponentStatus(id int64, status string) error {
+	st := strings.ToLower(strings.TrimSpace(status))
+	if err := model.ValidateComponentStatus(st); err != nil {
+		return err
+	}
+	err := s.repo.UpdateComponentStatus(id, st)
+	if err != nil {
+		if errors.Is(err, repository.ErrComponentNotFound) {
+			return ErrComponentNotFound
+		}
+		return err
+	}
 	return nil
 }
 
