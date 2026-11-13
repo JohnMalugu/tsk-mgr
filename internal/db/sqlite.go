@@ -1953,6 +1953,51 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	statusPagesQuery := `
+	CREATE TABLE IF NOT EXISTS status_pages (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		project_id INTEGER,
+		name TEXT NOT NULL,
+		slug TEXT NOT NULL UNIQUE,
+		description TEXT NOT NULL DEFAULT '',
+		headline TEXT NOT NULL DEFAULT '',
+		visibility TEXT NOT NULL DEFAULT 'public',
+		custom_domain TEXT NOT NULL DEFAULT '',
+		theme TEXT NOT NULL DEFAULT 'system',
+		current_status TEXT NOT NULL DEFAULT 'operational',
+		is_active INTEGER NOT NULL DEFAULT 1,
+		created_by_id TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+		FOREIGN KEY (created_by_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(statusPagesQuery)
+	if err != nil {
+		return err
+	}
+
+	statusComponentGroupsQuery := `
+	CREATE TABLE IF NOT EXISTS status_component_groups (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		page_id INTEGER NOT NULL,
+		name TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		display_order INTEGER NOT NULL DEFAULT 0,
+		collapsed INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (page_id) REFERENCES status_pages(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(statusComponentGroupsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
