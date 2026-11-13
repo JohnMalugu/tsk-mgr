@@ -2,6 +2,8 @@ package model
 
 import (
 	"errors"
+	"regexp"
+	"strings"
 	"time"
 )
 
@@ -210,4 +212,66 @@ type StatusSubscriber struct {
 
 	// Enriched fields
 	SubscribedComponentIDs []int64 `json:"subscribed_component_ids,omitempty"`
+}
+
+var slugRegex = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+
+// NormalizeSlug converts an arbitrary name into a clean, URL-safe slug
+func NormalizeSlug(input string) string {
+	s := strings.ToLower(strings.TrimSpace(input))
+	reg := regexp.MustCompile(`[^a-z0-9]+`)
+	s = reg.ReplaceAllString(s, "-")
+	return strings.Trim(s, "-")
+}
+
+// ValidateSlug validates that a slug consists only of lowercase alphanumerics and hyphens
+func ValidateSlug(slug string) error {
+	trimmed := strings.TrimSpace(slug)
+	if trimmed == "" {
+		return ErrStatusPageSlugRequired
+	}
+	if len(trimmed) < 2 || len(trimmed) > 80 || !slugRegex.MatchString(trimmed) {
+		return ErrInvalidStatusPageSlug
+	}
+	return nil
+}
+
+// ValidateComponentStatus verifies that a status is one of the supported component status levels
+func ValidateComponentStatus(st string) error {
+	switch strings.ToLower(strings.TrimSpace(st)) {
+	case StatusOperational, StatusDegradedPerformance, StatusPartialOutage, StatusMajorOutage, StatusUnderMaintenance:
+		return nil
+	default:
+		return ErrInvalidComponentStatus
+	}
+}
+
+// ValidateStatusIncidentStatus verifies that an incident status is supported
+func ValidateStatusIncidentStatus(st string) error {
+	switch strings.ToLower(strings.TrimSpace(st)) {
+	case StatusIncidentInvestigating, StatusIncidentIdentified, StatusIncidentMonitoring, StatusIncidentResolved:
+		return nil
+	default:
+		return ErrInvalidStatusIncidentSt
+	}
+}
+
+// ValidateIncidentImpact verifies that an incident impact level is recognized
+func ValidateIncidentImpact(impact string) error {
+	switch strings.ToLower(strings.TrimSpace(impact)) {
+	case ImpactNone, ImpactMinor, ImpactMajor, ImpactCritical:
+		return nil
+	default:
+		return ErrInvalidIncidentImpact
+	}
+}
+
+// ValidateSubscriberType verifies that a subscriber channel is recognized
+func ValidateSubscriberType(subType string) error {
+	switch strings.ToLower(strings.TrimSpace(subType)) {
+	case SubscriberTypeEmail, SubscriberTypeWebhook, SubscriberTypeSlack:
+		return nil
+	default:
+		return ErrInvalidSubscriberType
+	}
 }
