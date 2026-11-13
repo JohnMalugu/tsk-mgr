@@ -2062,6 +2062,30 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	statusMaintenanceWindowsQuery := `
+	CREATE TABLE IF NOT EXISTS status_maintenance_windows (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		page_id INTEGER NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'scheduled',
+		scheduled_start_at DATETIME NOT NULL,
+		scheduled_end_at DATETIME NOT NULL,
+		actual_start_at DATETIME,
+		actual_end_at DATETIME,
+		affected_components_json TEXT NOT NULL DEFAULT '[]',
+		created_by_id TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (page_id) REFERENCES status_pages(id) ON DELETE CASCADE,
+		FOREIGN KEY (created_by_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(statusMaintenanceWindowsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
