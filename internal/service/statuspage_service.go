@@ -2,6 +2,8 @@ package service
 
 import (
 	"errors"
+	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -97,26 +99,160 @@ func NewStatusPageService(
 }
 
 func (s *statusPageServiceImpl) CreatePage(creatorID string, req model.CreateStatusPageRequest) (*model.StatusPage, error) {
-	return nil, nil
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, ErrStatusPageNameRequired
+	}
+
+	slug := strings.TrimSpace(req.Slug)
+	if slug == "" {
+		slug = model.NormalizeSlug(name)
+	} else {
+		slug = model.NormalizeSlug(slug)
+	}
+
+	if err := model.ValidateSlug(slug); err != nil {
+		return nil, err
+	}
+
+	visibility := strings.ToLower(strings.TrimSpace(req.Visibility))
+	if visibility == "" {
+		visibility = model.VisibilityPublic
+	}
+
+	theme := strings.ToLower(strings.TrimSpace(req.Theme))
+	if theme == "" {
+		theme = model.ThemeSystem
+	}
+
+	page := &model.StatusPage{
+		WorkspaceID:   req.WorkspaceID,
+		ProjectID:     req.ProjectID,
+		Name:          name,
+		Slug:          slug,
+		Description:   strings.TrimSpace(req.Description),
+		Headline:      strings.TrimSpace(req.Headline),
+		Visibility:    visibility,
+		CustomDomain:  strings.TrimSpace(req.CustomDomain),
+		Theme:         theme,
+		CurrentStatus: model.StatusOperational,
+		IsActive:      true,
+		CreatedByID:   creatorID,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+
+	id, err := s.repo.CreatePage(page)
+	if err != nil {
+		if errors.Is(err, repository.ErrDuplicateStatusPageSlug) {
+			return nil, ErrDuplicateStatusPageSlug
+		}
+		return nil, err
+	}
+
+	return s.GetPage(id)
 }
 
 func (s *statusPageServiceImpl) GetPage(id int64) (*model.StatusPage, error) {
-	return nil, nil
+	page, err := s.repo.GetPageByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusPageNotFound) {
+			return nil, ErrStatusPageNotFound
+		}
+		return nil, err
+	}
+	return page, nil
 }
 
 func (s *statusPageServiceImpl) GetPageBySlug(slug string) (*model.StatusPage, error) {
-	return nil, nil
+	cleanSlug := strings.ToLower(strings.TrimSpace(slug))
+	page, err := s.repo.GetPageBySlug(cleanSlug)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusPageNotFound) {
+			return nil, ErrStatusPageNotFound
+		}
+		return nil, err
+	}
+	return page, nil
 }
 
 func (s *statusPageServiceImpl) ListPages(filter model.StatusPageFilter) ([]model.StatusPage, int, error) {
-	return nil, 0, nil
+	return s.repo.ListPages(filter)
 }
 
 func (s *statusPageServiceImpl) UpdatePage(id int64, req model.UpdateStatusPageRequest) (*model.StatusPage, error) {
-	return nil, nil
+	existing, err := s.repo.GetPageByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusPageNotFound) {
+			return nil, ErrStatusPageNotFound
+		}
+		return nil, err
+	}
+
+	if req.Name != nil {
+		name := strings.TrimSpace(*req.Name)
+		if name == "" {
+			return nil, ErrStatusPageNameRequired
+		}
+		existing.Name = name
+	}
+	if req.Slug != nil {
+		slug := model.NormalizeSlug(*req.Slug)
+		if err := model.ValidateSlug(slug); err != nil {
+			return nil, err
+		}
+		existing.Slug = slug
+	}
+	if req.Description != nil {
+		existing.Description = strings.TrimSpace(*req.Description)
+	}
+	if req.Headline != nil {
+		existing.Headline = strings.TrimSpace(*req.Headline)
+	}
+	if req.Visibility != nil {
+		vis := strings.ToLower(strings.TrimSpace(*req.Visibility))
+		if vis == model.VisibilityPublic || vis == model.VisibilityPrivate {
+			existing.Visibility = vis
+		}
+	}
+	if req.CustomDomain != nil {
+		existing.CustomDomain = strings.TrimSpace(*req.CustomDomain)
+	}
+	if req.Theme != nil {
+		theme := strings.ToLower(strings.TrimSpace(*req.Theme))
+		if theme == model.ThemeLight || theme == model.ThemeDark || theme == model.ThemeSystem {
+			existing.Theme = theme
+		}
+	}
+	if req.CurrentStatus != nil {
+		st := strings.ToLower(strings.TrimSpace(*req.CurrentStatus))
+		if err := model.ValidateComponentStatus(st); err != nil {
+			return nil, err
+		}
+		existing.CurrentStatus = st
+	}
+	if req.IsActive != nil {
+		existing.IsActive = *req.IsActive
+	}
+
+	if err := s.repo.UpdatePage(existing); err != nil {
+		if errors.Is(err, repository.ErrStatusPageNotFound) {
+			return nil, ErrStatusPageNotFound
+		}
+		return nil, err
+	}
+
+	return s.GetPage(id)
 }
 
 func (s *statusPageServiceImpl) DeletePage(id int64) error {
+	err := s.repo.DeletePage(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusPageNotFound) {
+			return ErrStatusPageNotFound
+		}
+		return err
+	}
 	return nil
 }
 
