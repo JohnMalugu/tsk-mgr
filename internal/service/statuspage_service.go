@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -474,26 +475,229 @@ func (s *statusPageServiceImpl) SetComponentStatus(id int64, status string) erro
 }
 
 func (s *statusPageServiceImpl) CreateIncident(creatorID string, pageID int64, req model.CreateStatusIncidentRequest) (*model.StatusIncident, error) {
-	return nil, nil
+	_, err := s.repo.GetPageByID(pageID)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusPageNotFound) {
+			return nil, ErrStatusPageNotFound
+		}
+		return nil, err
+	}
+
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		return nil, ErrStatusIncidentTitleReq
+	}
+
+	status := strings.ToLower(strings.TrimSpace(req.Status))
+	if status == "" {
+		status = model.StatusIncidentInvestigating
+	} else if err := model.ValidateStatusIncidentStatus(status); err != nil {
+		return nil, err
+	}
+
+	impact := strings.ToLower(strings.TrimSpace(req.Impact))
+	if impact == "" {
+		impact = model.ImpactMinor
+	} else if err := model.ValidateIncidentImpact(impact); err != nil {
+		return nil, err
+	}
+
+	affectedBytes, err := json.Marshal(req.AffectedComponentIDs)
+	if err != nil {
+		affectedBytes = []byte("[]")
+	}
+
+	inc := &model.StatusIncident{
+		PageID:                 pageID,
+		IncidentID:             req.IncidentID,
+		Title:                  title,
+		Status:                 status,
+		Impact:                 impact,
+		StartedAt:              time.Now(),
+		AffectedComponentsJSON: string(affectedBytes),
+		CreatedByID:            creatorID,
+		CreatedAt:              time.Now(),
+		UpdatedAt:              time.Now(),
+	}
+
+	if status == model.StatusIncidentResolved {
+		now := time.Now()
+		inc.ResolvedAt = &now
+	}
+
+	id, err := s.repo.CreateIncident(inc)
+	if err != nil {
+		return nil, err
+	}
+
+	// Post initial timeline message if provided
+	msg := strings.TrimSpace(req.Message)
+	if msg != "" {
+		_, _ = s.repo.AddIncidentUpdate(&model.StatusIncidentUpdate{
+			StatusIncidentID: id,
+			Status:           status,
+			Message:          msg,
+			PostedByID:       creatorID,
+			CreatedAt:        time.Now(),
+		})
+	}
+
+	// Update affected component statuses if map provided
+	for compID, compSt := range req.ComponentStatusMap {
+		_ = s.SetComponentStatus(compID, compSt)
+	}
+
+	return s.GetIncident(id)
 }
 
 func (s *statusPageServiceImpl) GetIncident(id int64) (*model.StatusIncident, error) {
-	return nil, nil
+	inc, err := s.repo.GetIncidentByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusIncidentNotFound) {
+			return nil, ErrStatusIncidentNotFound
+		}
+		return nil, err
+	}
+
+	if inc.AffectedComponentsJSON != "" {
+		var ids []int64
+		if err := json.Unmarshal([]byte(inc.AffectedComponentsJSON), &ids); err == nil {
+			inc.AffectedComponentIDs = ids
+		}
+	}
+
+	return inc, nil
 }
 
 func (s *statusPageServiceImpl) ListIncidents(pageID int64, limit, offset int) ([]model.StatusIncident, int, error) {
-	return nil, 0, nil
+	_, err := s.repo.GetPageByID(pageID)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusPageNotFound) {
+			return nil, 0, ErrStatusPageNotFound
+		}
+		return nil, 0, err
+	}
+
+	incidents, total, err := s.repo.ListIncidents(pageID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	for i := range incidents {
+		if incidents[i].AffectedComponentsJSON != "" {
+			var ids []int64
+			if err := json.Unmarshal([]byte(incidents[i].AffectedComponentsJSON), &ids); err == nil {
+				incidents[i].AffectedComponentIDs = ids
+			}
+		}
+	}
+
+	return incidents, total, nil
 }
 
 func (s *statusPageServiceImpl) UpdateIncident(id int64, req model.UpdateStatusIncidentRequest) (*model.StatusIncident, error) {
-	return nil, nil
+	existing, err := s.repo.GetIncidentByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusIncidentNotFound) {
+			return nil, ErrStatusIncidentNotFound
+		}
+		return nil, err
+	}
+
+	if req.Title != nil {
+		t := strings.TrimSpace(*req.Title)
+		if t == "" {
+			return nil, ErrStatusIncidentTitleReq
+		}
+		existing.Title = t
+	}
+	if req.Status != nil {
+		st := strings.ToLower(strings.TrimSpace(*req.Status))
+		if err := model.ValidateStatusIncidentStatus(st); err != nil {
+			return nil, err
+		}
+		existing.Status = st
+		if st == model.StatusIncidentResolved && existing.ResolvedAt == nil {
+			now := time.Now()
+			existing.ResolvedAt = &now
+		}
+	}
+	if req.Impact != nil {
+		imp := strings.ToLower(strings.TrimSpace(*req.Impact))
+		if err := model.ValidateIncidentImpact(imp); err != nil {
+			return nil, err
+		}
+		existing.Impact = imp
+	}
+	if req.Resolved != nil && *req.Resolved {
+		existing.Status = model.StatusIncidentResolved
+		if existing.ResolvedAt == nil {
+			now := time.Now()
+			existing.ResolvedAt = &now
+		}
+	}
+
+	if err := s.repo.UpdateIncident(existing); err != nil {
+		if errors.Is(err, repository.ErrStatusIncidentNotFound) {
+			return nil, ErrStatusIncidentNotFound
+		}
+		return nil, err
+	}
+
+	return s.GetIncident(id)
 }
 
 func (s *statusPageServiceImpl) AddIncidentUpdate(postedByID string, incidentID int64, req model.AddStatusIncidentUpdateRequest) (*model.StatusIncidentUpdate, error) {
-	return nil, nil
+	inc, err := s.repo.GetIncidentByID(incidentID)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusIncidentNotFound) {
+			return nil, ErrStatusIncidentNotFound
+		}
+		return nil, err
+	}
+
+	status := strings.ToLower(strings.TrimSpace(req.Status))
+	if status == "" {
+		status = inc.Status
+	} else if err := model.ValidateStatusIncidentStatus(status); err != nil {
+		return nil, err
+	}
+
+	msg := strings.TrimSpace(req.Message)
+	if msg == "" {
+		return nil, errors.New("incident update message is required")
+	}
+
+	update := &model.StatusIncidentUpdate{
+		StatusIncidentID: incidentID,
+		Status:           status,
+		Message:          msg,
+		PostedByID:       postedByID,
+		CreatedAt:        time.Now(),
+	}
+
+	id, err := s.repo.AddIncidentUpdate(update)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update affected component statuses if map provided
+	for compID, compSt := range req.ComponentStatusMap {
+		_ = s.SetComponentStatus(compID, compSt)
+	}
+
+	update.ID = id
+	return update, nil
 }
 
 func (s *statusPageServiceImpl) DeleteIncident(id int64) error {
+	err := s.repo.DeleteIncident(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrStatusIncidentNotFound) {
+			return ErrStatusIncidentNotFound
+		}
+		return err
+	}
 	return nil
 }
 
