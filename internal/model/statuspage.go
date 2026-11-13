@@ -341,3 +341,70 @@ type StatusPageFilter struct {
 	Limit       int    `json:"limit,omitempty"`
 	Offset      int    `json:"offset,omitempty"`
 }
+
+// CreateStatusIncidentRequest payload for announcing a new service incident
+type CreateStatusIncidentRequest struct {
+	IncidentID           *int64            `json:"incident_id,omitempty"`
+	Title                string            `json:"title"`
+	Status               string            `json:"status,omitempty"` // default: investigating
+	Impact               string            `json:"impact,omitempty"` // default: minor
+	Message              string            `json:"message"`
+	AffectedComponentIDs []int64           `json:"affected_component_ids,omitempty"`
+	ComponentStatusMap   map[int64]string  `json:"component_status_map,omitempty"`
+}
+
+// UpdateStatusIncidentRequest payload for updating incident attributes
+type UpdateStatusIncidentRequest struct {
+	Title    *string `json:"title,omitempty"`
+	Status   *string `json:"status,omitempty"`
+	Impact   *string `json:"impact,omitempty"`
+	Resolved *bool   `json:"resolved,omitempty"`
+}
+
+// AddStatusIncidentUpdateRequest payload for posting a timeline progression message
+type AddStatusIncidentUpdateRequest struct {
+	Status             string           `json:"status"` // investigating, identified, monitoring, resolved
+	Message            string           `json:"message"`
+	ComponentStatusMap map[int64]string `json:"component_status_map,omitempty"`
+}
+
+// CreateMaintenanceRequest payload for publishing a scheduled maintenance window
+type CreateMaintenanceRequest struct {
+	Title                string    `json:"title"`
+	Description          string    `json:"description,omitempty"`
+	ScheduledStartAt     time.Time `json:"scheduled_start_at"`
+	ScheduledEndAt       time.Time `json:"scheduled_end_at"`
+	AffectedComponentIDs []int64   `json:"affected_component_ids,omitempty"`
+}
+
+// UpdateMaintenanceRequest payload for modifying scheduled maintenance details
+type UpdateMaintenanceRequest struct {
+	Title            *string    `json:"title,omitempty"`
+	Description      *string    `json:"description,omitempty"`
+	Status           *string    `json:"status,omitempty"`
+	ScheduledStartAt *time.Time `json:"scheduled_start_at,omitempty"`
+	ScheduledEndAt   *time.Time `json:"scheduled_end_at,omitempty"`
+}
+
+// CreateSubscriberRequest payload for subscribing to status page updates
+type CreateSubscriberRequest struct {
+	SubscriberType         string  `json:"subscriber_type"` // email, webhook, slack
+	TargetEndpoint         string  `json:"target_endpoint"`
+	SubscribedComponentIDs []int64 `json:"subscribed_component_ids,omitempty"`
+}
+
+// StatusPageMetrics provides health summary, component uptime, and subscriber statistics
+type StatusPageMetrics struct {
+	TotalComponents            int     `json:"total_components"`
+	OperationalComponents      int     `json:"operational_components"`
+	DegradedComponents         int     `json:"degraded_components"`
+	OutageComponents           int     `json:"outage_components"`
+	UnderMaintenanceComponents int     `json:"under_maintenance_components"`
+	ActiveIncidents            int     `json:"active_incidents"`
+	ResolvedIncidents30d       int     `json:"resolved_incidents_30d"`
+	ScheduledMaintenances      int     `json:"scheduled_maintenances"`
+	TotalSubscribers           int     `json:"total_subscribers"`
+	UptimePercentage30d        float64 `json:"uptime_percentage_30d"`
+	UptimePercentage60d        float64 `json:"uptime_percentage_60d"`
+	UptimePercentage90d        float64 `json:"uptime_percentage_90d"`
+}
