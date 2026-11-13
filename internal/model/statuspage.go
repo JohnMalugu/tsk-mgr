@@ -108,3 +108,54 @@ type StatusComponent struct {
 	CIName    string `json:"ci_name,omitempty"`
 	CICode    string `json:"ci_code,omitempty"`
 }
+
+// Lifecycle status constants for status page incidents
+const (
+	StatusIncidentInvestigating = "investigating"
+	StatusIncidentIdentified    = "identified"
+	StatusIncidentMonitoring    = "monitoring"
+	StatusIncidentResolved      = "resolved"
+)
+
+// Impact level constants for status incidents
+const (
+	ImpactNone     = "none"
+	ImpactMinor    = "minor"
+	ImpactMajor    = "major"
+	ImpactCritical = "critical"
+)
+
+// StatusIncident represents a publicly or internally broadcasted service incident
+type StatusIncident struct {
+	ID                     int64      `json:"id"`
+	PageID                 int64      `json:"page_id"`
+	IncidentID             *int64     `json:"incident_id,omitempty"` // Link to internal /v2/incidents
+	Title                  string     `json:"title"`
+	Status                 string     `json:"status"` // investigating, identified, monitoring, resolved
+	Impact                 string     `json:"impact"` // none, minor, major, critical
+	StartedAt              time.Time  `json:"started_at"`
+	ResolvedAt             *time.Time `json:"resolved_at,omitempty"`
+	AffectedComponentsJSON string     `json:"affected_components_json,omitempty"`
+	CreatedByID            string     `json:"created_by_id"`
+	CreatedAt              time.Time  `json:"created_at"`
+	UpdatedAt              time.Time  `json:"updated_at"`
+
+	// Enriched fields
+	IncidentNumber         *int                   `json:"incident_number,omitempty"`
+	Updates                []StatusIncidentUpdate `json:"updates,omitempty"`
+	AffectedComponentIDs   []int64                `json:"affected_component_ids,omitempty"`
+	AffectedComponentNames []string               `json:"affected_component_names,omitempty"`
+}
+
+// StatusIncidentUpdate represents a chronological message post on an active status incident
+type StatusIncidentUpdate struct {
+	ID               int64     `json:"id"`
+	StatusIncidentID int64     `json:"status_incident_id"`
+	Status           string    `json:"status"` // investigating, identified, monitoring, resolved
+	Message          string    `json:"message"`
+	PostedByID       string    `json:"posted_by_id"`
+	CreatedAt        time.Time `json:"created_at"`
+
+	// Enriched fields
+	PosterName string `json:"poster_name,omitempty"`
+}
