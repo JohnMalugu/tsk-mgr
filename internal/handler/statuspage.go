@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
@@ -517,4 +518,240 @@ func (h *StatusPageHandler) DeleteSubscriber(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	writeStatusPageJSON(w, http.StatusOK, map[string]string{"message": "subscriber removed successfully"})
+}
+
+// GetPageMetrics handles GET /v2/statuspages/{id}/metrics
+func (h *StatusPageHandler) GetPageMetrics(w http.ResponseWriter, r *http.Request, pageID int64) {
+	metrics, err := h.svc.GetPageMetrics(pageID)
+	if err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusOK, metrics)
+}
+
+// GetPublicOverview handles GET /v2/statuspages/public/{slug}
+func (h *StatusPageHandler) GetPublicOverview(w http.ResponseWriter, r *http.Request, slug string) {
+	page, groups, incidents, err := h.svc.GetPublicStatusOverview(slug)
+	if err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+
+	metrics, _ := h.svc.GetPageMetrics(page.ID)
+
+	writeStatusPageJSON(w, http.StatusOK, map[string]interface{}{
+		"page":      page,
+		"groups":    groups,
+		"incidents": incidents,
+		"metrics":   metrics,
+	})
+}
+
+// ServeHTTP routes requests under /v2/statuspages
+func (h *StatusPageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/statuspages")
+	path = strings.TrimPrefix(path, "/")
+
+	if path == "" {
+		switch r.Method {
+		case http.MethodGet:
+			h.ListPages(w, r)
+		case http.MethodPost:
+			h.CreatePage(w, r)
+		default:
+			writeStatusPageError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if strings.HasPrefix(path, "public/") {
+		slug := strings.TrimPrefix(path, "public/")
+		slug = strings.TrimSpace(slug)
+		if r.Method != http.MethodGet {
+			writeStatusPageError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		h.GetPublicOverview(w, r, slug)
+		return
+	}
+
+	parts := strings.Split(path, "/")
+	if parts[0] == "by-slug" && len(parts) >= 2 {
+		if r.Method != http.MethodGet {
+			writeStatusPageError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		h.GetPublicOverview(w, r, parts[1])
+		return
+	}
+
+	id, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || id <= 0 {
+		writeStatusPageError(w, http.StatusBadRequest, "invalid status page id")
+		return
+	}
+
+	if len(parts) == 1 {
+		switch r.Method {
+		case http.MethodGet:
+			h.GetPage(w, r, id)
+		case http.MethodPut, http.MethodPatch:
+			h.UpdatePage(w, r, id)
+		case http.MethodDelete:
+			h.DeletePage(w, r, id)
+		default:
+			writeStatusPageError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if len(parts) == 2 {
+		switch parts[1] {
+		case "metrics":
+			if r.Method != http.MethodGet {
+				writeStatusPageError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.GetPageMetrics(w, r, id)
+		case "groups":
+			switch r.Method {
+			case http.MethodGet:
+				h.ListComponentGroups(w, r, id)
+			case http.MethodPost:
+				h.CreateComponentGroup(w, r, id)
+			default:
+				writeStatusPageError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		case "components":
+			switch r.Method {
+			case http.MethodGet:
+				h.ListComponents(w, r, id)
+			case http.MethodPost:
+				h.CreateComponent(w, r, id)
+			default:
+				writeStatusPageError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		case "incidents":
+			switch r.Method {
+			case http.MethodGet:
+				h.ListIncidents(w, r, id)
+			case http.MethodPost:
+				h.CreateIncident(w, r, id)
+			default:
+				writeStatusPageError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		case "maintenance":
+			switch r.Method {
+			case http.MethodGet:
+				h.ListMaintenances(w, r, id)
+			case http.MethodPost:
+				h.CreateMaintenance(w, r, id)
+			default:
+				writeStatusPageError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		case "subscribers":
+			switch r.Method {
+			case http.MethodGet:
+				h.ListSubscribers(w, r, id)
+			case http.MethodPost:
+				h.CreateSubscriber(w, r, id)
+			default:
+				writeStatusPageError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		default:
+			writeStatusPageError(w, http.StatusNotFound, "not found")
+		}
+		return
+	}
+
+	if len(parts) == 3 {
+		subID, err := strconv.ParseInt(parts[2], 10, 64)
+		if err != nil || subID <= 0 {
+			writeStatusPageError(w, http.StatusBadRequest, "invalid resource id")
+			return
+		}
+
+		switch parts[1] {
+		case "groups":
+			if r.Method != http.MethodDelete {
+				writeStatusPageError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.DeleteComponentGroup(w, r, subID)
+		case "components":
+			switch r.Method {
+			case http.MethodGet:
+				h.GetComponent(w, r, subID)
+			case http.MethodPut, http.MethodPatch:
+				h.UpdateComponent(w, r, subID)
+			case http.MethodDelete:
+				h.DeleteComponent(w, r, subID)
+			default:
+				writeStatusPageError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		case "incidents":
+			switch r.Method {
+			case http.MethodGet:
+				h.GetIncident(w, r, subID)
+			case http.MethodPut, http.MethodPatch:
+				h.UpdateIncident(w, r, subID)
+			case http.MethodDelete:
+				h.DeleteIncident(w, r, subID)
+			default:
+				writeStatusPageError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		case "maintenance":
+			switch r.Method {
+			case http.MethodGet:
+				h.GetMaintenance(w, r, subID)
+			case http.MethodPut, http.MethodPatch:
+				h.UpdateMaintenance(w, r, subID)
+			case http.MethodDelete:
+				h.DeleteMaintenance(w, r, subID)
+			default:
+				writeStatusPageError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		case "subscribers":
+			if r.Method != http.MethodDelete {
+				writeStatusPageError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			h.DeleteSubscriber(w, r, subID)
+		default:
+			writeStatusPageError(w, http.StatusNotFound, "not found")
+		}
+		return
+	}
+
+	if len(parts) == 4 {
+		subID, err := strconv.ParseInt(parts[2], 10, 64)
+		if err != nil || subID <= 0 {
+			writeStatusPageError(w, http.StatusBadRequest, "invalid resource id")
+			return
+		}
+
+		switch parts[1] {
+		case "components":
+			if parts[3] == "status" {
+				if r.Method != http.MethodPost && r.Method != http.MethodPatch {
+					writeStatusPageError(w, http.StatusMethodNotAllowed, "method not allowed")
+					return
+				}
+				h.SetComponentStatus(w, r, subID)
+				return
+			}
+		case "incidents":
+			if parts[3] == "updates" {
+				if r.Method != http.MethodPost {
+					writeStatusPageError(w, http.StatusMethodNotAllowed, "method not allowed")
+					return
+				}
+				h.AddIncidentUpdate(w, r, subID)
+				return
+			}
+		}
+	}
+
+	writeStatusPageError(w, http.StatusNotFound, "not found")
 }
