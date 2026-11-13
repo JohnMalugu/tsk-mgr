@@ -401,3 +401,120 @@ func (h *StatusPageHandler) AddIncidentUpdate(w http.ResponseWriter, r *http.Req
 	}
 	writeStatusPageJSON(w, http.StatusCreated, update)
 }
+
+// CreateMaintenance handles POST /v2/statuspages/{id}/maintenance
+func (h *StatusPageHandler) CreateMaintenance(w http.ResponseWriter, r *http.Request, pageID int64) {
+	var req model.CreateMaintenanceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeStatusPageError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+	userID := getStatusPageUser(r)
+
+	maint, err := h.svc.CreateMaintenance(userID, pageID, req)
+	if err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusCreated, maint)
+}
+
+// GetMaintenance handles GET /v2/statuspages/{id}/maintenance/{maintId}
+func (h *StatusPageHandler) GetMaintenance(w http.ResponseWriter, r *http.Request, maintID int64) {
+	maint, err := h.svc.GetMaintenance(maintID)
+	if err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusOK, maint)
+}
+
+// ListMaintenances handles GET /v2/statuspages/{id}/maintenance
+func (h *StatusPageHandler) ListMaintenances(w http.ResponseWriter, r *http.Request, pageID int64) {
+	q := r.URL.Query()
+	limit := 50
+	offset := 0
+	if l := q.Get("limit"); l != "" {
+		if val, err := strconv.Atoi(l); err == nil && val > 0 {
+			limit = val
+		}
+	}
+	if o := q.Get("offset"); o != "" {
+		if val, err := strconv.Atoi(o); err == nil && val >= 0 {
+			offset = val
+		}
+	}
+
+	maintenances, total, err := h.svc.ListMaintenances(pageID, limit, offset)
+	if err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+
+	writeStatusPageJSON(w, http.StatusOK, map[string]interface{}{
+		"maintenances": maintenances,
+		"total":        total,
+	})
+}
+
+// UpdateMaintenance handles PUT/PATCH /v2/statuspages/{id}/maintenance/{maintId}
+func (h *StatusPageHandler) UpdateMaintenance(w http.ResponseWriter, r *http.Request, maintID int64) {
+	var req model.UpdateMaintenanceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeStatusPageError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+
+	maint, err := h.svc.UpdateMaintenance(maintID, req)
+	if err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusOK, maint)
+}
+
+// DeleteMaintenance handles DELETE /v2/statuspages/{id}/maintenance/{maintId}
+func (h *StatusPageHandler) DeleteMaintenance(w http.ResponseWriter, r *http.Request, maintID int64) {
+	if err := h.svc.DeleteMaintenance(maintID); err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusOK, map[string]string{"message": "maintenance window deleted successfully"})
+}
+
+// CreateSubscriber handles POST /v2/statuspages/{id}/subscribers
+func (h *StatusPageHandler) CreateSubscriber(w http.ResponseWriter, r *http.Request, pageID int64) {
+	var req model.CreateSubscriberRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeStatusPageError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+
+	sub, err := h.svc.CreateSubscriber(pageID, req)
+	if err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusCreated, sub)
+}
+
+// ListSubscribers handles GET /v2/statuspages/{id}/subscribers
+func (h *StatusPageHandler) ListSubscribers(w http.ResponseWriter, r *http.Request, pageID int64) {
+	subs, err := h.svc.ListSubscribers(pageID)
+	if err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusOK, map[string]interface{}{
+		"subscribers": subs,
+	})
+}
+
+// DeleteSubscriber handles DELETE /v2/statuspages/{id}/subscribers/{subId}
+func (h *StatusPageHandler) DeleteSubscriber(w http.ResponseWriter, r *http.Request, subID int64) {
+	if err := h.svc.DeleteSubscriber(subID); err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusOK, map[string]string{"message": "subscriber removed successfully"})
+}
