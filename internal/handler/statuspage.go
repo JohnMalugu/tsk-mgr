@@ -304,3 +304,100 @@ func (h *StatusPageHandler) SetComponentStatus(w http.ResponseWriter, r *http.Re
 		"status":  req.Status,
 	})
 }
+
+// CreateIncident handles POST /v2/statuspages/{id}/incidents
+func (h *StatusPageHandler) CreateIncident(w http.ResponseWriter, r *http.Request, pageID int64) {
+	var req model.CreateStatusIncidentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeStatusPageError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+	userID := getStatusPageUser(r)
+
+	inc, err := h.svc.CreateIncident(userID, pageID, req)
+	if err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusCreated, inc)
+}
+
+// GetIncident handles GET /v2/statuspages/{id}/incidents/{incId}
+func (h *StatusPageHandler) GetIncident(w http.ResponseWriter, r *http.Request, incID int64) {
+	inc, err := h.svc.GetIncident(incID)
+	if err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusOK, inc)
+}
+
+// ListIncidents handles GET /v2/statuspages/{id}/incidents
+func (h *StatusPageHandler) ListIncidents(w http.ResponseWriter, r *http.Request, pageID int64) {
+	q := r.URL.Query()
+	limit := 50
+	offset := 0
+	if l := q.Get("limit"); l != "" {
+		if val, err := strconv.Atoi(l); err == nil && val > 0 {
+			limit = val
+		}
+	}
+	if o := q.Get("offset"); o != "" {
+		if val, err := strconv.Atoi(o); err == nil && val >= 0 {
+			offset = val
+		}
+	}
+
+	incidents, total, err := h.svc.ListIncidents(pageID, limit, offset)
+	if err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+
+	writeStatusPageJSON(w, http.StatusOK, map[string]interface{}{
+		"incidents": incidents,
+		"total":     total,
+	})
+}
+
+// UpdateIncident handles PUT/PATCH /v2/statuspages/{id}/incidents/{incId}
+func (h *StatusPageHandler) UpdateIncident(w http.ResponseWriter, r *http.Request, incID int64) {
+	var req model.UpdateStatusIncidentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeStatusPageError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+
+	inc, err := h.svc.UpdateIncident(incID, req)
+	if err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusOK, inc)
+}
+
+// DeleteIncident handles DELETE /v2/statuspages/{id}/incidents/{incId}
+func (h *StatusPageHandler) DeleteIncident(w http.ResponseWriter, r *http.Request, incID int64) {
+	if err := h.svc.DeleteIncident(incID); err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusOK, map[string]string{"message": "status incident deleted successfully"})
+}
+
+// AddIncidentUpdate handles POST /v2/statuspages/{id}/incidents/{incId}/updates
+func (h *StatusPageHandler) AddIncidentUpdate(w http.ResponseWriter, r *http.Request, incID int64) {
+	var req model.AddStatusIncidentUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeStatusPageError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+	userID := getStatusPageUser(r)
+
+	update, err := h.svc.AddIncidentUpdate(userID, incID, req)
+	if err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusCreated, update)
+}
