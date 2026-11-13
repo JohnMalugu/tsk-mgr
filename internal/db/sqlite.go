@@ -1998,6 +1998,29 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	statusComponentsQuery := `
+	CREATE TABLE IF NOT EXISTS status_components (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		page_id INTEGER NOT NULL,
+		group_id INTEGER,
+		ci_id INTEGER,
+		name TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'operational',
+		display_order INTEGER NOT NULL DEFAULT 0,
+		is_monitored INTEGER NOT NULL DEFAULT 1,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (page_id) REFERENCES status_pages(id) ON DELETE CASCADE,
+		FOREIGN KEY (group_id) REFERENCES status_component_groups(id) ON DELETE SET NULL,
+		FOREIGN KEY (ci_id) REFERENCES configuration_items(id) ON DELETE SET NULL
+	);`
+
+	_, err = db.Exec(statusComponentsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
