@@ -314,6 +314,22 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `POST /v2/oncall/pages/{id}/escalate` to manually escalate an alert page to the next policy tier
 - `POST /v2/oncall/pages/{id}/resolve` to mark an incident page as resolved with resolution notes
 - `GET /v2/oncall/metrics?workspace_id={id}` for aggregated on-call operational metrics, total/active schedules, active overrides, triggered alert counts, mean time to acknowledge (MTTA), mean time to resolve (MTTR), and status breakdown
+- `GET|POST /v2/statuspages` to list status pages with workspace/visibility filters or provision a new status page with customized slug, headline, description, theme (`light`, `dark`, `system`), and visibility (`public`, `private`)
+- `GET|PUT|PATCH|DELETE /v2/statuspages/{id}` to fetch status page details (enriched with component and active incident counts), modify page configuration and themes, or delete a status page with cascaded components, groups, incidents, maintenance windows, and subscriber cleanup
+- `GET /v2/statuspages/public/{slug}` to retrieve a public status page overview with component hierarchy, active incidents timeline, and operational metrics
+- `GET /v2/statuspages/{id}/metrics` for real-time status page health metrics, operational component distribution, active/resolved incidents, scheduled maintenance windows, subscriber count, and 30/60/90-day uptime percentage calculations
+- `GET|POST /v2/statuspages/{id}/groups` to list component groups with nested component trees or create a new logical grouping (`display_order`, `collapsed`)
+- `DELETE /v2/statuspages/{id}/groups/{groupId}` to remove a component group
+- `GET|POST /v2/statuspages/{id}/components` to list components or create a status component linked optionally to a CMDB Configuration Item (`/v2/cmdb`), with status levels (`operational`, `degraded_performance`, `partial_outage`, `major_outage`, `under_maintenance`) and automated page health aggregation
+- `GET|PUT|PATCH|DELETE /v2/statuspages/{id}/components/{compId}` to fetch component details, modify component attributes, or delete a status component
+- `POST|PATCH /v2/statuspages/{id}/components/{compId}/status` to update a component's status level and trigger automated page status roll-up recalculation
+- `GET|POST /v2/statuspages/{id}/incidents` to list status incidents or announce a new incident (`investigating`, `identified`, `monitoring`, `resolved`) with impact tiering (`none`, `minor`, `major`, `critical`), initial timeline post, and automated component status updates
+- `GET|PUT|PATCH|DELETE /v2/statuspages/{id}/incidents/{incId}` to inspect an incident with chronological timeline updates, modify attributes, or delete an incident
+- `POST /v2/statuspages/{id}/incidents/{incId}/updates` to post chronological timeline updates to an active incident with automated component status synchronization and incident resolution timestamping
+- `GET|POST /v2/statuspages/{id}/maintenance` to list scheduled maintenance windows or schedule a new maintenance window with start/end timestamps and affected component assignments
+- `GET|PUT|PATCH|DELETE /v2/statuspages/{id}/maintenance/{maintId}` to inspect maintenance window details, update schedule or status (`scheduled`, `in_progress`, `completed`, `cancelled`), or delete a maintenance window with automatic component status transitions (`under_maintenance` when in progress, `operational` when completed)
+- `GET|POST /v2/statuspages/{id}/subscribers` to list subscribers or register a notification subscriber (`email`, `webhook`, `slack`) with component-specific notification routing
+- `DELETE /v2/statuspages/{id}/subscribers/{subId}` to unsubscribe an endpoint from status page notifications
 
 ## Current limitations
 

@@ -10,13 +10,13 @@ import (
 )
 
 var (
-	ErrStatusPageNotFound      = errors.New("status page not found")
-	ErrDuplicateStatusPageSlug = errors.New("status page slug already in use")
-	ErrComponentNotFound       = errors.New("status component not found")
-	ErrComponentGroupNotFound  = errors.New("component group not found")
-	ErrStatusIncidentNotFound     = errors.New("status incident not found")
+	ErrStatusPageNotFound        = errors.New("status page not found")
+	ErrDuplicateStatusPageSlug   = errors.New("status page slug already in use")
+	ErrComponentNotFound         = errors.New("status component not found")
+	ErrComponentGroupNotFound    = errors.New("component group not found")
+	ErrStatusIncidentNotFound    = errors.New("status incident not found")
 	ErrStatusMaintenanceNotFound = errors.New("maintenance window not found")
-	ErrSubscriberNotFound         = errors.New("status subscriber not found")
+	ErrSubscriberNotFound        = errors.New("status subscriber not found")
 )
 
 // StatusPageRepository defines persistence operations for status pages, components, incidents, maintenances, and subscribers
@@ -80,7 +80,9 @@ func NewStatusPageRepository(db *sql.DB) StatusPageRepository {
 	return &statusPageRepositoryImpl{db: db}
 }
 
-func scanStatusPage(scanner interface{ Scan(dest ...interface{}) error }) (*model.StatusPage, error) {
+func scanStatusPage(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.StatusPage, error) {
 	var sp model.StatusPage
 	var projectID sql.NullInt64
 	var projectName, creatorName sql.NullString
@@ -447,7 +449,9 @@ func (r *statusPageRepositoryImpl) DeleteComponentGroup(id int64) error {
 	return nil
 }
 
-func scanStatusComponent(scanner interface{ Scan(dest ...interface{}) error }) (*model.StatusComponent, error) {
+func scanStatusComponent(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.StatusComponent, error) {
 	var c model.StatusComponent
 	var groupID, ciID sql.NullInt64
 	var groupName, ciName, ciCode sql.NullString
@@ -691,7 +695,9 @@ func (r *statusPageRepositoryImpl) ComputeOverallStatus(pageID int64) (string, e
 	return overall, nil
 }
 
-func scanStatusIncident(scanner interface{ Scan(dest ...interface{}) error }) (*model.StatusIncident, error) {
+func scanStatusIncident(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.StatusIncident, error) {
 	var inc model.StatusIncident
 	var incidentID sql.NullInt64
 	var resolvedAt sql.NullTime
@@ -933,7 +939,9 @@ func (r *statusPageRepositoryImpl) ListIncidentUpdates(incidentID int64) ([]mode
 	return updates, nil
 }
 
-func scanMaintenanceWindow(scanner interface{ Scan(dest ...interface{}) error }) (*model.StatusMaintenanceWindow, error) {
+func scanMaintenanceWindow(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.StatusMaintenanceWindow, error) {
 	var m model.StatusMaintenanceWindow
 	var actualStart, actualEnd sql.NullTime
 
@@ -1092,7 +1100,9 @@ func (r *statusPageRepositoryImpl) DeleteMaintenance(id int64) error {
 	return nil
 }
 
-func scanSubscriber(scanner interface{ Scan(dest ...interface{}) error }) (*model.StatusSubscriber, error) {
+func scanSubscriber(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.StatusSubscriber, error) {
 	var s model.StatusSubscriber
 	var isVerifiedInt int
 

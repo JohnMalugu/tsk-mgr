@@ -11,24 +11,24 @@ import (
 )
 
 var (
-	ErrStatusPageNotFound        = errors.New("status page not found")
-	ErrStatusPageNameRequired    = errors.New("status page name is required")
-	ErrStatusPageSlugRequired    = errors.New("status page slug is required")
-	ErrInvalidStatusPageSlug     = errors.New("invalid status page slug: alphanumeric and hyphens only")
-	ErrDuplicateStatusPageSlug   = errors.New("status page slug already in use")
-	ErrComponentNotFound         = errors.New("status component not found")
-	ErrComponentNameRequired     = errors.New("status component name is required")
-	ErrInvalidComponentStatus    = errors.New("invalid component status")
-	ErrStatusIncidentNotFound    = errors.New("status incident not found")
-	ErrStatusIncidentTitleReq    = errors.New("status incident title is required")
-	ErrInvalidStatusIncidentSt   = errors.New("invalid status incident status")
-	ErrInvalidIncidentImpact     = errors.New("invalid incident impact level")
-	ErrStatusMaintenanceNotFound = errors.New("maintenance window not found")
-	ErrMaintenanceTitleReq       = errors.New("maintenance window title is required")
-	ErrInvalidMaintenanceTimes   = errors.New("maintenance start time must be before end time")
-	ErrSubscriberNotFound        = errors.New("status subscriber not found")
-	ErrSubscriberTargetRequired  = errors.New("subscriber target endpoint or email is required")
-	ErrInvalidSubscriberType     = errors.New("invalid subscriber type: must be email, webhook, or slack")
+	ErrStatusPageNotFound        = model.ErrStatusPageNotFound
+	ErrStatusPageNameRequired    = model.ErrStatusPageNameRequired
+	ErrStatusPageSlugRequired    = model.ErrStatusPageSlugRequired
+	ErrInvalidStatusPageSlug     = model.ErrInvalidStatusPageSlug
+	ErrDuplicateStatusPageSlug   = model.ErrDuplicateStatusPageSlug
+	ErrComponentNotFound         = model.ErrComponentNotFound
+	ErrComponentNameRequired     = model.ErrComponentNameRequired
+	ErrInvalidComponentStatus    = model.ErrInvalidComponentStatus
+	ErrStatusIncidentNotFound    = model.ErrStatusIncidentNotFound
+	ErrStatusIncidentTitleReq    = model.ErrStatusIncidentTitleReq
+	ErrInvalidStatusIncidentSt   = model.ErrInvalidStatusIncidentSt
+	ErrInvalidIncidentImpact     = model.ErrInvalidIncidentImpact
+	ErrStatusMaintenanceNotFound = model.ErrMaintenanceNotFound
+	ErrMaintenanceTitleReq       = model.ErrMaintenanceTitleReq
+	ErrInvalidMaintenanceTimes   = model.ErrInvalidMaintenanceTimes
+	ErrSubscriberNotFound        = model.ErrSubscriberNotFound
+	ErrSubscriberTargetRequired  = model.ErrSubscriberTargetRequired
+	ErrInvalidSubscriberType     = model.ErrInvalidSubscriberType
 )
 
 // StatusPageService coordinates status pages, service component trees, incident broadcasts, and subscriber alerts
@@ -1000,10 +1000,16 @@ func (s *statusPageServiceImpl) GetPublicStatusOverview(slug string) (*model.Sta
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	if groups == nil {
+		groups = []model.ComponentGroup{}
+	}
 
 	incidents, _, err := s.ListIncidents(page.ID, 10, 0)
 	if err != nil {
 		return nil, nil, nil, err
+	}
+	if incidents == nil {
+		incidents = []model.StatusIncident{}
 	}
 
 	return page, groups, incidents, nil

@@ -61,7 +61,7 @@ type StatusPage struct {
 	Headline      string    `json:"headline,omitempty"`
 	Visibility    string    `json:"visibility"` // public, private
 	CustomDomain  string    `json:"custom_domain,omitempty"`
-	Theme         string    `json:"theme"` // light, dark, system
+	Theme         string    `json:"theme"`          // light, dark, system
 	CurrentStatus string    `json:"current_status"` // operational, degraded_performance, partial_outage, major_outage, under_maintenance
 	IsActive      bool      `json:"is_active"`
 	CreatedByID   string    `json:"created_by_id"`
@@ -291,15 +291,15 @@ type CreateStatusPageRequest struct {
 
 // UpdateStatusPageRequest payload for modifying an existing status page
 type UpdateStatusPageRequest struct {
-	Name         *string `json:"name,omitempty"`
-	Slug         *string `json:"slug,omitempty"`
-	Description  *string `json:"description,omitempty"`
-	Headline     *string `json:"headline,omitempty"`
-	Visibility   *string `json:"visibility,omitempty"`
-	CustomDomain *string `json:"custom_domain,omitempty"`
-	Theme        *string `json:"theme,omitempty"`
+	Name          *string `json:"name,omitempty"`
+	Slug          *string `json:"slug,omitempty"`
+	Description   *string `json:"description,omitempty"`
+	Headline      *string `json:"headline,omitempty"`
+	Visibility    *string `json:"visibility,omitempty"`
+	CustomDomain  *string `json:"custom_domain,omitempty"`
+	Theme         *string `json:"theme,omitempty"`
 	CurrentStatus *string `json:"current_status,omitempty"`
-	IsActive     *bool   `json:"is_active,omitempty"`
+	IsActive      *bool   `json:"is_active,omitempty"`
 }
 
 // CreateComponentGroupRequest payload for defining a component group
@@ -344,13 +344,13 @@ type StatusPageFilter struct {
 
 // CreateStatusIncidentRequest payload for announcing a new service incident
 type CreateStatusIncidentRequest struct {
-	IncidentID           *int64            `json:"incident_id,omitempty"`
-	Title                string            `json:"title"`
-	Status               string            `json:"status,omitempty"` // default: investigating
-	Impact               string            `json:"impact,omitempty"` // default: minor
-	Message              string            `json:"message"`
-	AffectedComponentIDs []int64           `json:"affected_component_ids,omitempty"`
-	ComponentStatusMap   map[int64]string  `json:"component_status_map,omitempty"`
+	IncidentID           *int64           `json:"incident_id,omitempty"`
+	Title                string           `json:"title"`
+	Status               string           `json:"status,omitempty"` // default: investigating
+	Impact               string           `json:"impact,omitempty"` // default: minor
+	Message              string           `json:"message"`
+	AffectedComponentIDs []int64          `json:"affected_component_ids,omitempty"`
+	ComponentStatusMap   map[int64]string `json:"component_status_map,omitempty"`
 }
 
 // UpdateStatusIncidentRequest payload for updating incident attributes
