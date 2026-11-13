@@ -2308,6 +2308,17 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_oncall_pages_policy ON oncall_pages(policy_id);
 	CREATE INDEX IF NOT EXISTS idx_oncall_pages_inc ON oncall_pages(incident_id);
 	CREATE INDEX IF NOT EXISTS idx_oncall_pages_paged ON oncall_pages(paged_user_id);
+	CREATE INDEX IF NOT EXISTS idx_status_pages_ws_slug ON status_pages(workspace_id, slug);
+	CREATE INDEX IF NOT EXISTS idx_status_pages_public ON status_pages(visibility, is_active);
+	CREATE INDEX IF NOT EXISTS idx_status_comp_groups_page ON status_component_groups(page_id, display_order);
+	CREATE INDEX IF NOT EXISTS idx_status_comp_page ON status_components(page_id, display_order);
+	CREATE INDEX IF NOT EXISTS idx_status_comp_group ON status_components(group_id);
+	CREATE INDEX IF NOT EXISTS idx_status_comp_ci ON status_components(ci_id);
+	CREATE INDEX IF NOT EXISTS idx_status_inc_page_status ON status_incidents(page_id, status);
+	CREATE INDEX IF NOT EXISTS idx_status_inc_inc ON status_incidents(incident_id);
+	CREATE INDEX IF NOT EXISTS idx_status_inc_updates_inc ON status_incident_updates(status_incident_id, created_at);
+	CREATE INDEX IF NOT EXISTS idx_status_maint_page_status ON status_maintenance_windows(page_id, status);
+	CREATE INDEX IF NOT EXISTS idx_status_subs_page ON status_subscribers(page_id, is_verified);
 	`
 
 	_, err = db.Exec(indexQuery)
