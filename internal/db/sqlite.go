@@ -2021,6 +2021,47 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	statusIncidentsQuery := `
+	CREATE TABLE IF NOT EXISTS status_incidents (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		page_id INTEGER NOT NULL,
+		incident_id INTEGER,
+		title TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'investigating',
+		impact TEXT NOT NULL DEFAULT 'minor',
+		started_at DATETIME NOT NULL,
+		resolved_at DATETIME,
+		affected_components_json TEXT NOT NULL DEFAULT '[]',
+		created_by_id TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (page_id) REFERENCES status_pages(id) ON DELETE CASCADE,
+		FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE SET NULL,
+		FOREIGN KEY (created_by_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(statusIncidentsQuery)
+	if err != nil {
+		return err
+	}
+
+	statusIncidentUpdatesQuery := `
+	CREATE TABLE IF NOT EXISTS status_incident_updates (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		status_incident_id INTEGER NOT NULL,
+		status TEXT NOT NULL,
+		message TEXT NOT NULL,
+		posted_by_id TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (status_incident_id) REFERENCES status_incidents(id) ON DELETE CASCADE,
+		FOREIGN KEY (posted_by_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(statusIncidentUpdatesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
