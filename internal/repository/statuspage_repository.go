@@ -691,51 +691,404 @@ func (r *statusPageRepositoryImpl) ComputeOverallStatus(pageID int64) (string, e
 	return overall, nil
 }
 
+func scanStatusIncident(scanner interface{ Scan(dest ...interface{}) error }) (*model.StatusIncident, error) {
+	var inc model.StatusIncident
+	var incidentID sql.NullInt64
+	var resolvedAt sql.NullTime
+	var incidentNumber sql.NullInt64
+
+	err := scanner.Scan(
+		&inc.ID, &inc.PageID, &incidentID, &inc.Title, &inc.Status,
+		&inc.Impact, &inc.StartedAt, &resolvedAt, &inc.AffectedComponentsJSON,
+		&inc.CreatedByID, &inc.CreatedAt, &inc.UpdatedAt,
+		&incidentNumber,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if incidentID.Valid {
+		iid := incidentID.Int64
+		inc.IncidentID = &iid
+	}
+	if resolvedAt.Valid {
+		rt := resolvedAt.Time
+		inc.ResolvedAt = &rt
+	}
+	if incidentNumber.Valid {
+		in := int(incidentNumber.Int64)
+		inc.IncidentNumber = &in
+	}
+	return &inc, nil
+}
+
 func (r *statusPageRepositoryImpl) CreateIncident(inc *model.StatusIncident) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if inc.CreatedAt.IsZero() {
+		inc.CreatedAt = now
+	}
+	if inc.UpdatedAt.IsZero() {
+		inc.UpdatedAt = now
+	}
+	if inc.StartedAt.IsZero() {
+		inc.StartedAt = now
+	}
+	if inc.Status == "" {
+		inc.Status = model.StatusIncidentInvestigating
+	}
+	if inc.Impact == "" {
+		inc.Impact = model.ImpactMinor
+	}
+	if inc.AffectedComponentsJSON == "" {
+		inc.AffectedComponentsJSON = "[]"
+	}
+
+	res, err := r.db.Exec(`
+		INSERT INTO status_incidents (
+			page_id, incident_id, title, status, impact, started_at,
+			resolved_at, affected_components_json, created_by_id, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, inc.PageID, inc.IncidentID, inc.Title, inc.Status, inc.Impact,
+		inc.StartedAt, inc.ResolvedAt, inc.AffectedComponentsJSON, inc.CreatedByID, inc.CreatedAt, inc.UpdatedAt)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	inc.ID = id
+	return id, nil
 }
 
 func (r *statusPageRepositoryImpl) GetIncidentByID(id int64) (*model.StatusIncident, error) {
-	return nil, nil
+	query := `
+		SELECT si.id, si.page_id, si.incident_id, si.title, si.status,
+		       si.impact, si.started_at, si.resolved_at, si.affected_components_json,
+		       si.created_by_id, si.created_at, si.updated_at,
+		       i.incident_number
+		FROM status_incidents si
+		LEFT JOIN incidents i ON si.incident_id = i.id
+		WHERE si.id = ?
+	`
+	inc, err := scanStatusIncident(r.db.QueryRow(query, id))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrStatusIncidentNotFound
+		}
+		return nil, err
+	}
+
+	updates, err := r.ListIncidentUpdates(id)
+	if err == nil {
+		inc.Updates = updates
+	}
+	return inc, nil
 }
 
 func (r *statusPageRepositoryImpl) ListIncidents(pageID int64, limit, offset int) ([]model.StatusIncident, int, error) {
-	return nil, 0, nil
+	countQuery := `SELECT COUNT(*) FROM status_incidents WHERE page_id = ?`
+	var totalCount int
+	if err := r.db.QueryRow(countQuery, pageID).Scan(&totalCount); err != nil {
+		return nil, 0, err
+	}
+
+	dataQuery := `
+		SELECT si.id, si.page_id, si.incident_id, si.title, si.status,
+		       si.impact, si.started_at, si.resolved_at, si.affected_components_json,
+		       si.created_by_id, si.created_at, si.updated_at,
+		       i.incident_number
+		FROM status_incidents si
+		LEFT JOIN incidents i ON si.incident_id = i.id
+		WHERE si.page_id = ?
+		ORDER BY si.started_at DESC, si.id DESC
+	`
+	var args []interface{}
+	args = append(args, pageID)
+	if limit > 0 {
+		dataQuery += " LIMIT ?"
+		args = append(args, limit)
+		if offset > 0 {
+			dataQuery += " OFFSET ?"
+			args = append(args, offset)
+		}
+	}
+
+	rows, err := r.db.Query(dataQuery, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var incidents []model.StatusIncident
+	for rows.Next() {
+		inc, err := scanStatusIncident(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		updates, _ := r.ListIncidentUpdates(inc.ID)
+		inc.Updates = updates
+		incidents = append(incidents, *inc)
+	}
+	return incidents, totalCount, nil
 }
 
 func (r *statusPageRepositoryImpl) UpdateIncident(inc *model.StatusIncident) error {
+	inc.UpdatedAt = time.Now()
+	res, err := r.db.Exec(`
+		UPDATE status_incidents
+		SET title = ?, status = ?, impact = ?, resolved_at = ?,
+		    affected_components_json = ?, updated_at = ?
+		WHERE id = ?
+	`, inc.Title, inc.Status, inc.Impact, inc.ResolvedAt,
+		inc.AffectedComponentsJSON, inc.UpdatedAt, inc.ID)
+	if err != nil {
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return ErrStatusIncidentNotFound
+	}
 	return nil
 }
 
 func (r *statusPageRepositoryImpl) DeleteIncident(id int64) error {
+	res, err := r.db.Exec(`DELETE FROM status_incidents WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return ErrStatusIncidentNotFound
+	}
 	return nil
 }
 
 func (r *statusPageRepositoryImpl) AddIncidentUpdate(update *model.StatusIncidentUpdate) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if update.CreatedAt.IsZero() {
+		update.CreatedAt = now
+	}
+
+	res, err := r.db.Exec(`
+		INSERT INTO status_incident_updates (
+			status_incident_id, status, message, posted_by_id, created_at
+		) VALUES (?, ?, ?, ?, ?)
+	`, update.StatusIncidentID, update.Status, update.Message, update.PostedByID, update.CreatedAt)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	update.ID = id
+
+	// Sync incident status & timestamp if resolved
+	if update.Status == model.StatusIncidentResolved {
+		_, _ = r.db.Exec(`UPDATE status_incidents SET status = ?, resolved_at = ?, updated_at = ? WHERE id = ?`,
+			update.Status, now, now, update.StatusIncidentID)
+	} else {
+		_, _ = r.db.Exec(`UPDATE status_incidents SET status = ?, updated_at = ? WHERE id = ?`,
+			update.Status, now, update.StatusIncidentID)
+	}
+
+	return id, nil
 }
 
 func (r *statusPageRepositoryImpl) ListIncidentUpdates(incidentID int64) ([]model.StatusIncidentUpdate, error) {
-	return nil, nil
+	query := `
+		SELECT u.id, u.status_incident_id, u.status, u.message, u.posted_by_id, u.created_at,
+		       COALESCE(usr.username, '')
+		FROM status_incident_updates u
+		LEFT JOIN users usr ON u.posted_by_id = usr.id
+		WHERE u.status_incident_id = ?
+		ORDER BY u.created_at DESC, u.id DESC
+	`
+	rows, err := r.db.Query(query, incidentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var updates []model.StatusIncidentUpdate
+	for rows.Next() {
+		var u model.StatusIncidentUpdate
+		var posterName sql.NullString
+		if err := rows.Scan(&u.ID, &u.StatusIncidentID, &u.Status, &u.Message, &u.PostedByID, &u.CreatedAt, &posterName); err != nil {
+			return nil, err
+		}
+		if posterName.Valid {
+			u.PosterName = posterName.String
+		}
+		updates = append(updates, u)
+	}
+	return updates, nil
+}
+
+func scanMaintenanceWindow(scanner interface{ Scan(dest ...interface{}) error }) (*model.StatusMaintenanceWindow, error) {
+	var m model.StatusMaintenanceWindow
+	var actualStart, actualEnd sql.NullTime
+
+	err := scanner.Scan(
+		&m.ID, &m.PageID, &m.Title, &m.Description, &m.Status,
+		&m.ScheduledStartAt, &m.ScheduledEndAt, &actualStart, &actualEnd,
+		&m.AffectedComponentsJSON, &m.CreatedByID, &m.CreatedAt, &m.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if actualStart.Valid {
+		as := actualStart.Time
+		m.ActualStartAt = &as
+	}
+	if actualEnd.Valid {
+		ae := actualEnd.Time
+		m.ActualEndAt = &ae
+	}
+	return &m, nil
 }
 
 func (r *statusPageRepositoryImpl) CreateMaintenance(maint *model.StatusMaintenanceWindow) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if maint.CreatedAt.IsZero() {
+		maint.CreatedAt = now
+	}
+	if maint.UpdatedAt.IsZero() {
+		maint.UpdatedAt = now
+	}
+	if maint.Status == "" {
+		maint.Status = model.MaintenanceStatusScheduled
+	}
+	if maint.AffectedComponentsJSON == "" {
+		maint.AffectedComponentsJSON = "[]"
+	}
+
+	res, err := r.db.Exec(`
+		INSERT INTO status_maintenance_windows (
+			page_id, title, description, status, scheduled_start_at, scheduled_end_at,
+			actual_start_at, actual_end_at, affected_components_json, created_by_id,
+			created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, maint.PageID, maint.Title, maint.Description, maint.Status, maint.ScheduledStartAt,
+		maint.ScheduledEndAt, maint.ActualStartAt, maint.ActualEndAt, maint.AffectedComponentsJSON,
+		maint.CreatedByID, maint.CreatedAt, maint.UpdatedAt)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	maint.ID = id
+	return id, nil
 }
 
 func (r *statusPageRepositoryImpl) GetMaintenanceByID(id int64) (*model.StatusMaintenanceWindow, error) {
-	return nil, nil
+	query := `
+		SELECT id, page_id, title, description, status, scheduled_start_at, scheduled_end_at,
+		       actual_start_at, actual_end_at, affected_components_json, created_by_id,
+		       created_at, updated_at
+		FROM status_maintenance_windows
+		WHERE id = ?
+	`
+	m, err := scanMaintenanceWindow(r.db.QueryRow(query, id))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrStatusMaintenanceNotFound
+		}
+		return nil, err
+	}
+	return m, nil
 }
 
 func (r *statusPageRepositoryImpl) ListMaintenances(pageID int64, limit, offset int) ([]model.StatusMaintenanceWindow, int, error) {
-	return nil, 0, nil
+	countQuery := `SELECT COUNT(*) FROM status_maintenance_windows WHERE page_id = ?`
+	var totalCount int
+	if err := r.db.QueryRow(countQuery, pageID).Scan(&totalCount); err != nil {
+		return nil, 0, err
+	}
+
+	dataQuery := `
+		SELECT id, page_id, title, description, status, scheduled_start_at, scheduled_end_at,
+		       actual_start_at, actual_end_at, affected_components_json, created_by_id,
+		       created_at, updated_at
+		FROM status_maintenance_windows
+		WHERE page_id = ?
+		ORDER BY scheduled_start_at DESC, id DESC
+	`
+	var args []interface{}
+	args = append(args, pageID)
+	if limit > 0 {
+		dataQuery += " LIMIT ?"
+		args = append(args, limit)
+		if offset > 0 {
+			dataQuery += " OFFSET ?"
+			args = append(args, offset)
+		}
+	}
+
+	rows, err := r.db.Query(dataQuery, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var list []model.StatusMaintenanceWindow
+	for rows.Next() {
+		m, err := scanMaintenanceWindow(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		list = append(list, *m)
+	}
+	return list, totalCount, nil
 }
 
 func (r *statusPageRepositoryImpl) UpdateMaintenance(maint *model.StatusMaintenanceWindow) error {
+	maint.UpdatedAt = time.Now()
+	res, err := r.db.Exec(`
+		UPDATE status_maintenance_windows
+		SET title = ?, description = ?, status = ?, scheduled_start_at = ?,
+		    scheduled_end_at = ?, actual_start_at = ?, actual_end_at = ?,
+		    affected_components_json = ?, updated_at = ?
+		WHERE id = ?
+	`, maint.Title, maint.Description, maint.Status, maint.ScheduledStartAt,
+		maint.ScheduledEndAt, maint.ActualStartAt, maint.ActualEndAt,
+		maint.AffectedComponentsJSON, maint.UpdatedAt, maint.ID)
+	if err != nil {
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return ErrStatusMaintenanceNotFound
+	}
 	return nil
 }
 
 func (r *statusPageRepositoryImpl) DeleteMaintenance(id int64) error {
+	res, err := r.db.Exec(`DELETE FROM status_maintenance_windows WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return ErrStatusMaintenanceNotFound
+	}
 	return nil
 }
 
