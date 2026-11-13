@@ -188,3 +188,26 @@ type StatusMaintenanceWindow struct {
 	AffectedComponentIDs   []int64  `json:"affected_component_ids,omitempty"`
 	AffectedComponentNames []string `json:"affected_component_names,omitempty"`
 }
+
+// Notification channel types for status page subscribers
+const (
+	SubscriberTypeEmail   = "email"
+	SubscriberTypeWebhook = "webhook"
+	SubscriberTypeSlack   = "slack"
+)
+
+// StatusSubscriber represents an external user or webhook endpoint subscribed to status page notifications
+type StatusSubscriber struct {
+	ID                       int64     `json:"id"`
+	PageID                   int64     `json:"page_id"`
+	SubscriberType           string    `json:"subscriber_type"` // email, webhook, slack
+	TargetEndpoint           string    `json:"target_endpoint"` // email address, webhook url, or slack incoming webhook
+	VerificationToken        string    `json:"verification_token,omitempty"`
+	IsVerified               bool      `json:"is_verified"`
+	SubscribedComponentsJSON string    `json:"subscribed_components_json,omitempty"`
+	CreatedAt                time.Time `json:"created_at"`
+	UpdatedAt                time.Time `json:"updated_at"`
+
+	// Enriched fields
+	SubscribedComponentIDs []int64 `json:"subscribed_component_ids,omitempty"`
+}
