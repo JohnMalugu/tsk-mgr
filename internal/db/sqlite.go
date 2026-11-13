@@ -2086,6 +2086,26 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	statusSubscribersQuery := `
+	CREATE TABLE IF NOT EXISTS status_subscribers (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		page_id INTEGER NOT NULL,
+		subscriber_type TEXT NOT NULL DEFAULT 'email',
+		target_endpoint TEXT NOT NULL,
+		verification_token TEXT NOT NULL DEFAULT '',
+		is_verified INTEGER NOT NULL DEFAULT 1,
+		subscribed_components_json TEXT NOT NULL DEFAULT '[]',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		UNIQUE(page_id, target_endpoint),
+		FOREIGN KEY (page_id) REFERENCES status_pages(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(statusSubscribersQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
