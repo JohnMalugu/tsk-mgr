@@ -201,6 +201,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 Status Page & Service Health Broadcasting System
+	if strings.HasPrefix(r.URL.Path, "/v2/statuspages") {
+		if handler.GlobalStatusPageHandler == nil {
+			http.Error(w, "StatusPage handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalStatusPageHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return
