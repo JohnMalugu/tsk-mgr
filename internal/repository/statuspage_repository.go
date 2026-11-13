@@ -1092,22 +1092,194 @@ func (r *statusPageRepositoryImpl) DeleteMaintenance(id int64) error {
 	return nil
 }
 
+func scanSubscriber(scanner interface{ Scan(dest ...interface{}) error }) (*model.StatusSubscriber, error) {
+	var s model.StatusSubscriber
+	var isVerifiedInt int
+
+	err := scanner.Scan(
+		&s.ID, &s.PageID, &s.SubscriberType, &s.TargetEndpoint,
+		&s.VerificationToken, &isVerifiedInt, &s.SubscribedComponentsJSON,
+		&s.CreatedAt, &s.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	s.IsVerified = (isVerifiedInt == 1)
+	return &s, nil
+}
+
 func (r *statusPageRepositoryImpl) CreateSubscriber(sub *model.StatusSubscriber) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if sub.CreatedAt.IsZero() {
+		sub.CreatedAt = now
+	}
+	if sub.UpdatedAt.IsZero() {
+		sub.UpdatedAt = now
+	}
+	if sub.SubscriberType == "" {
+		sub.SubscriberType = model.SubscriberTypeEmail
+	}
+	if sub.SubscribedComponentsJSON == "" {
+		sub.SubscribedComponentsJSON = "[]"
+	}
+	isVerifiedInt := 1
+
+	res, err := r.db.Exec(`
+		INSERT INTO status_subscribers (
+			page_id, subscriber_type, target_endpoint, verification_token,
+			is_verified, subscribed_components_json, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, sub.PageID, sub.SubscriberType, sub.TargetEndpoint, sub.VerificationToken,
+		isVerifiedInt, sub.SubscribedComponentsJSON, sub.CreatedAt, sub.UpdatedAt)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	sub.ID = id
+	return id, nil
 }
 
 func (r *statusPageRepositoryImpl) GetSubscriberByID(id int64) (*model.StatusSubscriber, error) {
-	return nil, nil
+	query := `
+		SELECT id, page_id, subscriber_type, target_endpoint,
+		       verification_token, is_verified, subscribed_components_json,
+		       created_at, updated_at
+		FROM status_subscribers
+		WHERE id = ?
+	`
+	sub, err := scanSubscriber(r.db.QueryRow(query, id))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrSubscriberNotFound
+		}
+		return nil, err
+	}
+	return sub, nil
 }
 
 func (r *statusPageRepositoryImpl) ListSubscribers(pageID int64) ([]model.StatusSubscriber, error) {
-	return nil, nil
+	query := `
+		SELECT id, page_id, subscriber_type, target_endpoint,
+		       verification_token, is_verified, subscribed_components_json,
+		       created_at, updated_at
+		FROM status_subscribers
+		WHERE page_id = ?
+		ORDER BY id DESC
+	`
+	rows, err := r.db.Query(query, pageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var subs []model.StatusSubscriber
+	for rows.Next() {
+		sub, err := scanSubscriber(rows)
+		if err != nil {
+			return nil, err
+		}
+		subs = append(subs, *sub)
+	}
+	return subs, nil
 }
 
 func (r *statusPageRepositoryImpl) DeleteSubscriber(id int64) error {
+	res, err := r.db.Exec(`DELETE FROM status_subscribers WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return ErrSubscriberNotFound
+	}
 	return nil
 }
 
 func (r *statusPageRepositoryImpl) GetPageMetrics(pageID int64) (*model.StatusPageMetrics, error) {
-	return nil, nil
+	metrics := &model.StatusPageMetrics{
+		UptimePercentage30d: 100.0,
+		UptimePercentage60d: 100.0,
+		UptimePercentage90d: 100.0,
+	}
+
+	// 1. Component breakdown
+	rows, err := r.db.Query(`SELECT status, COUNT(*) FROM status_components WHERE page_id = ? GROUP BY status`, pageID)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var st string
+			var count int
+			if err := rows.Scan(&st, &count); err == nil {
+				metrics.TotalComponents += count
+				switch st {
+				case model.StatusOperational:
+					metrics.OperationalComponents = count
+				case model.StatusDegradedPerformance:
+					metrics.DegradedComponents = count
+				case model.StatusPartialOutage, model.StatusMajorOutage:
+					metrics.OutageComponents += count
+				case model.StatusUnderMaintenance:
+					metrics.UnderMaintenanceComponents = count
+				}
+			}
+		}
+	}
+
+	// 2. Active incidents count
+	_ = r.db.QueryRow(`
+		SELECT COUNT(*) FROM status_incidents WHERE page_id = ? AND status != 'resolved'
+	`, pageID).Scan(&metrics.ActiveIncidents)
+
+	// 3. Resolved incidents in last 30 days
+	_ = r.db.QueryRow(`
+		SELECT COUNT(*) FROM status_incidents
+		WHERE page_id = ? AND status = 'resolved' AND resolved_at >= datetime('now', '-30 days')
+	`, pageID).Scan(&metrics.ResolvedIncidents30d)
+
+	// 4. Scheduled maintenance count
+	_ = r.db.QueryRow(`
+		SELECT COUNT(*) FROM status_maintenance_windows
+		WHERE page_id = ? AND status IN ('scheduled', 'in_progress')
+	`, pageID).Scan(&metrics.ScheduledMaintenances)
+
+	// 5. Total subscribers
+	_ = r.db.QueryRow(`
+		SELECT COUNT(*) FROM status_subscribers WHERE page_id = ?
+	`, pageID).Scan(&metrics.TotalSubscribers)
+
+	// 6. Uptime percentages based on major/critical outage incident duration
+	calculateUptime := func(days int) float64 {
+		totalMinutes := float64(days * 1440)
+		var downtimeMinutes float64
+		_ = r.db.QueryRow(`
+			SELECT COALESCE(SUM((julianday(COALESCE(resolved_at, datetime('now'))) - julianday(started_at)) * 1440.0), 0.0)
+			FROM status_incidents
+			WHERE page_id = ? AND impact IN ('major', 'critical') AND started_at >= datetime('now', printf('-%d days', ?))
+		`, pageID, days).Scan(&downtimeMinutes)
+
+		if downtimeMinutes <= 0.0 {
+			return 100.0
+		}
+		pct := 100.0 - (downtimeMinutes / totalMinutes * 100.0)
+		if pct < 0.0 {
+			return 0.0
+		}
+		if pct > 100.0 {
+			return 100.0
+		}
+		return pct
+	}
+
+	metrics.UptimePercentage30d = calculateUptime(30)
+	metrics.UptimePercentage60d = calculateUptime(60)
+	metrics.UptimePercentage90d = calculateUptime(90)
+
+	return metrics, nil
 }
