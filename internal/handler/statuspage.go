@@ -184,3 +184,123 @@ func (h *StatusPageHandler) DeletePage(w http.ResponseWriter, r *http.Request, i
 	}
 	writeStatusPageJSON(w, http.StatusOK, map[string]string{"message": "status page deleted successfully"})
 }
+
+// CreateComponentGroup handles POST /v2/statuspages/{id}/groups
+func (h *StatusPageHandler) CreateComponentGroup(w http.ResponseWriter, r *http.Request, pageID int64) {
+	var req model.CreateComponentGroupRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeStatusPageError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+
+	group, err := h.svc.CreateComponentGroup(pageID, req)
+	if err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusCreated, group)
+}
+
+// ListComponentGroups handles GET /v2/statuspages/{id}/groups
+func (h *StatusPageHandler) ListComponentGroups(w http.ResponseWriter, r *http.Request, pageID int64) {
+	groups, err := h.svc.ListComponentGroups(pageID)
+	if err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusOK, map[string]interface{}{
+		"groups": groups,
+	})
+}
+
+// DeleteComponentGroup handles DELETE /v2/statuspages/{id}/groups/{groupId}
+func (h *StatusPageHandler) DeleteComponentGroup(w http.ResponseWriter, r *http.Request, groupID int64) {
+	if err := h.svc.DeleteComponentGroup(groupID); err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusOK, map[string]string{"message": "component group deleted successfully"})
+}
+
+// CreateComponent handles POST /v2/statuspages/{id}/components
+func (h *StatusPageHandler) CreateComponent(w http.ResponseWriter, r *http.Request, pageID int64) {
+	var req model.CreateComponentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeStatusPageError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+
+	comp, err := h.svc.CreateComponent(pageID, req)
+	if err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusCreated, comp)
+}
+
+// GetComponent handles GET /v2/statuspages/{id}/components/{compId}
+func (h *StatusPageHandler) GetComponent(w http.ResponseWriter, r *http.Request, compID int64) {
+	comp, err := h.svc.GetComponent(compID)
+	if err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusOK, comp)
+}
+
+// ListComponents handles GET /v2/statuspages/{id}/components
+func (h *StatusPageHandler) ListComponents(w http.ResponseWriter, r *http.Request, pageID int64) {
+	components, err := h.svc.ListComponents(pageID)
+	if err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusOK, map[string]interface{}{
+		"components": components,
+	})
+}
+
+// UpdateComponent handles PUT/PATCH /v2/statuspages/{id}/components/{compId}
+func (h *StatusPageHandler) UpdateComponent(w http.ResponseWriter, r *http.Request, compID int64) {
+	var req model.UpdateComponentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeStatusPageError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+
+	comp, err := h.svc.UpdateComponent(compID, req)
+	if err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusOK, comp)
+}
+
+// DeleteComponent handles DELETE /v2/statuspages/{id}/components/{compId}
+func (h *StatusPageHandler) DeleteComponent(w http.ResponseWriter, r *http.Request, compID int64) {
+	if err := h.svc.DeleteComponent(compID); err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusOK, map[string]string{"message": "component deleted successfully"})
+}
+
+// SetComponentStatus handles POST/PATCH /v2/statuspages/{id}/components/{compId}/status
+func (h *StatusPageHandler) SetComponentStatus(w http.ResponseWriter, r *http.Request, compID int64) {
+	var req struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeStatusPageError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+
+	if err := h.svc.SetComponentStatus(compID, req.Status); err != nil {
+		handleStatusPageServiceError(w, err)
+		return
+	}
+	writeStatusPageJSON(w, http.StatusOK, map[string]string{
+		"message": "component status updated successfully",
+		"status":  req.Status,
+	})
+}
