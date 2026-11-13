@@ -72,3 +72,39 @@ type StatusPage struct {
 	ComponentsCount      int    `json:"components_count"`
 	ActiveIncidentsCount int    `json:"active_incidents_count"`
 }
+
+// ComponentGroup aggregates related components into logical sections (e.g. Core APIs, Third-Party Providers)
+type ComponentGroup struct {
+	ID           int64     `json:"id"`
+	PageID       int64     `json:"page_id"`
+	Name         string    `json:"name"`
+	Description  string    `json:"description,omitempty"`
+	DisplayOrder int       `json:"display_order"`
+	Collapsed    bool      `json:"collapsed"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+
+	// Enriched fields
+	Components      []StatusComponent `json:"components,omitempty"`
+	ComponentsCount int               `json:"components_count"`
+}
+
+// StatusComponent represents an individual tracked service, API, or infrastructure component
+type StatusComponent struct {
+	ID           int64     `json:"id"`
+	PageID       int64     `json:"page_id"`
+	GroupID      *int64    `json:"group_id,omitempty"`
+	CIID         *int64    `json:"ci_id,omitempty"` // Optional link to CMDB Configuration Item
+	Name         string    `json:"name"`
+	Description  string    `json:"description,omitempty"`
+	Status       string    `json:"status"` // operational, degraded_performance, partial_outage, major_outage, under_maintenance
+	DisplayOrder int       `json:"display_order"`
+	IsMonitored  bool      `json:"is_monitored"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+
+	// Enriched fields
+	GroupName string `json:"group_name,omitempty"`
+	CIName    string `json:"ci_name,omitempty"`
+	CICode    string `json:"ci_code,omitempty"`
+}
