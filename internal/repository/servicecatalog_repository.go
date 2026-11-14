@@ -247,22 +247,323 @@ func (r *serviceCatalogRepositoryImpl) DeleteCategory(id int64) error {
 	}
 	return nil
 }
+func scanCatalogItem(scanner interface{ Scan(dest ...interface{}) error }) (*model.ServiceCatalogItem, error) {
+	var item model.ServiceCatalogItem
+	var targetProjectID, ciID sql.NullInt64
+	var reqApprInt, autoTaskInt, isActiveInt int
+	var categoryName, projectName, ciName sql.NullString
+	var reqCount int
+
+	err := scanner.Scan(
+		&item.ID, &item.WorkspaceID, &item.CategoryID, &item.Name, &item.Slug,
+		&item.Description, &item.ShortDescription, &item.Icon,
+		&item.EstimatedFulfillmentHours, &item.CostEstimateCents, &item.Currency,
+		&reqApprInt, &item.ApprovalRole, &autoTaskInt, &targetProjectID, &ciID,
+		&isActiveInt, &item.FormSchemaJSON, &item.CreatedByID, &item.CreatedAt, &item.UpdatedAt,
+		&categoryName, &projectName, &ciName, &reqCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	item.RequiresApproval = (reqApprInt == 1)
+	item.AutoCreateTask = (autoTaskInt == 1)
+	item.IsActive = (isActiveInt == 1)
+
+	if targetProjectID.Valid {
+		pid := targetProjectID.Int64
+		item.TargetProjectID = &pid
+	}
+	if ciID.Valid {
+		cid := ciID.Int64
+		item.CIID = &cid
+	}
+	if categoryName.Valid {
+		item.CategoryName = categoryName.String
+	}
+	if projectName.Valid {
+		item.ProjectName = projectName.String
+	}
+	if ciName.Valid {
+		item.CIName = ciName.String
+	}
+	item.RequestCount = reqCount
+
+	return &item, nil
+}
+
 func (r *serviceCatalogRepositoryImpl) CreateItem(item *model.ServiceCatalogItem) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if item.CreatedAt.IsZero() {
+		item.CreatedAt = now
+	}
+	if item.UpdatedAt.IsZero() {
+		item.UpdatedAt = now
+	}
+	if item.Currency == "" {
+		item.Currency = "USD"
+	}
+	if item.FormSchemaJSON == "" {
+		item.FormSchemaJSON = `{"fields":[]}`
+	}
+
+	reqApprInt := 0
+	if item.RequiresApproval {
+		reqApprInt = 1
+	}
+	autoTaskInt := 0
+	if item.AutoCreateTask {
+		autoTaskInt = 1
+	}
+	isActiveInt := 0
+	if item.IsActive {
+		isActiveInt = 1
+	}
+
+	var existingCount int
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM service_catalog_items WHERE workspace_id = ? AND slug = ?`,
+		item.WorkspaceID, item.Slug).Scan(&existingCount)
+	if existingCount > 0 {
+		return 0, ErrDuplicateItemSlug
+	}
+
+	res, err := r.db.Exec(`
+		INSERT INTO service_catalog_items (
+			workspace_id, category_id, name, slug, description, short_description, icon,
+			estimated_fulfillment_hours, cost_estimate_cents, currency,
+			requires_approval, approval_role, auto_create_task, target_project_id, ci_id,
+			is_active, form_schema_json, created_by_id, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, item.WorkspaceID, item.CategoryID, item.Name, item.Slug, item.Description, item.ShortDescription, item.Icon,
+		item.EstimatedFulfillmentHours, item.CostEstimateCents, item.Currency,
+		reqApprInt, item.ApprovalRole, autoTaskInt, item.TargetProjectID, item.CIID,
+		isActiveInt, item.FormSchemaJSON, item.CreatedByID, item.CreatedAt, item.UpdatedAt)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	item.ID = id
+	return id, nil
 }
+
 func (r *serviceCatalogRepositoryImpl) GetItemByID(id int64) (*model.ServiceCatalogItem, error) {
-	return nil, nil
+	query := `
+		SELECT i.id, i.workspace_id, i.category_id, i.name, i.slug,
+		       i.description, i.short_description, i.icon,
+		       i.estimated_fulfillment_hours, i.cost_estimate_cents, i.currency,
+		       i.requires_approval, i.approval_role, i.auto_create_task, i.target_project_id, i.ci_id,
+		       i.is_active, i.form_schema_json, i.created_by_id, i.created_at, i.updated_at,
+		       c.name, p.name, ci.name,
+		       (SELECT COUNT(*) FROM service_requests WHERE catalog_item_id = i.id)
+		FROM service_catalog_items i
+		LEFT JOIN service_catalog_categories c ON i.category_id = c.id
+		LEFT JOIN projects p ON i.target_project_id = p.id
+		LEFT JOIN configuration_items ci ON i.ci_id = ci.id
+		WHERE i.id = ?
+	`
+	item, err := scanCatalogItem(r.db.QueryRow(query, id))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrCatalogItemNotFound
+		}
+		return nil, err
+	}
+	return item, nil
 }
+
 func (r *serviceCatalogRepositoryImpl) GetItemBySlug(workspaceID int64, slug string) (*model.ServiceCatalogItem, error) {
-	return nil, nil
+	query := `
+		SELECT i.id, i.workspace_id, i.category_id, i.name, i.slug,
+		       i.description, i.short_description, i.icon,
+		       i.estimated_fulfillment_hours, i.cost_estimate_cents, i.currency,
+		       i.requires_approval, i.approval_role, i.auto_create_task, i.target_project_id, i.ci_id,
+		       i.is_active, i.form_schema_json, i.created_by_id, i.created_at, i.updated_at,
+		       c.name, p.name, ci.name,
+		       (SELECT COUNT(*) FROM service_requests WHERE catalog_item_id = i.id)
+		FROM service_catalog_items i
+		LEFT JOIN service_catalog_categories c ON i.category_id = c.id
+		LEFT JOIN projects p ON i.target_project_id = p.id
+		LEFT JOIN configuration_items ci ON i.ci_id = ci.id
+		WHERE i.workspace_id = ? AND i.slug = ?
+	`
+	item, err := scanCatalogItem(r.db.QueryRow(query, workspaceID, slug))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrCatalogItemNotFound
+		}
+		return nil, err
+	}
+	return item, nil
 }
+
 func (r *serviceCatalogRepositoryImpl) ListItems(filter model.CatalogItemFilter) ([]model.ServiceCatalogItem, int, error) {
-	return nil, 0, nil
+	countQuery := `
+		SELECT COUNT(*)
+		FROM service_catalog_items i
+		WHERE i.workspace_id = ?
+	`
+	args := []interface{}{filter.WorkspaceID}
+
+	if filter.CategoryID != nil {
+		countQuery += " AND i.category_id = ?"
+		args = append(args, *filter.CategoryID)
+	}
+	if filter.RequiresApproval != nil {
+		reqAppr := 0
+		if *filter.RequiresApproval {
+			reqAppr = 1
+		}
+		countQuery += " AND i.requires_approval = ?"
+		args = append(args, reqAppr)
+	}
+	if filter.IsActive != nil {
+		act := 0
+		if *filter.IsActive {
+			act = 1
+		}
+		countQuery += " AND i.is_active = ?"
+		args = append(args, act)
+	}
+	if filter.Search != "" {
+		keyword := "%" + strings.ToLower(filter.Search) + "%"
+		countQuery += " AND (LOWER(i.name) LIKE ? OR LOWER(i.description) LIKE ? OR LOWER(i.short_description) LIKE ?)"
+		args = append(args, keyword, keyword, keyword)
+	}
+
+	var totalCount int
+	if err := r.db.QueryRow(countQuery, args...).Scan(&totalCount); err != nil {
+		return nil, 0, err
+	}
+
+	dataQuery := `
+		SELECT i.id, i.workspace_id, i.category_id, i.name, i.slug,
+		       i.description, i.short_description, i.icon,
+		       i.estimated_fulfillment_hours, i.cost_estimate_cents, i.currency,
+		       i.requires_approval, i.approval_role, i.auto_create_task, i.target_project_id, i.ci_id,
+		       i.is_active, i.form_schema_json, i.created_by_id, i.created_at, i.updated_at,
+		       c.name, p.name, ci.name,
+		       (SELECT COUNT(*) FROM service_requests WHERE catalog_item_id = i.id)
+		FROM service_catalog_items i
+		LEFT JOIN service_catalog_categories c ON i.category_id = c.id
+		LEFT JOIN projects p ON i.target_project_id = p.id
+		LEFT JOIN configuration_items ci ON i.ci_id = ci.id
+		WHERE i.workspace_id = ?
+	`
+	dataArgs := []interface{}{filter.WorkspaceID}
+
+	if filter.CategoryID != nil {
+		dataQuery += " AND i.category_id = ?"
+		dataArgs = append(dataArgs, *filter.CategoryID)
+	}
+	if filter.RequiresApproval != nil {
+		reqAppr := 0
+		if *filter.RequiresApproval {
+			reqAppr = 1
+		}
+		dataQuery += " AND i.requires_approval = ?"
+		dataArgs = append(dataArgs, reqAppr)
+	}
+	if filter.IsActive != nil {
+		act := 0
+		if *filter.IsActive {
+			act = 1
+		}
+		dataQuery += " AND i.is_active = ?"
+		dataArgs = append(dataArgs, act)
+	}
+	if filter.Search != "" {
+		keyword := "%" + strings.ToLower(filter.Search) + "%"
+		dataQuery += " AND (LOWER(i.name) LIKE ? OR LOWER(i.description) LIKE ? OR LOWER(i.short_description) LIKE ?)"
+		dataArgs = append(dataArgs, keyword, keyword, keyword)
+	}
+
+	dataQuery += " ORDER BY i.name ASC, i.id ASC"
+
+	if filter.Limit > 0 {
+		dataQuery += " LIMIT ?"
+		dataArgs = append(dataArgs, filter.Limit)
+		if filter.Offset > 0 {
+			dataQuery += " OFFSET ?"
+			dataArgs = append(dataArgs, filter.Offset)
+		}
+	}
+
+	rows, err := r.db.Query(dataQuery, dataArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var items []model.ServiceCatalogItem
+	for rows.Next() {
+		item, err := scanCatalogItem(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		items = append(items, *item)
+	}
+	if items == nil {
+		items = []model.ServiceCatalogItem{}
+	}
+	return items, totalCount, nil
 }
+
 func (r *serviceCatalogRepositoryImpl) UpdateItem(item *model.ServiceCatalogItem) error {
+	item.UpdatedAt = time.Now()
+	reqApprInt := 0
+	if item.RequiresApproval {
+		reqApprInt = 1
+	}
+	autoTaskInt := 0
+	if item.AutoCreateTask {
+		autoTaskInt = 1
+	}
+	isActiveInt := 0
+	if item.IsActive {
+		isActiveInt = 1
+	}
+
+	res, err := r.db.Exec(`
+		UPDATE service_catalog_items
+		SET category_id = ?, name = ?, slug = ?, description = ?, short_description = ?, icon = ?,
+		    estimated_fulfillment_hours = ?, cost_estimate_cents = ?, currency = ?,
+		    requires_approval = ?, approval_role = ?, auto_create_task = ?, target_project_id = ?, ci_id = ?,
+		    is_active = ?, form_schema_json = ?, updated_at = ?
+		WHERE id = ?
+	`, item.CategoryID, item.Name, item.Slug, item.Description, item.ShortDescription, item.Icon,
+		item.EstimatedFulfillmentHours, item.CostEstimateCents, item.Currency,
+		reqApprInt, item.ApprovalRole, autoTaskInt, item.TargetProjectID, item.CIID,
+		isActiveInt, item.FormSchemaJSON, item.UpdatedAt, item.ID)
+	if err != nil {
+		return err
+	}
+
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return ErrCatalogItemNotFound
+	}
 	return nil
 }
+
 func (r *serviceCatalogRepositoryImpl) DeleteItem(id int64) error {
+	res, err := r.db.Exec(`DELETE FROM service_catalog_items WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return ErrCatalogItemNotFound
+	}
 	return nil
 }
 func (r *serviceCatalogRepositoryImpl) CreateRequest(req *model.ServiceRequest) (int64, error) {
