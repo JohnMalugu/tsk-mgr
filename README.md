@@ -330,6 +330,15 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET|PUT|PATCH|DELETE /v2/statuspages/{id}/maintenance/{maintId}` to inspect maintenance window details, update schedule or status (`scheduled`, `in_progress`, `completed`, `cancelled`), or delete a maintenance window with automatic component status transitions (`under_maintenance` when in progress, `operational` when completed)
 - `GET|POST /v2/statuspages/{id}/subscribers` to list subscribers or register a notification subscriber (`email`, `webhook`, `slack`) with component-specific notification routing
 - `DELETE /v2/statuspages/{id}/subscribers/{subId}` to unsubscribe an endpoint from status page notifications
+- `GET|POST /v2/servicecatalog/categories` to list service catalog categories with search and active filters or create a new category with customized slug, icon, and display ordering
+- `GET|PUT|PATCH|DELETE /v2/servicecatalog/categories/{id}` to fetch category details (with active item counts), update category metadata, or delete a category
+- `GET|POST /v2/servicecatalog/items` to list catalog offerings (`workspace_id`, `category_id`, `requires_approval`, `is_active`, `search`, `limit`, `offset`) or create an orderable service item with fulfillment time estimates, cost estimates, dynamic intake questionnaire schema (`form_schema`), approval requirements (`manager`, `admin`, `security_officer`), and optional linkage to CMDB Configuration Items (`/v2/cmdb`) and fulfillment projects (`/v2/projects`)
+- `GET|PUT|PATCH|DELETE /v2/servicecatalog/items/{id}` to fetch catalog item details (with form schema and request count), update item configuration, or delete a catalog item
+- `GET|POST /v2/servicecatalog/requests` to list service requests (`workspace_id`, `catalog_item_id`, `requester_id`, `assigned_to_id`, `status`, `priority`, `search`, `limit`, `offset`) or submit a new service request with automatic sequential numbering (`REQ-0001`), dynamic form response payload, initial approval workflow generation, or automated fulfillment task dispatch
+- `GET|PUT|PATCH /v2/servicecatalog/requests/{id}` to fetch full request details (enriched with approvals, comments, and task link) or update request lifecycle status (`submitted`, `pending_approval`, `approved`, `in_progress`, `fulfilled`, `rejected`, `cancelled`), priority, assignment, or completion timestamps
+- `POST /v2/servicecatalog/approvals/{id}` to review a pending service request approval (`approved`, `rejected`) with reviewer comments, automated request status transitions, and fulfillment task generation
+- `GET|POST /v2/servicecatalog/requests/{id}/comments` to list communication history or add a public reply or internal fulfillment team note to a service request
+- `GET /v2/servicecatalog/metrics?workspace_id={id}` for IT Service Catalog & Request Fulfillment analytics, total category/item counts, request volume breakdown by status, average fulfillment lead time hours, total cost estimate of fulfilled requests, approval rate percentage, and top 5 most requested catalog offerings
 
 ## Current limitations
 

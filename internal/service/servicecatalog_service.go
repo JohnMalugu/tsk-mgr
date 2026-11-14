@@ -15,11 +15,11 @@ var (
 	ErrCatalogCategoryNotFound = model.ErrCatalogCategoryNotFound
 	ErrCatalogCategoryNameReq  = model.ErrCatalogCategoryNameReq
 	ErrCatalogCategorySlugReq  = model.ErrCatalogCategorySlugReq
-	ErrDuplicateCategorySlug    = model.ErrDuplicateCategorySlug
+	ErrDuplicateCategorySlug   = model.ErrDuplicateCategorySlug
 	ErrCatalogItemNotFound     = model.ErrCatalogItemNotFound
 	ErrCatalogItemNameReq      = model.ErrCatalogItemNameReq
 	ErrCatalogItemSlugReq      = model.ErrCatalogItemSlugReq
-	ErrDuplicateItemSlug        = model.ErrDuplicateItemSlug
+	ErrDuplicateItemSlug       = model.ErrDuplicateItemSlug
 	ErrInvalidApprovalRole     = model.ErrInvalidApprovalRole
 	ErrServiceRequestNotFound  = model.ErrServiceRequestNotFound
 	ErrServiceRequestTitleReq  = model.ErrServiceRequestTitleReq

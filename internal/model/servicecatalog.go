@@ -6,23 +6,23 @@ import (
 )
 
 var (
-	ErrCatalogCategoryNotFound    = errors.New("service catalog category not found")
-	ErrCatalogCategoryNameReq     = errors.New("service catalog category name is required")
-	ErrCatalogCategorySlugReq     = errors.New("service catalog category slug is required")
-	ErrDuplicateCategorySlug      = errors.New("service catalog category slug already in use")
-	ErrCatalogItemNotFound        = errors.New("service catalog item not found")
-	ErrCatalogItemNameReq         = errors.New("service catalog item name is required")
-	ErrCatalogItemSlugReq         = errors.New("service catalog item slug is required")
-	ErrDuplicateItemSlug          = errors.New("service catalog item slug already in use")
-	ErrInvalidApprovalRole        = errors.New("invalid approval role: must be manager, admin, or security_officer")
-	ErrServiceRequestNotFound     = errors.New("service request not found")
-	ErrServiceRequestTitleReq     = errors.New("service request title is required")
-	ErrInvalidRequestStatus       = errors.New("invalid service request status")
-	ErrInvalidRequestPriority     = errors.New("invalid service request priority")
-	ErrRequestApprovalNotFound    = errors.New("service request approval not found")
-	ErrInvalidApprovalStatus      = errors.New("invalid approval status: must be pending, approved, or rejected")
-	ErrRequestAlreadyDecided      = errors.New("service request approval has already been decided")
-	ErrRequestCommentEmpty        = errors.New("service request comment cannot be empty")
+	ErrCatalogCategoryNotFound = errors.New("service catalog category not found")
+	ErrCatalogCategoryNameReq  = errors.New("service catalog category name is required")
+	ErrCatalogCategorySlugReq  = errors.New("service catalog category slug is required")
+	ErrDuplicateCategorySlug   = errors.New("service catalog category slug already in use")
+	ErrCatalogItemNotFound     = errors.New("service catalog item not found")
+	ErrCatalogItemNameReq      = errors.New("service catalog item name is required")
+	ErrCatalogItemSlugReq      = errors.New("service catalog item slug is required")
+	ErrDuplicateItemSlug       = errors.New("service catalog item slug already in use")
+	ErrInvalidApprovalRole     = errors.New("invalid approval role: must be manager, admin, or security_officer")
+	ErrServiceRequestNotFound  = errors.New("service request not found")
+	ErrServiceRequestTitleReq  = errors.New("service request title is required")
+	ErrInvalidRequestStatus    = errors.New("invalid service request status")
+	ErrInvalidRequestPriority  = errors.New("invalid service request priority")
+	ErrRequestApprovalNotFound = errors.New("service request approval not found")
+	ErrInvalidApprovalStatus   = errors.New("invalid approval status: must be pending, approved, or rejected")
+	ErrRequestAlreadyDecided   = errors.New("service request approval has already been decided")
+	ErrRequestCommentEmpty     = errors.New("service request comment cannot be empty")
 )
 
 // ServiceCatalogCategory groups service catalog items into logical offerings
@@ -77,27 +77,27 @@ type CatalogFormSchema struct {
 
 // ServiceCatalogItem represents an orderable IT service offering or resource
 type ServiceCatalogItem struct {
-	ID                        int64      `json:"id"`
-	WorkspaceID               int64      `json:"workspace_id"`
-	CategoryID                int64      `json:"category_id"`
-	Name                      string     `json:"name"`
-	Slug                      string     `json:"slug"`
-	Description               string     `json:"description,omitempty"`
-	ShortDescription          string     `json:"short_description,omitempty"`
-	Icon                      string     `json:"icon,omitempty"`
-	EstimatedFulfillmentHours float64    `json:"estimated_fulfillment_hours"`
-	CostEstimateCents         int64      `json:"cost_estimate_cents"`
-	Currency                  string     `json:"currency"`
-	RequiresApproval          bool       `json:"requires_approval"`
-	ApprovalRole              string     `json:"approval_role,omitempty"` // manager, admin, security_officer
-	AutoCreateTask            bool       `json:"auto_create_task"`
-	TargetProjectID           *int64     `json:"target_project_id,omitempty"`
-	CIID                      *int64     `json:"ci_id,omitempty"` // Link to CMDB Configuration Item
-	IsActive                  bool       `json:"is_active"`
-	FormSchemaJSON            string     `json:"form_schema_json,omitempty"`
-	CreatedByID               string     `json:"created_by_id"`
-	CreatedAt                 time.Time  `json:"created_at"`
-	UpdatedAt                 time.Time  `json:"updated_at"`
+	ID                        int64     `json:"id"`
+	WorkspaceID               int64     `json:"workspace_id"`
+	CategoryID                int64     `json:"category_id"`
+	Name                      string    `json:"name"`
+	Slug                      string    `json:"slug"`
+	Description               string    `json:"description,omitempty"`
+	ShortDescription          string    `json:"short_description,omitempty"`
+	Icon                      string    `json:"icon,omitempty"`
+	EstimatedFulfillmentHours float64   `json:"estimated_fulfillment_hours"`
+	CostEstimateCents         int64     `json:"cost_estimate_cents"`
+	Currency                  string    `json:"currency"`
+	RequiresApproval          bool      `json:"requires_approval"`
+	ApprovalRole              string    `json:"approval_role,omitempty"` // manager, admin, security_officer
+	AutoCreateTask            bool      `json:"auto_create_task"`
+	TargetProjectID           *int64    `json:"target_project_id,omitempty"`
+	CIID                      *int64    `json:"ci_id,omitempty"` // Link to CMDB Configuration Item
+	IsActive                  bool      `json:"is_active"`
+	FormSchemaJSON            string    `json:"form_schema_json,omitempty"`
+	CreatedByID               string    `json:"created_by_id"`
+	CreatedAt                 time.Time `json:"created_at"`
+	UpdatedAt                 time.Time `json:"updated_at"`
 
 	// Enriched fields
 	CategoryName string             `json:"category_name,omitempty"`
@@ -134,7 +134,7 @@ type ServiceRequest struct {
 	RequestNumber      string     `json:"request_number"` // e.g. REQ-1001
 	Title              string     `json:"title"`
 	Description        string     `json:"description,omitempty"`
-	Status             string     `json:"status"` // submitted, pending_approval, approved, in_progress, fulfilled, rejected, cancelled
+	Status             string     `json:"status"`   // submitted, pending_approval, approved, in_progress, fulfilled, rejected, cancelled
 	Priority           string     `json:"priority"` // low, medium, high, urgent
 	RequesterID        string     `json:"requester_id"`
 	AssignedToID       *string    `json:"assigned_to_id,omitempty"`
@@ -151,11 +151,11 @@ type ServiceRequest struct {
 	UpdatedAt          time.Time  `json:"updated_at"`
 
 	// Enriched fields
-	CatalogItemName string                 `json:"catalog_item_name,omitempty"`
-	RequesterName   string                 `json:"requester_name,omitempty"`
-	AssignedToName  string                 `json:"assigned_to_name,omitempty"`
-	TaskTitle       string                 `json:"task_title,omitempty"`
-	FormData        map[string]interface{} `json:"form_data,omitempty"`
+	CatalogItemName string                   `json:"catalog_item_name,omitempty"`
+	RequesterName   string                   `json:"requester_name,omitempty"`
+	AssignedToName  string                   `json:"assigned_to_name,omitempty"`
+	TaskTitle       string                   `json:"task_title,omitempty"`
+	FormData        map[string]interface{}   `json:"form_data,omitempty"`
 	Approvals       []ServiceRequestApproval `json:"approvals,omitempty"`
 	Comments        []ServiceRequestComment  `json:"comments,omitempty"`
 }

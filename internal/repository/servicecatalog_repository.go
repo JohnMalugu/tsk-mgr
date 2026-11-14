@@ -69,7 +69,9 @@ func NewServiceCatalogRepository(db *sql.DB) ServiceCatalogRepository {
 	return &serviceCatalogRepositoryImpl{db: db}
 }
 
-func scanCategory(scanner interface{ Scan(dest ...interface{}) error }) (*model.ServiceCatalogCategory, error) {
+func scanCategory(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.ServiceCatalogCategory, error) {
 	var c model.ServiceCatalogCategory
 	var isActiveInt int
 	var itemCount int
@@ -248,7 +250,9 @@ func (r *serviceCatalogRepositoryImpl) DeleteCategory(id int64) error {
 	}
 	return nil
 }
-func scanCatalogItem(scanner interface{ Scan(dest ...interface{}) error }) (*model.ServiceCatalogItem, error) {
+func scanCatalogItem(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.ServiceCatalogItem, error) {
 	var item model.ServiceCatalogItem
 	var targetProjectID, ciID sql.NullInt64
 	var reqApprInt, autoTaskInt, isActiveInt int
@@ -567,7 +571,9 @@ func (r *serviceCatalogRepositoryImpl) DeleteItem(id int64) error {
 	}
 	return nil
 }
-func scanServiceRequest(scanner interface{ Scan(dest ...interface{}) error }) (*model.ServiceRequest, error) {
+func scanServiceRequest(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.ServiceRequest, error) {
 	var req model.ServiceRequest
 	var assignedToID sql.NullString
 	var dueAt, approvedAt, fulfilledAt, cancelledAt sql.NullTime
@@ -914,7 +920,9 @@ func (r *serviceCatalogRepositoryImpl) DeleteRequest(id int64) error {
 	}
 	return nil
 }
-func scanRequestApproval(scanner interface{ Scan(dest ...interface{}) error }) (*model.ServiceRequestApproval, error) {
+func scanRequestApproval(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.ServiceRequestApproval, error) {
 	var a model.ServiceRequestApproval
 	var decidedAt sql.NullTime
 	var approverName sql.NullString
@@ -1042,7 +1050,9 @@ func (r *serviceCatalogRepositoryImpl) UpdateApproval(approval *model.ServiceReq
 	}
 	return nil
 }
-func scanRequestComment(scanner interface{ Scan(dest ...interface{}) error }) (*model.ServiceRequestComment, error) {
+func scanRequestComment(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.ServiceRequestComment, error) {
 	var c model.ServiceRequestComment
 	var isInternalInt int
 	var userName sql.NullString
