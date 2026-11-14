@@ -168,3 +168,101 @@ func (h *ServiceCatalogHandler) DeleteCategory(w http.ResponseWriter, r *http.Re
 	}
 	writeServiceCatalogJSON(w, http.StatusOK, map[string]string{"message": "category deleted successfully"})
 }
+
+// CreateItem handles POST /v2/servicecatalog/items
+func (h *ServiceCatalogHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
+	var req model.CreateCatalogItemRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeServiceCatalogError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+	userID := getServiceCatalogUser(r)
+
+	item, err := h.svc.CreateItem(userID, req)
+	if err != nil {
+		handleServiceCatalogError(w, err)
+		return
+	}
+	writeServiceCatalogJSON(w, http.StatusCreated, item)
+}
+
+// GetItem handles GET /v2/servicecatalog/items/{id}
+func (h *ServiceCatalogHandler) GetItem(w http.ResponseWriter, r *http.Request, id int64) {
+	item, err := h.svc.GetItem(id)
+	if err != nil {
+		handleServiceCatalogError(w, err)
+		return
+	}
+	writeServiceCatalogJSON(w, http.StatusOK, item)
+}
+
+// ListItems handles GET /v2/servicecatalog/items
+func (h *ServiceCatalogHandler) ListItems(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	filter := model.CatalogItemFilter{
+		Search: q.Get("search"),
+	}
+	if ws := q.Get("workspace_id"); ws != "" {
+		if wsID, err := strconv.ParseInt(ws, 10, 64); err == nil {
+			filter.WorkspaceID = wsID
+		}
+	}
+	if cat := q.Get("category_id"); cat != "" {
+		if catID, err := strconv.ParseInt(cat, 10, 64); err == nil {
+			filter.CategoryID = &catID
+		}
+	}
+	if reqAppr := q.Get("requires_approval"); reqAppr != "" {
+		ra := (reqAppr == "true" || reqAppr == "1")
+		filter.RequiresApproval = &ra
+	}
+	if act := q.Get("is_active"); act != "" {
+		isActive := (act == "true" || act == "1")
+		filter.IsActive = &isActive
+	}
+	if l := q.Get("limit"); l != "" {
+		if val, err := strconv.Atoi(l); err == nil && val > 0 {
+			filter.Limit = val
+		}
+	}
+	if o := q.Get("offset"); o != "" {
+		if val, err := strconv.Atoi(o); err == nil && val >= 0 {
+			filter.Offset = val
+		}
+	}
+
+	items, total, err := h.svc.ListItems(filter)
+	if err != nil {
+		handleServiceCatalogError(w, err)
+		return
+	}
+	writeServiceCatalogJSON(w, http.StatusOK, map[string]interface{}{
+		"items": items,
+		"total": total,
+	})
+}
+
+// UpdateItem handles PUT/PATCH /v2/servicecatalog/items/{id}
+func (h *ServiceCatalogHandler) UpdateItem(w http.ResponseWriter, r *http.Request, id int64) {
+	var req model.UpdateCatalogItemRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeServiceCatalogError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+
+	item, err := h.svc.UpdateItem(id, req)
+	if err != nil {
+		handleServiceCatalogError(w, err)
+		return
+	}
+	writeServiceCatalogJSON(w, http.StatusOK, item)
+}
+
+// DeleteItem handles DELETE /v2/servicecatalog/items/{id}
+func (h *ServiceCatalogHandler) DeleteItem(w http.ResponseWriter, r *http.Request, id int64) {
+	if err := h.svc.DeleteItem(id); err != nil {
+		handleServiceCatalogError(w, err)
+		return
+	}
+	writeServiceCatalogJSON(w, http.StatusOK, map[string]string{"message": "catalog item deleted successfully"})
+}
