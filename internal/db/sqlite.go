@@ -2319,6 +2319,25 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	licenseAllocationsQuery := `
+	CREATE TABLE IF NOT EXISTS license_allocations (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		license_id INTEGER NOT NULL,
+		asset_id INTEGER,
+		user_id TEXT,
+		allocated_by TEXT NOT NULL,
+		allocated_at DATETIME NOT NULL,
+		notes TEXT NOT NULL DEFAULT '',
+		FOREIGN KEY (license_id) REFERENCES software_licenses(id) ON DELETE CASCADE,
+		FOREIGN KEY (asset_id) REFERENCES it_assets(id) ON DELETE CASCADE,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(licenseAllocationsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
