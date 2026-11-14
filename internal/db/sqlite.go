@@ -2585,6 +2585,20 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_svc_appr_req_step ON service_request_approvals(request_id, step_order);
 	CREATE INDEX IF NOT EXISTS idx_svc_appr_approver ON service_request_approvals(approver_id, status);
 	CREATE INDEX IF NOT EXISTS idx_svc_comm_req ON service_request_comments(request_id, created_at);
+	CREATE INDEX IF NOT EXISTS idx_it_assets_ws_tag ON it_assets(workspace_id, asset_tag);
+	CREATE INDEX IF NOT EXISTS idx_it_assets_ws_status ON it_assets(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_it_assets_ws_category ON it_assets(workspace_id, category);
+	CREATE INDEX IF NOT EXISTS idx_it_assets_assigned_user ON it_assets(assigned_to_user_id);
+	CREATE INDEX IF NOT EXISTS idx_it_assets_ci ON it_assets(ci_id);
+	CREATE INDEX IF NOT EXISTS idx_it_asset_maint_asset ON it_asset_maintenance_records(asset_id, status);
+	CREATE INDEX IF NOT EXISTS idx_it_asset_maint_dates ON it_asset_maintenance_records(scheduled_date, completed_date);
+	CREATE INDEX IF NOT EXISTS idx_soft_licenses_ws_name ON software_licenses(workspace_id, software_name);
+	CREATE INDEX IF NOT EXISTS idx_soft_licenses_publisher ON software_licenses(publisher);
+	CREATE INDEX IF NOT EXISTS idx_license_alloc_lic ON license_allocations(license_id);
+	CREATE INDEX IF NOT EXISTS idx_license_alloc_asset ON license_allocations(asset_id);
+	CREATE INDEX IF NOT EXISTS idx_license_alloc_user ON license_allocations(user_id);
+	CREATE INDEX IF NOT EXISTS idx_it_asset_audits_ws ON it_asset_audits(workspace_id, scanned_at);
+	CREATE INDEX IF NOT EXISTS idx_it_asset_audits_asset ON it_asset_audits(asset_id, audit_status);
 	`
 
 	_, err = db.Exec(indexQuery)
