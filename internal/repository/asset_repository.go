@@ -953,12 +953,233 @@ func (r *sqlITAssetRepository) ListLicenseAllocations(ctx context.Context, licen
 	}
 	return allocations, rows.Err()
 }
+func (r *sqlITAssetRepository) scanAuditLog(row interface{ Scan(...any) error }) (*model.AssetAuditLog, error) {
+	var a model.AssetAuditLog
+	var assetTag, assetName, scannerName sql.NullString
+
+	err := row.Scan(
+		&a.ID,
+		&a.WorkspaceID,
+		&a.AssetID,
+		&a.ScannedBy,
+		&a.ScannedAt,
+		&a.AuditStatus,
+		&a.Location,
+		&a.Notes,
+		&assetTag,
+		&assetName,
+		&scannerName,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if assetTag.Valid {
+		a.AssetTag = assetTag.String
+	}
+	if assetName.Valid {
+		a.AssetName = assetName.String
+	}
+	if scannerName.Valid {
+		a.ScannerName = scannerName.String
+	}
+	return &a, nil
+}
+
+const auditSelectFields = `
+	aud.id, aud.workspace_id, aud.asset_id, aud.scanned_by, aud.scanned_at,
+	aud.audit_status, aud.location, aud.notes,
+	COALESCE(ast.asset_tag, '') AS asset_tag,
+	COALESCE(ast.name, '') AS asset_name,
+	COALESCE(u.username, '') AS scanner_name
+`
+
+const auditFromClause = `
+	FROM it_asset_audits aud
+	JOIN it_assets ast ON aud.asset_id = ast.id
+	JOIN users u ON aud.scanned_by = u.id
+`
+
 func (r *sqlITAssetRepository) CreateAuditLog(ctx context.Context, audit *model.AssetAuditLog) error {
-	return errNotImplemented
+	if audit.ScannedAt.IsZero() {
+		audit.ScannedAt = time.Now().UTC()
+	}
+
+	query := `
+	INSERT INTO it_asset_audits (
+		workspace_id, asset_id, scanned_by, scanned_at, audit_status, location, notes
+	) VALUES (?, ?, ?, ?, ?, ?, ?);`
+
+	res, err := r.db.ExecContext(ctx, query,
+		audit.WorkspaceID, audit.AssetID, audit.ScannedBy, audit.ScannedAt, audit.AuditStatus, audit.Location, audit.Notes,
+	)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	audit.ID = id
+	return nil
 }
+
 func (r *sqlITAssetRepository) ListAuditLogs(ctx context.Context, workspaceID int64, assetID *int64, limit, offset int) ([]model.AssetAuditLog, error) {
-	return nil, errNotImplemented
+	var whereClauses []string
+	var args []interface{}
+
+	whereClauses = append(whereClauses, "aud.workspace_id = ?")
+	args = append(args, workspaceID)
+
+	if assetID != nil && *assetID > 0 {
+		whereClauses = append(whereClauses, "aud.asset_id = ?")
+		args = append(args, *assetID)
+	}
+
+	whereSQL := "WHERE " + strings.Join(whereClauses, " AND ")
+	query := fmt.Sprintf("SELECT %s %s %s ORDER BY aud.id DESC", auditSelectFields, auditFromClause, whereSQL)
+	if limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", limit)
+		if offset > 0 {
+			query += fmt.Sprintf(" OFFSET %d", offset)
+		}
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var logs []model.AssetAuditLog
+	for rows.Next() {
+		a, err := r.scanAuditLog(rows)
+		if err != nil {
+			return nil, err
+		}
+		logs = append(logs, *a)
+	}
+	return logs, rows.Err()
 }
+
 func (r *sqlITAssetRepository) GetAssetMetrics(ctx context.Context, workspaceID int64) (*model.AssetMetrics, error) {
-	return nil, errNotImplemented
+	metrics := &model.AssetMetrics{
+		WorkspaceID:       workspaceID,
+		StatusBreakdown:   make(map[string]int),
+		CategoryBreakdown: make(map[string]int),
+	}
+
+	// Total assets and total purchase value
+	row := r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*), COALESCE(SUM(purchase_cost), 0.0)
+		FROM it_assets
+		WHERE workspace_id = ?;`, workspaceID)
+	if err := row.Scan(&metrics.TotalAssets, &metrics.TotalPurchaseValue); err != nil {
+		return nil, err
+	}
+
+	// Status breakdown
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT status, COUNT(*)
+		FROM it_assets
+		WHERE workspace_id = ?
+		GROUP BY status;`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var s string
+		var count int
+		if err := rows.Scan(&s, &count); err == nil {
+			metrics.StatusBreakdown[s] = count
+		}
+	}
+
+	// Category breakdown
+	catRows, err := r.db.QueryContext(ctx, `
+		SELECT category, COUNT(*)
+		FROM it_assets
+		WHERE workspace_id = ?
+		GROUP BY category;`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer catRows.Close()
+	for catRows.Next() {
+		var c string
+		var count int
+		if err := catRows.Scan(&c, &count); err == nil {
+			metrics.CategoryBreakdown[c] = count
+		}
+	}
+
+	// Warranty expiring in 30 days and 90 days
+	now := time.Now().UTC()
+	in30 := now.AddDate(0, 0, 30)
+	in90 := now.AddDate(0, 0, 90)
+
+	_ = r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM it_assets
+		WHERE workspace_id = ? AND warranty_expiry IS NOT NULL AND warranty_expiry >= ? AND warranty_expiry <= ?;`,
+		workspaceID, now, in30,
+	).Scan(&metrics.WarrantyExpiringIn30Days)
+
+	_ = r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM it_assets
+		WHERE workspace_id = ? AND warranty_expiry IS NOT NULL AND warranty_expiry >= ? AND warranty_expiry <= ?;`,
+		workspaceID, now, in90,
+	).Scan(&metrics.WarrantyExpiringIn90Days)
+
+	// Software licenses metrics
+	_ = r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*), COALESCE(SUM(total_seats), 0), COALESCE(SUM(allocated_seats), 0)
+		FROM software_licenses
+		WHERE workspace_id = ?;`, workspaceID,
+	).Scan(&metrics.TotalLicenses, &metrics.TotalLicenseSeats, &metrics.AllocatedLicenseSeats)
+
+	if metrics.TotalLicenseSeats > 0 {
+		metrics.LicenseSeatUtilizationRate = (float64(metrics.AllocatedLicenseSeats) / float64(metrics.TotalLicenseSeats)) * 100.0
+	}
+
+	// Calculate total estimated book value across active assets
+	bookValRows, err := r.db.QueryContext(ctx, `
+		SELECT purchase_cost, residual_value, useful_life_months, purchase_date, depreciation_method
+		FROM it_assets
+		WHERE workspace_id = ? AND status != 'disposed';`, workspaceID)
+	if err == nil {
+		defer bookValRows.Close()
+		var totalBookValue float64
+		for bookValRows.Next() {
+			var cost, resVal float64
+			var usefulMonths int
+			var pDate sql.NullTime
+			var method string
+			if err := bookValRows.Scan(&cost, &resVal, &usefulMonths, &pDate, &method); err == nil {
+				if method == model.DepreciationNone || !pDate.Valid || usefulMonths <= 0 {
+					totalBookValue += cost
+					continue
+				}
+				elapsedMonths := int(now.Sub(pDate.Time).Hours() / (24 * 30.4375))
+				if elapsedMonths < 0 {
+					elapsedMonths = 0
+				}
+				depreciableAmount := cost - resVal
+				if depreciableAmount < 0 {
+					depreciableAmount = 0
+				}
+				monthlyDepr := depreciableAmount / float64(usefulMonths)
+				accumDepr := monthlyDepr * float64(elapsedMonths)
+				currentBook := cost - accumDepr
+				if currentBook < resVal {
+					currentBook = resVal
+				}
+				totalBookValue += currentBook
+			}
+		}
+		metrics.TotalEstimatedBookValue = totalBookValue
+	}
+
+	return metrics, nil
 }
