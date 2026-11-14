@@ -211,6 +211,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 ITIL Service Catalog & Service Request Fulfillment
+	if strings.HasPrefix(r.URL.Path, "/v2/servicecatalog") {
+		if handler.GlobalServiceCatalogHandler == nil {
+			http.Error(w, "ServiceCatalog handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalServiceCatalogHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return
