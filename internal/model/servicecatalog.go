@@ -106,3 +106,62 @@ type ServiceCatalogItem struct {
 	RequestCount int                `json:"request_count,omitempty"`
 	FormSchema   *CatalogFormSchema `json:"form_schema,omitempty"`
 }
+
+// Request lifecycle status constants
+const (
+	RequestStatusSubmitted       = "submitted"
+	RequestStatusPendingApproval = "pending_approval"
+	RequestStatusApproved        = "approved"
+	RequestStatusInProgress      = "in_progress"
+	RequestStatusFulfilled       = "fulfilled"
+	RequestStatusRejected        = "rejected"
+	RequestStatusCancelled       = "cancelled"
+)
+
+// Request priority levels
+const (
+	RequestPriorityLow    = "low"
+	RequestPriorityMedium = "medium"
+	RequestPriorityHigh   = "high"
+	RequestPriorityUrgent = "urgent"
+)
+
+// ServiceRequest represents an instance of a user request ordered through the service catalog
+type ServiceRequest struct {
+	ID                 int64      `json:"id"`
+	WorkspaceID        int64      `json:"workspace_id"`
+	CatalogItemID      int64      `json:"catalog_item_id"`
+	RequestNumber      string     `json:"request_number"` // e.g. REQ-1001
+	Title              string     `json:"title"`
+	Description        string     `json:"description,omitempty"`
+	Status             string     `json:"status"` // submitted, pending_approval, approved, in_progress, fulfilled, rejected, cancelled
+	Priority           string     `json:"priority"` // low, medium, high, urgent
+	RequesterID        string     `json:"requester_id"`
+	AssignedToID       *string    `json:"assigned_to_id,omitempty"`
+	FormDataJSON       string     `json:"form_data_json,omitempty"`
+	DueAt              *time.Time `json:"due_at,omitempty"`
+	SubmittedAt        time.Time  `json:"submitted_at"`
+	ApprovedAt         *time.Time `json:"approved_at,omitempty"`
+	FulfilledAt        *time.Time `json:"fulfilled_at,omitempty"`
+	CancelledAt        *time.Time `json:"cancelled_at,omitempty"`
+	CancellationReason string     `json:"cancellation_reason,omitempty"`
+	RejectionReason    string     `json:"rejection_reason,omitempty"`
+	TaskID             *int       `json:"task_id,omitempty"` // Link to task generated for fulfillment
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+
+	// Enriched fields
+	CatalogItemName string                 `json:"catalog_item_name,omitempty"`
+	RequesterName   string                 `json:"requester_name,omitempty"`
+	AssignedToName  string                 `json:"assigned_to_name,omitempty"`
+	TaskTitle       string                 `json:"task_title,omitempty"`
+	FormData        map[string]interface{} `json:"form_data,omitempty"`
+	Approvals       []ServiceRequestApproval `json:"approvals,omitempty"`
+	Comments        []ServiceRequestComment  `json:"comments,omitempty"`
+}
+
+// ServiceRequestApproval placeholder
+type ServiceRequestApproval struct{}
+
+// ServiceRequestComment placeholder
+type ServiceRequestComment struct{}
