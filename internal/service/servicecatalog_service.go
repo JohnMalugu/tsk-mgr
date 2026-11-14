@@ -1,6 +1,11 @@
 package service
 
 import (
+	"encoding/json"
+	"errors"
+	"strings"
+	"time"
+
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
 )
@@ -79,39 +84,359 @@ func NewServiceCatalogService(
 
 // Stubs for subsequent commits
 func (s *serviceCatalogServiceImpl) CreateCategory(creatorID string, req model.CreateCatalogCategoryRequest) (*model.ServiceCatalogCategory, error) {
-	return nil, nil
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, ErrCatalogCategoryNameReq
+	}
+
+	slug := req.Slug
+	if strings.TrimSpace(slug) == "" {
+		slug = model.NormalizeSlug(name)
+	} else {
+		slug = model.NormalizeSlug(slug)
+	}
+	if slug == "" {
+		return nil, ErrCatalogCategorySlugReq
+	}
+
+	cat := &model.ServiceCatalogCategory{
+		WorkspaceID:  req.WorkspaceID,
+		Name:         name,
+		Slug:         slug,
+		Description:  strings.TrimSpace(req.Description),
+		Icon:         strings.TrimSpace(req.Icon),
+		DisplayOrder: req.DisplayOrder,
+		IsActive:     true,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+
+	id, err := s.repo.CreateCategory(cat)
+	if err != nil {
+		if errors.Is(err, repository.ErrDuplicateCategorySlug) {
+			return nil, ErrDuplicateCategorySlug
+		}
+		return nil, err
+	}
+
+	return s.GetCategory(id)
 }
+
 func (s *serviceCatalogServiceImpl) GetCategory(id int64) (*model.ServiceCatalogCategory, error) {
-	return nil, nil
+	cat, err := s.repo.GetCategoryByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrCatalogCategoryNotFound) {
+			return nil, ErrCatalogCategoryNotFound
+		}
+		return nil, err
+	}
+	return cat, nil
 }
+
 func (s *serviceCatalogServiceImpl) GetCategoryBySlug(workspaceID int64, slug string) (*model.ServiceCatalogCategory, error) {
-	return nil, nil
+	cleanSlug := model.NormalizeSlug(slug)
+	cat, err := s.repo.GetCategoryBySlug(workspaceID, cleanSlug)
+	if err != nil {
+		if errors.Is(err, repository.ErrCatalogCategoryNotFound) {
+			return nil, ErrCatalogCategoryNotFound
+		}
+		return nil, err
+	}
+	return cat, nil
 }
+
 func (s *serviceCatalogServiceImpl) ListCategories(filter model.CatalogCategoryFilter) ([]model.ServiceCatalogCategory, error) {
-	return nil, nil
+	return s.repo.ListCategories(filter)
 }
+
 func (s *serviceCatalogServiceImpl) UpdateCategory(id int64, req model.UpdateCatalogCategoryRequest) (*model.ServiceCatalogCategory, error) {
-	return nil, nil
+	existing, err := s.repo.GetCategoryByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrCatalogCategoryNotFound) {
+			return nil, ErrCatalogCategoryNotFound
+		}
+		return nil, err
+	}
+
+	if req.Name != nil {
+		name := strings.TrimSpace(*req.Name)
+		if name == "" {
+			return nil, ErrCatalogCategoryNameReq
+		}
+		existing.Name = name
+	}
+	if req.Slug != nil {
+		slug := model.NormalizeSlug(*req.Slug)
+		if slug == "" {
+			return nil, ErrCatalogCategorySlugReq
+		}
+		existing.Slug = slug
+	}
+	if req.Description != nil {
+		existing.Description = strings.TrimSpace(*req.Description)
+	}
+	if req.Icon != nil {
+		existing.Icon = strings.TrimSpace(*req.Icon)
+	}
+	if req.DisplayOrder != nil {
+		existing.DisplayOrder = *req.DisplayOrder
+	}
+	if req.IsActive != nil {
+		existing.IsActive = *req.IsActive
+	}
+
+	if err := s.repo.UpdateCategory(existing); err != nil {
+		if errors.Is(err, repository.ErrDuplicateCategorySlug) {
+			return nil, ErrDuplicateCategorySlug
+		}
+		if errors.Is(err, repository.ErrCatalogCategoryNotFound) {
+			return nil, ErrCatalogCategoryNotFound
+		}
+		return nil, err
+	}
+
+	return s.GetCategory(id)
 }
+
 func (s *serviceCatalogServiceImpl) DeleteCategory(id int64) error {
+	err := s.repo.DeleteCategory(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrCatalogCategoryNotFound) {
+			return ErrCatalogCategoryNotFound
+		}
+		return err
+	}
 	return nil
 }
+
 func (s *serviceCatalogServiceImpl) CreateItem(creatorID string, req model.CreateCatalogItemRequest) (*model.ServiceCatalogItem, error) {
-	return nil, nil
+	_, err := s.repo.GetCategoryByID(req.CategoryID)
+	if err != nil {
+		if errors.Is(err, repository.ErrCatalogCategoryNotFound) {
+			return nil, ErrCatalogCategoryNotFound
+		}
+		return nil, err
+	}
+
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, ErrCatalogItemNameReq
+	}
+
+	slug := req.Slug
+	if strings.TrimSpace(slug) == "" {
+		slug = model.NormalizeSlug(name)
+	} else {
+		slug = model.NormalizeSlug(slug)
+	}
+	if slug == "" {
+		return nil, ErrCatalogItemSlugReq
+	}
+
+	if req.RequiresApproval {
+		if err := model.ValidateApprovalRole(req.ApprovalRole); err != nil {
+			return nil, err
+		}
+		if req.ApprovalRole == "" {
+			req.ApprovalRole = model.ApprovalRoleManager
+		}
+	}
+
+	schemaJSON := `{"fields":[]}`
+	if req.FormSchema != nil {
+		b, err := json.Marshal(req.FormSchema)
+		if err == nil {
+			schemaJSON = string(b)
+		}
+	}
+
+	item := &model.ServiceCatalogItem{
+		WorkspaceID:               req.WorkspaceID,
+		CategoryID:                req.CategoryID,
+		Name:                      name,
+		Slug:                      slug,
+		Description:               strings.TrimSpace(req.Description),
+		ShortDescription:          strings.TrimSpace(req.ShortDescription),
+		Icon:                      strings.TrimSpace(req.Icon),
+		EstimatedFulfillmentHours: req.EstimatedFulfillmentHours,
+		CostEstimateCents:         req.CostEstimateCents,
+		Currency:                  req.Currency,
+		RequiresApproval:          req.RequiresApproval,
+		ApprovalRole:              req.ApprovalRole,
+		AutoCreateTask:            req.AutoCreateTask,
+		TargetProjectID:           req.TargetProjectID,
+		CIID:                      req.CIID,
+		IsActive:                  true,
+		FormSchemaJSON:            schemaJSON,
+		CreatedByID:               creatorID,
+		CreatedAt:                 time.Now(),
+		UpdatedAt:                 time.Now(),
+	}
+
+	id, err := s.repo.CreateItem(item)
+	if err != nil {
+		if errors.Is(err, repository.ErrDuplicateItemSlug) {
+			return nil, ErrDuplicateItemSlug
+		}
+		return nil, err
+	}
+
+	return s.GetItem(id)
 }
+
 func (s *serviceCatalogServiceImpl) GetItem(id int64) (*model.ServiceCatalogItem, error) {
-	return nil, nil
+	item, err := s.repo.GetItemByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrCatalogItemNotFound) {
+			return nil, ErrCatalogItemNotFound
+		}
+		return nil, err
+	}
+
+	if item.FormSchemaJSON != "" {
+		var schema model.CatalogFormSchema
+		if err := json.Unmarshal([]byte(item.FormSchemaJSON), &schema); err == nil {
+			item.FormSchema = &schema
+		}
+	}
+
+	return item, nil
 }
+
 func (s *serviceCatalogServiceImpl) GetItemBySlug(workspaceID int64, slug string) (*model.ServiceCatalogItem, error) {
-	return nil, nil
+	cleanSlug := model.NormalizeSlug(slug)
+	item, err := s.repo.GetItemBySlug(workspaceID, cleanSlug)
+	if err != nil {
+		if errors.Is(err, repository.ErrCatalogItemNotFound) {
+			return nil, ErrCatalogItemNotFound
+		}
+		return nil, err
+	}
+
+	if item.FormSchemaJSON != "" {
+		var schema model.CatalogFormSchema
+		if err := json.Unmarshal([]byte(item.FormSchemaJSON), &schema); err == nil {
+			item.FormSchema = &schema
+		}
+	}
+
+	return item, nil
 }
+
 func (s *serviceCatalogServiceImpl) ListItems(filter model.CatalogItemFilter) ([]model.ServiceCatalogItem, int, error) {
-	return nil, 0, nil
+	items, total, err := s.repo.ListItems(filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	for i := range items {
+		if items[i].FormSchemaJSON != "" {
+			var schema model.CatalogFormSchema
+			if err := json.Unmarshal([]byte(items[i].FormSchemaJSON), &schema); err == nil {
+				items[i].FormSchema = &schema
+			}
+		}
+	}
+
+	return items, total, nil
 }
+
 func (s *serviceCatalogServiceImpl) UpdateItem(id int64, req model.UpdateCatalogItemRequest) (*model.ServiceCatalogItem, error) {
-	return nil, nil
+	existing, err := s.repo.GetItemByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrCatalogItemNotFound) {
+			return nil, ErrCatalogItemNotFound
+		}
+		return nil, err
+	}
+
+	if req.CategoryID != nil {
+		if _, err := s.repo.GetCategoryByID(*req.CategoryID); err != nil {
+			return nil, ErrCatalogCategoryNotFound
+		}
+		existing.CategoryID = *req.CategoryID
+	}
+	if req.Name != nil {
+		name := strings.TrimSpace(*req.Name)
+		if name == "" {
+			return nil, ErrCatalogItemNameReq
+		}
+		existing.Name = name
+	}
+	if req.Slug != nil {
+		slug := model.NormalizeSlug(*req.Slug)
+		if slug == "" {
+			return nil, ErrCatalogItemSlugReq
+		}
+		existing.Slug = slug
+	}
+	if req.Description != nil {
+		existing.Description = strings.TrimSpace(*req.Description)
+	}
+	if req.ShortDescription != nil {
+		existing.ShortDescription = strings.TrimSpace(*req.ShortDescription)
+	}
+	if req.Icon != nil {
+		existing.Icon = strings.TrimSpace(*req.Icon)
+	}
+	if req.EstimatedFulfillmentHours != nil {
+		existing.EstimatedFulfillmentHours = *req.EstimatedFulfillmentHours
+	}
+	if req.CostEstimateCents != nil {
+		existing.CostEstimateCents = *req.CostEstimateCents
+	}
+	if req.Currency != nil {
+		existing.Currency = *req.Currency
+	}
+	if req.RequiresApproval != nil {
+		existing.RequiresApproval = *req.RequiresApproval
+	}
+	if req.ApprovalRole != nil {
+		if err := model.ValidateApprovalRole(*req.ApprovalRole); err != nil {
+			return nil, err
+		}
+		existing.ApprovalRole = *req.ApprovalRole
+	}
+	if req.AutoCreateTask != nil {
+		existing.AutoCreateTask = *req.AutoCreateTask
+	}
+	if req.TargetProjectID != nil {
+		existing.TargetProjectID = req.TargetProjectID
+	}
+	if req.CIID != nil {
+		existing.CIID = req.CIID
+	}
+	if req.IsActive != nil {
+		existing.IsActive = *req.IsActive
+	}
+	if req.FormSchema != nil {
+		b, err := json.Marshal(req.FormSchema)
+		if err == nil {
+			existing.FormSchemaJSON = string(b)
+		}
+	}
+
+	if err := s.repo.UpdateItem(existing); err != nil {
+		if errors.Is(err, repository.ErrDuplicateItemSlug) {
+			return nil, ErrDuplicateItemSlug
+		}
+		if errors.Is(err, repository.ErrCatalogItemNotFound) {
+			return nil, ErrCatalogItemNotFound
+		}
+		return nil, err
+	}
+
+	return s.GetItem(id)
 }
+
 func (s *serviceCatalogServiceImpl) DeleteItem(id int64) error {
+	err := s.repo.DeleteItem(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrCatalogItemNotFound) {
+			return ErrCatalogItemNotFound
+		}
+		return err
+	}
 	return nil
 }
 func (s *serviceCatalogServiceImpl) SubmitRequest(requesterID string, req model.SubmitServiceRequest) (*model.ServiceRequest, error) {
