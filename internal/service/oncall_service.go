@@ -410,7 +410,7 @@ func (s *oncallServiceImpl) GetActiveResponder(scheduleID int64) (*model.ActiveR
 		return nil, err
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 
 	// 1. Check active override
 	activeOverride, err := s.repo.GetActiveOverride(scheduleID, now)
