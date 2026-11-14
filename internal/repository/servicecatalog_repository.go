@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -566,26 +567,352 @@ func (r *serviceCatalogRepositoryImpl) DeleteItem(id int64) error {
 	}
 	return nil
 }
-func (r *serviceCatalogRepositoryImpl) CreateRequest(req *model.ServiceRequest) (int64, error) {
-	return 0, nil
+func scanServiceRequest(scanner interface{ Scan(dest ...interface{}) error }) (*model.ServiceRequest, error) {
+	var req model.ServiceRequest
+	var assignedToID sql.NullString
+	var dueAt, approvedAt, fulfilledAt, cancelledAt sql.NullTime
+	var taskID sql.NullInt64
+	var itemName, requesterName, assignedToName, taskTitle sql.NullString
+
+	err := scanner.Scan(
+		&req.ID, &req.WorkspaceID, &req.CatalogItemID, &req.RequestNumber,
+		&req.Title, &req.Description, &req.Status, &req.Priority,
+		&req.RequesterID, &assignedToID, &req.FormDataJSON, &dueAt,
+		&req.SubmittedAt, &approvedAt, &fulfilledAt, &cancelledAt,
+		&req.CancellationReason, &req.RejectionReason, &taskID,
+		&req.CreatedAt, &req.UpdatedAt,
+		&itemName, &requesterName, &assignedToName, &taskTitle,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if assignedToID.Valid {
+		at := assignedToID.String
+		req.AssignedToID = &at
+	}
+	if dueAt.Valid {
+		da := dueAt.Time
+		req.DueAt = &da
+	}
+	if approvedAt.Valid {
+		aa := approvedAt.Time
+		req.ApprovedAt = &aa
+	}
+	if fulfilledAt.Valid {
+		fa := fulfilledAt.Time
+		req.FulfilledAt = &fa
+	}
+	if cancelledAt.Valid {
+		ca := cancelledAt.Time
+		req.CancelledAt = &ca
+	}
+	if taskID.Valid {
+		tid := int(taskID.Int64)
+		req.TaskID = &tid
+	}
+	if itemName.Valid {
+		req.CatalogItemName = itemName.String
+	}
+	if requesterName.Valid {
+		req.RequesterName = requesterName.String
+	}
+	if assignedToName.Valid {
+		req.AssignedToName = assignedToName.String
+	}
+	if taskTitle.Valid {
+		req.TaskTitle = taskTitle.String
+	}
+
+	return &req, nil
 }
-func (r *serviceCatalogRepositoryImpl) GetRequestByID(id int64) (*model.ServiceRequest, error) {
-	return nil, nil
-}
-func (r *serviceCatalogRepositoryImpl) GetRequestByNumber(workspaceID int64, requestNumber string) (*model.ServiceRequest, error) {
-	return nil, nil
-}
-func (r *serviceCatalogRepositoryImpl) ListRequests(filter model.ServiceRequestFilter) ([]model.ServiceRequest, int, error) {
-	return nil, 0, nil
-}
-func (r *serviceCatalogRepositoryImpl) UpdateRequest(req *model.ServiceRequest) error {
-	return nil
-}
-func (r *serviceCatalogRepositoryImpl) DeleteRequest(id int64) error {
-	return nil
-}
+
 func (r *serviceCatalogRepositoryImpl) GetNextRequestNumber(workspaceID int64) (string, error) {
-	return "", nil
+	var count int
+	err := r.db.QueryRow(`SELECT COUNT(*) FROM service_requests WHERE workspace_id = ?`, workspaceID).Scan(&count)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("REQ-%04d", count+1), nil
+}
+
+func (r *serviceCatalogRepositoryImpl) CreateRequest(req *model.ServiceRequest) (int64, error) {
+	now := time.Now()
+	if req.CreatedAt.IsZero() {
+		req.CreatedAt = now
+	}
+	if req.UpdatedAt.IsZero() {
+		req.UpdatedAt = now
+	}
+	if req.SubmittedAt.IsZero() {
+		req.SubmittedAt = now
+	}
+	if req.Status == "" {
+		req.Status = model.RequestStatusSubmitted
+	}
+	if req.Priority == "" {
+		req.Priority = model.RequestPriorityMedium
+	}
+	if req.FormDataJSON == "" {
+		req.FormDataJSON = "{}"
+	}
+
+	if req.RequestNumber == "" {
+		num, err := r.GetNextRequestNumber(req.WorkspaceID)
+		if err != nil {
+			return 0, err
+		}
+		req.RequestNumber = num
+	}
+
+	res, err := r.db.Exec(`
+		INSERT INTO service_requests (
+			workspace_id, catalog_item_id, request_number, title, description,
+			status, priority, requester_id, assigned_to_id, form_data_json,
+			due_at, submitted_at, approved_at, fulfilled_at, cancelled_at,
+			cancellation_reason, rejection_reason, task_id, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, req.WorkspaceID, req.CatalogItemID, req.RequestNumber, req.Title, req.Description,
+		req.Status, req.Priority, req.RequesterID, req.AssignedToID, req.FormDataJSON,
+		req.DueAt, req.SubmittedAt, req.ApprovedAt, req.FulfilledAt, req.CancelledAt,
+		req.CancellationReason, req.RejectionReason, req.TaskID, req.CreatedAt, req.UpdatedAt)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	req.ID = id
+	return id, nil
+}
+
+func (r *serviceCatalogRepositoryImpl) GetRequestByID(id int64) (*model.ServiceRequest, error) {
+	query := `
+		SELECT sr.id, sr.workspace_id, sr.catalog_item_id, sr.request_number,
+		       sr.title, sr.description, sr.status, sr.priority,
+		       sr.requester_id, sr.assigned_to_id, sr.form_data_json, sr.due_at,
+		       sr.submitted_at, sr.approved_at, sr.fulfilled_at, sr.cancelled_at,
+		       sr.cancellation_reason, sr.rejection_reason, sr.task_id,
+		       sr.created_at, sr.updated_at,
+		       i.name, u1.username, u2.username, t.title
+		FROM service_requests sr
+		LEFT JOIN service_catalog_items i ON sr.catalog_item_id = i.id
+		LEFT JOIN users u1 ON sr.requester_id = u1.id
+		LEFT JOIN users u2 ON sr.assigned_to_id = u2.id
+		LEFT JOIN tasks t ON sr.task_id = t.id
+		WHERE sr.id = ?
+	`
+	req, err := scanServiceRequest(r.db.QueryRow(query, id))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrServiceRequestNotFound
+		}
+		return nil, err
+	}
+
+	approvals, err := r.ListApprovals(id)
+	if err == nil {
+		req.Approvals = approvals
+	}
+	comments, err := r.ListComments(id)
+	if err == nil {
+		req.Comments = comments
+	}
+
+	return req, nil
+}
+
+func (r *serviceCatalogRepositoryImpl) GetRequestByNumber(workspaceID int64, requestNumber string) (*model.ServiceRequest, error) {
+	query := `
+		SELECT sr.id, sr.workspace_id, sr.catalog_item_id, sr.request_number,
+		       sr.title, sr.description, sr.status, sr.priority,
+		       sr.requester_id, sr.assigned_to_id, sr.form_data_json, sr.due_at,
+		       sr.submitted_at, sr.approved_at, sr.fulfilled_at, sr.cancelled_at,
+		       sr.cancellation_reason, sr.rejection_reason, sr.task_id,
+		       sr.created_at, sr.updated_at,
+		       i.name, u1.username, u2.username, t.title
+		FROM service_requests sr
+		LEFT JOIN service_catalog_items i ON sr.catalog_item_id = i.id
+		LEFT JOIN users u1 ON sr.requester_id = u1.id
+		LEFT JOIN users u2 ON sr.assigned_to_id = u2.id
+		LEFT JOIN tasks t ON sr.task_id = t.id
+		WHERE sr.workspace_id = ? AND sr.request_number = ?
+	`
+	req, err := scanServiceRequest(r.db.QueryRow(query, workspaceID, requestNumber))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrServiceRequestNotFound
+		}
+		return nil, err
+	}
+
+	approvals, err := r.ListApprovals(req.ID)
+	if err == nil {
+		req.Approvals = approvals
+	}
+	comments, err := r.ListComments(req.ID)
+	if err == nil {
+		req.Comments = comments
+	}
+
+	return req, nil
+}
+
+func (r *serviceCatalogRepositoryImpl) ListRequests(filter model.ServiceRequestFilter) ([]model.ServiceRequest, int, error) {
+	countQuery := `
+		SELECT COUNT(*)
+		FROM service_requests sr
+		WHERE sr.workspace_id = ?
+	`
+	args := []interface{}{filter.WorkspaceID}
+
+	if filter.CatalogItemID != nil {
+		countQuery += " AND sr.catalog_item_id = ?"
+		args = append(args, *filter.CatalogItemID)
+	}
+	if filter.RequesterID != "" {
+		countQuery += " AND sr.requester_id = ?"
+		args = append(args, filter.RequesterID)
+	}
+	if filter.AssignedToID != "" {
+		countQuery += " AND sr.assigned_to_id = ?"
+		args = append(args, filter.AssignedToID)
+	}
+	if filter.Status != "" {
+		countQuery += " AND sr.status = ?"
+		args = append(args, filter.Status)
+	}
+	if filter.Priority != "" {
+		countQuery += " AND sr.priority = ?"
+		args = append(args, filter.Priority)
+	}
+	if filter.Search != "" {
+		keyword := "%" + strings.ToLower(filter.Search) + "%"
+		countQuery += " AND (LOWER(sr.title) LIKE ? OR LOWER(sr.description) LIKE ? OR LOWER(sr.request_number) LIKE ?)"
+		args = append(args, keyword, keyword, keyword)
+	}
+
+	var totalCount int
+	if err := r.db.QueryRow(countQuery, args...).Scan(&totalCount); err != nil {
+		return nil, 0, err
+	}
+
+	dataQuery := `
+		SELECT sr.id, sr.workspace_id, sr.catalog_item_id, sr.request_number,
+		       sr.title, sr.description, sr.status, sr.priority,
+		       sr.requester_id, sr.assigned_to_id, sr.form_data_json, sr.due_at,
+		       sr.submitted_at, sr.approved_at, sr.fulfilled_at, sr.cancelled_at,
+		       sr.cancellation_reason, sr.rejection_reason, sr.task_id,
+		       sr.created_at, sr.updated_at,
+		       i.name, u1.username, u2.username, t.title
+		FROM service_requests sr
+		LEFT JOIN service_catalog_items i ON sr.catalog_item_id = i.id
+		LEFT JOIN users u1 ON sr.requester_id = u1.id
+		LEFT JOIN users u2 ON sr.assigned_to_id = u2.id
+		LEFT JOIN tasks t ON sr.task_id = t.id
+		WHERE sr.workspace_id = ?
+	`
+	dataArgs := []interface{}{filter.WorkspaceID}
+
+	if filter.CatalogItemID != nil {
+		dataQuery += " AND sr.catalog_item_id = ?"
+		dataArgs = append(dataArgs, *filter.CatalogItemID)
+	}
+	if filter.RequesterID != "" {
+		dataQuery += " AND sr.requester_id = ?"
+		dataArgs = append(dataArgs, filter.RequesterID)
+	}
+	if filter.AssignedToID != "" {
+		dataQuery += " AND sr.assigned_to_id = ?"
+		dataArgs = append(dataArgs, filter.AssignedToID)
+	}
+	if filter.Status != "" {
+		dataQuery += " AND sr.status = ?"
+		dataArgs = append(dataArgs, filter.Status)
+	}
+	if filter.Priority != "" {
+		dataQuery += " AND sr.priority = ?"
+		dataArgs = append(dataArgs, filter.Priority)
+	}
+	if filter.Search != "" {
+		keyword := "%" + strings.ToLower(filter.Search) + "%"
+		dataQuery += " AND (LOWER(sr.title) LIKE ? OR LOWER(sr.description) LIKE ? OR LOWER(sr.request_number) LIKE ?)"
+		dataArgs = append(dataArgs, keyword, keyword, keyword)
+	}
+
+	dataQuery += " ORDER BY sr.submitted_at DESC, sr.id DESC"
+
+	if filter.Limit > 0 {
+		dataQuery += " LIMIT ?"
+		dataArgs = append(dataArgs, filter.Limit)
+		if filter.Offset > 0 {
+			dataQuery += " OFFSET ?"
+			dataArgs = append(dataArgs, filter.Offset)
+		}
+	}
+
+	rows, err := r.db.Query(dataQuery, dataArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var requests []model.ServiceRequest
+	for rows.Next() {
+		req, err := scanServiceRequest(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		requests = append(requests, *req)
+	}
+	if requests == nil {
+		requests = []model.ServiceRequest{}
+	}
+	return requests, totalCount, nil
+}
+
+func (r *serviceCatalogRepositoryImpl) UpdateRequest(req *model.ServiceRequest) error {
+	req.UpdatedAt = time.Now()
+	res, err := r.db.Exec(`
+		UPDATE service_requests
+		SET title = ?, description = ?, status = ?, priority = ?, assigned_to_id = ?,
+		    form_data_json = ?, due_at = ?, approved_at = ?, fulfilled_at = ?,
+		    cancelled_at = ?, cancellation_reason = ?, rejection_reason = ?,
+		    task_id = ?, updated_at = ?
+		WHERE id = ?
+	`, req.Title, req.Description, req.Status, req.Priority, req.AssignedToID,
+		req.FormDataJSON, req.DueAt, req.ApprovedAt, req.FulfilledAt,
+		req.CancelledAt, req.CancellationReason, req.RejectionReason,
+		req.TaskID, req.UpdatedAt, req.ID)
+	if err != nil {
+		return err
+	}
+
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return ErrServiceRequestNotFound
+	}
+	return nil
+}
+
+func (r *serviceCatalogRepositoryImpl) DeleteRequest(id int64) error {
+	res, err := r.db.Exec(`DELETE FROM service_requests WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return ErrServiceRequestNotFound
+	}
+	return nil
 }
 func (r *serviceCatalogRepositoryImpl) CreateApproval(approval *model.ServiceRequestApproval) (int64, error) {
 	return 0, nil
