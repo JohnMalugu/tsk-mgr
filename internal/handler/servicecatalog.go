@@ -266,3 +266,88 @@ func (h *ServiceCatalogHandler) DeleteItem(w http.ResponseWriter, r *http.Reques
 	}
 	writeServiceCatalogJSON(w, http.StatusOK, map[string]string{"message": "catalog item deleted successfully"})
 }
+
+// SubmitRequest handles POST /v2/servicecatalog/requests
+func (h *ServiceCatalogHandler) SubmitRequest(w http.ResponseWriter, r *http.Request) {
+	var req model.SubmitServiceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeServiceCatalogError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+	userID := getServiceCatalogUser(r)
+
+	serviceReq, err := h.svc.SubmitRequest(userID, req)
+	if err != nil {
+		handleServiceCatalogError(w, err)
+		return
+	}
+	writeServiceCatalogJSON(w, http.StatusCreated, serviceReq)
+}
+
+// GetRequest handles GET /v2/servicecatalog/requests/{id}
+func (h *ServiceCatalogHandler) GetRequest(w http.ResponseWriter, r *http.Request, id int64) {
+	serviceReq, err := h.svc.GetRequest(id)
+	if err != nil {
+		handleServiceCatalogError(w, err)
+		return
+	}
+	writeServiceCatalogJSON(w, http.StatusOK, serviceReq)
+}
+
+// ListRequests handles GET /v2/servicecatalog/requests
+func (h *ServiceCatalogHandler) ListRequests(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	filter := model.ServiceRequestFilter{
+		RequesterID:  q.Get("requester_id"),
+		AssignedToID: q.Get("assigned_to_id"),
+		Status:       q.Get("status"),
+		Priority:     q.Get("priority"),
+		Search:       q.Get("search"),
+	}
+	if ws := q.Get("workspace_id"); ws != "" {
+		if wsID, err := strconv.ParseInt(ws, 10, 64); err == nil {
+			filter.WorkspaceID = wsID
+		}
+	}
+	if item := q.Get("catalog_item_id"); item != "" {
+		if itemID, err := strconv.ParseInt(item, 10, 64); err == nil {
+			filter.CatalogItemID = &itemID
+		}
+	}
+	if l := q.Get("limit"); l != "" {
+		if val, err := strconv.Atoi(l); err == nil && val > 0 {
+			filter.Limit = val
+		}
+	}
+	if o := q.Get("offset"); o != "" {
+		if val, err := strconv.Atoi(o); err == nil && val >= 0 {
+			filter.Offset = val
+		}
+	}
+
+	requests, total, err := h.svc.ListRequests(filter)
+	if err != nil {
+		handleServiceCatalogError(w, err)
+		return
+	}
+	writeServiceCatalogJSON(w, http.StatusOK, map[string]interface{}{
+		"requests": requests,
+		"total":    total,
+	})
+}
+
+// UpdateRequest handles PUT/PATCH /v2/servicecatalog/requests/{id}
+func (h *ServiceCatalogHandler) UpdateRequest(w http.ResponseWriter, r *http.Request, id int64) {
+	var req model.UpdateServiceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeServiceCatalogError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+
+	serviceReq, err := h.svc.UpdateRequest(id, req)
+	if err != nil {
+		handleServiceCatalogError(w, err)
+		return
+	}
+	writeServiceCatalogJSON(w, http.StatusOK, serviceReq)
+}
