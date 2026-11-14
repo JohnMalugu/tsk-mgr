@@ -2449,6 +2449,20 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_status_inc_updates_inc ON status_incident_updates(status_incident_id, created_at);
 	CREATE INDEX IF NOT EXISTS idx_status_maint_page_status ON status_maintenance_windows(page_id, status);
 	CREATE INDEX IF NOT EXISTS idx_status_subs_page ON status_subscribers(page_id, is_verified);
+	CREATE INDEX IF NOT EXISTS idx_svc_cat_ws_slug ON service_catalog_categories(workspace_id, slug);
+	CREATE INDEX IF NOT EXISTS idx_svc_cat_ws_order ON service_catalog_categories(workspace_id, display_order);
+	CREATE INDEX IF NOT EXISTS idx_svc_item_ws_slug ON service_catalog_items(workspace_id, slug);
+	CREATE INDEX IF NOT EXISTS idx_svc_item_cat ON service_catalog_items(category_id, is_active);
+	CREATE INDEX IF NOT EXISTS idx_svc_item_ci ON service_catalog_items(ci_id);
+	CREATE INDEX IF NOT EXISTS idx_svc_req_ws_status ON service_requests(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_svc_req_ws_num ON service_requests(workspace_id, request_number);
+	CREATE INDEX IF NOT EXISTS idx_svc_req_item ON service_requests(catalog_item_id);
+	CREATE INDEX IF NOT EXISTS idx_svc_req_requester ON service_requests(requester_id);
+	CREATE INDEX IF NOT EXISTS idx_svc_req_assigned ON service_requests(assigned_to_id);
+	CREATE INDEX IF NOT EXISTS idx_svc_req_task ON service_requests(task_id);
+	CREATE INDEX IF NOT EXISTS idx_svc_appr_req_step ON service_request_approvals(request_id, step_order);
+	CREATE INDEX IF NOT EXISTS idx_svc_appr_approver ON service_request_approvals(approver_id, status);
+	CREATE INDEX IF NOT EXISTS idx_svc_comm_req ON service_request_comments(request_id, created_at);
 	`
 
 	_, err = db.Exec(indexQuery)
