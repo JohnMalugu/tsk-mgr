@@ -2236,6 +2236,42 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	itAssetsQuery := `
+	CREATE TABLE IF NOT EXISTS it_assets (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		asset_tag TEXT NOT NULL,
+		name TEXT NOT NULL,
+		category TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'in_stock',
+		make TEXT NOT NULL DEFAULT '',
+		model TEXT NOT NULL DEFAULT '',
+		serial_number TEXT NOT NULL DEFAULT '',
+		purchase_date DATETIME,
+		purchase_cost REAL NOT NULL DEFAULT 0.0,
+		currency TEXT NOT NULL DEFAULT 'USD',
+		warranty_expiry DATETIME,
+		residual_value REAL NOT NULL DEFAULT 0.0,
+		useful_life_months INTEGER NOT NULL DEFAULT 36,
+		depreciation_method TEXT NOT NULL DEFAULT 'straight_line',
+		location TEXT NOT NULL DEFAULT '',
+		assigned_to_user_id TEXT,
+		assigned_to_dept TEXT NOT NULL DEFAULT '',
+		assigned_at DATETIME,
+		ci_id INTEGER,
+		notes TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (assigned_to_user_id) REFERENCES users(id) ON DELETE SET NULL,
+		FOREIGN KEY (ci_id) REFERENCES configuration_items(id) ON DELETE SET NULL
+	);`
+
+	_, err = db.Exec(itAssetsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
