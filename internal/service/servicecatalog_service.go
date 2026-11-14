@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -440,22 +441,258 @@ func (s *serviceCatalogServiceImpl) DeleteItem(id int64) error {
 	return nil
 }
 func (s *serviceCatalogServiceImpl) SubmitRequest(requesterID string, req model.SubmitServiceRequest) (*model.ServiceRequest, error) {
-	return nil, nil
+	item, err := s.repo.GetItemByID(req.CatalogItemID)
+	if err != nil {
+		if errors.Is(err, repository.ErrCatalogItemNotFound) {
+			return nil, ErrCatalogItemNotFound
+		}
+		return nil, err
+	}
+
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		title = item.Name
+	}
+
+	priority := strings.ToLower(strings.TrimSpace(req.Priority))
+	if priority == "" {
+		priority = model.RequestPriorityMedium
+	} else if err := model.ValidateRequestPriority(priority); err != nil {
+		return nil, err
+	}
+
+	formDataBytes, err := json.Marshal(req.FormData)
+	if err != nil {
+		formDataBytes = []byte("{}")
+	}
+
+	status := model.RequestStatusSubmitted
+	if item.RequiresApproval {
+		status = model.RequestStatusPendingApproval
+	}
+
+	serviceReq := &model.ServiceRequest{
+		WorkspaceID:   item.WorkspaceID,
+		CatalogItemID: item.ID,
+		Title:         title,
+		Description:   strings.TrimSpace(req.Description),
+		Status:        status,
+		Priority:      priority,
+		RequesterID:   requesterID,
+		FormDataJSON:  string(formDataBytes),
+		DueAt:         req.DueAt,
+		SubmittedAt:   time.Now(),
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+
+	id, err := s.repo.CreateRequest(serviceReq)
+	if err != nil {
+		return nil, err
+	}
+
+	if item.RequiresApproval {
+		// Create initial pending approval step
+		_, _ = s.repo.CreateApproval(&model.ServiceRequestApproval{
+			RequestID:  id,
+			StepOrder:  1,
+			ApproverID: requesterID,
+			Status:     model.ApprovalStatusPending,
+		})
+	} else if item.AutoCreateTask && item.TargetProjectID != nil {
+		// Directly generate task if no approval needed
+		pid := int(*item.TargetProjectID)
+		task := &model.Task{
+			UserID:      requesterID,
+			ProjectID:   &pid,
+			Title:       fmt.Sprintf("[%s] %s", serviceReq.RequestNumber, title),
+			Description: serviceReq.Description,
+			Status:      "todo",
+			Priority:    priority,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		}
+		if err := s.taskRepo.Create(task); err == nil {
+			serviceReq.TaskID = &task.ID
+			serviceReq.Status = model.RequestStatusInProgress
+			_ = s.repo.UpdateRequest(serviceReq)
+		}
+	}
+
+	return s.GetRequest(id)
 }
+
 func (s *serviceCatalogServiceImpl) GetRequest(id int64) (*model.ServiceRequest, error) {
-	return nil, nil
+	req, err := s.repo.GetRequestByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrServiceRequestNotFound) {
+			return nil, ErrServiceRequestNotFound
+		}
+		return nil, err
+	}
+
+	if req.FormDataJSON != "" {
+		var fd map[string]interface{}
+		if err := json.Unmarshal([]byte(req.FormDataJSON), &fd); err == nil {
+			req.FormData = fd
+		}
+	}
+
+	return req, nil
 }
+
 func (s *serviceCatalogServiceImpl) GetRequestByNumber(workspaceID int64, requestNumber string) (*model.ServiceRequest, error) {
-	return nil, nil
+	req, err := s.repo.GetRequestByNumber(workspaceID, requestNumber)
+	if err != nil {
+		if errors.Is(err, repository.ErrServiceRequestNotFound) {
+			return nil, ErrServiceRequestNotFound
+		}
+		return nil, err
+	}
+
+	if req.FormDataJSON != "" {
+		var fd map[string]interface{}
+		if err := json.Unmarshal([]byte(req.FormDataJSON), &fd); err == nil {
+			req.FormData = fd
+		}
+	}
+
+	return req, nil
 }
+
 func (s *serviceCatalogServiceImpl) ListRequests(filter model.ServiceRequestFilter) ([]model.ServiceRequest, int, error) {
-	return nil, 0, nil
+	requests, total, err := s.repo.ListRequests(filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	for i := range requests {
+		if requests[i].FormDataJSON != "" {
+			var fd map[string]interface{}
+			if err := json.Unmarshal([]byte(requests[i].FormDataJSON), &fd); err == nil {
+				requests[i].FormData = fd
+			}
+		}
+	}
+
+	return requests, total, nil
 }
+
 func (s *serviceCatalogServiceImpl) UpdateRequest(id int64, req model.UpdateServiceRequest) (*model.ServiceRequest, error) {
-	return nil, nil
+	existing, err := s.repo.GetRequestByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrServiceRequestNotFound) {
+			return nil, ErrServiceRequestNotFound
+		}
+		return nil, err
+	}
+
+	if req.Status != nil {
+		st := strings.ToLower(strings.TrimSpace(*req.Status))
+		if err := model.ValidateRequestStatus(st); err != nil {
+			return nil, err
+		}
+		existing.Status = st
+		now := time.Now()
+		if st == model.RequestStatusFulfilled && existing.FulfilledAt == nil {
+			existing.FulfilledAt = &now
+		} else if st == model.RequestStatusCancelled && existing.CancelledAt == nil {
+			existing.CancelledAt = &now
+		}
+	}
+	if req.Priority != nil {
+		p := strings.ToLower(strings.TrimSpace(*req.Priority))
+		if err := model.ValidateRequestPriority(p); err != nil {
+			return nil, err
+		}
+		existing.Priority = p
+	}
+	if req.AssignedToID != nil {
+		existing.AssignedToID = req.AssignedToID
+	}
+	if req.DueAt != nil {
+		existing.DueAt = req.DueAt
+	}
+	if req.RejectionReason != nil {
+		existing.RejectionReason = strings.TrimSpace(*req.RejectionReason)
+	}
+	if req.CancellationReason != nil {
+		existing.CancellationReason = strings.TrimSpace(*req.CancellationReason)
+	}
+
+	if err := s.repo.UpdateRequest(existing); err != nil {
+		if errors.Is(err, repository.ErrServiceRequestNotFound) {
+			return nil, ErrServiceRequestNotFound
+		}
+		return nil, err
+	}
+
+	return s.GetRequest(id)
 }
+
 func (s *serviceCatalogServiceImpl) ReviewApproval(approverID string, approvalID int64, req model.ReviewApprovalRequest) (*model.ServiceRequestApproval, error) {
-	return nil, nil
+	approval, err := s.repo.GetApprovalByID(approvalID)
+	if err != nil {
+		if errors.Is(err, repository.ErrRequestApprovalNotFound) {
+			return nil, ErrRequestApprovalNotFound
+		}
+		return nil, err
+	}
+
+	if approval.Status != model.ApprovalStatusPending {
+		return nil, ErrRequestAlreadyDecided
+	}
+
+	action := strings.ToLower(strings.TrimSpace(req.Status))
+	if action != model.ApprovalStatusApproved && action != model.ApprovalStatusRejected {
+		return nil, ErrInvalidApprovalStatus
+	}
+
+	now := time.Now()
+	approval.Status = action
+	approval.Comments = strings.TrimSpace(req.Comments)
+	approval.DecidedAt = &now
+	approval.ApproverID = approverID
+
+	if err := s.repo.UpdateApproval(approval); err != nil {
+		return nil, err
+	}
+
+	// Update the parent request state
+	parentReq, err := s.repo.GetRequestByID(approval.RequestID)
+	if err == nil {
+		if action == model.ApprovalStatusApproved {
+			parentReq.Status = model.RequestStatusApproved
+			parentReq.ApprovedAt = &now
+
+			// Auto-generate task if requested
+			item, err := s.repo.GetItemByID(parentReq.CatalogItemID)
+			if err == nil && item.AutoCreateTask && item.TargetProjectID != nil {
+				pid := int(*item.TargetProjectID)
+				task := &model.Task{
+					UserID:      parentReq.RequesterID,
+					ProjectID:   &pid,
+					Title:       fmt.Sprintf("[%s] %s", parentReq.RequestNumber, parentReq.Title),
+					Description: parentReq.Description,
+					Status:      "todo",
+					Priority:    parentReq.Priority,
+					CreatedAt:   now,
+					UpdatedAt:   now,
+				}
+				if err := s.taskRepo.Create(task); err == nil {
+					parentReq.TaskID = &task.ID
+					parentReq.Status = model.RequestStatusInProgress
+				}
+			}
+			_ = s.repo.UpdateRequest(parentReq)
+		} else if action == model.ApprovalStatusRejected {
+			parentReq.Status = model.RequestStatusRejected
+			parentReq.RejectionReason = strings.TrimSpace(req.Comments)
+			_ = s.repo.UpdateRequest(parentReq)
+		}
+	}
+
+	return s.repo.GetApprovalByID(approvalID)
 }
 func (s *serviceCatalogServiceImpl) AddComment(userID string, requestID int64, req model.AddRequestCommentRequest) (*model.ServiceRequestComment, error) {
 	return nil, nil
