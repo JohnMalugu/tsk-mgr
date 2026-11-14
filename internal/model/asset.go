@@ -485,3 +485,57 @@ func (r *AssetAuditScanRequest) Validate() error {
 	}
 	return nil
 }
+
+// AssetFilterCriteria defines search and pagination parameters for assets
+type AssetFilterCriteria struct {
+	WorkspaceID          int64  `json:"workspace_id"`
+	Category             string `json:"category,omitempty"`
+	Status               string `json:"status,omitempty"`
+	AssignedToUserID     string `json:"assigned_to_user_id,omitempty"`
+	Location             string `json:"location,omitempty"`
+	Search               string `json:"search,omitempty"`
+	WarrantyExpiringDays *int   `json:"warranty_expiring_days,omitempty"`
+	Limit                int    `json:"limit,omitempty"`
+	Offset               int    `json:"offset,omitempty"`
+}
+
+// LicenseFilterCriteria defines search and pagination parameters for software licenses
+type LicenseFilterCriteria struct {
+	WorkspaceID  int64  `json:"workspace_id"`
+	LicenseType  string `json:"license_type,omitempty"`
+	Publisher    string `json:"publisher,omitempty"`
+	Search       string `json:"search,omitempty"`
+	ExpiringDays *int   `json:"expiring_days,omitempty"`
+	Limit        int    `json:"limit,omitempty"`
+	Offset       int    `json:"offset,omitempty"`
+}
+
+// AssetDepreciationSchedule outlines depreciation metrics for an asset
+type AssetDepreciationSchedule struct {
+	AssetID                 int64   `json:"asset_id"`
+	AssetTag                string  `json:"asset_tag"`
+	AssetName               string  `json:"asset_name"`
+	PurchaseCost            float64 `json:"purchase_cost"`
+	ResidualValue           float64 `json:"residual_value"`
+	UsefulLifeMonths        int     `json:"useful_life_months"`
+	AgeMonths               int     `json:"age_months"`
+	MonthlyDepreciation     float64 `json:"monthly_depreciation"`
+	AccumulatedDepreciation float64 `json:"accumulated_depreciation"`
+	CurrentBookValue        float64 `json:"current_book_value"`
+}
+
+// AssetMetrics represents aggregated operational and financial asset statistics
+type AssetMetrics struct {
+	WorkspaceID                int64          `json:"workspace_id"`
+	TotalAssets                int            `json:"total_assets"`
+	TotalPurchaseValue         float64        `json:"total_purchase_value"`
+	TotalEstimatedBookValue    float64        `json:"total_estimated_book_value"`
+	StatusBreakdown            map[string]int `json:"status_breakdown"`
+	CategoryBreakdown          map[string]int `json:"category_breakdown"`
+	WarrantyExpiringIn30Days   int            `json:"warranty_expiring_in_30_days"`
+	WarrantyExpiringIn90Days   int            `json:"warranty_expiring_in_90_days"`
+	TotalLicenses              int            `json:"total_licenses"`
+	TotalLicenseSeats          int            `json:"total_license_seats"`
+	AllocatedLicenseSeats      int            `json:"allocated_license_seats"`
+	LicenseSeatUtilizationRate float64        `json:"license_seat_utilization_rate"`
+}
