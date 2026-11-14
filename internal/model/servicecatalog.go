@@ -160,8 +160,39 @@ type ServiceRequest struct {
 	Comments        []ServiceRequestComment  `json:"comments,omitempty"`
 }
 
-// ServiceRequestApproval placeholder
-type ServiceRequestApproval struct{}
+// Approval status constants
+const (
+	ApprovalStatusPending  = "pending"
+	ApprovalStatusApproved = "approved"
+	ApprovalStatusRejected = "rejected"
+)
 
-// ServiceRequestComment placeholder
-type ServiceRequestComment struct{}
+// ServiceRequestApproval represents a governance review milestone for a service request
+type ServiceRequestApproval struct {
+	ID         int64      `json:"id"`
+	RequestID  int64      `json:"request_id"`
+	StepOrder  int        `json:"step_order"`
+	ApproverID string     `json:"approver_id"`
+	Status     string     `json:"status"` // pending, approved, rejected
+	Comments   string     `json:"comments,omitempty"`
+	DecidedAt  *time.Time `json:"decided_at,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
+
+	// Enriched fields
+	ApproverName string `json:"approver_name,omitempty"`
+}
+
+// ServiceRequestComment represents an internal note or communication message on a request
+type ServiceRequestComment struct {
+	ID         int64     `json:"id"`
+	RequestID  int64     `json:"request_id"`
+	UserID     string    `json:"user_id"`
+	IsInternal bool      `json:"is_internal"` // true for fulfillment team internal notes
+	Comment    string    `json:"comment"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+
+	// Enriched fields
+	UserName string `json:"user_name,omitempty"`
+}
