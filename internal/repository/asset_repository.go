@@ -770,17 +770,188 @@ func (r *sqlITAssetRepository) ListSoftwareLicenses(ctx context.Context, filter 
 	}
 	return licenses, total, rows.Err()
 }
+func (r *sqlITAssetRepository) scanLicenseAllocation(row interface{ Scan(...any) error }) (*model.LicenseAllocation, error) {
+	var a model.LicenseAllocation
+	var assetID sql.NullInt64
+	var userID sql.NullString
+	var assetTag, assetName, userName, userEmail, softName sql.NullString
+
+	err := row.Scan(
+		&a.ID,
+		&a.LicenseID,
+		&assetID,
+		&userID,
+		&a.AllocatedBy,
+		&a.AllocatedAt,
+		&a.Notes,
+		&assetTag,
+		&assetName,
+		&userName,
+		&userEmail,
+		&softName,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrLicenseAllocNotFound
+		}
+		return nil, err
+	}
+	if assetID.Valid {
+		id := assetID.Int64
+		a.AssetID = &id
+	}
+	if userID.Valid {
+		u := userID.String
+		a.UserID = &u
+	}
+	if assetTag.Valid {
+		a.AssetTag = assetTag.String
+	}
+	if assetName.Valid {
+		a.AssetName = assetName.String
+	}
+	if userName.Valid {
+		a.UserName = userName.String
+	}
+	if userEmail.Valid {
+		a.UserEmail = userEmail.String
+	}
+	if softName.Valid {
+		a.SoftwareName = softName.String
+	}
+	return &a, nil
+}
+
+const allocSelectFields = `
+	la.id, la.license_id, la.asset_id, la.user_id, la.allocated_by, la.allocated_at, la.notes,
+	COALESCE(ast.asset_tag, '') AS asset_tag,
+	COALESCE(ast.name, '') AS asset_name,
+	COALESCE(u.username, '') AS user_name,
+	COALESCE(u.email, '') AS user_email,
+	COALESCE(sl.software_name, '') AS software_name
+`
+
+const allocFromClause = `
+	FROM license_allocations la
+	JOIN software_licenses sl ON la.license_id = sl.id
+	LEFT JOIN it_assets ast ON la.asset_id = ast.id
+	LEFT JOIN users u ON la.user_id = u.id
+`
+
 func (r *sqlITAssetRepository) CreateLicenseAllocation(ctx context.Context, alloc *model.LicenseAllocation) error {
-	return errNotImplemented
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Check license capacity
+	var totalSeats, allocatedSeats int
+	err = tx.QueryRowContext(ctx, "SELECT total_seats, allocated_seats FROM software_licenses WHERE id = ?", alloc.LicenseID).Scan(&totalSeats, &allocatedSeats)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrLicenseNotFound
+		}
+		return err
+	}
+	if allocatedSeats >= totalSeats {
+		return ErrNoSeatsAvailable
+	}
+
+	// Check if target already has this license
+	if alloc.AssetID != nil && *alloc.AssetID > 0 {
+		var count int
+		_ = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM license_allocations WHERE license_id = ? AND asset_id = ?", alloc.LicenseID, *alloc.AssetID).Scan(&count)
+		if count > 0 {
+			return ErrAlreadyAllocated
+		}
+	} else if alloc.UserID != nil && *alloc.UserID != "" {
+		var count int
+		_ = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM license_allocations WHERE license_id = ? AND user_id = ?", alloc.LicenseID, *alloc.UserID).Scan(&count)
+		if count > 0 {
+			return ErrAlreadyAllocated
+		}
+	}
+
+	alloc.AllocatedAt = time.Now().UTC()
+	insertQuery := `
+	INSERT INTO license_allocations (
+		license_id, asset_id, user_id, allocated_by, allocated_at, notes
+	) VALUES (?, ?, ?, ?, ?, ?);`
+
+	res, err := tx.ExecContext(ctx, insertQuery,
+		alloc.LicenseID, alloc.AssetID, alloc.UserID, alloc.AllocatedBy, alloc.AllocatedAt, alloc.Notes,
+	)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	alloc.ID = id
+
+	// Increment allocated seats
+	_, err = tx.ExecContext(ctx, "UPDATE software_licenses SET allocated_seats = allocated_seats + 1, updated_at = ? WHERE id = ?", alloc.AllocatedAt, alloc.LicenseID)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
+
 func (r *sqlITAssetRepository) GetLicenseAllocationByID(ctx context.Context, id int64) (*model.LicenseAllocation, error) {
-	return nil, errNotImplemented
+	query := fmt.Sprintf("SELECT %s %s WHERE la.id = ?", allocSelectFields, allocFromClause)
+	return r.scanLicenseAllocation(r.db.QueryRowContext(ctx, query, id))
 }
+
 func (r *sqlITAssetRepository) DeleteLicenseAllocation(ctx context.Context, id int64) error {
-	return errNotImplemented
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var licenseID int64
+	err = tx.QueryRowContext(ctx, "SELECT license_id FROM license_allocations WHERE id = ?", id).Scan(&licenseID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrLicenseAllocNotFound
+		}
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx, "DELETE FROM license_allocations WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+	_, err = tx.ExecContext(ctx, "UPDATE software_licenses SET allocated_seats = CASE WHEN allocated_seats > 0 THEN allocated_seats - 1 ELSE 0 END, updated_at = ? WHERE id = ?", now, licenseID)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
+
 func (r *sqlITAssetRepository) ListLicenseAllocations(ctx context.Context, licenseID int64) ([]model.LicenseAllocation, error) {
-	return nil, errNotImplemented
+	query := fmt.Sprintf("SELECT %s %s WHERE la.license_id = ? ORDER BY la.id DESC", allocSelectFields, allocFromClause)
+	rows, err := r.db.QueryContext(ctx, query, licenseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var allocations []model.LicenseAllocation
+	for rows.Next() {
+		a, err := r.scanLicenseAllocation(rows)
+		if err != nil {
+			return nil, err
+		}
+		allocations = append(allocations, *a)
+	}
+	return allocations, rows.Err()
 }
 func (r *sqlITAssetRepository) CreateAuditLog(ctx context.Context, audit *model.AssetAuditLog) error {
 	return errNotImplemented
