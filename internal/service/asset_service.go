@@ -678,11 +678,55 @@ func (s *itAssetService) ListLicenseAllocations(ctx context.Context, licenseID i
 	return s.repo.ListLicenseAllocations(ctx, licenseID)
 }
 func (s *itAssetService) RecordAuditScan(ctx context.Context, workspaceID int64, scannedBy string, req *model.AssetAuditScanRequest) (*model.AssetAuditLog, error) {
-	return nil, errNotImpl
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	var assetID int64
+	if req.AssetID != nil && *req.AssetID > 0 {
+		asset, err := s.repo.GetAssetByID(ctx, *req.AssetID)
+		if err != nil {
+			return nil, err
+		}
+		assetID = asset.ID
+	} else {
+		asset, err := s.repo.GetAssetByTag(ctx, workspaceID, strings.TrimSpace(req.AssetTag))
+		if err != nil {
+			return nil, err
+		}
+		assetID = asset.ID
+	}
+
+	status := strings.ToLower(strings.TrimSpace(req.AuditStatus))
+	if status == "" {
+		status = model.AuditStatusVerified
+	}
+
+	audit := &model.AssetAuditLog{
+		WorkspaceID: workspaceID,
+		AssetID:     assetID,
+		ScannedBy:   scannedBy,
+		ScannedAt:   time.Now().UTC(),
+		AuditStatus: status,
+		Location:    strings.TrimSpace(req.Location),
+		Notes:       strings.TrimSpace(req.Notes),
+	}
+
+	if err := s.repo.CreateAuditLog(ctx, audit); err != nil {
+		return nil, err
+	}
+
+	logs, err := s.repo.ListAuditLogs(ctx, workspaceID, &assetID, 1, 0)
+	if err == nil && len(logs) > 0 {
+		return &logs[0], nil
+	}
+	return audit, nil
 }
+
 func (s *itAssetService) ListAuditLogs(ctx context.Context, workspaceID int64, assetID *int64, limit, offset int) ([]model.AssetAuditLog, error) {
-	return nil, errNotImpl
+	return s.repo.ListAuditLogs(ctx, workspaceID, assetID, limit, offset)
 }
+
 func (s *itAssetService) GetAssetMetrics(ctx context.Context, workspaceID int64) (*model.AssetMetrics, error) {
-	return nil, errNotImpl
+	return s.repo.GetAssetMetrics(ctx, workspaceID)
 }
