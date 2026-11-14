@@ -2198,6 +2198,26 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	serviceRequestApprovalsQuery := `
+	CREATE TABLE IF NOT EXISTS service_request_approvals (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		request_id INTEGER NOT NULL,
+		step_order INTEGER NOT NULL DEFAULT 1,
+		approver_id TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending',
+		comments TEXT NOT NULL DEFAULT '',
+		decided_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (request_id) REFERENCES service_requests(id) ON DELETE CASCADE,
+		FOREIGN KEY (approver_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(serviceRequestApprovalsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
