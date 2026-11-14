@@ -311,16 +311,130 @@ func (s *itAssetService) ListAssets(ctx context.Context, filter model.AssetFilte
 	return assets, total, nil
 }
 func (s *itAssetService) AssignAsset(ctx context.Context, id int64, req *model.AssignAssetRequest) (*model.ITAsset, error) {
-	return nil, errNotImpl
+	asset, err := s.repo.GetAssetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if asset.Status == model.AssetStatusRetired || asset.Status == model.AssetStatusDisposed {
+		return nil, ErrAssetRetired
+	}
+
+	dept := strings.TrimSpace(req.Department)
+	var userID *string
+	if req.UserID != nil && strings.TrimSpace(*req.UserID) != "" {
+		trimmed := strings.TrimSpace(*req.UserID)
+		userID = &trimmed
+	}
+
+	if userID == nil && dept == "" {
+		return nil, errors.New("user ID or department is required for assignment")
+	}
+
+	now := time.Now().UTC()
+	if err := s.repo.AssignAsset(ctx, id, userID, dept, strings.TrimSpace(req.Location), now, strings.TrimSpace(req.Notes)); err != nil {
+		return nil, err
+	}
+
+	updated, err := s.repo.GetAssetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	computeAssetBookValue(updated)
+	return updated, nil
 }
+
 func (s *itAssetService) CheckinAsset(ctx context.Context, id int64, location, notes string) (*model.ITAsset, error) {
-	return nil, errNotImpl
+	asset, err := s.repo.GetAssetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if asset.AssignedToUserID == nil && asset.AssignedToDept == "" {
+		return nil, ErrAssetNotAssigned
+	}
+
+	if err := s.repo.CheckinAsset(ctx, id, strings.TrimSpace(location), strings.TrimSpace(notes)); err != nil {
+		return nil, err
+	}
+
+	updated, err := s.repo.GetAssetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	computeAssetBookValue(updated)
+	return updated, nil
 }
+
 func (s *itAssetService) TransitionAssetStatus(ctx context.Context, id int64, req *model.AssetStatusTransitionRequest) (*model.ITAsset, error) {
-	return nil, errNotImpl
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	asset, err := s.repo.GetAssetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if asset.Status == model.AssetStatusDisposed {
+		return nil, ErrAssetRetired
+	}
+
+	status := strings.ToLower(strings.TrimSpace(req.Status))
+	if err := s.repo.UpdateAssetStatus(ctx, id, status, strings.TrimSpace(req.Notes)); err != nil {
+		return nil, err
+	}
+
+	updated, err := s.repo.GetAssetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	computeAssetBookValue(updated)
+	return updated, nil
 }
+
 func (s *itAssetService) CalculateDepreciation(ctx context.Context, id int64) (*model.AssetDepreciationSchedule, error) {
-	return nil, errNotImpl
+	asset, err := s.repo.GetAssetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	sched := &model.AssetDepreciationSchedule{
+		AssetID:          asset.ID,
+		AssetTag:         asset.AssetTag,
+		AssetName:        asset.Name,
+		PurchaseCost:     asset.PurchaseCost,
+		ResidualValue:    asset.ResidualValue,
+		UsefulLifeMonths: asset.UsefulLifeMonths,
+	}
+
+	if asset.PurchaseDate == nil || asset.DepreciationMethod == model.DepreciationNone || asset.UsefulLifeMonths <= 0 {
+		sched.CurrentBookValue = asset.PurchaseCost
+		return sched, nil
+	}
+
+	now := time.Now().UTC()
+	elapsedMonths := int(now.Sub(*asset.PurchaseDate).Hours() / (24 * 30.4375))
+	if elapsedMonths < 0 {
+		elapsedMonths = 0
+	}
+	sched.AgeMonths = elapsedMonths
+
+	depreciable := asset.PurchaseCost - asset.ResidualValue
+	if depreciable <= 0 {
+		sched.CurrentBookValue = asset.PurchaseCost
+		return sched, nil
+	}
+
+	monthlyDepr := depreciable / float64(asset.UsefulLifeMonths)
+	sched.MonthlyDepreciation = monthlyDepr
+	accumDepr := monthlyDepr * float64(elapsedMonths)
+	sched.AccumulatedDepreciation = accumDepr
+
+	currentBook := asset.PurchaseCost - accumDepr
+	if currentBook < asset.ResidualValue {
+		currentBook = asset.ResidualValue
+	}
+	sched.CurrentBookValue = currentBook
+
+	return sched, nil
 }
 func (s *itAssetService) CreateMaintenanceRecord(ctx context.Context, assetID int64, req *model.CreateMaintenanceRecordRequest) (*model.AssetMaintenanceRecord, error) {
 	return nil, errNotImpl
