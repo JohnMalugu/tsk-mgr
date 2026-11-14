@@ -2293,6 +2293,32 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	softwareLicensesQuery := `
+	CREATE TABLE IF NOT EXISTS software_licenses (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		software_name TEXT NOT NULL,
+		version TEXT NOT NULL DEFAULT '',
+		publisher TEXT NOT NULL DEFAULT '',
+		license_key TEXT NOT NULL DEFAULT '',
+		license_type TEXT NOT NULL DEFAULT 'seat_based',
+		total_seats INTEGER NOT NULL DEFAULT 1,
+		allocated_seats INTEGER NOT NULL DEFAULT 0,
+		purchase_cost REAL NOT NULL DEFAULT 0.0,
+		currency TEXT NOT NULL DEFAULT 'USD',
+		expiration_date DATETIME,
+		vendor TEXT NOT NULL DEFAULT '',
+		notes TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(softwareLicensesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
