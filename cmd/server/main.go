@@ -167,6 +167,10 @@ func main() {
 	statusPageSvc := service.NewStatusPageService(statusPageRepo, projectRepo, cmdbRepo, incidentRepo)
 	handler.InitStatusPageHandler(statusPageSvc)
 
+	serviceCatalogRepo := repository.NewServiceCatalogRepository(sqliteDB)
+	serviceCatalogSvc := service.NewServiceCatalogService(serviceCatalogRepo, taskRepo, projectRepo, cmdbRepo)
+	handler.InitServiceCatalogHandler(serviceCatalogSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
@@ -186,6 +190,9 @@ func main() {
 	fmt.Printf("   GET    http://localhost:8080/v2/oncall/metrics?workspace_id={id}\n")
 	fmt.Printf("   GET    http://localhost:8080/v2/statuspages?workspace_id={id}\n")
 	fmt.Printf("   GET    http://localhost:8080/v2/statuspages/public/{slug}\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/servicecatalog/categories?workspace_id={id}\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/servicecatalog/items?workspace_id={id}\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/servicecatalog/requests?workspace_id={id}\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/ready\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/blocked\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/upcoming?days=7\n")
