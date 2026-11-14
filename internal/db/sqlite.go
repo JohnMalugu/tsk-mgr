@@ -2106,6 +2106,27 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	serviceCatalogCategoriesQuery := `
+	CREATE TABLE IF NOT EXISTS service_catalog_categories (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		name TEXT NOT NULL,
+		slug TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		icon TEXT NOT NULL DEFAULT '',
+		display_order INTEGER NOT NULL DEFAULT 0,
+		is_active INTEGER NOT NULL DEFAULT 1,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		UNIQUE(workspace_id, slug),
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(serviceCatalogCategoriesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
