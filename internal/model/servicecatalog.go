@@ -287,3 +287,35 @@ func ValidateRequestPriority(priority string) error {
 		return ErrInvalidRequestPriority
 	}
 }
+
+// SubmitServiceRequest payload for placing an order from a catalog item
+type SubmitServiceRequest struct {
+	CatalogItemID int64                  `json:"catalog_item_id"`
+	Title         string                 `json:"title"`
+	Description   string                 `json:"description,omitempty"`
+	Priority      string                 `json:"priority,omitempty"` // low, medium, high, urgent
+	FormData      map[string]interface{} `json:"form_data,omitempty"`
+	DueAt         *time.Time             `json:"due_at,omitempty"`
+}
+
+// UpdateServiceRequest payload for transitioning or assigning a request
+type UpdateServiceRequest struct {
+	Status             *string    `json:"status,omitempty"`
+	Priority           *string    `json:"priority,omitempty"`
+	AssignedToID       *string    `json:"assigned_to_id,omitempty"`
+	DueAt              *time.Time `json:"due_at,omitempty"`
+	RejectionReason    *string    `json:"rejection_reason,omitempty"`
+	CancellationReason *string    `json:"cancellation_reason,omitempty"`
+}
+
+// ReviewApprovalRequest payload for approving or rejecting a service request
+type ReviewApprovalRequest struct {
+	Status   string `json:"status"` // approved, rejected
+	Comments string `json:"comments,omitempty"`
+}
+
+// AddRequestCommentRequest payload for adding an update or internal note to a request
+type AddRequestCommentRequest struct {
+	Comment    string `json:"comment"`
+	IsInternal bool   `json:"is_internal,omitempty"`
+}
