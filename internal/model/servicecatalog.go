@@ -196,3 +196,94 @@ type ServiceRequestComment struct {
 	// Enriched fields
 	UserName string `json:"user_name,omitempty"`
 }
+
+// CreateCatalogCategoryRequest payload for registering a category
+type CreateCatalogCategoryRequest struct {
+	WorkspaceID  int64  `json:"workspace_id"`
+	Name         string `json:"name"`
+	Slug         string `json:"slug,omitempty"`
+	Description  string `json:"description,omitempty"`
+	Icon         string `json:"icon,omitempty"`
+	DisplayOrder int    `json:"display_order,omitempty"`
+}
+
+// UpdateCatalogCategoryRequest payload for updating a category
+type UpdateCatalogCategoryRequest struct {
+	Name         *string `json:"name,omitempty"`
+	Slug         *string `json:"slug,omitempty"`
+	Description  *string `json:"description,omitempty"`
+	Icon         *string `json:"icon,omitempty"`
+	DisplayOrder *int    `json:"display_order,omitempty"`
+	IsActive     *bool   `json:"is_active,omitempty"`
+}
+
+// CreateCatalogItemRequest payload for creating a catalog offering
+type CreateCatalogItemRequest struct {
+	WorkspaceID               int64              `json:"workspace_id"`
+	CategoryID                int64              `json:"category_id"`
+	Name                      string             `json:"name"`
+	Slug                      string             `json:"slug,omitempty"`
+	Description               string             `json:"description,omitempty"`
+	ShortDescription          string             `json:"short_description,omitempty"`
+	Icon                      string             `json:"icon,omitempty"`
+	EstimatedFulfillmentHours float64            `json:"estimated_fulfillment_hours,omitempty"`
+	CostEstimateCents         int64              `json:"cost_estimate_cents,omitempty"`
+	Currency                  string             `json:"currency,omitempty"`
+	RequiresApproval          bool               `json:"requires_approval,omitempty"`
+	ApprovalRole              string             `json:"approval_role,omitempty"` // manager, admin, security_officer
+	AutoCreateTask            bool               `json:"auto_create_task,omitempty"`
+	TargetProjectID           *int64             `json:"target_project_id,omitempty"`
+	CIID                      *int64             `json:"ci_id,omitempty"`
+	FormSchema                *CatalogFormSchema `json:"form_schema,omitempty"`
+}
+
+// UpdateCatalogItemRequest payload for modifying a catalog item
+type UpdateCatalogItemRequest struct {
+	CategoryID                *int64             `json:"category_id,omitempty"`
+	Name                      *string            `json:"name,omitempty"`
+	Slug                      *string            `json:"slug,omitempty"`
+	Description               *string            `json:"description,omitempty"`
+	ShortDescription          *string            `json:"short_description,omitempty"`
+	Icon                      *string            `json:"icon,omitempty"`
+	EstimatedFulfillmentHours *float64           `json:"estimated_fulfillment_hours,omitempty"`
+	CostEstimateCents         *int64             `json:"cost_estimate_cents,omitempty"`
+	Currency                  *string            `json:"currency,omitempty"`
+	RequiresApproval          *bool              `json:"requires_approval,omitempty"`
+	ApprovalRole              *string            `json:"approval_role,omitempty"`
+	AutoCreateTask            *bool              `json:"auto_create_task,omitempty"`
+	TargetProjectID           *int64             `json:"target_project_id,omitempty"`
+	CIID                      *int64             `json:"ci_id,omitempty"`
+	IsActive                  *bool              `json:"is_active,omitempty"`
+	FormSchema                *CatalogFormSchema `json:"form_schema,omitempty"`
+}
+
+// ValidateApprovalRole ensures the role matches an allowed approval persona
+func ValidateApprovalRole(role string) error {
+	switch role {
+	case ApprovalRoleManager, ApprovalRoleAdmin, ApprovalRoleSecurity, "":
+		return nil
+	default:
+		return ErrInvalidApprovalRole
+	}
+}
+
+// ValidateRequestStatus checks if request status transition is recognized
+func ValidateRequestStatus(status string) error {
+	switch status {
+	case RequestStatusSubmitted, RequestStatusPendingApproval, RequestStatusApproved,
+		RequestStatusInProgress, RequestStatusFulfilled, RequestStatusRejected, RequestStatusCancelled:
+		return nil
+	default:
+		return ErrInvalidRequestStatus
+	}
+}
+
+// ValidateRequestPriority checks if priority is valid
+func ValidateRequestPriority(priority string) error {
+	switch priority {
+	case RequestPriorityLow, RequestPriorityMedium, RequestPriorityHigh, RequestPriorityUrgent:
+		return nil
+	default:
+		return ErrInvalidRequestPriority
+	}
+}
