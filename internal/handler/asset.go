@@ -217,3 +217,165 @@ func (h *ITAssetHandler) CalculateDepreciation(w http.ResponseWriter, r *http.Re
 	}
 	writeITAssetJSON(w, http.StatusOK, sched)
 }
+
+// AssignAsset handles POST /v2/assets/{id}/assign
+func (h *ITAssetHandler) AssignAsset(w http.ResponseWriter, r *http.Request, id int64) {
+	var req model.AssignAssetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeITAssetError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+
+	asset, err := h.svc.AssignAsset(r.Context(), id, &req)
+	if err != nil {
+		handleITAssetError(w, err)
+		return
+	}
+	writeITAssetJSON(w, http.StatusOK, asset)
+}
+
+// CheckinAsset handles POST /v2/assets/{id}/checkin
+func (h *ITAssetHandler) CheckinAsset(w http.ResponseWriter, r *http.Request, id int64) {
+	var body struct {
+		Location string `json:"location"`
+		Notes    string `json:"notes"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+
+	asset, err := h.svc.CheckinAsset(r.Context(), id, body.Location, body.Notes)
+	if err != nil {
+		handleITAssetError(w, err)
+		return
+	}
+	writeITAssetJSON(w, http.StatusOK, asset)
+}
+
+// TransitionStatus handles POST /v2/assets/{id}/status
+func (h *ITAssetHandler) TransitionStatus(w http.ResponseWriter, r *http.Request, id int64) {
+	var req model.AssetStatusTransitionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeITAssetError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+
+	asset, err := h.svc.TransitionAssetStatus(r.Context(), id, &req)
+	if err != nil {
+		handleITAssetError(w, err)
+		return
+	}
+	writeITAssetJSON(w, http.StatusOK, asset)
+}
+
+// CreateMaintenanceRecord handles POST /v2/assets/{id}/maintenance
+func (h *ITAssetHandler) CreateMaintenanceRecord(w http.ResponseWriter, r *http.Request, assetID int64) {
+	var req model.CreateMaintenanceRecordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeITAssetError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+
+	record, err := h.svc.CreateMaintenanceRecord(r.Context(), assetID, &req)
+	if err != nil {
+		handleITAssetError(w, err)
+		return
+	}
+	writeITAssetJSON(w, http.StatusCreated, record)
+}
+
+// GetMaintenanceRecord handles GET /v2/assets/maintenance/{id}
+func (h *ITAssetHandler) GetMaintenanceRecord(w http.ResponseWriter, r *http.Request, id int64) {
+	record, err := h.svc.GetMaintenanceRecordByID(r.Context(), id)
+	if err != nil {
+		handleITAssetError(w, err)
+		return
+	}
+	writeITAssetJSON(w, http.StatusOK, record)
+}
+
+// UpdateMaintenanceRecord handles PUT /v2/assets/maintenance/{id}
+func (h *ITAssetHandler) UpdateMaintenanceRecord(w http.ResponseWriter, r *http.Request, id int64) {
+	var req model.UpdateMaintenanceRecordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeITAssetError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+
+	record, err := h.svc.UpdateMaintenanceRecord(r.Context(), id, &req)
+	if err != nil {
+		handleITAssetError(w, err)
+		return
+	}
+	writeITAssetJSON(w, http.StatusOK, record)
+}
+
+// DeleteMaintenanceRecord handles DELETE /v2/assets/maintenance/{id}
+func (h *ITAssetHandler) DeleteMaintenanceRecord(w http.ResponseWriter, r *http.Request, id int64) {
+	if err := h.svc.DeleteMaintenanceRecord(r.Context(), id); err != nil {
+		handleITAssetError(w, err)
+		return
+	}
+	writeITAssetJSON(w, http.StatusOK, map[string]string{"message": "maintenance record deleted successfully"})
+}
+
+// ListMaintenanceRecords handles GET /v2/assets/{id}/maintenance
+func (h *ITAssetHandler) ListMaintenanceRecords(w http.ResponseWriter, r *http.Request, assetID int64) {
+	records, err := h.svc.ListMaintenanceRecords(r.Context(), assetID)
+	if err != nil {
+		handleITAssetError(w, err)
+		return
+	}
+	writeITAssetJSON(w, http.StatusOK, map[string]interface{}{
+		"maintenance_records": records,
+		"total":               len(records),
+	})
+}
+
+// RecordAuditScan handles POST /v2/assets/audit
+func (h *ITAssetHandler) RecordAuditScan(w http.ResponseWriter, r *http.Request) {
+	var req model.AssetAuditScanRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeITAssetError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+
+	wsID, _ := strconv.ParseInt(r.URL.Query().Get("workspace_id"), 10, 64)
+	if wsID <= 0 {
+		wsID = 1
+	}
+
+	user := getITAssetUser(r)
+	log, err := h.svc.RecordAuditScan(r.Context(), wsID, user, &req)
+	if err != nil {
+		handleITAssetError(w, err)
+		return
+	}
+	writeITAssetJSON(w, http.StatusCreated, log)
+}
+
+// ListAuditLogs handles GET /v2/assets/audit/logs
+func (h *ITAssetHandler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	wsID, _ := strconv.ParseInt(query.Get("workspace_id"), 10, 64)
+	if wsID <= 0 {
+		wsID = 1
+	}
+	limit, _ := strconv.Atoi(query.Get("limit"))
+	offset, _ := strconv.Atoi(query.Get("offset"))
+
+	var assetID *int64
+	if aIDStr := query.Get("asset_id"); aIDStr != "" {
+		if id, err := strconv.ParseInt(aIDStr, 10, 64); err == nil && id > 0 {
+			assetID = &id
+		}
+	}
+
+	logs, err := h.svc.ListAuditLogs(r.Context(), wsID, assetID, limit, offset)
+	if err != nil {
+		handleITAssetError(w, err)
+		return
+	}
+	writeITAssetJSON(w, http.StatusOK, map[string]interface{}{
+		"audit_logs": logs,
+		"total":      len(logs),
+	})
+}
