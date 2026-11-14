@@ -2218,6 +2218,24 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	serviceRequestCommentsQuery := `
+	CREATE TABLE IF NOT EXISTS service_request_comments (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		request_id INTEGER NOT NULL,
+		user_id TEXT NOT NULL,
+		is_internal INTEGER NOT NULL DEFAULT 0,
+		comment TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (request_id) REFERENCES service_requests(id) ON DELETE CASCADE,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(serviceRequestCommentsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
