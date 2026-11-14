@@ -3,6 +3,9 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -87,23 +90,225 @@ func NewITAssetService(repo repository.ITAssetRepository) ITAssetService {
 
 var errNotImpl = errors.New("not implemented")
 
+func computeAssetBookValue(asset *model.ITAsset) {
+	if asset == nil {
+		return
+	}
+	if asset.PurchaseDate == nil || asset.DepreciationMethod == model.DepreciationNone || asset.UsefulLifeMonths <= 0 {
+		asset.CurrentBookValue = asset.PurchaseCost
+		asset.AgeMonths = 0
+		return
+	}
+
+	now := time.Now().UTC()
+	elapsedMonths := int(now.Sub(*asset.PurchaseDate).Hours() / (24 * 30.4375))
+	if elapsedMonths < 0 {
+		elapsedMonths = 0
+	}
+	asset.AgeMonths = elapsedMonths
+
+	depreciable := asset.PurchaseCost - asset.ResidualValue
+	if depreciable <= 0 {
+		asset.CurrentBookValue = asset.PurchaseCost
+		return
+	}
+
+	monthlyDepr := depreciable / float64(asset.UsefulLifeMonths)
+	accumDepr := monthlyDepr * float64(elapsedMonths)
+	currentBook := asset.PurchaseCost - accumDepr
+	if currentBook < asset.ResidualValue {
+		currentBook = asset.ResidualValue
+	}
+	asset.CurrentBookValue = currentBook
+}
+
 func (s *itAssetService) CreateAsset(ctx context.Context, req *model.CreateAssetRequest) (*model.ITAsset, error) {
-	return nil, errNotImpl
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	status := strings.ToLower(strings.TrimSpace(req.Status))
+	if status == "" {
+		status = model.AssetStatusInStock
+	}
+
+	currency := strings.ToUpper(strings.TrimSpace(req.Currency))
+	if currency == "" {
+		currency = "USD"
+	}
+
+	deprMethod := strings.ToLower(strings.TrimSpace(req.DepreciationMethod))
+	if deprMethod == "" {
+		deprMethod = model.DepreciationStraightLine
+	}
+
+	usefulLife := req.UsefulLifeMonths
+	if usefulLife <= 0 {
+		usefulLife = 36
+	}
+
+	tag := strings.TrimSpace(req.AssetTag)
+	if tag == "" {
+		seq, err := s.repo.GetNextAssetTagSequence(ctx, req.WorkspaceID)
+		if err != nil {
+			return nil, err
+		}
+		tag = fmt.Sprintf("AST-%04d", seq)
+	}
+
+	var assignedAt *time.Time
+	if req.AssignedToUserID != nil && strings.TrimSpace(*req.AssignedToUserID) != "" {
+		now := time.Now().UTC()
+		assignedAt = &now
+		status = model.AssetStatusInUse
+	}
+
+	asset := &model.ITAsset{
+		WorkspaceID:        req.WorkspaceID,
+		AssetTag:           tag,
+		Name:               strings.TrimSpace(req.Name),
+		Category:           strings.ToLower(strings.TrimSpace(req.Category)),
+		Status:             status,
+		Make:               strings.TrimSpace(req.Make),
+		Model:              strings.TrimSpace(req.Model),
+		SerialNumber:       strings.TrimSpace(req.SerialNumber),
+		PurchaseDate:       req.PurchaseDate,
+		PurchaseCost:       req.PurchaseCost,
+		Currency:           currency,
+		WarrantyExpiry:     req.WarrantyExpiry,
+		ResidualValue:      req.ResidualValue,
+		UsefulLifeMonths:   usefulLife,
+		DepreciationMethod: deprMethod,
+		Location:           strings.TrimSpace(req.Location),
+		AssignedToUserID:   req.AssignedToUserID,
+		AssignedToDept:     strings.TrimSpace(req.AssignedToDept),
+		AssignedAt:         assignedAt,
+		CIID:               req.CIID,
+		Notes:              strings.TrimSpace(req.Notes),
+	}
+
+	if err := s.repo.CreateAsset(ctx, asset); err != nil {
+		return nil, err
+	}
+
+	created, err := s.repo.GetAssetByID(ctx, asset.ID)
+	if err != nil {
+		return asset, nil
+	}
+	computeAssetBookValue(created)
+	return created, nil
 }
+
 func (s *itAssetService) GetAssetByID(ctx context.Context, id int64) (*model.ITAsset, error) {
-	return nil, errNotImpl
+	asset, err := s.repo.GetAssetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	computeAssetBookValue(asset)
+	return asset, nil
 }
+
 func (s *itAssetService) GetAssetByTag(ctx context.Context, workspaceID int64, assetTag string) (*model.ITAsset, error) {
-	return nil, errNotImpl
+	asset, err := s.repo.GetAssetByTag(ctx, workspaceID, assetTag)
+	if err != nil {
+		return nil, err
+	}
+	computeAssetBookValue(asset)
+	return asset, nil
 }
+
 func (s *itAssetService) UpdateAsset(ctx context.Context, id int64, req *model.UpdateAssetRequest) (*model.ITAsset, error) {
-	return nil, errNotImpl
+	asset, err := s.repo.GetAssetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Name != nil {
+		name := strings.TrimSpace(*req.Name)
+		if name == "" {
+			return nil, ErrAssetNameRequired
+		}
+		asset.Name = name
+	}
+	if req.Category != nil {
+		cat := strings.ToLower(strings.TrimSpace(*req.Category))
+		if err := model.ValidateAssetCategory(cat); err != nil {
+			return nil, err
+		}
+		asset.Category = cat
+	}
+	if req.Make != nil {
+		asset.Make = strings.TrimSpace(*req.Make)
+	}
+	if req.Model != nil {
+		asset.Model = strings.TrimSpace(*req.Model)
+	}
+	if req.SerialNumber != nil {
+		asset.SerialNumber = strings.TrimSpace(*req.SerialNumber)
+	}
+	if req.PurchaseDate != nil {
+		asset.PurchaseDate = req.PurchaseDate
+	}
+	if req.PurchaseCost != nil {
+		asset.PurchaseCost = *req.PurchaseCost
+	}
+	if req.Currency != nil {
+		asset.Currency = strings.ToUpper(strings.TrimSpace(*req.Currency))
+	}
+	if req.WarrantyExpiry != nil {
+		asset.WarrantyExpiry = req.WarrantyExpiry
+	}
+	if req.ResidualValue != nil {
+		asset.ResidualValue = *req.ResidualValue
+	}
+	if req.UsefulLifeMonths != nil && *req.UsefulLifeMonths > 0 {
+		asset.UsefulLifeMonths = *req.UsefulLifeMonths
+	}
+	if req.DepreciationMethod != nil {
+		method := strings.ToLower(strings.TrimSpace(*req.DepreciationMethod))
+		if err := model.ValidateDepreciationMethod(method); err != nil {
+			return nil, err
+		}
+		asset.DepreciationMethod = method
+	}
+	if req.Location != nil {
+		asset.Location = strings.TrimSpace(*req.Location)
+	}
+	if req.AssignedToDept != nil {
+		asset.AssignedToDept = strings.TrimSpace(*req.AssignedToDept)
+	}
+	if req.CIID != nil {
+		asset.CIID = req.CIID
+	}
+	if req.Notes != nil {
+		asset.Notes = strings.TrimSpace(*req.Notes)
+	}
+
+	if err := s.repo.UpdateAsset(ctx, asset); err != nil {
+		return nil, err
+	}
+
+	updated, err := s.repo.GetAssetByID(ctx, id)
+	if err != nil {
+		return asset, nil
+	}
+	computeAssetBookValue(updated)
+	return updated, nil
 }
+
 func (s *itAssetService) DeleteAsset(ctx context.Context, id int64) error {
-	return errNotImpl
+	return s.repo.DeleteAsset(ctx, id)
 }
+
 func (s *itAssetService) ListAssets(ctx context.Context, filter model.AssetFilterCriteria) ([]model.ITAsset, int, error) {
-	return nil, 0, errNotImpl
+	assets, total, err := s.repo.ListAssets(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	for i := range assets {
+		computeAssetBookValue(&assets[i])
+	}
+	return assets, total, nil
 }
 func (s *itAssetService) AssignAsset(ctx context.Context, id int64, req *model.AssignAssetRequest) (*model.ITAsset, error) {
 	return nil, errNotImpl
