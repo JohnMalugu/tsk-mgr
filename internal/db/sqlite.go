@@ -2127,6 +2127,41 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	serviceCatalogItemsQuery := `
+	CREATE TABLE IF NOT EXISTS service_catalog_items (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		category_id INTEGER NOT NULL,
+		name TEXT NOT NULL,
+		slug TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		short_description TEXT NOT NULL DEFAULT '',
+		icon TEXT NOT NULL DEFAULT '',
+		estimated_fulfillment_hours REAL NOT NULL DEFAULT 0.0,
+		cost_estimate_cents INTEGER NOT NULL DEFAULT 0,
+		currency TEXT NOT NULL DEFAULT 'USD',
+		requires_approval INTEGER NOT NULL DEFAULT 0,
+		approval_role TEXT NOT NULL DEFAULT '',
+		auto_create_task INTEGER NOT NULL DEFAULT 0,
+		target_project_id INTEGER,
+		ci_id INTEGER,
+		is_active INTEGER NOT NULL DEFAULT 1,
+		form_schema_json TEXT NOT NULL DEFAULT '{"fields":[]}',
+		created_by_id TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		UNIQUE(workspace_id, slug),
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (category_id) REFERENCES service_catalog_categories(id) ON DELETE CASCADE,
+		FOREIGN KEY (target_project_id) REFERENCES projects(id) ON DELETE SET NULL,
+		FOREIGN KEY (ci_id) REFERENCES configuration_items(id) ON DELETE SET NULL
+	);`
+
+	_, err = db.Exec(serviceCatalogItemsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
