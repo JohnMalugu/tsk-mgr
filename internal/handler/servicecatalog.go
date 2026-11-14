@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
@@ -350,4 +351,218 @@ func (h *ServiceCatalogHandler) UpdateRequest(w http.ResponseWriter, r *http.Req
 		return
 	}
 	writeServiceCatalogJSON(w, http.StatusOK, serviceReq)
+}
+
+// ReviewApproval handles POST /v2/servicecatalog/approvals/{id}
+func (h *ServiceCatalogHandler) ReviewApproval(w http.ResponseWriter, r *http.Request, approvalID int64) {
+	var req model.ReviewApprovalRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeServiceCatalogError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+	userID := getServiceCatalogUser(r)
+
+	approval, err := h.svc.ReviewApproval(userID, approvalID, req)
+	if err != nil {
+		handleServiceCatalogError(w, err)
+		return
+	}
+	writeServiceCatalogJSON(w, http.StatusOK, approval)
+}
+
+// AddComment handles POST /v2/servicecatalog/requests/{id}/comments
+func (h *ServiceCatalogHandler) AddComment(w http.ResponseWriter, r *http.Request, requestID int64) {
+	var req model.AddRequestCommentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeServiceCatalogError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+	userID := getServiceCatalogUser(r)
+
+	comment, err := h.svc.AddComment(userID, requestID, req)
+	if err != nil {
+		handleServiceCatalogError(w, err)
+		return
+	}
+	writeServiceCatalogJSON(w, http.StatusCreated, comment)
+}
+
+// ListComments handles GET /v2/servicecatalog/requests/{id}/comments
+func (h *ServiceCatalogHandler) ListComments(w http.ResponseWriter, r *http.Request, requestID int64) {
+	comments, err := h.svc.ListComments(requestID)
+	if err != nil {
+		handleServiceCatalogError(w, err)
+		return
+	}
+	writeServiceCatalogJSON(w, http.StatusOK, map[string]interface{}{
+		"comments": comments,
+	})
+}
+
+// GetMetrics handles GET /v2/servicecatalog/metrics
+func (h *ServiceCatalogHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
+	wsStr := r.URL.Query().Get("workspace_id")
+	if wsStr == "" {
+		writeServiceCatalogError(w, http.StatusBadRequest, "workspace_id is required")
+		return
+	}
+	wsID, err := strconv.ParseInt(wsStr, 10, 64)
+	if err != nil || wsID <= 0 {
+		writeServiceCatalogError(w, http.StatusBadRequest, "invalid workspace_id")
+		return
+	}
+
+	metrics, err := h.svc.GetMetrics(wsID)
+	if err != nil {
+		handleServiceCatalogError(w, err)
+		return
+	}
+	writeServiceCatalogJSON(w, http.StatusOK, metrics)
+}
+
+// ServeHTTP routes requests under /v2/servicecatalog
+func (h *ServiceCatalogHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/servicecatalog")
+	path = strings.TrimPrefix(path, "/")
+
+	if path == "metrics" {
+		if r.Method != http.MethodGet {
+			writeServiceCatalogError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		h.GetMetrics(w, r)
+		return
+	}
+
+	parts := strings.Split(path, "/")
+
+	// Routes under /v2/servicecatalog/categories
+	if parts[0] == "categories" {
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListCategories(w, r)
+			case http.MethodPost:
+				h.CreateCategory(w, r)
+			default:
+				writeServiceCatalogError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 {
+			id, err := strconv.ParseInt(parts[1], 10, 64)
+			if err != nil || id <= 0 {
+				writeServiceCatalogError(w, http.StatusBadRequest, "invalid category id")
+				return
+			}
+			switch r.Method {
+			case http.MethodGet:
+				h.GetCategory(w, r, id)
+			case http.MethodPut, http.MethodPatch:
+				h.UpdateCategory(w, r, id)
+			case http.MethodDelete:
+				h.DeleteCategory(w, r, id)
+			default:
+				writeServiceCatalogError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+	}
+
+	// Routes under /v2/servicecatalog/items
+	if parts[0] == "items" {
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListItems(w, r)
+			case http.MethodPost:
+				h.CreateItem(w, r)
+			default:
+				writeServiceCatalogError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 {
+			id, err := strconv.ParseInt(parts[1], 10, 64)
+			if err != nil || id <= 0 {
+				writeServiceCatalogError(w, http.StatusBadRequest, "invalid item id")
+				return
+			}
+			switch r.Method {
+			case http.MethodGet:
+				h.GetItem(w, r, id)
+			case http.MethodPut, http.MethodPatch:
+				h.UpdateItem(w, r, id)
+			case http.MethodDelete:
+				h.DeleteItem(w, r, id)
+			default:
+				writeServiceCatalogError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+	}
+
+	// Routes under /v2/servicecatalog/requests
+	if parts[0] == "requests" {
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListRequests(w, r)
+			case http.MethodPost:
+				h.SubmitRequest(w, r)
+			default:
+				writeServiceCatalogError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 {
+			id, err := strconv.ParseInt(parts[1], 10, 64)
+			if err != nil || id <= 0 {
+				writeServiceCatalogError(w, http.StatusBadRequest, "invalid request id")
+				return
+			}
+			switch r.Method {
+			case http.MethodGet:
+				h.GetRequest(w, r, id)
+			case http.MethodPut, http.MethodPatch:
+				h.UpdateRequest(w, r, id)
+			default:
+				writeServiceCatalogError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 3 && parts[2] == "comments" {
+			id, err := strconv.ParseInt(parts[1], 10, 64)
+			if err != nil || id <= 0 {
+				writeServiceCatalogError(w, http.StatusBadRequest, "invalid request id")
+				return
+			}
+			switch r.Method {
+			case http.MethodGet:
+				h.ListComments(w, r, id)
+			case http.MethodPost:
+				h.AddComment(w, r, id)
+			default:
+				writeServiceCatalogError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+	}
+
+	// Routes under /v2/servicecatalog/approvals/{id}
+	if parts[0] == "approvals" && len(parts) == 2 {
+		id, err := strconv.ParseInt(parts[1], 10, 64)
+		if err != nil || id <= 0 {
+			writeServiceCatalogError(w, http.StatusBadRequest, "invalid approval id")
+			return
+		}
+		if r.Method == http.MethodPost {
+			h.ReviewApproval(w, r, id)
+			return
+		}
+		writeServiceCatalogError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	writeServiceCatalogError(w, http.StatusNotFound, "not found")
 }
