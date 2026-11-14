@@ -2162,6 +2162,42 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	serviceRequestsQuery := `
+	CREATE TABLE IF NOT EXISTS service_requests (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		catalog_item_id INTEGER NOT NULL,
+		request_number TEXT NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'submitted',
+		priority TEXT NOT NULL DEFAULT 'medium',
+		requester_id TEXT NOT NULL,
+		assigned_to_id TEXT,
+		form_data_json TEXT NOT NULL DEFAULT '{}',
+		due_at DATETIME,
+		submitted_at DATETIME NOT NULL,
+		approved_at DATETIME,
+		fulfilled_at DATETIME,
+		cancelled_at DATETIME,
+		cancellation_reason TEXT NOT NULL DEFAULT '',
+		rejection_reason TEXT NOT NULL DEFAULT '',
+		task_id INTEGER,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		UNIQUE(workspace_id, request_number),
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (catalog_item_id) REFERENCES service_catalog_items(id) ON DELETE CASCADE,
+		FOREIGN KEY (requester_id) REFERENCES users(id) ON DELETE CASCADE,
+		FOREIGN KEY (assigned_to_id) REFERENCES users(id) ON DELETE SET NULL,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL
+	);`
+
+	_, err = db.Exec(serviceRequestsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
