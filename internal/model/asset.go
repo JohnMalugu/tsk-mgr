@@ -425,3 +425,63 @@ func (r *AllocateLicenseRequest) Validate() error {
 	}
 	return nil
 }
+
+// CreateMaintenanceRecordRequest represents payload to log an asset maintenance or servicing event
+type CreateMaintenanceRecordRequest struct {
+	MaintenanceType string     `json:"maintenance_type"`
+	Status          string     `json:"status,omitempty"`
+	Cost            float64    `json:"cost,omitempty"`
+	PerformedBy     string     `json:"performed_by,omitempty"`
+	Description     string     `json:"description"`
+	ScheduledDate   *time.Time `json:"scheduled_date,omitempty"`
+	CompletedDate   *time.Time `json:"completed_date,omitempty"`
+}
+
+// Validate validates CreateMaintenanceRecordRequest
+func (r *CreateMaintenanceRecordRequest) Validate() error {
+	if strings.TrimSpace(r.Description) == "" {
+		return errors.New("maintenance description is required")
+	}
+	if err := ValidateMaintenanceType(r.MaintenanceType); err != nil {
+		return err
+	}
+	if r.Status != "" {
+		if err := ValidateMaintenanceRecordStatus(r.Status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// UpdateMaintenanceRecordRequest represents payload to update a maintenance record
+type UpdateMaintenanceRecordRequest struct {
+	MaintenanceType *string    `json:"maintenance_type,omitempty"`
+	Status          *string    `json:"status,omitempty"`
+	Cost            *float64   `json:"cost,omitempty"`
+	PerformedBy     *string    `json:"performed_by,omitempty"`
+	Description     *string    `json:"description,omitempty"`
+	ScheduledDate   *time.Time `json:"scheduled_date,omitempty"`
+	CompletedDate   *time.Time `json:"completed_date,omitempty"`
+}
+
+// AssetAuditScanRequest represents payload when scanning physical inventory barcode or asset tag
+type AssetAuditScanRequest struct {
+	AssetID     *int64 `json:"asset_id,omitempty"`
+	AssetTag    string `json:"asset_tag,omitempty"`
+	AuditStatus string `json:"audit_status,omitempty"`
+	Location    string `json:"location,omitempty"`
+	Notes       string `json:"notes,omitempty"`
+}
+
+// Validate validates AssetAuditScanRequest
+func (r *AssetAuditScanRequest) Validate() error {
+	if (r.AssetID == nil || *r.AssetID <= 0) && strings.TrimSpace(r.AssetTag) == "" {
+		return ErrAuditScanAssetRequired
+	}
+	if r.AuditStatus != "" {
+		if err := ValidateAuditStatus(r.AuditStatus); err != nil {
+			return err
+		}
+	}
+	return nil
+}
