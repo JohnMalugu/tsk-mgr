@@ -319,3 +319,57 @@ type AddRequestCommentRequest struct {
 	Comment    string `json:"comment"`
 	IsInternal bool   `json:"is_internal,omitempty"`
 }
+
+// CatalogCategoryFilter defines search and filter options for catalog categories
+type CatalogCategoryFilter struct {
+	WorkspaceID int64  `json:"workspace_id"`
+	IsActive    *bool  `json:"is_active,omitempty"`
+	Search      string `json:"search,omitempty"`
+}
+
+// CatalogItemFilter defines search and filter options for catalog items
+type CatalogItemFilter struct {
+	WorkspaceID      int64  `json:"workspace_id"`
+	CategoryID       *int64 `json:"category_id,omitempty"`
+	RequiresApproval *bool  `json:"requires_approval,omitempty"`
+	IsActive         *bool  `json:"is_active,omitempty"`
+	Search           string `json:"search,omitempty"`
+	Limit            int    `json:"limit,omitempty"`
+	Offset           int    `json:"offset,omitempty"`
+}
+
+// ServiceRequestFilter defines query filters for listing user requests
+type ServiceRequestFilter struct {
+	WorkspaceID   int64  `json:"workspace_id"`
+	CatalogItemID *int64 `json:"catalog_item_id,omitempty"`
+	RequesterID   string `json:"requester_id,omitempty"`
+	AssignedToID  string `json:"assigned_to_id,omitempty"`
+	Status        string `json:"status,omitempty"`
+	Priority      string `json:"priority,omitempty"`
+	Search        string `json:"search,omitempty"`
+	Limit         int    `json:"limit,omitempty"`
+	Offset        int    `json:"offset,omitempty"`
+}
+
+// ItemRequestStat provides top-requested catalog item distribution
+type ItemRequestStat struct {
+	ItemID       int64  `json:"item_id"`
+	ItemName     string `json:"item_name"`
+	RequestCount int    `json:"request_count"`
+}
+
+// ServiceCatalogMetrics summarizes self-service portal performance and fulfillment velocity
+type ServiceCatalogMetrics struct {
+	TotalCategories         int               `json:"total_categories"`
+	TotalItems              int               `json:"total_items"`
+	TotalRequests           int               `json:"total_requests"`
+	PendingApprovalRequests int               `json:"pending_approval_requests"`
+	InProgressRequests      int               `json:"in_progress_requests"`
+	FulfilledRequests       int               `json:"fulfilled_requests"`
+	RejectedRequests        int               `json:"rejected_requests"`
+	CancelledRequests       int               `json:"cancelled_requests"`
+	AvgFulfillmentHours     float64           `json:"avg_fulfillment_hours"`
+	TotalCostEstimateCents  int64             `json:"total_cost_estimate_cents"`
+	ApprovalRate            float64           `json:"approval_rate"`
+	MostRequestedItems      []ItemRequestStat `json:"most_requested_items"`
+}
