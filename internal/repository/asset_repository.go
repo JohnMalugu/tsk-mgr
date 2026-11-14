@@ -574,20 +574,201 @@ func (r *sqlITAssetRepository) DeleteMaintenanceRecord(ctx context.Context, id i
 	}
 	return nil
 }
+func (r *sqlITAssetRepository) scanSoftwareLicense(row interface{ Scan(...any) error }) (*model.SoftwareLicense, error) {
+	var l model.SoftwareLicense
+	var expDate sql.NullTime
+
+	err := row.Scan(
+		&l.ID,
+		&l.WorkspaceID,
+		&l.SoftwareName,
+		&l.Version,
+		&l.Publisher,
+		&l.LicenseKey,
+		&l.LicenseType,
+		&l.TotalSeats,
+		&l.AllocatedSeats,
+		&l.PurchaseCost,
+		&l.Currency,
+		&expDate,
+		&l.Vendor,
+		&l.Notes,
+		&l.CreatedAt,
+		&l.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrLicenseNotFound
+		}
+		return nil, err
+	}
+	if expDate.Valid {
+		t := expDate.Time
+		l.ExpirationDate = &t
+	}
+	if l.TotalSeats >= l.AllocatedSeats {
+		l.AvailableSeats = l.TotalSeats - l.AllocatedSeats
+	} else {
+		l.AvailableSeats = 0
+	}
+	return &l, nil
+}
+
+const licenseSelectFields = `
+	id, workspace_id, software_name, version, publisher, license_key, license_type,
+	total_seats, allocated_seats, purchase_cost, currency, expiration_date, vendor,
+	notes, created_at, updated_at
+`
+
 func (r *sqlITAssetRepository) CreateSoftwareLicense(ctx context.Context, license *model.SoftwareLicense) error {
-	return errNotImplemented
+	now := time.Now().UTC()
+	license.CreatedAt = now
+	license.UpdatedAt = now
+	license.AllocatedSeats = 0
+
+	query := `
+	INSERT INTO software_licenses (
+		workspace_id, software_name, version, publisher, license_key, license_type,
+		total_seats, allocated_seats, purchase_cost, currency, expiration_date,
+		vendor, notes, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
+
+	res, err := r.db.ExecContext(ctx, query,
+		license.WorkspaceID, license.SoftwareName, license.Version, license.Publisher, license.LicenseKey, license.LicenseType,
+		license.TotalSeats, license.AllocatedSeats, license.PurchaseCost, license.Currency, license.ExpirationDate,
+		license.Vendor, license.Notes, license.CreatedAt, license.UpdatedAt,
+	)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	license.ID = id
+	license.AvailableSeats = license.TotalSeats
+	return nil
 }
+
 func (r *sqlITAssetRepository) GetSoftwareLicenseByID(ctx context.Context, id int64) (*model.SoftwareLicense, error) {
-	return nil, errNotImplemented
+	query := fmt.Sprintf("SELECT %s FROM software_licenses WHERE id = ?", licenseSelectFields)
+	return r.scanSoftwareLicense(r.db.QueryRowContext(ctx, query, id))
 }
+
 func (r *sqlITAssetRepository) UpdateSoftwareLicense(ctx context.Context, license *model.SoftwareLicense) error {
-	return errNotImplemented
+	license.UpdatedAt = time.Now().UTC()
+
+	query := `
+	UPDATE software_licenses SET
+		software_name = ?,
+		version = ?,
+		publisher = ?,
+		license_key = ?,
+		license_type = ?,
+		total_seats = ?,
+		purchase_cost = ?,
+		currency = ?,
+		expiration_date = ?,
+		vendor = ?,
+		notes = ?,
+		updated_at = ?
+	WHERE id = ?;`
+
+	res, err := r.db.ExecContext(ctx, query,
+		license.SoftwareName, license.Version, license.Publisher, license.LicenseKey, license.LicenseType,
+		license.TotalSeats, license.PurchaseCost, license.Currency, license.ExpirationDate,
+		license.Vendor, license.Notes, license.UpdatedAt, license.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrLicenseNotFound
+	}
+	return nil
 }
+
 func (r *sqlITAssetRepository) DeleteSoftwareLicense(ctx context.Context, id int64) error {
-	return errNotImplemented
+	res, err := r.db.ExecContext(ctx, "DELETE FROM software_licenses WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrLicenseNotFound
+	}
+	return nil
 }
+
 func (r *sqlITAssetRepository) ListSoftwareLicenses(ctx context.Context, filter model.LicenseFilterCriteria) ([]model.SoftwareLicense, int, error) {
-	return nil, 0, errNotImplemented
+	var whereClauses []string
+	var args []interface{}
+
+	if filter.WorkspaceID > 0 {
+		whereClauses = append(whereClauses, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.LicenseType != "" {
+		whereClauses = append(whereClauses, "license_type = ?")
+		args = append(args, filter.LicenseType)
+	}
+	if filter.Publisher != "" {
+		whereClauses = append(whereClauses, "publisher LIKE ?")
+		args = append(args, "%"+filter.Publisher+"%")
+	}
+	if filter.Search != "" {
+		searchPattern := "%" + filter.Search + "%"
+		whereClauses = append(whereClauses, "(software_name LIKE ? OR publisher LIKE ? OR vendor LIKE ?)")
+		args = append(args, searchPattern, searchPattern, searchPattern)
+	}
+	if filter.ExpiringDays != nil && *filter.ExpiringDays > 0 {
+		now := time.Now().UTC()
+		future := now.AddDate(0, 0, *filter.ExpiringDays)
+		whereClauses = append(whereClauses, "expiration_date IS NOT NULL AND expiration_date >= ? AND expiration_date <= ?")
+		args = append(args, now, future)
+	}
+
+	whereSQL := ""
+	if len(whereClauses) > 0 {
+		whereSQL = "WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM software_licenses %s", whereSQL)
+	var total int
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	query := fmt.Sprintf("SELECT %s FROM software_licenses %s ORDER BY id DESC", licenseSelectFields, whereSQL)
+	if filter.Limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", filter.Limit)
+		if filter.Offset > 0 {
+			query += fmt.Sprintf(" OFFSET %d", filter.Offset)
+		}
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var licenses []model.SoftwareLicense
+	for rows.Next() {
+		l, err := r.scanSoftwareLicense(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		licenses = append(licenses, *l)
+	}
+	return licenses, total, rows.Err()
 }
 func (r *sqlITAssetRepository) CreateLicenseAllocation(ctx context.Context, alloc *model.LicenseAllocation) error {
 	return errNotImplemented
