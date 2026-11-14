@@ -914,16 +914,132 @@ func (r *serviceCatalogRepositoryImpl) DeleteRequest(id int64) error {
 	}
 	return nil
 }
+func scanRequestApproval(scanner interface{ Scan(dest ...interface{}) error }) (*model.ServiceRequestApproval, error) {
+	var a model.ServiceRequestApproval
+	var decidedAt sql.NullTime
+	var approverName sql.NullString
+
+	err := scanner.Scan(
+		&a.ID, &a.RequestID, &a.StepOrder, &a.ApproverID,
+		&a.Status, &a.Comments, &decidedAt,
+		&a.CreatedAt, &a.UpdatedAt,
+		&approverName,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if decidedAt.Valid {
+		dt := decidedAt.Time
+		a.DecidedAt = &dt
+	}
+	if approverName.Valid {
+		a.ApproverName = approverName.String
+	}
+	return &a, nil
+}
+
 func (r *serviceCatalogRepositoryImpl) CreateApproval(approval *model.ServiceRequestApproval) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if approval.CreatedAt.IsZero() {
+		approval.CreatedAt = now
+	}
+	if approval.UpdatedAt.IsZero() {
+		approval.UpdatedAt = now
+	}
+	if approval.Status == "" {
+		approval.Status = model.ApprovalStatusPending
+	}
+	if approval.StepOrder <= 0 {
+		approval.StepOrder = 1
+	}
+
+	res, err := r.db.Exec(`
+		INSERT INTO service_request_approvals (
+			request_id, step_order, approver_id, status, comments, decided_at, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, approval.RequestID, approval.StepOrder, approval.ApproverID, approval.Status,
+		approval.Comments, approval.DecidedAt, approval.CreatedAt, approval.UpdatedAt)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	approval.ID = id
+	return id, nil
 }
+
 func (r *serviceCatalogRepositoryImpl) GetApprovalByID(id int64) (*model.ServiceRequestApproval, error) {
-	return nil, nil
+	query := `
+		SELECT a.id, a.request_id, a.step_order, a.approver_id,
+		       a.status, a.comments, a.decided_at,
+		       a.created_at, a.updated_at,
+		       u.username
+		FROM service_request_approvals a
+		LEFT JOIN users u ON a.approver_id = u.id
+		WHERE a.id = ?
+	`
+	approval, err := scanRequestApproval(r.db.QueryRow(query, id))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrRequestApprovalNotFound
+		}
+		return nil, err
+	}
+	return approval, nil
 }
+
 func (r *serviceCatalogRepositoryImpl) ListApprovals(requestID int64) ([]model.ServiceRequestApproval, error) {
-	return nil, nil
+	query := `
+		SELECT a.id, a.request_id, a.step_order, a.approver_id,
+		       a.status, a.comments, a.decided_at,
+		       a.created_at, a.updated_at,
+		       u.username
+		FROM service_request_approvals a
+		LEFT JOIN users u ON a.approver_id = u.id
+		WHERE a.request_id = ?
+		ORDER BY a.step_order ASC, a.id ASC
+	`
+	rows, err := r.db.Query(query, requestID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var approvals []model.ServiceRequestApproval
+	for rows.Next() {
+		appr, err := scanRequestApproval(rows)
+		if err != nil {
+			return nil, err
+		}
+		approvals = append(approvals, *appr)
+	}
+	if approvals == nil {
+		approvals = []model.ServiceRequestApproval{}
+	}
+	return approvals, nil
 }
+
 func (r *serviceCatalogRepositoryImpl) UpdateApproval(approval *model.ServiceRequestApproval) error {
+	approval.UpdatedAt = time.Now()
+	res, err := r.db.Exec(`
+		UPDATE service_request_approvals
+		SET status = ?, comments = ?, decided_at = ?, updated_at = ?
+		WHERE id = ?
+	`, approval.Status, approval.Comments, approval.DecidedAt, approval.UpdatedAt, approval.ID)
+	if err != nil {
+		return err
+	}
+
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return ErrRequestApprovalNotFound
+	}
 	return nil
 }
 func (r *serviceCatalogRepositoryImpl) CreateComment(comment *model.ServiceRequestComment) (int64, error) {
