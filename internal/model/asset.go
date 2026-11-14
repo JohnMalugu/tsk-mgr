@@ -183,3 +183,101 @@ type LicenseAllocation struct {
 	UserEmail    string `json:"user_email,omitempty"`
 	SoftwareName string `json:"software_name,omitempty"`
 }
+
+// Maintenance types for IT assets
+const (
+	MaintTypePreventative = "preventative"
+	MaintTypeRepair       = "repair"
+	MaintTypeUpgrade      = "upgrade"
+	MaintTypeInspection   = "inspection"
+)
+
+// Maintenance statuses for IT assets
+const (
+	MaintRecordScheduled  = "scheduled"
+	MaintRecordInProgress = "in_progress"
+	MaintRecordCompleted  = "completed"
+	MaintRecordCancelled  = "cancelled"
+)
+
+// Physical audit scan status constants
+const (
+	AuditStatusVerified  = "verified"
+	AuditStatusMisplaced = "misplaced"
+	AuditStatusMissing   = "missing"
+)
+
+var (
+	ErrMaintenanceRecordNotFound = errors.New("asset maintenance record not found")
+	ErrInvalidMaintenanceType    = errors.New("invalid maintenance type")
+	ErrInvalidMaintRecordStatus  = errors.New("invalid maintenance record status")
+	ErrAuditScanNotFound         = errors.New("asset audit scan record not found")
+	ErrInvalidAuditStatus        = errors.New("invalid asset audit status")
+	ErrAuditScanAssetRequired    = errors.New("asset ID or tag is required for audit scan")
+)
+
+// ValidateMaintenanceType validates maintenance record type
+func ValidateMaintenanceType(t string) error {
+	switch strings.ToLower(strings.TrimSpace(t)) {
+	case MaintTypePreventative, MaintTypeRepair, MaintTypeUpgrade, MaintTypeInspection:
+		return nil
+	default:
+		return ErrInvalidMaintenanceType
+	}
+}
+
+// ValidateMaintenanceRecordStatus validates maintenance record status
+func ValidateMaintenanceRecordStatus(s string) error {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case MaintRecordScheduled, MaintRecordInProgress, MaintRecordCompleted, MaintRecordCancelled:
+		return nil
+	default:
+		return ErrInvalidMaintRecordStatus
+	}
+}
+
+// ValidateAuditStatus validates physical inventory audit status
+func ValidateAuditStatus(s string) error {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case AuditStatusVerified, AuditStatusMisplaced, AuditStatusMissing:
+		return nil
+	default:
+		return ErrInvalidAuditStatus
+	}
+}
+
+// AssetMaintenanceRecord tracks maintenance, servicing, and repair history for an asset
+type AssetMaintenanceRecord struct {
+	ID              int64      `json:"id"`
+	AssetID         int64      `json:"asset_id"`
+	MaintenanceType string     `json:"maintenance_type"`
+	Status          string     `json:"status"`
+	Cost            float64    `json:"cost"`
+	PerformedBy     string     `json:"performed_by"`
+	Description     string     `json:"description"`
+	ScheduledDate   *time.Time `json:"scheduled_date,omitempty"`
+	CompletedDate   *time.Time `json:"completed_date,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+
+	// Enriched fields
+	AssetTag  string `json:"asset_tag,omitempty"`
+	AssetName string `json:"asset_name,omitempty"`
+}
+
+// AssetAuditLog records a physical or barcode inventory audit scan event
+type AssetAuditLog struct {
+	ID          int64     `json:"id"`
+	WorkspaceID int64     `json:"workspace_id"`
+	AssetID     int64     `json:"asset_id"`
+	ScannedBy   string    `json:"scanned_by"`
+	ScannedAt   time.Time `json:"scanned_at"`
+	AuditStatus string    `json:"audit_status"`
+	Location    string    `json:"location"`
+	Notes       string    `json:"notes,omitempty"`
+
+	// Enriched fields
+	AssetTag    string `json:"asset_tag,omitempty"`
+	AssetName   string `json:"asset_name,omitempty"`
+	ScannerName string `json:"scanner_name,omitempty"`
+}
