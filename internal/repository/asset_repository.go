@@ -348,13 +348,80 @@ func (r *sqlITAssetRepository) GetNextAssetTagSequence(ctx context.Context, work
 	return count + 1, nil
 }
 func (r *sqlITAssetRepository) AssignAsset(ctx context.Context, assetID int64, userID *string, dept, location string, assignedAt time.Time, notes string) error {
-	return errNotImplemented
+	now := time.Now().UTC()
+	query := `
+	UPDATE it_assets SET
+		assigned_to_user_id = ?,
+		assigned_to_dept = ?,
+		location = CASE WHEN ? != '' THEN ? ELSE location END,
+		assigned_at = ?,
+		status = 'in_use',
+		notes = CASE WHEN ? != '' THEN ? ELSE notes END,
+		updated_at = ?
+	WHERE id = ?;`
+
+	res, err := r.db.ExecContext(ctx, query, userID, dept, location, location, assignedAt, notes, notes, now, assetID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrAssetNotFound
+	}
+	return nil
 }
+
 func (r *sqlITAssetRepository) CheckinAsset(ctx context.Context, assetID int64, location string, notes string) error {
-	return errNotImplemented
+	now := time.Now().UTC()
+	query := `
+	UPDATE it_assets SET
+		assigned_to_user_id = NULL,
+		assigned_to_dept = '',
+		assigned_at = NULL,
+		location = CASE WHEN ? != '' THEN ? ELSE location END,
+		status = 'in_stock',
+		notes = CASE WHEN ? != '' THEN ? ELSE notes END,
+		updated_at = ?
+	WHERE id = ?;`
+
+	res, err := r.db.ExecContext(ctx, query, location, location, notes, notes, now, assetID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrAssetNotFound
+	}
+	return nil
 }
+
 func (r *sqlITAssetRepository) UpdateAssetStatus(ctx context.Context, assetID int64, status string, notes string) error {
-	return errNotImplemented
+	now := time.Now().UTC()
+	query := `
+	UPDATE it_assets SET
+		status = ?,
+		notes = CASE WHEN ? != '' THEN ? ELSE notes END,
+		updated_at = ?
+	WHERE id = ?;`
+
+	res, err := r.db.ExecContext(ctx, query, status, notes, notes, now, assetID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrAssetNotFound
+	}
+	return nil
 }
 func (r *sqlITAssetRepository) CreateMaintenanceRecord(ctx context.Context, record *model.AssetMaintenanceRecord) error {
 	return errNotImplemented
