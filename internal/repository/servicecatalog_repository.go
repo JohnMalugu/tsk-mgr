@@ -1042,12 +1042,189 @@ func (r *serviceCatalogRepositoryImpl) UpdateApproval(approval *model.ServiceReq
 	}
 	return nil
 }
+func scanRequestComment(scanner interface{ Scan(dest ...interface{}) error }) (*model.ServiceRequestComment, error) {
+	var c model.ServiceRequestComment
+	var isInternalInt int
+	var userName sql.NullString
+
+	err := scanner.Scan(
+		&c.ID, &c.RequestID, &c.UserID, &isInternalInt,
+		&c.Comment, &c.CreatedAt, &c.UpdatedAt,
+		&userName,
+	)
+	if err != nil {
+		return nil, err
+	}
+	c.IsInternal = (isInternalInt == 1)
+	if userName.Valid {
+		c.UserName = userName.String
+	}
+	return &c, nil
+}
+
 func (r *serviceCatalogRepositoryImpl) CreateComment(comment *model.ServiceRequestComment) (int64, error) {
-	return 0, nil
+	now := time.Now()
+	if comment.CreatedAt.IsZero() {
+		comment.CreatedAt = now
+	}
+	if comment.UpdatedAt.IsZero() {
+		comment.UpdatedAt = now
+	}
+
+	isInternalInt := 0
+	if comment.IsInternal {
+		isInternalInt = 1
+	}
+
+	res, err := r.db.Exec(`
+		INSERT INTO service_request_comments (
+			request_id, user_id, is_internal, comment, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?)
+	`, comment.RequestID, comment.UserID, isInternalInt, comment.Comment, comment.CreatedAt, comment.UpdatedAt)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	comment.ID = id
+	return id, nil
 }
+
 func (r *serviceCatalogRepositoryImpl) ListComments(requestID int64) ([]model.ServiceRequestComment, error) {
-	return nil, nil
+	query := `
+		SELECT c.id, c.request_id, c.user_id, c.is_internal,
+		       c.comment, c.created_at, c.updated_at,
+		       u.username
+		FROM service_request_comments c
+		LEFT JOIN users u ON c.user_id = u.id
+		WHERE c.request_id = ?
+		ORDER BY c.created_at ASC, c.id ASC
+	`
+	rows, err := r.db.Query(query, requestID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var comments []model.ServiceRequestComment
+	for rows.Next() {
+		comm, err := scanRequestComment(rows)
+		if err != nil {
+			return nil, err
+		}
+		comments = append(comments, *comm)
+	}
+	if comments == nil {
+		comments = []model.ServiceRequestComment{}
+	}
+	return comments, nil
 }
+
 func (r *serviceCatalogRepositoryImpl) GetMetrics(workspaceID int64) (*model.ServiceCatalogMetrics, error) {
-	return nil, nil
+	metrics := &model.ServiceCatalogMetrics{
+		ApprovalRate:       100.0,
+		MostRequestedItems: []model.ItemRequestStat{},
+	}
+
+	// 1. Total categories
+	_ = r.db.QueryRow(`
+		SELECT COUNT(*) FROM service_catalog_categories WHERE workspace_id = ?
+	`, workspaceID).Scan(&metrics.TotalCategories)
+
+	// 2. Total items
+	_ = r.db.QueryRow(`
+		SELECT COUNT(*) FROM service_catalog_items WHERE workspace_id = ?
+	`, workspaceID).Scan(&metrics.TotalItems)
+
+	// 3. Request counts by status
+	rows, err := r.db.Query(`
+		SELECT status, COUNT(*)
+		FROM service_requests
+		WHERE workspace_id = ?
+		GROUP BY status
+	`, workspaceID)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var st string
+			var count int
+			if err := rows.Scan(&st, &count); err == nil {
+				metrics.TotalRequests += count
+				switch st {
+				case model.RequestStatusPendingApproval:
+					metrics.PendingApprovalRequests = count
+				case model.RequestStatusInProgress:
+					metrics.InProgressRequests = count
+				case model.RequestStatusFulfilled:
+					metrics.FulfilledRequests = count
+				case model.RequestStatusRejected:
+					metrics.RejectedRequests = count
+				case model.RequestStatusCancelled:
+					metrics.CancelledRequests = count
+				}
+			}
+		}
+	}
+
+	// 4. Average fulfillment hours for fulfilled requests
+	var avgHours sql.NullFloat64
+	_ = r.db.QueryRow(`
+		SELECT AVG((julianday(fulfilled_at) - julianday(submitted_at)) * 24.0)
+		FROM service_requests
+		WHERE workspace_id = ? AND status = 'fulfilled' AND fulfilled_at IS NOT NULL
+	`, workspaceID).Scan(&avgHours)
+	if avgHours.Valid {
+		metrics.AvgFulfillmentHours = avgHours.Float64
+	}
+
+	// 5. Total cost estimate cents of fulfilled requests
+	var totalCost sql.NullInt64
+	_ = r.db.QueryRow(`
+		SELECT SUM(i.cost_estimate_cents)
+		FROM service_requests sr
+		JOIN service_catalog_items i ON sr.catalog_item_id = i.id
+		WHERE sr.workspace_id = ? AND sr.status = 'fulfilled'
+	`, workspaceID).Scan(&totalCost)
+	if totalCost.Valid {
+		metrics.TotalCostEstimateCents = totalCost.Int64
+	}
+
+	// 6. Approval rate calculation: approved / (approved + rejected) * 100
+	var approvedCount, rejectedCount int
+	_ = r.db.QueryRow(`
+		SELECT COUNT(*) FROM service_requests WHERE workspace_id = ? AND status IN ('approved', 'in_progress', 'fulfilled')
+	`, workspaceID).Scan(&approvedCount)
+	_ = r.db.QueryRow(`
+		SELECT COUNT(*) FROM service_requests WHERE workspace_id = ? AND status = 'rejected'
+	`, workspaceID).Scan(&rejectedCount)
+
+	totalDecided := approvedCount + rejectedCount
+	if totalDecided > 0 {
+		metrics.ApprovalRate = float64(approvedCount) / float64(totalDecided) * 100.0
+	}
+
+	// 7. Top 5 most requested items
+	itemRows, err := r.db.Query(`
+		SELECT sr.catalog_item_id, i.name, COUNT(*) as req_count
+		FROM service_requests sr
+		JOIN service_catalog_items i ON sr.catalog_item_id = i.id
+		WHERE sr.workspace_id = ?
+		GROUP BY sr.catalog_item_id, i.name
+		ORDER BY req_count DESC
+		LIMIT 5
+	`, workspaceID)
+	if err == nil {
+		defer itemRows.Close()
+		for itemRows.Next() {
+			var stat model.ItemRequestStat
+			if err := itemRows.Scan(&stat.ItemID, &stat.ItemName, &stat.RequestCount); err == nil {
+				metrics.MostRequestedItems = append(metrics.MostRequestedItems, stat)
+			}
+		}
+	}
+
+	return metrics, nil
 }
