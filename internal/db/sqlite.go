@@ -2338,6 +2338,26 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	itAssetAuditsQuery := `
+	CREATE TABLE IF NOT EXISTS it_asset_audits (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		asset_id INTEGER NOT NULL,
+		scanned_by TEXT NOT NULL,
+		scanned_at DATETIME NOT NULL,
+		audit_status TEXT NOT NULL DEFAULT 'verified',
+		location TEXT NOT NULL DEFAULT '',
+		notes TEXT NOT NULL DEFAULT '',
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (asset_id) REFERENCES it_assets(id) ON DELETE CASCADE,
+		FOREIGN KEY (scanned_by) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(itAssetAuditsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
