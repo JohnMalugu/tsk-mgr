@@ -695,11 +695,47 @@ func (s *serviceCatalogServiceImpl) ReviewApproval(approverID string, approvalID
 	return s.repo.GetApprovalByID(approvalID)
 }
 func (s *serviceCatalogServiceImpl) AddComment(userID string, requestID int64, req model.AddRequestCommentRequest) (*model.ServiceRequestComment, error) {
-	return nil, nil
+	_, err := s.repo.GetRequestByID(requestID)
+	if err != nil {
+		if errors.Is(err, repository.ErrServiceRequestNotFound) {
+			return nil, ErrServiceRequestNotFound
+		}
+		return nil, err
+	}
+
+	text := strings.TrimSpace(req.Comment)
+	if text == "" {
+		return nil, ErrRequestCommentEmpty
+	}
+
+	comment := &model.ServiceRequestComment{
+		RequestID:  requestID,
+		UserID:     userID,
+		IsInternal: req.IsInternal,
+		Comment:    text,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+
+	id, err := s.repo.CreateComment(comment)
+	if err != nil {
+		return nil, err
+	}
+	comment.ID = id
+	return comment, nil
 }
+
 func (s *serviceCatalogServiceImpl) ListComments(requestID int64) ([]model.ServiceRequestComment, error) {
-	return nil, nil
+	_, err := s.repo.GetRequestByID(requestID)
+	if err != nil {
+		if errors.Is(err, repository.ErrServiceRequestNotFound) {
+			return nil, ErrServiceRequestNotFound
+		}
+		return nil, err
+	}
+	return s.repo.ListComments(requestID)
 }
+
 func (s *serviceCatalogServiceImpl) GetMetrics(workspaceID int64) (*model.ServiceCatalogMetrics, error) {
-	return nil, nil
+	return s.repo.GetMetrics(workspaceID)
 }
