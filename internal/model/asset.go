@@ -281,3 +281,87 @@ type AssetAuditLog struct {
 	AssetName   string `json:"asset_name,omitempty"`
 	ScannerName string `json:"scanner_name,omitempty"`
 }
+
+// CreateAssetRequest represents payload to register a new IT asset
+type CreateAssetRequest struct {
+	WorkspaceID        int64      `json:"workspace_id"`
+	AssetTag           string     `json:"asset_tag,omitempty"`
+	Name               string     `json:"name"`
+	Category           string     `json:"category"`
+	Status             string     `json:"status,omitempty"`
+	Make               string     `json:"make,omitempty"`
+	Model              string     `json:"model,omitempty"`
+	SerialNumber       string     `json:"serial_number,omitempty"`
+	PurchaseDate       *time.Time `json:"purchase_date,omitempty"`
+	PurchaseCost       float64    `json:"purchase_cost,omitempty"`
+	Currency           string     `json:"currency,omitempty"`
+	WarrantyExpiry     *time.Time `json:"warranty_expiry,omitempty"`
+	ResidualValue      float64    `json:"residual_value,omitempty"`
+	UsefulLifeMonths   int        `json:"useful_life_months,omitempty"`
+	DepreciationMethod string     `json:"depreciation_method,omitempty"`
+	Location           string     `json:"location,omitempty"`
+	AssignedToUserID   *string    `json:"assigned_to_user_id,omitempty"`
+	AssignedToDept     string     `json:"assigned_to_department,omitempty"`
+	CIID               *int64     `json:"ci_id,omitempty"`
+	Notes              string     `json:"notes,omitempty"`
+}
+
+// Validate validates CreateAssetRequest fields
+func (r *CreateAssetRequest) Validate() error {
+	if strings.TrimSpace(r.Name) == "" {
+		return ErrAssetNameRequired
+	}
+	if err := ValidateAssetCategory(r.Category); err != nil {
+		return err
+	}
+	if r.Status != "" {
+		if err := ValidateAssetStatus(r.Status); err != nil {
+			return err
+		}
+	}
+	if r.DepreciationMethod != "" {
+		if err := ValidateDepreciationMethod(r.DepreciationMethod); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// UpdateAssetRequest represents payload to update existing asset attributes
+type UpdateAssetRequest struct {
+	Name               *string    `json:"name,omitempty"`
+	Category           *string    `json:"category,omitempty"`
+	Make               *string    `json:"make,omitempty"`
+	Model              *string    `json:"model,omitempty"`
+	SerialNumber       *string    `json:"serial_number,omitempty"`
+	PurchaseDate       *time.Time `json:"purchase_date,omitempty"`
+	PurchaseCost       *float64   `json:"purchase_cost,omitempty"`
+	Currency           *string    `json:"currency,omitempty"`
+	WarrantyExpiry     *time.Time `json:"warranty_expiry,omitempty"`
+	ResidualValue      *float64   `json:"residual_value,omitempty"`
+	UsefulLifeMonths   *int       `json:"useful_life_months,omitempty"`
+	DepreciationMethod *string    `json:"depreciation_method,omitempty"`
+	Location           *string    `json:"location,omitempty"`
+	AssignedToDept     *string    `json:"assigned_to_department,omitempty"`
+	CIID               *int64     `json:"ci_id,omitempty"`
+	Notes              *string    `json:"notes,omitempty"`
+}
+
+// AssignAssetRequest represents payload to assign an asset to a user or department
+type AssignAssetRequest struct {
+	UserID     *string `json:"user_id,omitempty"`
+	Department string  `json:"department,omitempty"`
+	Location   string  `json:"location,omitempty"`
+	Notes      string  `json:"notes,omitempty"`
+}
+
+// AssetStatusTransitionRequest represents payload to transition an asset's lifecycle status
+type AssetStatusTransitionRequest struct {
+	Status string `json:"status"`
+	Notes  string `json:"notes,omitempty"`
+}
+
+// Validate validates AssetStatusTransitionRequest
+func (r *AssetStatusTransitionRequest) Validate() error {
+	return ValidateAssetStatus(r.Status)
+}
