@@ -365,3 +365,63 @@ type AssetStatusTransitionRequest struct {
 func (r *AssetStatusTransitionRequest) Validate() error {
 	return ValidateAssetStatus(r.Status)
 }
+
+// CreateSoftwareLicenseRequest represents payload to register a software license
+type CreateSoftwareLicenseRequest struct {
+	WorkspaceID    int64      `json:"workspace_id"`
+	SoftwareName   string     `json:"software_name"`
+	Version        string     `json:"version,omitempty"`
+	Publisher      string     `json:"publisher,omitempty"`
+	LicenseKey     string     `json:"license_key,omitempty"`
+	LicenseType    string     `json:"license_type"`
+	TotalSeats     int        `json:"total_seats"`
+	PurchaseCost   float64    `json:"purchase_cost,omitempty"`
+	Currency       string     `json:"currency,omitempty"`
+	ExpirationDate *time.Time `json:"expiration_date,omitempty"`
+	Vendor         string     `json:"vendor,omitempty"`
+	Notes          string     `json:"notes,omitempty"`
+}
+
+// Validate validates CreateSoftwareLicenseRequest
+func (r *CreateSoftwareLicenseRequest) Validate() error {
+	if strings.TrimSpace(r.SoftwareName) == "" {
+		return ErrLicenseNameRequired
+	}
+	if err := ValidateLicenseType(r.LicenseType); err != nil {
+		return err
+	}
+	if r.TotalSeats < 0 {
+		r.TotalSeats = 0
+	}
+	return nil
+}
+
+// UpdateSoftwareLicenseRequest represents payload to update license parameters
+type UpdateSoftwareLicenseRequest struct {
+	SoftwareName   *string    `json:"software_name,omitempty"`
+	Version        *string    `json:"version,omitempty"`
+	Publisher      *string    `json:"publisher,omitempty"`
+	LicenseKey     *string    `json:"license_key,omitempty"`
+	LicenseType    *string    `json:"license_type,omitempty"`
+	TotalSeats     *int       `json:"total_seats,omitempty"`
+	PurchaseCost   *float64   `json:"purchase_cost,omitempty"`
+	Currency       *string    `json:"currency,omitempty"`
+	ExpirationDate *time.Time `json:"expiration_date,omitempty"`
+	Vendor         *string    `json:"vendor,omitempty"`
+	Notes          *string    `json:"notes,omitempty"`
+}
+
+// AllocateLicenseRequest represents payload to allocate a license seat to an asset or user
+type AllocateLicenseRequest struct {
+	AssetID *int64  `json:"asset_id,omitempty"`
+	UserID  *string `json:"user_id,omitempty"`
+	Notes   string  `json:"notes,omitempty"`
+}
+
+// Validate checks that at least one allocation target is specified
+func (r *AllocateLicenseRequest) Validate() error {
+	if (r.AssetID == nil || *r.AssetID <= 0) && (r.UserID == nil || strings.TrimSpace(*r.UserID) == "") {
+		return ErrAllocationTargetReq
+	}
+	return nil
+}
