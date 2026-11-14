@@ -423,20 +423,156 @@ func (r *sqlITAssetRepository) UpdateAssetStatus(ctx context.Context, assetID in
 	}
 	return nil
 }
+func (r *sqlITAssetRepository) scanMaintenanceRecord(row interface{ Scan(...any) error }) (*model.AssetMaintenanceRecord, error) {
+	var m model.AssetMaintenanceRecord
+	var schedDate, compDate sql.NullTime
+	var assetTag, assetName sql.NullString
+
+	err := row.Scan(
+		&m.ID,
+		&m.AssetID,
+		&m.MaintenanceType,
+		&m.Status,
+		&m.Cost,
+		&m.PerformedBy,
+		&m.Description,
+		&schedDate,
+		&compDate,
+		&m.CreatedAt,
+		&m.UpdatedAt,
+		&assetTag,
+		&assetName,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrMaintenanceRecordNotFound
+		}
+		return nil, err
+	}
+	if schedDate.Valid {
+		t := schedDate.Time
+		m.ScheduledDate = &t
+	}
+	if compDate.Valid {
+		t := compDate.Time
+		m.CompletedDate = &t
+	}
+	if assetTag.Valid {
+		m.AssetTag = assetTag.String
+	}
+	if assetName.Valid {
+		m.AssetName = assetName.String
+	}
+	return &m, nil
+}
+
+const maintSelectFields = `
+	m.id, m.asset_id, m.maintenance_type, m.status, m.cost, m.performed_by, m.description,
+	m.scheduled_date, m.completed_date, m.created_at, m.updated_at,
+	COALESCE(a.asset_tag, '') AS asset_tag,
+	COALESCE(a.name, '') AS asset_name
+`
+
+const maintFromClause = `
+	FROM it_asset_maintenance_records m
+	JOIN it_assets a ON m.asset_id = a.id
+`
+
 func (r *sqlITAssetRepository) CreateMaintenanceRecord(ctx context.Context, record *model.AssetMaintenanceRecord) error {
-	return errNotImplemented
+	now := time.Now().UTC()
+	record.CreatedAt = now
+	record.UpdatedAt = now
+
+	query := `
+	INSERT INTO it_asset_maintenance_records (
+		asset_id, maintenance_type, status, cost, performed_by, description,
+		scheduled_date, completed_date, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
+
+	res, err := r.db.ExecContext(ctx, query,
+		record.AssetID, record.MaintenanceType, record.Status, record.Cost, record.PerformedBy, record.Description,
+		record.ScheduledDate, record.CompletedDate, record.CreatedAt, record.UpdatedAt,
+	)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	record.ID = id
+	return nil
 }
+
 func (r *sqlITAssetRepository) GetMaintenanceRecordByID(ctx context.Context, id int64) (*model.AssetMaintenanceRecord, error) {
-	return nil, errNotImplemented
+	query := fmt.Sprintf("SELECT %s %s WHERE m.id = ?", maintSelectFields, maintFromClause)
+	return r.scanMaintenanceRecord(r.db.QueryRowContext(ctx, query, id))
 }
+
 func (r *sqlITAssetRepository) UpdateMaintenanceRecord(ctx context.Context, record *model.AssetMaintenanceRecord) error {
-	return errNotImplemented
+	record.UpdatedAt = time.Now().UTC()
+
+	query := `
+	UPDATE it_asset_maintenance_records SET
+		maintenance_type = ?,
+		status = ?,
+		cost = ?,
+		performed_by = ?,
+		description = ?,
+		scheduled_date = ?,
+		completed_date = ?,
+		updated_at = ?
+	WHERE id = ?;`
+
+	res, err := r.db.ExecContext(ctx, query,
+		record.MaintenanceType, record.Status, record.Cost, record.PerformedBy, record.Description,
+		record.ScheduledDate, record.CompletedDate, record.UpdatedAt, record.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrMaintenanceRecordNotFound
+	}
+	return nil
 }
+
 func (r *sqlITAssetRepository) ListMaintenanceRecords(ctx context.Context, assetID int64) ([]model.AssetMaintenanceRecord, error) {
-	return nil, errNotImplemented
+	query := fmt.Sprintf("SELECT %s %s WHERE m.asset_id = ? ORDER BY m.id DESC", maintSelectFields, maintFromClause)
+	rows, err := r.db.QueryContext(ctx, query, assetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []model.AssetMaintenanceRecord
+	for rows.Next() {
+		m, err := r.scanMaintenanceRecord(rows)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, *m)
+	}
+	return records, rows.Err()
 }
+
 func (r *sqlITAssetRepository) DeleteMaintenanceRecord(ctx context.Context, id int64) error {
-	return errNotImplemented
+	res, err := r.db.ExecContext(ctx, "DELETE FROM it_asset_maintenance_records WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrMaintenanceRecordNotFound
+	}
+	return nil
 }
 func (r *sqlITAssetRepository) CreateSoftwareLicense(ctx context.Context, license *model.SoftwareLicense) error {
 	return errNotImplemented
