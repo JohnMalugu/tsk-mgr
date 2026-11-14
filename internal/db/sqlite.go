@@ -2272,6 +2272,27 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	itAssetMaintenanceQuery := `
+	CREATE TABLE IF NOT EXISTS it_asset_maintenance_records (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		asset_id INTEGER NOT NULL,
+		maintenance_type TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'scheduled',
+		cost REAL NOT NULL DEFAULT 0.0,
+		performed_by TEXT NOT NULL DEFAULT '',
+		description TEXT NOT NULL,
+		scheduled_date DATETIME,
+		completed_date DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (asset_id) REFERENCES it_assets(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(itAssetMaintenanceQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
