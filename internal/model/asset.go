@@ -114,3 +114,72 @@ type ITAsset struct {
 	CurrentBookValue  float64 `json:"current_book_value,omitempty"`
 	AgeMonths         int     `json:"age_months,omitempty"`
 }
+
+// Software License types
+const (
+	LicenseTypePerpetual    = "perpetual"
+	LicenseTypeSubscription = "subscription"
+	LicenseTypeSeatBased    = "seat_based"
+	LicenseTypeSiteWide     = "site_wide"
+)
+
+var (
+	ErrLicenseNotFound     = errors.New("software license not found")
+	ErrLicenseNameRequired = errors.New("software name is required")
+	ErrInvalidLicenseType  = errors.New("invalid software license type")
+	ErrNoSeatsAvailable    = errors.New("no license seats available")
+	ErrAllocationNotFound  = errors.New("license allocation not found")
+	ErrAlreadyAllocated    = errors.New("license is already allocated to this target")
+	ErrAllocationTargetReq = errors.New("allocation target (user or asset) is required")
+)
+
+// ValidateLicenseType validates software license type
+func ValidateLicenseType(t string) error {
+	switch strings.ToLower(strings.TrimSpace(t)) {
+	case LicenseTypePerpetual, LicenseTypeSubscription, LicenseTypeSeatBased, LicenseTypeSiteWide:
+		return nil
+	default:
+		return ErrInvalidLicenseType
+	}
+}
+
+// SoftwareLicense represents a managed enterprise software license or subscription
+type SoftwareLicense struct {
+	ID             int64      `json:"id"`
+	WorkspaceID    int64      `json:"workspace_id"`
+	SoftwareName   string     `json:"software_name"`
+	Version        string     `json:"version"`
+	Publisher      string     `json:"publisher"`
+	LicenseKey     string     `json:"license_key,omitempty"`
+	LicenseType    string     `json:"license_type"`
+	TotalSeats     int        `json:"total_seats"`
+	AllocatedSeats int        `json:"allocated_seats"`
+	PurchaseCost   float64    `json:"purchase_cost"`
+	Currency       string     `json:"currency"`
+	ExpirationDate *time.Time `json:"expiration_date,omitempty"`
+	Vendor         string     `json:"vendor,omitempty"`
+	Notes          string     `json:"notes,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+
+	// Enriched fields
+	AvailableSeats int `json:"available_seats"`
+}
+
+// LicenseAllocation maps a software license seat to a user or hardware asset
+type LicenseAllocation struct {
+	ID          int64     `json:"id"`
+	LicenseID   int64     `json:"license_id"`
+	AssetID     *int64    `json:"asset_id,omitempty"`
+	UserID      *string   `json:"user_id,omitempty"`
+	AllocatedBy string    `json:"allocated_by"`
+	AllocatedAt time.Time `json:"allocated_at"`
+	Notes       string    `json:"notes,omitempty"`
+
+	// Enriched fields
+	AssetTag     string `json:"asset_tag,omitempty"`
+	AssetName    string `json:"asset_name,omitempty"`
+	UserName     string `json:"user_name,omitempty"`
+	UserEmail    string `json:"user_email,omitempty"`
+	SoftwareName string `json:"software_name,omitempty"`
+}
