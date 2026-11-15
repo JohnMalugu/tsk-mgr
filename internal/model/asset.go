@@ -8,25 +8,25 @@ import (
 
 // Hardware and Asset category constants
 const (
-	AssetCategoryLaptop      = "laptop"
-	AssetCategoryDesktop     = "desktop"
-	AssetCategoryServer      = "server"
-	AssetCategoryNetwork     = "network"
-	AssetCategoryMobile      = "mobile_device"
-	AssetCategoryPeripheral  = "peripheral"
-	AssetCategoryCloudVM     = "cloud_vm"
-	AssetCategoryOther       = "other"
+	AssetCategoryLaptop     = "laptop"
+	AssetCategoryDesktop    = "desktop"
+	AssetCategoryServer     = "server"
+	AssetCategoryNetwork    = "network"
+	AssetCategoryMobile     = "mobile_device"
+	AssetCategoryPeripheral = "peripheral"
+	AssetCategoryCloudVM    = "cloud_vm"
+	AssetCategoryOther      = "other"
 )
 
 // Asset lifecycle status constants
 const (
-	AssetStatusOrdered   = "ordered"
-	AssetStatusReceived  = "received"
-	AssetStatusInStock   = "in_stock"
-	AssetStatusInUse     = "in_use"
-	AssetStatusInRepair  = "in_repair"
-	AssetStatusRetired   = "retired"
-	AssetStatusDisposed  = "disposed"
+	AssetStatusOrdered  = "ordered"
+	AssetStatusReceived = "received"
+	AssetStatusInStock  = "in_stock"
+	AssetStatusInUse    = "in_use"
+	AssetStatusInRepair = "in_repair"
+	AssetStatusRetired  = "retired"
+	AssetStatusDisposed = "disposed"
 )
 
 // Asset depreciation methods
@@ -36,13 +36,13 @@ const (
 )
 
 var (
-	ErrAssetNotFound       = errors.New("asset not found")
-	ErrAssetNameRequired   = errors.New("asset name is required")
-	ErrAssetTagRequired    = errors.New("asset tag is required")
+	ErrAssetNotFound        = errors.New("asset not found")
+	ErrAssetNameRequired    = errors.New("asset name is required")
+	ErrAssetTagRequired     = errors.New("asset tag is required")
 	ErrInvalidAssetCategory = errors.New("invalid asset category")
 	ErrInvalidAssetStatus   = errors.New("invalid asset status")
 	ErrInvalidDepreciation  = errors.New("invalid depreciation method")
-	ErrAssetTagConflict    = errors.New("asset tag already exists")
+	ErrAssetTagConflict     = errors.New("asset tag already exists")
 	ErrAssetAlreadyAssigned = errors.New("asset is already assigned")
 	ErrAssetNotAssigned     = errors.New("asset is not assigned")
 	ErrAssetRetired         = errors.New("cannot perform operation on retired or disposed asset")

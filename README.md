@@ -339,6 +339,22 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `POST /v2/servicecatalog/approvals/{id}` to review a pending service request approval (`approved`, `rejected`) with reviewer comments, automated request status transitions, and fulfillment task generation
 - `GET|POST /v2/servicecatalog/requests/{id}/comments` to list communication history or add a public reply or internal fulfillment team note to a service request
 - `GET /v2/servicecatalog/metrics?workspace_id={id}` for IT Service Catalog & Request Fulfillment analytics, total category/item counts, request volume breakdown by status, average fulfillment lead time hours, total cost estimate of fulfilled requests, approval rate percentage, and top 5 most requested catalog offerings
+- `GET|POST /v2/assets` to list hardware and virtual IT assets (`workspace_id`, `category`, `status`, `assigned_to_user_id`, `location`, `search`, `warranty_expiring_days`, `limit`, `offset`) or register a new asset with auto-generated asset tags (`AST-0001`), purchase details, useful life, warranty expiration, and depreciation configurations
+- `GET|PUT|DELETE /v2/assets/{id}` to fetch full asset details (enriched with assigned user profile, linked CMDB Configuration Item, age in months, and straight-line net book value calculation), modify asset attributes, or delete an asset
+- `GET /v2/assets/tags/{tag}?workspace_id={id}` for instant barcode/asset tag physical inventory lookup
+- `POST /v2/assets/{id}/assign` to assign an asset to a user or department with location, timestamping, notes, and automated lifecycle transition to `in_use`
+- `POST /v2/assets/{id}/checkin` to check in/return an assigned asset back to inventory with updated storage location, clearing assignment, and transitioning status back to `in_stock`
+- `POST /v2/assets/{id}/status` to transition asset lifecycle state (`ordered`, `received`, `in_stock`, `in_use`, `in_repair`, `retired`, `disposed`) with notes
+- `GET /v2/assets/{id}/depreciation` to calculate current depreciation schedule, monthly depreciation rate, accumulated depreciation, age in months, and net book value
+- `GET|POST /v2/assets/{id}/maintenance` to list maintenance history or schedule a new servicing/repair/upgrade record with technician and cost estimates
+- `GET|PUT|DELETE /v2/assets/maintenance/{id}` to inspect maintenance record details, update servicing status (`scheduled`, `in_progress`, `completed`, `cancelled`) and actual completion date/costs, or remove a maintenance record
+- `GET|POST /v2/assets/licenses` to list software licenses/subscriptions (`workspace_id`, `license_type`, `publisher`, `search`, `expiring_days`, `limit`, `offset`) or register a new software license pool (`perpetual`, `subscription`, `seat_based`, `site_wide`) with total seat quotas and purchase costs
+- `GET|PUT|DELETE /v2/assets/licenses/{id}` to inspect software license details with seat allocation breakdown and available seat counts, update license parameters, or remove a license
+- `GET|POST /v2/assets/licenses/{id}/allocations` to list active seat holders or allocate a software license seat to a target user or hardware asset with automated seat capacity enforcement
+- `GET|DELETE /v2/assets/licenses/allocations/{id}` to fetch allocation details or deallocate/reclaim a software license seat back to the available seat pool
+- `POST /v2/assets/audit` to record a physical inventory barcode/asset tag audit scan with location tracking, audit status (`verified`, `misplaced`, `missing`), and audit notes
+- `GET /v2/assets/audit/logs?workspace_id={id}&asset_id={asset_id}` to retrieve physical inventory audit history and scan logs
+- `GET /v2/assets/metrics?workspace_id={id}` for IT Asset Management (ITAM) operational and financial analytics, total asset count, total initial purchase valuation, total estimated net book value, status and category breakdowns, upcoming warranty expirations in 30/90 days, software license count, total/allocated license seats, and software license utilization percentage
 
 ## Current limitations
 
