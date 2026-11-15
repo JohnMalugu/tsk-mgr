@@ -221,6 +221,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 IT Asset Management (ITAM) & Software Licenses
+	if strings.HasPrefix(r.URL.Path, "/v2/assets") {
+		if handler.GlobalITAssetHandler == nil {
+			http.Error(w, "ITAsset handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalITAssetHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return
