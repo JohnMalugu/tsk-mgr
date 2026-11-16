@@ -2439,6 +2439,26 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	contractMilestonesQuery := `
+	CREATE TABLE IF NOT EXISTS contract_milestones (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		contract_id INTEGER NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		due_date DATETIME NOT NULL,
+		completed_at DATETIME,
+		amount REAL NOT NULL DEFAULT 0.0,
+		status TEXT NOT NULL DEFAULT 'pending',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (contract_id) REFERENCES vendor_contracts(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(contractMilestonesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
