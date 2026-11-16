@@ -175,6 +175,10 @@ func main() {
 	itAssetSvc := service.NewITAssetService(itAssetRepo)
 	handler.InitITAssetHandler(itAssetSvc)
 
+	vendorRepo := repository.NewVendorRepository(sqliteDB)
+	vendorSvc := service.NewVendorService(vendorRepo)
+	handler.InitVendorHandler(vendorSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
@@ -200,6 +204,9 @@ func main() {
 	fmt.Printf("   GET    http://localhost:8080/v2/assets?workspace_id={id}\n")
 	fmt.Printf("   GET    http://localhost:8080/v2/assets/licenses?workspace_id={id}\n")
 	fmt.Printf("   GET    http://localhost:8080/v2/assets/metrics?workspace_id={id}\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/vendors?workspace_id={id}\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/vendors/metrics?workspace_id={id}\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/contracts?workspace_id={id}\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/ready\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/blocked\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/upcoming?days=7\n")

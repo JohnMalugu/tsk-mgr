@@ -231,6 +231,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 ITIL Supplier & Contract Management System
+	if strings.HasPrefix(r.URL.Path, "/v2/vendors") || strings.HasPrefix(r.URL.Path, "/v2/contracts") {
+		if handler.GlobalVendorHandler == nil {
+			http.Error(w, "Vendor handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalVendorHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return
