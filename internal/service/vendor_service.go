@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -254,25 +256,223 @@ func (s *vendorService) ListVendors(ctx context.Context, filter model.VendorFilt
 	return s.repo.ListVendors(ctx, filter)
 }
 func (s *vendorService) CreateContract(ctx context.Context, req *model.CreateVendorContractRequest) (*model.VendorContract, error) {
-	return nil, errVndNotImplemented
+	if req == nil {
+		return nil, ErrContractTitleRequired
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Verify vendor exists
+	if _, err := s.repo.GetVendorByID(ctx, req.VendorID); err != nil {
+		return nil, err
+	}
+
+	contractNumber := strings.ToUpper(strings.TrimSpace(req.ContractNumber))
+	if contractNumber == "" {
+		contractNumber = fmt.Sprintf("CTR-%d-%04d", req.VendorID, time.Now().UnixNano()%10000)
+	} else {
+		// Verify uniqueness
+		existing, err := s.repo.GetContractByNumber(ctx, req.WorkspaceID, contractNumber)
+		if err == nil && existing != nil {
+			return nil, ErrContractNumberConflict
+		}
+	}
+
+	contractType := strings.ToLower(strings.TrimSpace(req.ContractType))
+	if contractType == "" {
+		contractType = model.ContractTypeMSA
+	}
+	status := strings.ToLower(strings.TrimSpace(req.Status))
+	if status == "" {
+		status = model.ContractStatusDraft
+	}
+	currency := strings.ToUpper(strings.TrimSpace(req.Currency))
+	if currency == "" {
+		currency = "USD"
+	}
+	renewalNoticeDays := req.RenewalNoticeDays
+	if renewalNoticeDays <= 0 {
+		renewalNoticeDays = 30
+	}
+
+	contract := &model.VendorContract{
+		WorkspaceID:         req.WorkspaceID,
+		VendorID:            req.VendorID,
+		ContractNumber:      contractNumber,
+		Title:               strings.TrimSpace(req.Title),
+		ContractType:        contractType,
+		Status:              status,
+		TotalValue:          req.TotalValue,
+		AnnualRecurringCost: req.AnnualRecurringCost,
+		Currency:            currency,
+		StartDate:           req.StartDate,
+		EndDate:             req.EndDate,
+		AutoRenew:           req.AutoRenew,
+		RenewalNoticeDays:   renewalNoticeDays,
+		OwnerUserID:         strings.TrimSpace(req.OwnerUserID),
+		PaymentTerms:        strings.TrimSpace(req.PaymentTerms),
+		DocumentURL:         strings.TrimSpace(req.DocumentURL),
+		Notes:               strings.TrimSpace(req.Notes),
+	}
+
+	if err := s.repo.CreateContract(ctx, contract); err != nil {
+		return nil, err
+	}
+	return s.repo.GetContractByID(ctx, contract.ID)
 }
+
 func (s *vendorService) GetContractByID(ctx context.Context, id int64) (*model.VendorContract, error) {
-	return nil, errVndNotImplemented
+	if id <= 0 {
+		return nil, ErrContractNotFound
+	}
+	return s.repo.GetContractByID(ctx, id)
 }
+
 func (s *vendorService) GetContractByNumber(ctx context.Context, workspaceID int64, contractNumber string) (*model.VendorContract, error) {
-	return nil, errVndNotImplemented
+	num := strings.ToUpper(strings.TrimSpace(contractNumber))
+	if num == "" {
+		return nil, ErrContractNumberRequired
+	}
+	return s.repo.GetContractByNumber(ctx, workspaceID, num)
 }
+
 func (s *vendorService) UpdateContract(ctx context.Context, id int64, req *model.UpdateVendorContractRequest) (*model.VendorContract, error) {
-	return nil, errVndNotImplemented
+	if id <= 0 || req == nil {
+		return nil, ErrContractNotFound
+	}
+
+	c, err := s.repo.GetContractByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Title != nil {
+		title := strings.TrimSpace(*req.Title)
+		if title == "" {
+			return nil, ErrContractTitleRequired
+		}
+		c.Title = title
+	}
+	if req.ContractType != nil {
+		ct := strings.ToLower(strings.TrimSpace(*req.ContractType))
+		if err := model.ValidateContractType(ct); err != nil {
+			return nil, err
+		}
+		c.ContractType = ct
+	}
+	if req.Status != nil {
+		st := strings.ToLower(strings.TrimSpace(*req.Status))
+		if err := model.ValidateContractStatus(st); err != nil {
+			return nil, err
+		}
+		c.Status = st
+	}
+	if req.TotalValue != nil {
+		c.TotalValue = *req.TotalValue
+	}
+	if req.AnnualRecurringCost != nil {
+		c.AnnualRecurringCost = *req.AnnualRecurringCost
+	}
+	if req.Currency != nil {
+		c.Currency = strings.ToUpper(strings.TrimSpace(*req.Currency))
+	}
+	if req.StartDate != nil {
+		c.StartDate = *req.StartDate
+	}
+	if req.EndDate != nil {
+		c.EndDate = *req.EndDate
+	}
+	if !c.StartDate.IsZero() && !c.EndDate.IsZero() && !c.EndDate.After(c.StartDate) {
+		return nil, ErrInvalidContractDates
+	}
+	if req.AutoRenew != nil {
+		c.AutoRenew = *req.AutoRenew
+	}
+	if req.RenewalNoticeDays != nil {
+		c.RenewalNoticeDays = *req.RenewalNoticeDays
+	}
+	if req.OwnerUserID != nil {
+		c.OwnerUserID = strings.TrimSpace(*req.OwnerUserID)
+	}
+	if req.PaymentTerms != nil {
+		c.PaymentTerms = strings.TrimSpace(*req.PaymentTerms)
+	}
+	if req.DocumentURL != nil {
+		c.DocumentURL = strings.TrimSpace(*req.DocumentURL)
+	}
+	if req.Notes != nil {
+		c.Notes = strings.TrimSpace(*req.Notes)
+	}
+
+	if err := s.repo.UpdateContract(ctx, c); err != nil {
+		return nil, err
+	}
+	return s.repo.GetContractByID(ctx, id)
 }
+
 func (s *vendorService) DeleteContract(ctx context.Context, id int64) error {
-	return errVndNotImplemented
+	if id <= 0 {
+		return ErrContractNotFound
+	}
+	if _, err := s.repo.GetContractByID(ctx, id); err != nil {
+		return err
+	}
+	return s.repo.DeleteContract(ctx, id)
 }
+
 func (s *vendorService) ListContracts(ctx context.Context, filter model.ContractFilterCriteria) ([]model.VendorContract, int, error) {
-	return nil, 0, errVndNotImplemented
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+	return s.repo.ListContracts(ctx, filter)
 }
+
 func (s *vendorService) RenewContract(ctx context.Context, id int64, req *model.RenewContractRequest) (*model.VendorContract, error) {
-	return nil, errVndNotImplemented
+	if id <= 0 || req == nil {
+		return nil, ErrContractNotFound
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	c, err := s.repo.GetContractByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if !req.NewEndDate.After(c.StartDate) {
+		return nil, ErrInvalidContractDates
+	}
+
+	c.EndDate = req.NewEndDate
+	c.Status = model.ContractStatusActive
+	if req.NewTotalValue != nil {
+		c.TotalValue = *req.NewTotalValue
+	}
+	if req.NewAnnualCost != nil {
+		c.AnnualRecurringCost = *req.NewAnnualCost
+	}
+	if req.AutoRenew != nil {
+		c.AutoRenew = *req.AutoRenew
+	}
+	if req.NoticeDays != nil {
+		c.RenewalNoticeDays = *req.NoticeDays
+	}
+	if strings.TrimSpace(req.Notes) != "" {
+		if c.Notes != "" {
+			c.Notes = c.Notes + "\n" + strings.TrimSpace(req.Notes)
+		} else {
+			c.Notes = strings.TrimSpace(req.Notes)
+		}
+	}
+
+	if err := s.repo.UpdateContract(ctx, c); err != nil {
+		return nil, err
+	}
+	return s.repo.GetContractByID(ctx, id)
 }
 func (s *vendorService) CreateEvaluation(ctx context.Context, vendorID int64, evaluatorID string, req *model.CreateVendorEvaluationRequest) (*model.VendorEvaluation, error) {
 	return nil, errVndNotImplemented
