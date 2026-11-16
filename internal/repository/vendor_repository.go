@@ -829,14 +829,190 @@ func (r *sqlVendorRepository) ListMilestones(ctx context.Context, contractID int
 	return milestones, rows.Err()
 }
 func (r *sqlVendorRepository) LinkCI(ctx context.Context, link *model.VendorCILink) error {
-	return errVendorNotImplemented
+	link.CreatedAt = time.Now().UTC()
+
+	var count int
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM vendor_ci_links WHERE vendor_id = ? AND ci_id = ?", link.VendorID, link.CIID).Scan(&count)
+	if count > 0 {
+		return ErrVendorCILinkConflict
+	}
+
+	query := `
+	INSERT INTO vendor_ci_links (vendor_id, ci_id, relationship, created_at)
+	VALUES (?, ?, ?, ?);`
+
+	res, err := r.db.ExecContext(ctx, query, link.VendorID, link.CIID, link.Relationship, link.CreatedAt)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "constraint") {
+			return ErrVendorCILinkConflict
+		}
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	link.ID = id
+	return nil
 }
+
 func (r *sqlVendorRepository) UnlinkCI(ctx context.Context, vendorID, ciID int64) error {
-	return errVendorNotImplemented
+	res, err := r.db.ExecContext(ctx, "DELETE FROM vendor_ci_links WHERE vendor_id = ? AND ci_id = ?", vendorID, ciID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrVendorCILinkNotFound
+	}
+	return nil
 }
+
 func (r *sqlVendorRepository) ListCILinks(ctx context.Context, vendorID int64) ([]model.VendorCILink, error) {
-	return nil, errVendorNotImplemented
+	query := `
+	SELECT l.id, l.vendor_id, l.ci_id, l.relationship, l.created_at,
+	       COALESCE(ci.name, ''), COALESCE(ci.ci_type, '')
+	FROM vendor_ci_links l
+	JOIN configuration_items ci ON l.ci_id = ci.id
+	WHERE l.vendor_id = ?
+	ORDER BY l.id DESC;`
+
+	rows, err := r.db.QueryContext(ctx, query, vendorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var links []model.VendorCILink
+	for rows.Next() {
+		var l model.VendorCILink
+		var ciName, ciType sql.NullString
+		if err := rows.Scan(&l.ID, &l.VendorID, &l.CIID, &l.Relationship, &l.CreatedAt, &ciName, &ciType); err != nil {
+			return nil, err
+		}
+		if ciName.Valid {
+			l.CIName = ciName.String
+		}
+		if ciType.Valid {
+			l.CIType = ciType.String
+		}
+		links = append(links, l)
+	}
+	return links, rows.Err()
 }
+
 func (r *sqlVendorRepository) GetVendorMetrics(ctx context.Context, workspaceID int64) (*model.VendorMetrics, error) {
-	return nil, errVendorNotImplemented
+	metrics := &model.VendorMetrics{
+		WorkspaceID:           workspaceID,
+		TierBreakdown:         make(map[string]int),
+		RiskBreakdown:         make(map[string]int),
+		ContractTypeBreakdown: make(map[string]int),
+	}
+
+	// Total vendors & active vendors
+	_ = r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*), COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0)
+		FROM vendors
+		WHERE workspace_id = ?;`, workspaceID).Scan(&metrics.TotalVendors, &metrics.ActiveVendors)
+
+	// Total contracts, active contracts, total value, annual spend
+	_ = r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*),
+		       COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0),
+		       COALESCE(SUM(total_value), 0.0),
+		       COALESCE(SUM(CASE WHEN status = 'active' THEN annual_recurring_cost ELSE 0.0 END), 0.0)
+		FROM vendor_contracts
+		WHERE workspace_id = ?;`, workspaceID).Scan(&metrics.TotalContracts, &metrics.ActiveContracts, &metrics.TotalContractValue, &metrics.TotalAnnualSpend)
+
+	// Tier breakdown
+	tierRows, err := r.db.QueryContext(ctx, `
+		SELECT tier, COUNT(*) FROM vendors WHERE workspace_id = ? GROUP BY tier;`, workspaceID)
+	if err == nil {
+		defer tierRows.Close()
+		for tierRows.Next() {
+			var tier string
+			var count int
+			if err := tierRows.Scan(&tier, &count); err == nil {
+				metrics.TierBreakdown[tier] = count
+			}
+		}
+	}
+
+	// Risk breakdown
+	riskRows, err := r.db.QueryContext(ctx, `
+		SELECT risk_level, COUNT(*) FROM vendors WHERE workspace_id = ? GROUP BY risk_level;`, workspaceID)
+	if err == nil {
+		defer riskRows.Close()
+		for riskRows.Next() {
+			var risk string
+			var count int
+			if err := riskRows.Scan(&risk, &count); err == nil {
+				metrics.RiskBreakdown[risk] = count
+			}
+		}
+	}
+
+	// Contract type breakdown
+	typeRows, err := r.db.QueryContext(ctx, `
+		SELECT contract_type, COUNT(*) FROM vendor_contracts WHERE workspace_id = ? GROUP BY contract_type;`, workspaceID)
+	if err == nil {
+		defer typeRows.Close()
+		for typeRows.Next() {
+			var cType string
+			var count int
+			if err := typeRows.Scan(&cType, &count); err == nil {
+				metrics.ContractTypeBreakdown[cType] = count
+			}
+		}
+	}
+
+	// Expiration in 30 days and 90 days
+	now := time.Now().UTC()
+	in30 := now.AddDate(0, 0, 30)
+	in90 := now.AddDate(0, 0, 90)
+
+	_ = r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM vendor_contracts
+		WHERE workspace_id = ? AND status != 'terminated' AND end_date >= ? AND end_date <= ?;`,
+		workspaceID, now, in30,
+	).Scan(&metrics.ContractsExpiring30Days)
+
+	_ = r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM vendor_contracts
+		WHERE workspace_id = ? AND status != 'terminated' AND end_date >= ? AND end_date <= ?;`,
+		workspaceID, now, in90,
+	).Scan(&metrics.ContractsExpiring90Days)
+
+	// Average evaluation score
+	_ = r.db.QueryRowContext(ctx, `
+		SELECT COALESCE(AVG(e.overall_score), 0.0)
+		FROM vendor_evaluations e
+		JOIN vendors v ON e.vendor_id = v.id
+		WHERE v.workspace_id = ?;`, workspaceID).Scan(&metrics.AverageVendorScore)
+
+	// Top vendors by spend
+	spendRows, err := r.db.QueryContext(ctx, `
+		SELECT v.id, v.name,
+		       COALESCE(SUM(c.annual_recurring_cost), 0.0) AS annual_spend,
+		       COUNT(c.id) AS active_contracts
+		FROM vendors v
+		JOIN vendor_contracts c ON v.id = c.vendor_id AND c.status = 'active'
+		WHERE v.workspace_id = ?
+		GROUP BY v.id, v.name
+		ORDER BY annual_spend DESC
+		LIMIT 5;`, workspaceID)
+	if err == nil {
+		defer spendRows.Close()
+		for spendRows.Next() {
+			var s model.VendorSpendSummary
+			if err := spendRows.Scan(&s.VendorID, &s.VendorName, &s.AnnualSpend, &s.ActiveContracts); err == nil {
+				metrics.TopVendorsBySpend = append(metrics.TopVendorsBySpend, s)
+			}
+		}
+	}
+
+	return metrics, nil
 }
