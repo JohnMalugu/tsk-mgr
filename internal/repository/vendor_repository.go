@@ -599,14 +599,113 @@ func (r *sqlVendorRepository) GetNextContractNumberSequence(ctx context.Context,
 	}
 	return count + 1, nil
 }
+func (r *sqlVendorRepository) scanEvaluation(row interface{ Scan(...any) error }) (*model.VendorEvaluation, error) {
+	var e model.VendorEvaluation
+	var evalName, vName sql.NullString
+
+	err := row.Scan(
+		&e.ID,
+		&e.VendorID,
+		&e.EvaluatorID,
+		&e.EvaluationPeriod,
+		&e.QualityScore,
+		&e.ResponsivenessScore,
+		&e.SLAScore,
+		&e.PricingScore,
+		&e.OverallScore,
+		&e.Feedback,
+		&e.CreatedAt,
+		&evalName,
+		&vName,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrEvaluationNotFound
+		}
+		return nil, err
+	}
+	if evalName.Valid {
+		e.EvaluatorName = evalName.String
+	}
+	if vName.Valid {
+		e.VendorName = vName.String
+	}
+	return &e, nil
+}
+
+const evalSelectFields = `
+	e.id, e.vendor_id, e.evaluator_id, e.evaluation_period,
+	e.quality_score, e.responsiveness_score, e.sla_score, e.pricing_score,
+	e.overall_score, e.feedback, e.created_at,
+	COALESCE(u.username, '') AS evaluator_name,
+	COALESCE(v.name, '') AS vendor_name
+`
+
+const evalFromClause = `
+	FROM vendor_evaluations e
+	JOIN vendors v ON e.vendor_id = v.id
+	LEFT JOIN users u ON e.evaluator_id = u.id
+`
+
 func (r *sqlVendorRepository) CreateEvaluation(ctx context.Context, eval *model.VendorEvaluation) error {
-	return errVendorNotImplemented
+	eval.CreatedAt = time.Now().UTC()
+	eval.OverallScore = (eval.QualityScore + eval.ResponsivenessScore + eval.SLAScore + eval.PricingScore) / 4.0
+
+	query := `
+	INSERT INTO vendor_evaluations (
+		vendor_id, evaluator_id, evaluation_period, quality_score,
+		responsiveness_score, sla_score, pricing_score, overall_score,
+		feedback, created_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
+
+	res, err := r.db.ExecContext(ctx, query,
+		eval.VendorID, eval.EvaluatorID, eval.EvaluationPeriod, eval.QualityScore,
+		eval.ResponsivenessScore, eval.SLAScore, eval.PricingScore, eval.OverallScore,
+		eval.Feedback, eval.CreatedAt,
+	)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	eval.ID = id
+	return nil
 }
+
 func (r *sqlVendorRepository) ListEvaluations(ctx context.Context, vendorID int64) ([]model.VendorEvaluation, error) {
-	return nil, errVendorNotImplemented
+	query := fmt.Sprintf("SELECT %s %s WHERE e.vendor_id = ? ORDER BY e.id DESC", evalSelectFields, evalFromClause)
+	rows, err := r.db.QueryContext(ctx, query, vendorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var evals []model.VendorEvaluation
+	for rows.Next() {
+		e, err := r.scanEvaluation(rows)
+		if err != nil {
+			return nil, err
+		}
+		evals = append(evals, *e)
+	}
+	return evals, rows.Err()
 }
+
 func (r *sqlVendorRepository) DeleteEvaluation(ctx context.Context, id int64) error {
-	return errVendorNotImplemented
+	res, err := r.db.ExecContext(ctx, "DELETE FROM vendor_evaluations WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrEvaluationNotFound
+	}
+	return nil
 }
 func (r *sqlVendorRepository) CreateMilestone(ctx context.Context, milestone *model.ContractMilestone) error {
 	return errVendorNotImplemented
