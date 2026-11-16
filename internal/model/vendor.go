@@ -200,3 +200,91 @@ type VendorContract struct {
 	DaysUntilExpiration int    `json:"days_until_expiration,omitempty"`
 	MilestonesCount     int    `json:"milestones_count,omitempty"`
 }
+
+// Contract milestone status constants
+const (
+	ContractMilestonePending   = "pending"
+	ContractMilestoneCompleted = "completed"
+	ContractMilestoneCancelled = "cancelled"
+)
+
+// Vendor CI relationship types
+const (
+	VendorCIRelProvides  = "provides"
+	VendorCIRelMaintains = "maintains"
+	VendorCIRelSupports  = "supports"
+	VendorCIRelLicenses  = "licenses"
+)
+
+var (
+	ErrEvaluationNotFound     = errors.New("vendor evaluation not found")
+	ErrMilestoneNotFound      = errors.New("contract milestone not found")
+	ErrInvalidScore           = errors.New("score must be between 1.0 and 5.0")
+	ErrInvalidMilestoneStatus = errors.New("invalid contract milestone status")
+	ErrVendorCILinkNotFound   = errors.New("vendor CI link not found")
+	ErrVendorCILinkConflict   = errors.New("vendor CI link already exists")
+)
+
+// ValidateScore validates that an evaluation rating is between 1.0 and 5.0
+func ValidateScore(s float64) error {
+	if s < 1.0 || s > 5.0 {
+		return ErrInvalidScore
+	}
+	return nil
+}
+
+// ValidateMilestoneStatus validates milestone status
+func ValidateMilestoneStatus(s string) error {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case ContractMilestonePending, ContractMilestoneCompleted, ContractMilestoneCancelled:
+		return nil
+	default:
+		return ErrInvalidMilestoneStatus
+	}
+}
+
+// VendorEvaluation records periodic performance scorecards and reviews for a vendor
+type VendorEvaluation struct {
+	ID                  int64     `json:"id"`
+	VendorID            int64     `json:"vendor_id"`
+	EvaluatorID         string    `json:"evaluator_id"`
+	EvaluationPeriod    string    `json:"evaluation_period"`
+	QualityScore        float64   `json:"quality_score"`
+	ResponsivenessScore float64   `json:"responsiveness_score"`
+	SLAScore            float64   `json:"sla_score"`
+	PricingScore        float64   `json:"pricing_score"`
+	OverallScore        float64   `json:"overall_score"`
+	Feedback            string    `json:"feedback,omitempty"`
+	CreatedAt           time.Time `json:"created_at"`
+
+	// Enriched fields
+	EvaluatorName string `json:"evaluator_name,omitempty"`
+	VendorName    string `json:"vendor_name,omitempty"`
+}
+
+// ContractMilestone tracks key deliverable phases and payment releases for a contract
+type ContractMilestone struct {
+	ID          int64      `json:"id"`
+	ContractID  int64      `json:"contract_id"`
+	Title       string     `json:"title"`
+	Description string     `json:"description,omitempty"`
+	DueDate     time.Time  `json:"due_date"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	Amount      float64    `json:"amount"`
+	Status      string     `json:"status"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
+// VendorCILink connects a vendor to a CMDB Configuration Item
+type VendorCILink struct {
+	ID           int64     `json:"id"`
+	VendorID     int64     `json:"vendor_id"`
+	CIID         int64     `json:"ci_id"`
+	Relationship string    `json:"relationship"`
+	CreatedAt    time.Time `json:"created_at"`
+
+	// Enriched fields
+	CIName string `json:"ci_name,omitempty"`
+	CIType string `json:"ci_type,omitempty"`
+}
