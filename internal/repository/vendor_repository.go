@@ -707,20 +707,126 @@ func (r *sqlVendorRepository) DeleteEvaluation(ctx context.Context, id int64) er
 	}
 	return nil
 }
+func (r *sqlVendorRepository) scanMilestone(row interface{ Scan(...any) error }) (*model.ContractMilestone, error) {
+	var m model.ContractMilestone
+	var compAt sql.NullTime
+
+	err := row.Scan(
+		&m.ID,
+		&m.ContractID,
+		&m.Title,
+		&m.Description,
+		&m.DueDate,
+		&compAt,
+		&m.Amount,
+		&m.Status,
+		&m.CreatedAt,
+		&m.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrContractMilestoneNotFound
+		}
+		return nil, err
+	}
+	if compAt.Valid {
+		t := compAt.Time
+		m.CompletedAt = &t
+	}
+	return &m, nil
+}
+
+const milestoneSelectFields = `
+	id, contract_id, title, description, due_date, completed_at, amount, status, created_at, updated_at
+`
+
 func (r *sqlVendorRepository) CreateMilestone(ctx context.Context, milestone *model.ContractMilestone) error {
-	return errVendorNotImplemented
+	now := time.Now().UTC()
+	milestone.CreatedAt = now
+	milestone.UpdatedAt = now
+
+	query := `
+	INSERT INTO contract_milestones (
+		contract_id, title, description, due_date, completed_at, amount, status, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`
+
+	res, err := r.db.ExecContext(ctx, query,
+		milestone.ContractID, milestone.Title, milestone.Description, milestone.DueDate,
+		milestone.CompletedAt, milestone.Amount, milestone.Status, milestone.CreatedAt, milestone.UpdatedAt,
+	)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	milestone.ID = id
+	return nil
 }
+
 func (r *sqlVendorRepository) GetMilestoneByID(ctx context.Context, id int64) (*model.ContractMilestone, error) {
-	return nil, errVendorNotImplemented
+	query := fmt.Sprintf("SELECT %s FROM contract_milestones WHERE id = ?", milestoneSelectFields)
+	return r.scanMilestone(r.db.QueryRowContext(ctx, query, id))
 }
+
 func (r *sqlVendorRepository) UpdateMilestone(ctx context.Context, milestone *model.ContractMilestone) error {
-	return errVendorNotImplemented
+	milestone.UpdatedAt = time.Now().UTC()
+
+	query := `
+	UPDATE contract_milestones SET
+		title = ?, description = ?, due_date = ?, completed_at = ?, amount = ?, status = ?, updated_at = ?
+	WHERE id = ?;`
+
+	res, err := r.db.ExecContext(ctx, query,
+		milestone.Title, milestone.Description, milestone.DueDate, milestone.CompletedAt,
+		milestone.Amount, milestone.Status, milestone.UpdatedAt, milestone.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrContractMilestoneNotFound
+	}
+	return nil
 }
+
 func (r *sqlVendorRepository) DeleteMilestone(ctx context.Context, id int64) error {
-	return errVendorNotImplemented
+	res, err := r.db.ExecContext(ctx, "DELETE FROM contract_milestones WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrContractMilestoneNotFound
+	}
+	return nil
 }
+
 func (r *sqlVendorRepository) ListMilestones(ctx context.Context, contractID int64) ([]model.ContractMilestone, error) {
-	return nil, errVendorNotImplemented
+	query := fmt.Sprintf("SELECT %s FROM contract_milestones WHERE contract_id = ? ORDER BY due_date ASC", milestoneSelectFields)
+	rows, err := r.db.QueryContext(ctx, query, contractID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var milestones []model.ContractMilestone
+	for rows.Next() {
+		m, err := r.scanMilestone(rows)
+		if err != nil {
+			return nil, err
+		}
+		milestones = append(milestones, *m)
+	}
+	return milestones, rows.Err()
 }
 func (r *sqlVendorRepository) LinkCI(ctx context.Context, link *model.VendorCILink) error {
 	return errVendorNotImplemented
