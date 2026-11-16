@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
@@ -72,23 +74,217 @@ func NewVendorRepository(db *sql.DB) VendorRepository {
 
 var errVendorNotImplemented = errors.New("not implemented")
 
+func (r *sqlVendorRepository) scanVendor(row interface{ Scan(...any) error }) (*model.Vendor, error) {
+	var v model.Vendor
+	var activeContracts sql.NullInt64
+	var totalSpend, avgScore sql.NullFloat64
+
+	err := row.Scan(
+		&v.ID,
+		&v.WorkspaceID,
+		&v.Name,
+		&v.Slug,
+		&v.Category,
+		&v.Tier,
+		&v.Status,
+		&v.RiskLevel,
+		&v.Website,
+		&v.ContactPerson,
+		&v.ContactEmail,
+		&v.ContactPhone,
+		&v.SupportPortalURL,
+		&v.SecurityCertifications,
+		&v.Notes,
+		&v.CreatedAt,
+		&v.UpdatedAt,
+		&activeContracts,
+		&totalSpend,
+		&avgScore,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrVendorNotFound
+		}
+		return nil, err
+	}
+	if activeContracts.Valid {
+		v.ActiveContractsCount = int(activeContracts.Int64)
+	}
+	if totalSpend.Valid {
+		v.TotalAnnualSpend = totalSpend.Float64
+	}
+	if avgScore.Valid {
+		v.AverageEvaluationScore = avgScore.Float64
+	}
+	return &v, nil
+}
+
+const vendorSelectFields = `
+	v.id, v.workspace_id, v.name, v.slug, v.category, v.tier, v.status, v.risk_level,
+	v.website, v.contact_person, v.contact_email, v.contact_phone, v.support_portal_url,
+	v.security_certifications, v.notes, v.created_at, v.updated_at,
+	(SELECT COUNT(*) FROM vendor_contracts c WHERE c.vendor_id = v.id AND c.status = 'active') AS active_contracts_count,
+	(SELECT COALESCE(SUM(c.annual_recurring_cost), 0.0) FROM vendor_contracts c WHERE c.vendor_id = v.id AND c.status = 'active') AS total_annual_spend,
+	(SELECT COALESCE(AVG(e.overall_score), 0.0) FROM vendor_evaluations e WHERE e.vendor_id = v.id) AS average_evaluation_score
+`
+
+const vendorFromClause = `FROM vendors v`
+
 func (r *sqlVendorRepository) CreateVendor(ctx context.Context, vendor *model.Vendor) error {
-	return errVendorNotImplemented
+	now := time.Now().UTC()
+	vendor.CreatedAt = now
+	vendor.UpdatedAt = now
+
+	// Check slug uniqueness
+	var count int
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM vendors WHERE workspace_id = ? AND slug = ?", vendor.WorkspaceID, vendor.Slug).Scan(&count)
+	if count > 0 {
+		return ErrVendorSlugConflict
+	}
+
+	query := `
+	INSERT INTO vendors (
+		workspace_id, name, slug, category, tier, status, risk_level,
+		website, contact_person, contact_email, contact_phone, support_portal_url,
+		security_certifications, notes, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
+
+	res, err := r.db.ExecContext(ctx, query,
+		vendor.WorkspaceID, vendor.Name, vendor.Slug, vendor.Category, vendor.Tier, vendor.Status, vendor.RiskLevel,
+		vendor.Website, vendor.ContactPerson, vendor.ContactEmail, vendor.ContactPhone, vendor.SupportPortalURL,
+		vendor.SecurityCertifications, vendor.Notes, vendor.CreatedAt, vendor.UpdatedAt,
+	)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "constraint") {
+			return ErrVendorSlugConflict
+		}
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	vendor.ID = id
+	return nil
 }
+
 func (r *sqlVendorRepository) GetVendorByID(ctx context.Context, id int64) (*model.Vendor, error) {
-	return nil, errVendorNotImplemented
+	query := fmt.Sprintf("SELECT %s %s WHERE v.id = ?", vendorSelectFields, vendorFromClause)
+	return r.scanVendor(r.db.QueryRowContext(ctx, query, id))
 }
+
 func (r *sqlVendorRepository) GetVendorBySlug(ctx context.Context, workspaceID int64, slug string) (*model.Vendor, error) {
-	return nil, errVendorNotImplemented
+	query := fmt.Sprintf("SELECT %s %s WHERE v.workspace_id = ? AND v.slug = ?", vendorSelectFields, vendorFromClause)
+	return r.scanVendor(r.db.QueryRowContext(ctx, query, workspaceID, slug))
 }
+
 func (r *sqlVendorRepository) UpdateVendor(ctx context.Context, vendor *model.Vendor) error {
-	return errVendorNotImplemented
+	vendor.UpdatedAt = time.Now().UTC()
+
+	query := `
+	UPDATE vendors SET
+		name = ?, category = ?, tier = ?, status = ?, risk_level = ?,
+		website = ?, contact_person = ?, contact_email = ?, contact_phone = ?,
+		support_portal_url = ?, security_certifications = ?, notes = ?, updated_at = ?
+	WHERE id = ?;`
+
+	res, err := r.db.ExecContext(ctx, query,
+		vendor.Name, vendor.Category, vendor.Tier, vendor.Status, vendor.RiskLevel,
+		vendor.Website, vendor.ContactPerson, vendor.ContactEmail, vendor.ContactPhone,
+		vendor.SupportPortalURL, vendor.SecurityCertifications, vendor.Notes, vendor.UpdatedAt, vendor.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrVendorNotFound
+	}
+	return nil
 }
+
 func (r *sqlVendorRepository) DeleteVendor(ctx context.Context, id int64) error {
-	return errVendorNotImplemented
+	res, err := r.db.ExecContext(ctx, "DELETE FROM vendors WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrVendorNotFound
+	}
+	return nil
 }
+
 func (r *sqlVendorRepository) ListVendors(ctx context.Context, filter model.VendorFilterCriteria) ([]model.Vendor, int, error) {
-	return nil, 0, errVendorNotImplemented
+	var whereClauses []string
+	var args []interface{}
+
+	if filter.WorkspaceID > 0 {
+		whereClauses = append(whereClauses, "v.workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.Category != "" {
+		whereClauses = append(whereClauses, "v.category = ?")
+		args = append(args, filter.Category)
+	}
+	if filter.Tier != "" {
+		whereClauses = append(whereClauses, "v.tier = ?")
+		args = append(args, filter.Tier)
+	}
+	if filter.Status != "" {
+		whereClauses = append(whereClauses, "v.status = ?")
+		args = append(args, filter.Status)
+	}
+	if filter.RiskLevel != "" {
+		whereClauses = append(whereClauses, "v.risk_level = ?")
+		args = append(args, filter.RiskLevel)
+	}
+	if filter.Search != "" {
+		searchPattern := "%" + filter.Search + "%"
+		whereClauses = append(whereClauses, "(v.name LIKE ? OR v.slug LIKE ? OR v.contact_person LIKE ? OR v.contact_email LIKE ?)")
+		args = append(args, searchPattern, searchPattern, searchPattern, searchPattern)
+	}
+
+	whereSQL := ""
+	if len(whereClauses) > 0 {
+		whereSQL = "WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) %s %s", vendorFromClause, whereSQL)
+	var total int
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	query := fmt.Sprintf("SELECT %s %s %s ORDER BY v.id DESC", vendorSelectFields, vendorFromClause, whereSQL)
+	if filter.Limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", filter.Limit)
+		if filter.Offset > 0 {
+			query += fmt.Sprintf(" OFFSET %d", filter.Offset)
+		}
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var vendors []model.Vendor
+	for rows.Next() {
+		v, err := r.scanVendor(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		vendors = append(vendors, *v)
+	}
+	return vendors, total, rows.Err()
 }
 func (r *sqlVendorRepository) CreateContract(ctx context.Context, contract *model.VendorContract) error {
 	return errVendorNotImplemented
