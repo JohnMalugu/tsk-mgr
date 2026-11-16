@@ -2358,6 +2358,33 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	vendorsQuery := `
+	CREATE TABLE IF NOT EXISTS vendors (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		name TEXT NOT NULL,
+		slug TEXT NOT NULL,
+		category TEXT NOT NULL DEFAULT 'software',
+		tier TEXT NOT NULL DEFAULT 'tactical',
+		status TEXT NOT NULL DEFAULT 'active',
+		risk_level TEXT NOT NULL DEFAULT 'medium',
+		website TEXT NOT NULL DEFAULT '',
+		contact_person TEXT NOT NULL DEFAULT '',
+		contact_email TEXT NOT NULL DEFAULT '',
+		contact_phone TEXT NOT NULL DEFAULT '',
+		support_portal_url TEXT NOT NULL DEFAULT '',
+		security_certifications TEXT NOT NULL DEFAULT '',
+		notes TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(vendorsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
