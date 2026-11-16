@@ -475,28 +475,159 @@ func (s *vendorService) RenewContract(ctx context.Context, id int64, req *model.
 	return s.repo.GetContractByID(ctx, id)
 }
 func (s *vendorService) CreateEvaluation(ctx context.Context, vendorID int64, evaluatorID string, req *model.CreateVendorEvaluationRequest) (*model.VendorEvaluation, error) {
-	return nil, errVndNotImplemented
+	if vendorID <= 0 {
+		return nil, ErrVendorNotFound
+	}
+	if _, err := s.repo.GetVendorByID(ctx, vendorID); err != nil {
+		return nil, err
+	}
+	if req == nil {
+		return nil, ErrInvalidScore
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	evaluator := strings.TrimSpace(evaluatorID)
+	if evaluator == "" {
+		evaluator = "system"
+	}
+	overall := (req.QualityScore + req.ResponsivenessScore + req.SLAScore + req.PricingScore) / 4.0
+
+	eval := &model.VendorEvaluation{
+		VendorID:            vendorID,
+		EvaluatorID:         evaluator,
+		EvaluationPeriod:    strings.TrimSpace(req.EvaluationPeriod),
+		QualityScore:        req.QualityScore,
+		ResponsivenessScore: req.ResponsivenessScore,
+		SLAScore:            req.SLAScore,
+		PricingScore:        req.PricingScore,
+		OverallScore:        overall,
+		Feedback:            strings.TrimSpace(req.Feedback),
+	}
+
+	if err := s.repo.CreateEvaluation(ctx, eval); err != nil {
+		return nil, err
+	}
+	return eval, nil
 }
+
 func (s *vendorService) ListEvaluations(ctx context.Context, vendorID int64) ([]model.VendorEvaluation, error) {
-	return nil, errVndNotImplemented
+	if vendorID <= 0 {
+		return nil, ErrVendorNotFound
+	}
+	return s.repo.ListEvaluations(ctx, vendorID)
 }
+
 func (s *vendorService) DeleteEvaluation(ctx context.Context, id int64) error {
-	return errVndNotImplemented
+	if id <= 0 {
+		return ErrEvaluationNotFound
+	}
+	return s.repo.DeleteEvaluation(ctx, id)
 }
+
 func (s *vendorService) CreateMilestone(ctx context.Context, contractID int64, req *model.CreateContractMilestoneRequest) (*model.ContractMilestone, error) {
-	return nil, errVndNotImplemented
+	if contractID <= 0 {
+		return nil, ErrContractNotFound
+	}
+	if _, err := s.repo.GetContractByID(ctx, contractID); err != nil {
+		return nil, err
+	}
+	if req == nil {
+		return nil, errors.New("milestone request is required")
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	status := strings.ToLower(strings.TrimSpace(req.Status))
+	if status == "" {
+		status = model.ContractMilestonePending
+	}
+
+	m := &model.ContractMilestone{
+		ContractID:  contractID,
+		Title:       strings.TrimSpace(req.Title),
+		Description: strings.TrimSpace(req.Description),
+		DueDate:     req.DueDate,
+		Amount:      req.Amount,
+		Status:      status,
+	}
+
+	if err := s.repo.CreateMilestone(ctx, m); err != nil {
+		return nil, err
+	}
+	return s.repo.GetMilestoneByID(ctx, m.ID)
 }
+
 func (s *vendorService) GetMilestoneByID(ctx context.Context, id int64) (*model.ContractMilestone, error) {
-	return nil, errVndNotImplemented
+	if id <= 0 {
+		return nil, ErrContractMilestoneNotFound
+	}
+	return s.repo.GetMilestoneByID(ctx, id)
 }
+
 func (s *vendorService) UpdateMilestone(ctx context.Context, id int64, req *model.UpdateContractMilestoneRequest) (*model.ContractMilestone, error) {
-	return nil, errVndNotImplemented
+	if id <= 0 || req == nil {
+		return nil, ErrContractMilestoneNotFound
+	}
+	m, err := s.repo.GetMilestoneByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Title != nil {
+		t := strings.TrimSpace(*req.Title)
+		if t == "" {
+			return nil, errors.New("milestone title cannot be empty")
+		}
+		m.Title = t
+	}
+	if req.Description != nil {
+		m.Description = strings.TrimSpace(*req.Description)
+	}
+	if req.DueDate != nil {
+		m.DueDate = *req.DueDate
+	}
+	if req.Amount != nil {
+		m.Amount = *req.Amount
+	}
+	if req.Status != nil {
+		st := strings.ToLower(strings.TrimSpace(*req.Status))
+		if err := model.ValidateMilestoneStatus(st); err != nil {
+			return nil, err
+		}
+		m.Status = st
+		if st == model.ContractMilestoneCompleted && m.CompletedAt == nil {
+			now := time.Now().UTC()
+			m.CompletedAt = &now
+		}
+	}
+	if req.CompletedAt != nil {
+		m.CompletedAt = req.CompletedAt
+	}
+
+	if err := s.repo.UpdateMilestone(ctx, m); err != nil {
+		return nil, err
+	}
+	return s.repo.GetMilestoneByID(ctx, id)
 }
+
 func (s *vendorService) DeleteMilestone(ctx context.Context, id int64) error {
-	return errVndNotImplemented
+	if id <= 0 {
+		return ErrContractMilestoneNotFound
+	}
+	if _, err := s.repo.GetMilestoneByID(ctx, id); err != nil {
+		return err
+	}
+	return s.repo.DeleteMilestone(ctx, id)
 }
+
 func (s *vendorService) ListMilestones(ctx context.Context, contractID int64) ([]model.ContractMilestone, error) {
-	return nil, errVndNotImplemented
+	if contractID <= 0 {
+		return nil, ErrContractNotFound
+	}
+	return s.repo.ListMilestones(ctx, contractID)
 }
 func (s *vendorService) LinkCI(ctx context.Context, vendorID int64, req *model.LinkVendorCIRequest) (*model.VendorCILink, error) {
 	return nil, errVndNotImplemented
