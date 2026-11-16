@@ -510,3 +510,54 @@ func (r *LinkVendorCIRequest) Validate() error {
 	}
 	return nil
 }
+
+// VendorFilterCriteria defines query parameters for listing vendors
+type VendorFilterCriteria struct {
+	WorkspaceID int64  `json:"workspace_id"`
+	Category    string `json:"category,omitempty"`
+	Tier        string `json:"tier,omitempty"`
+	Status      string `json:"status,omitempty"`
+	RiskLevel   string `json:"risk_level,omitempty"`
+	Search      string `json:"search,omitempty"`
+	Limit       int    `json:"limit,omitempty"`
+	Offset      int    `json:"offset,omitempty"`
+}
+
+// ContractFilterCriteria defines query parameters for listing vendor contracts
+type ContractFilterCriteria struct {
+	WorkspaceID  int64  `json:"workspace_id"`
+	VendorID     int64  `json:"vendor_id,omitempty"`
+	ContractType string `json:"contract_type,omitempty"`
+	Status       string `json:"status,omitempty"`
+	OwnerUserID  string `json:"owner_user_id,omitempty"`
+	Search       string `json:"search,omitempty"`
+	ExpiringDays *int   `json:"expiring_days,omitempty"`
+	Limit        int    `json:"limit,omitempty"`
+	Offset       int    `json:"offset,omitempty"`
+}
+
+// VendorSpendSummary provides financial aggregation for a top vendor
+type VendorSpendSummary struct {
+	VendorID        int64   `json:"vendor_id"`
+	VendorName      string  `json:"vendor_name"`
+	AnnualSpend     float64 `json:"annual_spend"`
+	ActiveContracts int     `json:"active_contracts"`
+}
+
+// VendorMetrics represents aggregated supplier and contract management analytics
+type VendorMetrics struct {
+	WorkspaceID             int64                `json:"workspace_id"`
+	TotalVendors            int                  `json:"total_vendors"`
+	ActiveVendors           int                  `json:"active_vendors"`
+	TotalContracts          int                  `json:"total_contracts"`
+	ActiveContracts         int                  `json:"active_contracts"`
+	TotalAnnualSpend        float64              `json:"total_annual_spend"`
+	TotalContractValue      float64              `json:"total_contract_value"`
+	ContractsExpiring30Days int                  `json:"contracts_expiring_30_days"`
+	ContractsExpiring90Days int                  `json:"contracts_expiring_90_days"`
+	TierBreakdown           map[string]int       `json:"tier_breakdown"`
+	RiskBreakdown           map[string]int       `json:"risk_breakdown"`
+	ContractTypeBreakdown   map[string]int       `json:"contract_type_breakdown"`
+	AverageVendorScore      float64              `json:"average_vendor_score"`
+	TopVendorsBySpend       []VendorSpendSummary `json:"top_vendors_by_spend"`
+}
