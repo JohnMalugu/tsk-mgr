@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -84,22 +85,173 @@ func NewVendorService(repo repository.VendorRepository) VendorService {
 var errVndNotImplemented = errors.New("not implemented")
 
 func (s *vendorService) CreateVendor(ctx context.Context, req *model.CreateVendorRequest) (*model.Vendor, error) {
-	return nil, errVndNotImplemented
+	if req == nil {
+		return nil, ErrVendorNameRequired
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	slug := model.NormalizeSlug(req.Slug)
+	if slug == "" {
+		slug = model.NormalizeSlug(req.Name)
+	}
+	if slug == "" {
+		return nil, ErrVendorSlugRequired
+	}
+
+	// Verify slug uniqueness within workspace
+	existing, err := s.repo.GetVendorBySlug(ctx, req.WorkspaceID, slug)
+	if err == nil && existing != nil {
+		return nil, ErrVendorSlugConflict
+	}
+
+	category := strings.ToLower(strings.TrimSpace(req.Category))
+	if category == "" {
+		category = model.VendorCategoryOther
+	}
+	tier := strings.ToLower(strings.TrimSpace(req.Tier))
+	if tier == "" {
+		tier = model.VendorTierCommodity
+	}
+	status := strings.ToLower(strings.TrimSpace(req.Status))
+	if status == "" {
+		status = model.VendorStatusActive
+	}
+	riskLevel := strings.ToLower(strings.TrimSpace(req.RiskLevel))
+	if riskLevel == "" {
+		riskLevel = model.VendorRiskLow
+	}
+
+	vendor := &model.Vendor{
+		WorkspaceID:            req.WorkspaceID,
+		Name:                   strings.TrimSpace(req.Name),
+		Slug:                   slug,
+		Category:               category,
+		Tier:                   tier,
+		Status:                 status,
+		RiskLevel:              riskLevel,
+		Website:                strings.TrimSpace(req.Website),
+		ContactPerson:          strings.TrimSpace(req.ContactPerson),
+		ContactEmail:           strings.TrimSpace(req.ContactEmail),
+		ContactPhone:           strings.TrimSpace(req.ContactPhone),
+		SupportPortalURL:       strings.TrimSpace(req.SupportPortalURL),
+		SecurityCertifications: strings.TrimSpace(req.SecurityCertifications),
+		Notes:                  strings.TrimSpace(req.Notes),
+	}
+
+	if err := s.repo.CreateVendor(ctx, vendor); err != nil {
+		return nil, err
+	}
+	return s.repo.GetVendorByID(ctx, vendor.ID)
 }
+
 func (s *vendorService) GetVendorByID(ctx context.Context, id int64) (*model.Vendor, error) {
-	return nil, errVndNotImplemented
+	if id <= 0 {
+		return nil, ErrVendorNotFound
+	}
+	return s.repo.GetVendorByID(ctx, id)
 }
+
 func (s *vendorService) GetVendorBySlug(ctx context.Context, workspaceID int64, slug string) (*model.Vendor, error) {
-	return nil, errVndNotImplemented
+	cleanSlug := model.NormalizeSlug(slug)
+	if cleanSlug == "" {
+		return nil, ErrVendorSlugRequired
+	}
+	return s.repo.GetVendorBySlug(ctx, workspaceID, cleanSlug)
 }
+
 func (s *vendorService) UpdateVendor(ctx context.Context, id int64, req *model.UpdateVendorRequest) (*model.Vendor, error) {
-	return nil, errVndNotImplemented
+	if id <= 0 || req == nil {
+		return nil, ErrVendorNotFound
+	}
+
+	v, err := s.repo.GetVendorByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Name != nil {
+		name := strings.TrimSpace(*req.Name)
+		if name == "" {
+			return nil, ErrVendorNameRequired
+		}
+		v.Name = name
+	}
+	if req.Category != nil {
+		cat := strings.ToLower(strings.TrimSpace(*req.Category))
+		if err := model.ValidateVendorCategory(cat); err != nil {
+			return nil, err
+		}
+		v.Category = cat
+	}
+	if req.Tier != nil {
+		tier := strings.ToLower(strings.TrimSpace(*req.Tier))
+		if err := model.ValidateVendorTier(tier); err != nil {
+			return nil, err
+		}
+		v.Tier = tier
+	}
+	if req.Status != nil {
+		status := strings.ToLower(strings.TrimSpace(*req.Status))
+		if err := model.ValidateVendorStatus(status); err != nil {
+			return nil, err
+		}
+		v.Status = status
+	}
+	if req.RiskLevel != nil {
+		risk := strings.ToLower(strings.TrimSpace(*req.RiskLevel))
+		if err := model.ValidateVendorRisk(risk); err != nil {
+			return nil, err
+		}
+		v.RiskLevel = risk
+	}
+	if req.Website != nil {
+		v.Website = strings.TrimSpace(*req.Website)
+	}
+	if req.ContactPerson != nil {
+		v.ContactPerson = strings.TrimSpace(*req.ContactPerson)
+	}
+	if req.ContactEmail != nil {
+		v.ContactEmail = strings.TrimSpace(*req.ContactEmail)
+	}
+	if req.ContactPhone != nil {
+		v.ContactPhone = strings.TrimSpace(*req.ContactPhone)
+	}
+	if req.SupportPortalURL != nil {
+		v.SupportPortalURL = strings.TrimSpace(*req.SupportPortalURL)
+	}
+	if req.SecurityCertifications != nil {
+		v.SecurityCertifications = strings.TrimSpace(*req.SecurityCertifications)
+	}
+	if req.Notes != nil {
+		v.Notes = strings.TrimSpace(*req.Notes)
+	}
+
+	if err := s.repo.UpdateVendor(ctx, v); err != nil {
+		return nil, err
+	}
+	return s.repo.GetVendorByID(ctx, id)
 }
+
 func (s *vendorService) DeleteVendor(ctx context.Context, id int64) error {
-	return errVndNotImplemented
+	if id <= 0 {
+		return ErrVendorNotFound
+	}
+	if _, err := s.repo.GetVendorByID(ctx, id); err != nil {
+		return err
+	}
+	return s.repo.DeleteVendor(ctx, id)
 }
+
 func (s *vendorService) ListVendors(ctx context.Context, filter model.VendorFilterCriteria) ([]model.Vendor, int, error) {
-	return nil, 0, errVndNotImplemented
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+	return s.repo.ListVendors(ctx, filter)
 }
 func (s *vendorService) CreateContract(ctx context.Context, req *model.CreateVendorContractRequest) (*model.VendorContract, error) {
 	return nil, errVndNotImplemented
