@@ -288,3 +288,128 @@ type VendorCILink struct {
 	CIName string `json:"ci_name,omitempty"`
 	CIType string `json:"ci_type,omitempty"`
 }
+
+// CreateVendorRequest represents payload to register a new vendor
+type CreateVendorRequest struct {
+	WorkspaceID            int64  `json:"workspace_id"`
+	Name                   string `json:"name"`
+	Slug                   string `json:"slug,omitempty"`
+	Category               string `json:"category,omitempty"`
+	Tier                   string `json:"tier,omitempty"`
+	Status                 string `json:"status,omitempty"`
+	RiskLevel              string `json:"risk_level,omitempty"`
+	Website                string `json:"website,omitempty"`
+	ContactPerson          string `json:"contact_person,omitempty"`
+	ContactEmail           string `json:"contact_email,omitempty"`
+	ContactPhone           string `json:"contact_phone,omitempty"`
+	SupportPortalURL       string `json:"support_portal_url,omitempty"`
+	SecurityCertifications string `json:"security_certifications,omitempty"`
+	Notes                  string `json:"notes,omitempty"`
+}
+
+// Validate validates CreateVendorRequest parameters
+func (r *CreateVendorRequest) Validate() error {
+	if strings.TrimSpace(r.Name) == "" {
+		return ErrVendorNameRequired
+	}
+	if r.Category != "" {
+		if err := ValidateVendorCategory(r.Category); err != nil {
+			return err
+		}
+	}
+	if r.Tier != "" {
+		if err := ValidateVendorTier(r.Tier); err != nil {
+			return err
+		}
+	}
+	if r.Status != "" {
+		if err := ValidateVendorStatus(r.Status); err != nil {
+			return err
+		}
+	}
+	if r.RiskLevel != "" {
+		if err := ValidateVendorRisk(r.RiskLevel); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// UpdateVendorRequest represents payload to modify existing vendor properties
+type UpdateVendorRequest struct {
+	Name                   *string `json:"name,omitempty"`
+	Category               *string `json:"category,omitempty"`
+	Tier                   *string `json:"tier,omitempty"`
+	Status                 *string `json:"status,omitempty"`
+	RiskLevel              *string `json:"risk_level,omitempty"`
+	Website                *string `json:"website,omitempty"`
+	ContactPerson          *string `json:"contact_person,omitempty"`
+	ContactEmail           *string `json:"contact_email,omitempty"`
+	ContactPhone           *string `json:"contact_phone,omitempty"`
+	SupportPortalURL       *string `json:"support_portal_url,omitempty"`
+	SecurityCertifications *string `json:"security_certifications,omitempty"`
+	Notes                  *string `json:"notes,omitempty"`
+}
+
+// CreateVendorContractRequest represents payload to create a new vendor contract
+type CreateVendorContractRequest struct {
+	WorkspaceID         int64     `json:"workspace_id"`
+	VendorID            int64     `json:"vendor_id"`
+	ContractNumber      string    `json:"contract_number,omitempty"`
+	Title               string    `json:"title"`
+	ContractType        string    `json:"contract_type,omitempty"`
+	Status              string    `json:"status,omitempty"`
+	TotalValue          float64   `json:"total_value,omitempty"`
+	AnnualRecurringCost float64   `json:"annual_recurring_cost,omitempty"`
+	Currency            string    `json:"currency,omitempty"`
+	StartDate           time.Time `json:"start_date"`
+	EndDate             time.Time `json:"end_date"`
+	AutoRenew           bool      `json:"auto_renew,omitempty"`
+	RenewalNoticeDays   int       `json:"renewal_notice_days,omitempty"`
+	OwnerUserID         string    `json:"owner_user_id,omitempty"`
+	PaymentTerms        string    `json:"payment_terms,omitempty"`
+	DocumentURL         string    `json:"document_url,omitempty"`
+	Notes               string    `json:"notes,omitempty"`
+}
+
+// Validate validates CreateVendorContractRequest
+func (r *CreateVendorContractRequest) Validate() error {
+	if strings.TrimSpace(r.Title) == "" {
+		return ErrContractTitleRequired
+	}
+	if r.VendorID <= 0 {
+		return ErrVendorNotFound
+	}
+	if r.ContractType != "" {
+		if err := ValidateContractType(r.ContractType); err != nil {
+			return err
+		}
+	}
+	if r.Status != "" {
+		if err := ValidateContractStatus(r.Status); err != nil {
+			return err
+		}
+	}
+	if !r.StartDate.IsZero() && !r.EndDate.IsZero() && !r.EndDate.After(r.StartDate) {
+		return ErrInvalidContractDates
+	}
+	return nil
+}
+
+// UpdateVendorContractRequest represents payload to update contract terms
+type UpdateVendorContractRequest struct {
+	Title               *string    `json:"title,omitempty"`
+	ContractType        *string    `json:"contract_type,omitempty"`
+	Status              *string    `json:"status,omitempty"`
+	TotalValue          *float64   `json:"total_value,omitempty"`
+	AnnualRecurringCost *float64   `json:"annual_recurring_cost,omitempty"`
+	Currency            *string    `json:"currency,omitempty"`
+	StartDate           *time.Time `json:"start_date,omitempty"`
+	EndDate             *time.Time `json:"end_date,omitempty"`
+	AutoRenew           *bool      `json:"auto_renew,omitempty"`
+	RenewalNoticeDays   *int       `json:"renewal_notice_days,omitempty"`
+	OwnerUserID         *string    `json:"owner_user_id,omitempty"`
+	PaymentTerms        *string    `json:"payment_terms,omitempty"`
+	DocumentURL         *string    `json:"document_url,omitempty"`
+	Notes               *string    `json:"notes,omitempty"`
+}
