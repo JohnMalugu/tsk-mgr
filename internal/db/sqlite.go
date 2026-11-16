@@ -2459,6 +2459,23 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	vendorCILinksQuery := `
+	CREATE TABLE IF NOT EXISTS vendor_ci_links (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		vendor_id INTEGER NOT NULL,
+		ci_id INTEGER NOT NULL,
+		relationship TEXT NOT NULL DEFAULT 'provides',
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE,
+		FOREIGN KEY (ci_id) REFERENCES configuration_items(id) ON DELETE CASCADE,
+		UNIQUE(vendor_id, ci_id)
+	);`
+
+	_, err = db.Exec(vendorCILinksQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
