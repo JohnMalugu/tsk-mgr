@@ -15,7 +15,7 @@ var (
 	ErrVendorNotFound            = model.ErrVendorNotFound
 	ErrVendorSlugConflict        = model.ErrVendorSlugConflict
 	ErrContractNotFound          = model.ErrContractNotFound
-	ErrContractNumberConflict     = model.ErrContractNumberConflict
+	ErrContractNumberConflict    = model.ErrContractNumberConflict
 	ErrEvaluationNotFound        = model.ErrEvaluationNotFound
 	ErrContractMilestoneNotFound = model.ErrMilestoneNotFound
 	ErrVendorCILinkNotFound      = model.ErrVendorCILinkNotFound

@@ -42,10 +42,10 @@ const (
 )
 
 var (
-	ErrVendorNotFound       = errors.New("vendor not found")
-	ErrVendorNameRequired   = errors.New("vendor name is required")
-	ErrVendorSlugRequired   = errors.New("vendor slug is required")
-	ErrVendorSlugConflict   = errors.New("vendor slug already exists")
+	ErrVendorNotFound        = errors.New("vendor not found")
+	ErrVendorNameRequired    = errors.New("vendor name is required")
+	ErrVendorSlugRequired    = errors.New("vendor slug is required")
+	ErrVendorSlugConflict    = errors.New("vendor slug already exists")
 	ErrInvalidVendorCategory = errors.New("invalid vendor category")
 	ErrInvalidVendorTier     = errors.New("invalid vendor tier")
 	ErrInvalidVendorStatus   = errors.New("invalid vendor status")
@@ -141,12 +141,12 @@ const (
 
 var (
 	ErrContractNotFound       = errors.New("vendor contract not found")
-	ErrContractTitleRequired   = errors.New("contract title is required")
-	ErrContractNumberRequired  = errors.New("contract number is required")
-	ErrInvalidContractType     = errors.New("invalid contract type")
-	ErrInvalidContractStatus   = errors.New("invalid contract status")
-	ErrInvalidContractDates    = errors.New("contract end date must be after start date")
-	ErrContractNumberConflict  = errors.New("contract number already exists")
+	ErrContractTitleRequired  = errors.New("contract title is required")
+	ErrContractNumberRequired = errors.New("contract number is required")
+	ErrInvalidContractType    = errors.New("invalid contract type")
+	ErrInvalidContractStatus  = errors.New("invalid contract status")
+	ErrInvalidContractDates   = errors.New("contract end date must be after start date")
+	ErrContractNumberConflict = errors.New("contract number already exists")
 )
 
 // ValidateContractType validates contract type
@@ -173,26 +173,26 @@ func ValidateContractStatus(s string) error {
 
 // VendorContract represents a formal contract, MSA, SOW, or agreement with a vendor
 type VendorContract struct {
-	ID                 int64     `json:"id"`
-	WorkspaceID        int64     `json:"workspace_id"`
-	VendorID           int64     `json:"vendor_id"`
-	ContractNumber     string    `json:"contract_number"`
-	Title              string    `json:"title"`
-	ContractType       string    `json:"contract_type"`
-	Status             string    `json:"status"`
-	TotalValue         float64   `json:"total_value"`
-	AnnualRecurringCost float64  `json:"annual_recurring_cost"`
-	Currency           string    `json:"currency"`
-	StartDate          time.Time `json:"start_date"`
-	EndDate            time.Time `json:"end_date"`
-	AutoRenew          bool      `json:"auto_renew"`
-	RenewalNoticeDays  int       `json:"renewal_notice_days"`
-	OwnerUserID        string    `json:"owner_user_id"`
-	PaymentTerms       string    `json:"payment_terms,omitempty"`
-	DocumentURL        string    `json:"document_url,omitempty"`
-	Notes              string    `json:"notes,omitempty"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	ID                  int64     `json:"id"`
+	WorkspaceID         int64     `json:"workspace_id"`
+	VendorID            int64     `json:"vendor_id"`
+	ContractNumber      string    `json:"contract_number"`
+	Title               string    `json:"title"`
+	ContractType        string    `json:"contract_type"`
+	Status              string    `json:"status"`
+	TotalValue          float64   `json:"total_value"`
+	AnnualRecurringCost float64   `json:"annual_recurring_cost"`
+	Currency            string    `json:"currency"`
+	StartDate           time.Time `json:"start_date"`
+	EndDate             time.Time `json:"end_date"`
+	AutoRenew           bool      `json:"auto_renew"`
+	RenewalNoticeDays   int       `json:"renewal_notice_days"`
+	OwnerUserID         string    `json:"owner_user_id"`
+	PaymentTerms        string    `json:"payment_terms,omitempty"`
+	DocumentURL         string    `json:"document_url,omitempty"`
+	Notes               string    `json:"notes,omitempty"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
 
 	// Enriched fields
 	VendorName          string `json:"vendor_name,omitempty"`
@@ -446,12 +446,12 @@ func (r *CreateVendorEvaluationRequest) Validate() error {
 
 // RenewContractRequest represents payload to extend and renew an existing contract
 type RenewContractRequest struct {
-	NewEndDate      time.Time `json:"new_end_date"`
-	NewTotalValue   *float64  `json:"new_total_value,omitempty"`
-	NewAnnualCost   *float64  `json:"new_annual_recurring_cost,omitempty"`
-	AutoRenew       *bool     `json:"auto_renew,omitempty"`
-	NoticeDays      *int      `json:"renewal_notice_days,omitempty"`
-	Notes           string    `json:"notes,omitempty"`
+	NewEndDate    time.Time `json:"new_end_date"`
+	NewTotalValue *float64  `json:"new_total_value,omitempty"`
+	NewAnnualCost *float64  `json:"new_annual_recurring_cost,omitempty"`
+	AutoRenew     *bool     `json:"auto_renew,omitempty"`
+	NoticeDays    *int      `json:"renewal_notice_days,omitempty"`
+	Notes         string    `json:"notes,omitempty"`
 }
 
 // Validate validates RenewContractRequest

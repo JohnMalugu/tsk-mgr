@@ -355,6 +355,20 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `POST /v2/assets/audit` to record a physical inventory barcode/asset tag audit scan with location tracking, audit status (`verified`, `misplaced`, `missing`), and audit notes
 - `GET /v2/assets/audit/logs?workspace_id={id}&asset_id={asset_id}` to retrieve physical inventory audit history and scan logs
 - `GET /v2/assets/metrics?workspace_id={id}` for IT Asset Management (ITAM) operational and financial analytics, total asset count, total initial purchase valuation, total estimated net book value, status and category breakdowns, upcoming warranty expirations in 30/90 days, software license count, total/allocated license seats, and software license utilization percentage
+- `GET|POST /v2/vendors` to list 3rd-party suppliers, service providers, and vendors (`workspace_id`, `category`, `tier`, `status`, `risk_level`, `search`, `limit`, `offset`) or onboard a new vendor with automated URL-safe slug derivation, risk ratings, security certifications, and contact directory
+- `GET|PUT|PATCH|DELETE /v2/vendors/{id}` to fetch vendor details (enriched with active contract count, total annual spend, and overall evaluation rating), update vendor attributes and tiering, or remove a vendor
+- `GET /v2/vendors/by-slug/{slug}?workspace_id={id}` for instant vendor lookup by URL-friendly slug
+- `GET|POST /v2/vendors/{id}/evaluations` to list vendor review history or record a periodic evaluation scorecard across quality, responsiveness, SLA compliance, and pricing dimensions with auto-calculated overall score
+- `DELETE /v2/vendors/evaluations/{id}` to delete a vendor evaluation record
+- `GET|POST /v2/vendors/{id}/ci-links` to inspect linked CMDB Configuration Items or associate a vendor with a configuration item (`provides`, `maintains`, `supports`, `licenses`)
+- `DELETE /v2/vendors/{id}/ci-links/{ciId}` to unlink a vendor from a CMDB Configuration Item
+- `GET /v2/vendors/metrics?workspace_id={id}` for ITIL Supplier & Contract Management analytics, total vendors, active contracts, total annual recurring spend, tier and category breakdowns, risk distribution, average supplier evaluation rating, and top spend vendors
+- `GET|POST /v2/contracts` to list vendor contracts (`workspace_id`, `vendor_id`, `contract_type`, `status`, `expiring_within_days`, `search`, `limit`, `offset`) or register a new contract with auto-generated contract numbers (`CTR-0001`), payment terms, renewal notice alerts, and auto-renew tracking
+- `GET|PUT|PATCH|DELETE /v2/contracts/{id}` to fetch contract details (enriched with vendor profile, milestone counts, and days until expiration), modify contract terms, or archive/delete a contract
+- `GET /v2/contracts/by-number/{number}?workspace_id={id}` for instant contract lookup by contract number
+- `POST /v2/contracts/{id}/renew` to execute a contract renewal or term extension with updated end date, recurring costs, and automatic active status renewal
+- `GET|POST /v2/contracts/{id}/milestones` to list contract milestones or record a deliverable phase/payment release milestone with due date and amount
+- `GET|PUT|PATCH|DELETE /v2/contracts/milestones/{id}` to fetch milestone details, update status (`pending`, `completed`, `cancelled`) with automatic completion timestamping, or remove a milestone
 
 ## Current limitations
 
