@@ -413,3 +413,100 @@ type UpdateVendorContractRequest struct {
 	DocumentURL         *string    `json:"document_url,omitempty"`
 	Notes               *string    `json:"notes,omitempty"`
 }
+
+// CreateVendorEvaluationRequest represents payload to submit a vendor review scorecard
+type CreateVendorEvaluationRequest struct {
+	EvaluationPeriod    string  `json:"evaluation_period"`
+	QualityScore        float64 `json:"quality_score"`
+	ResponsivenessScore float64 `json:"responsiveness_score"`
+	SLAScore            float64 `json:"sla_score"`
+	PricingScore        float64 `json:"pricing_score"`
+	Feedback            string  `json:"feedback,omitempty"`
+}
+
+// Validate validates CreateVendorEvaluationRequest
+func (r *CreateVendorEvaluationRequest) Validate() error {
+	if strings.TrimSpace(r.EvaluationPeriod) == "" {
+		return errors.New("evaluation period is required")
+	}
+	if err := ValidateScore(r.QualityScore); err != nil {
+		return err
+	}
+	if err := ValidateScore(r.ResponsivenessScore); err != nil {
+		return err
+	}
+	if err := ValidateScore(r.SLAScore); err != nil {
+		return err
+	}
+	if err := ValidateScore(r.PricingScore); err != nil {
+		return err
+	}
+	return nil
+}
+
+// RenewContractRequest represents payload to extend and renew an existing contract
+type RenewContractRequest struct {
+	NewEndDate      time.Time `json:"new_end_date"`
+	NewTotalValue   *float64  `json:"new_total_value,omitempty"`
+	NewAnnualCost   *float64  `json:"new_annual_recurring_cost,omitempty"`
+	AutoRenew       *bool     `json:"auto_renew,omitempty"`
+	NoticeDays      *int      `json:"renewal_notice_days,omitempty"`
+	Notes           string    `json:"notes,omitempty"`
+}
+
+// Validate validates RenewContractRequest
+func (r *RenewContractRequest) Validate() error {
+	if r.NewEndDate.IsZero() {
+		return errors.New("new end date is required")
+	}
+	return nil
+}
+
+// CreateContractMilestoneRequest represents payload to add a milestone to a contract
+type CreateContractMilestoneRequest struct {
+	Title       string    `json:"title"`
+	Description string    `json:"description,omitempty"`
+	DueDate     time.Time `json:"due_date"`
+	Amount      float64   `json:"amount,omitempty"`
+	Status      string    `json:"status,omitempty"`
+}
+
+// Validate validates CreateContractMilestoneRequest
+func (r *CreateContractMilestoneRequest) Validate() error {
+	if strings.TrimSpace(r.Title) == "" {
+		return errors.New("milestone title is required")
+	}
+	if r.DueDate.IsZero() {
+		return errors.New("milestone due date is required")
+	}
+	if r.Status != "" {
+		if err := ValidateMilestoneStatus(r.Status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// UpdateContractMilestoneRequest represents payload to modify milestone progress
+type UpdateContractMilestoneRequest struct {
+	Title       *string    `json:"title,omitempty"`
+	Description *string    `json:"description,omitempty"`
+	DueDate     *time.Time `json:"due_date,omitempty"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	Amount      *float64   `json:"amount,omitempty"`
+	Status      *string    `json:"status,omitempty"`
+}
+
+// LinkVendorCIRequest represents payload to associate a vendor with a CMDB CI
+type LinkVendorCIRequest struct {
+	CIID         int64  `json:"ci_id"`
+	Relationship string `json:"relationship,omitempty"`
+}
+
+// Validate validates LinkVendorCIRequest
+func (r *LinkVendorCIRequest) Validate() error {
+	if r.CIID <= 0 {
+		return errors.New("valid configuration item ID is required")
+	}
+	return nil
+}
