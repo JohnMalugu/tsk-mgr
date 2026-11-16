@@ -84,8 +84,6 @@ func NewVendorService(repo repository.VendorRepository) VendorService {
 	return &vendorService{repo: repo}
 }
 
-var errVndNotImplemented = errors.New("not implemented")
-
 func (s *vendorService) CreateVendor(ctx context.Context, req *model.CreateVendorRequest) (*model.Vendor, error) {
 	if req == nil {
 		return nil, ErrVendorNameRequired
@@ -630,14 +628,50 @@ func (s *vendorService) ListMilestones(ctx context.Context, contractID int64) ([
 	return s.repo.ListMilestones(ctx, contractID)
 }
 func (s *vendorService) LinkCI(ctx context.Context, vendorID int64, req *model.LinkVendorCIRequest) (*model.VendorCILink, error) {
-	return nil, errVndNotImplemented
+	if vendorID <= 0 {
+		return nil, ErrVendorNotFound
+	}
+	if _, err := s.repo.GetVendorByID(ctx, vendorID); err != nil {
+		return nil, err
+	}
+	if req == nil || req.CIID <= 0 {
+		return nil, errors.New("ci_id is required")
+	}
+
+	rel := strings.ToLower(strings.TrimSpace(req.Relationship))
+	if rel == "" {
+		rel = model.VendorCIRelProvides
+	}
+
+	link := &model.VendorCILink{
+		VendorID:     vendorID,
+		CIID:         req.CIID,
+		Relationship: rel,
+	}
+
+	if err := s.repo.LinkCI(ctx, link); err != nil {
+		return nil, err
+	}
+	return link, nil
 }
+
 func (s *vendorService) UnlinkCI(ctx context.Context, vendorID, ciID int64) error {
-	return errVndNotImplemented
+	if vendorID <= 0 {
+		return ErrVendorNotFound
+	}
+	if ciID <= 0 {
+		return ErrVendorCILinkNotFound
+	}
+	return s.repo.UnlinkCI(ctx, vendorID, ciID)
 }
+
 func (s *vendorService) ListCILinks(ctx context.Context, vendorID int64) ([]model.VendorCILink, error) {
-	return nil, errVndNotImplemented
+	if vendorID <= 0 {
+		return nil, ErrVendorNotFound
+	}
+	return s.repo.ListCILinks(ctx, vendorID)
 }
+
 func (s *vendorService) GetVendorMetrics(ctx context.Context, workspaceID int64) (*model.VendorMetrics, error) {
-	return nil, errVndNotImplemented
+	return s.repo.GetVendorMetrics(ctx, workspaceID)
 }
