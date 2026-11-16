@@ -2417,6 +2417,28 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	vendorEvaluationsQuery := `
+	CREATE TABLE IF NOT EXISTS vendor_evaluations (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		vendor_id INTEGER NOT NULL,
+		evaluator_id TEXT NOT NULL,
+		evaluation_period TEXT NOT NULL,
+		quality_score REAL NOT NULL DEFAULT 5.0,
+		responsiveness_score REAL NOT NULL DEFAULT 5.0,
+		sla_score REAL NOT NULL DEFAULT 5.0,
+		pricing_score REAL NOT NULL DEFAULT 5.0,
+		overall_score REAL NOT NULL DEFAULT 5.0,
+		feedback TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE,
+		FOREIGN KEY (evaluator_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(vendorEvaluationsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
