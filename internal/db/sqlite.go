@@ -2385,6 +2385,38 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	vendorContractsQuery := `
+	CREATE TABLE IF NOT EXISTS vendor_contracts (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		vendor_id INTEGER NOT NULL,
+		contract_number TEXT NOT NULL,
+		title TEXT NOT NULL,
+		contract_type TEXT NOT NULL DEFAULT 'msa',
+		status TEXT NOT NULL DEFAULT 'active',
+		total_value REAL NOT NULL DEFAULT 0.0,
+		annual_recurring_cost REAL NOT NULL DEFAULT 0.0,
+		currency TEXT NOT NULL DEFAULT 'USD',
+		start_date DATETIME NOT NULL,
+		end_date DATETIME NOT NULL,
+		auto_renew INTEGER NOT NULL DEFAULT 0,
+		renewal_notice_days INTEGER NOT NULL DEFAULT 30,
+		owner_user_id TEXT NOT NULL,
+		payment_terms TEXT NOT NULL DEFAULT '',
+		document_url TEXT NOT NULL DEFAULT '',
+		notes TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE,
+		FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(vendorContractsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
