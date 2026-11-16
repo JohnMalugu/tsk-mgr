@@ -286,29 +286,318 @@ func (r *sqlVendorRepository) ListVendors(ctx context.Context, filter model.Vend
 	}
 	return vendors, total, rows.Err()
 }
+func (r *sqlVendorRepository) scanContract(row interface{ Scan(...any) error }) (*model.VendorContract, error) {
+	var c model.VendorContract
+	var autoRenewInt int
+	var vendorName, ownerUserName sql.NullString
+	var milestonesCount sql.NullInt64
+
+	err := row.Scan(
+		&c.ID,
+		&c.WorkspaceID,
+		&c.VendorID,
+		&c.ContractNumber,
+		&c.Title,
+		&c.ContractType,
+		&c.Status,
+		&c.TotalValue,
+		&c.AnnualRecurringCost,
+		&c.Currency,
+		&c.StartDate,
+		&c.EndDate,
+		&autoRenewInt,
+		&c.RenewalNoticeDays,
+		&c.OwnerUserID,
+		&c.PaymentTerms,
+		&c.DocumentURL,
+		&c.Notes,
+		&c.CreatedAt,
+		&c.UpdatedAt,
+		&vendorName,
+		&ownerUserName,
+		&milestonesCount,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrContractNotFound
+		}
+		return nil, err
+	}
+	c.AutoRenew = (autoRenewInt == 1)
+	if vendorName.Valid {
+		c.VendorName = vendorName.String
+	}
+	if ownerUserName.Valid {
+		c.OwnerUserName = ownerUserName.String
+	}
+	if milestonesCount.Valid {
+		c.MilestonesCount = int(milestonesCount.Int64)
+	}
+
+	now := time.Now().UTC()
+	days := int(c.EndDate.Sub(now).Hours() / 24)
+	c.DaysUntilExpiration = days
+
+	return &c, nil
+}
+
+const contractSelectFields = `
+	c.id, c.workspace_id, c.vendor_id, c.contract_number, c.title, c.contract_type,
+	c.status, c.total_value, c.annual_recurring_cost, c.currency, c.start_date, c.end_date,
+	c.auto_renew, c.renewal_notice_days, c.owner_user_id, c.payment_terms, c.document_url,
+	c.notes, c.created_at, c.updated_at,
+	COALESCE(v.name, '') AS vendor_name,
+	COALESCE(u.username, '') AS owner_user_name,
+	(SELECT COUNT(*) FROM contract_milestones m WHERE m.contract_id = c.id) AS milestones_count
+`
+
+const contractFromClause = `
+	FROM vendor_contracts c
+	JOIN vendors v ON c.vendor_id = v.id
+	LEFT JOIN users u ON c.owner_user_id = u.id
+`
+
 func (r *sqlVendorRepository) CreateContract(ctx context.Context, contract *model.VendorContract) error {
-	return errVendorNotImplemented
+	now := time.Now().UTC()
+	contract.CreatedAt = now
+	contract.UpdatedAt = now
+
+	// Check contract number uniqueness
+	var count int
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM vendor_contracts WHERE workspace_id = ? AND contract_number = ?", contract.WorkspaceID, contract.ContractNumber).Scan(&count)
+	if count > 0 {
+		return ErrContractNumberConflict
+	}
+
+	autoRenewInt := 0
+	if contract.AutoRenew {
+		autoRenewInt = 1
+	}
+
+	query := `
+	INSERT INTO vendor_contracts (
+		workspace_id, vendor_id, contract_number, title, contract_type, status,
+		total_value, annual_recurring_cost, currency, start_date, end_date,
+		auto_renew, renewal_notice_days, owner_user_id, payment_terms, document_url,
+		notes, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
+
+	res, err := r.db.ExecContext(ctx, query,
+		contract.WorkspaceID, contract.VendorID, contract.ContractNumber, contract.Title, contract.ContractType, contract.Status,
+		contract.TotalValue, contract.AnnualRecurringCost, contract.Currency, contract.StartDate, contract.EndDate,
+		autoRenewInt, contract.RenewalNoticeDays, contract.OwnerUserID, contract.PaymentTerms, contract.DocumentURL,
+		contract.Notes, contract.CreatedAt, contract.UpdatedAt,
+	)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "constraint") {
+			return ErrContractNumberConflict
+		}
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	contract.ID = id
+	return nil
 }
+
 func (r *sqlVendorRepository) GetContractByID(ctx context.Context, id int64) (*model.VendorContract, error) {
-	return nil, errVendorNotImplemented
+	query := fmt.Sprintf("SELECT %s %s WHERE c.id = ?", contractSelectFields, contractFromClause)
+	return r.scanContract(r.db.QueryRowContext(ctx, query, id))
 }
+
 func (r *sqlVendorRepository) GetContractByNumber(ctx context.Context, workspaceID int64, contractNumber string) (*model.VendorContract, error) {
-	return nil, errVendorNotImplemented
+	query := fmt.Sprintf("SELECT %s %s WHERE c.workspace_id = ? AND c.contract_number = ?", contractSelectFields, contractFromClause)
+	return r.scanContract(r.db.QueryRowContext(ctx, query, workspaceID, contractNumber))
 }
+
 func (r *sqlVendorRepository) UpdateContract(ctx context.Context, contract *model.VendorContract) error {
-	return errVendorNotImplemented
+	contract.UpdatedAt = time.Now().UTC()
+	autoRenewInt := 0
+	if contract.AutoRenew {
+		autoRenewInt = 1
+	}
+
+	query := `
+	UPDATE vendor_contracts SET
+		title = ?, contract_type = ?, status = ?, total_value = ?,
+		annual_recurring_cost = ?, currency = ?, start_date = ?, end_date = ?,
+		auto_renew = ?, renewal_notice_days = ?, owner_user_id = ?,
+		payment_terms = ?, document_url = ?, notes = ?, updated_at = ?
+	WHERE id = ?;`
+
+	res, err := r.db.ExecContext(ctx, query,
+		contract.Title, contract.ContractType, contract.Status, contract.TotalValue,
+		contract.AnnualRecurringCost, contract.Currency, contract.StartDate, contract.EndDate,
+		autoRenewInt, contract.RenewalNoticeDays, contract.OwnerUserID,
+		contract.PaymentTerms, contract.DocumentURL, contract.Notes, contract.UpdatedAt, contract.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrContractNotFound
+	}
+	return nil
 }
+
 func (r *sqlVendorRepository) DeleteContract(ctx context.Context, id int64) error {
-	return errVendorNotImplemented
+	res, err := r.db.ExecContext(ctx, "DELETE FROM vendor_contracts WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrContractNotFound
+	}
+	return nil
 }
+
 func (r *sqlVendorRepository) ListContracts(ctx context.Context, filter model.ContractFilterCriteria) ([]model.VendorContract, int, error) {
-	return nil, 0, errVendorNotImplemented
+	var whereClauses []string
+	var args []interface{}
+
+	if filter.WorkspaceID > 0 {
+		whereClauses = append(whereClauses, "c.workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.VendorID > 0 {
+		whereClauses = append(whereClauses, "c.vendor_id = ?")
+		args = append(args, filter.VendorID)
+	}
+	if filter.ContractType != "" {
+		whereClauses = append(whereClauses, "c.contract_type = ?")
+		args = append(args, filter.ContractType)
+	}
+	if filter.Status != "" {
+		whereClauses = append(whereClauses, "c.status = ?")
+		args = append(args, filter.Status)
+	}
+	if filter.OwnerUserID != "" {
+		whereClauses = append(whereClauses, "c.owner_user_id = ?")
+		args = append(args, filter.OwnerUserID)
+	}
+	if filter.Search != "" {
+		searchPattern := "%" + filter.Search + "%"
+		whereClauses = append(whereClauses, "(c.title LIKE ? OR c.contract_number LIKE ? OR v.name LIKE ?)")
+		args = append(args, searchPattern, searchPattern, searchPattern)
+	}
+	if filter.ExpiringDays != nil && *filter.ExpiringDays > 0 {
+		now := time.Now().UTC()
+		future := now.AddDate(0, 0, *filter.ExpiringDays)
+		whereClauses = append(whereClauses, "c.end_date >= ? AND c.end_date <= ?")
+		args = append(args, now, future)
+	}
+
+	whereSQL := ""
+	if len(whereClauses) > 0 {
+		whereSQL = "WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) %s %s", contractFromClause, whereSQL)
+	var total int
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	query := fmt.Sprintf("SELECT %s %s %s ORDER BY c.id DESC", contractSelectFields, contractFromClause, whereSQL)
+	if filter.Limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", filter.Limit)
+		if filter.Offset > 0 {
+			query += fmt.Sprintf(" OFFSET %d", filter.Offset)
+		}
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var contracts []model.VendorContract
+	for rows.Next() {
+		c, err := r.scanContract(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		contracts = append(contracts, *c)
+	}
+	return contracts, total, rows.Err()
 }
+
 func (r *sqlVendorRepository) RenewContract(ctx context.Context, id int64, newEndDate time.Time, newTotalVal, newAnnualCost *float64, autoRenew *bool, noticeDays *int, notes string) error {
-	return errVendorNotImplemented
+	now := time.Now().UTC()
+
+	query := `
+	UPDATE vendor_contracts SET
+		end_date = ?,
+		status = 'active',
+		total_value = CASE WHEN ? >= 0.0 THEN ? ELSE total_value END,
+		annual_recurring_cost = CASE WHEN ? >= 0.0 THEN ? ELSE annual_recurring_cost END,
+		auto_renew = CASE WHEN ? >= 0 THEN ? ELSE auto_renew END,
+		renewal_notice_days = CASE WHEN ? > 0 THEN ? ELSE renewal_notice_days END,
+		notes = CASE WHEN ? != '' THEN ? ELSE notes END,
+		updated_at = ?
+	WHERE id = ?;`
+
+	valParam := -1.0
+	if newTotalVal != nil {
+		valParam = *newTotalVal
+	}
+	costParam := -1.0
+	if newAnnualCost != nil {
+		costParam = *newAnnualCost
+	}
+	autoRenewParam := -1
+	if autoRenew != nil {
+		if *autoRenew {
+			autoRenewParam = 1
+		} else {
+			autoRenewParam = 0
+		}
+	}
+	noticeParam := -1
+	if noticeDays != nil {
+		noticeParam = *noticeDays
+	}
+
+	res, err := r.db.ExecContext(ctx, query,
+		newEndDate,
+		valParam, valParam,
+		costParam, costParam,
+		autoRenewParam, autoRenewParam,
+		noticeParam, noticeParam,
+		notes, notes,
+		now, id,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrContractNotFound
+	}
+	return nil
 }
+
 func (r *sqlVendorRepository) GetNextContractNumberSequence(ctx context.Context, workspaceID int64) (int, error) {
-	return 0, errVendorNotImplemented
+	var count int
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM vendor_contracts WHERE workspace_id = ?", workspaceID).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count + 1, nil
 }
 func (r *sqlVendorRepository) CreateEvaluation(ctx context.Context, eval *model.VendorEvaluation) error {
 	return errVendorNotImplemented
