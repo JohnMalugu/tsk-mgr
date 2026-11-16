@@ -2717,6 +2717,16 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_license_alloc_user ON license_allocations(user_id);
 	CREATE INDEX IF NOT EXISTS idx_it_asset_audits_ws ON it_asset_audits(workspace_id, scanned_at);
 	CREATE INDEX IF NOT EXISTS idx_it_asset_audits_asset ON it_asset_audits(asset_id, audit_status);
+	CREATE INDEX IF NOT EXISTS idx_vendors_ws_slug ON vendors(workspace_id, slug);
+	CREATE INDEX IF NOT EXISTS idx_vendors_ws_status ON vendors(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_vendors_ws_tier ON vendors(workspace_id, tier);
+	CREATE INDEX IF NOT EXISTS idx_vendor_contracts_ws_num ON vendor_contracts(workspace_id, contract_number);
+	CREATE INDEX IF NOT EXISTS idx_vendor_contracts_vendor ON vendor_contracts(vendor_id, status);
+	CREATE INDEX IF NOT EXISTS idx_vendor_contracts_dates ON vendor_contracts(start_date, end_date);
+	CREATE INDEX IF NOT EXISTS idx_vendor_eval_vendor_period ON vendor_evaluations(vendor_id, evaluation_period);
+	CREATE INDEX IF NOT EXISTS idx_contract_milestones_contract ON contract_milestones(contract_id, status);
+	CREATE INDEX IF NOT EXISTS idx_vendor_ci_links_vendor ON vendor_ci_links(vendor_id);
+	CREATE INDEX IF NOT EXISTS idx_vendor_ci_links_ci ON vendor_ci_links(ci_id);
 	`
 
 	_, err = db.Exec(indexQuery)
