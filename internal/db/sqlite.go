@@ -2476,6 +2476,33 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	vulnerabilitiesQuery := `
+	CREATE TABLE IF NOT EXISTS vulnerabilities (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		cve_id TEXT NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		severity TEXT NOT NULL DEFAULT 'medium',
+		cvss_score REAL NOT NULL DEFAULT 0.0,
+		cvss_vector TEXT NOT NULL DEFAULT '',
+		affected_package TEXT NOT NULL DEFAULT '',
+		affected_versions TEXT NOT NULL DEFAULT '',
+		patched_versions TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'active',
+		source TEXT NOT NULL DEFAULT '',
+		reference_urls TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		UNIQUE(workspace_id, cve_id)
+	);`
+
+	_, err = db.Exec(vulnerabilitiesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
