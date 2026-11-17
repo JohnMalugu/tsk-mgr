@@ -2555,6 +2555,47 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	patchCampaignsQuery := `
+	CREATE TABLE IF NOT EXISTS patch_campaigns (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		patch_id INTEGER NOT NULL,
+		name TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		target_environment TEXT NOT NULL DEFAULT 'production',
+		status TEXT NOT NULL DEFAULT 'planned',
+		scheduled_start DATETIME NOT NULL,
+		scheduled_end DATETIME NOT NULL,
+		owner_user_id TEXT NOT NULL DEFAULT '',
+		total_targets INTEGER NOT NULL DEFAULT 0,
+		successful_targets INTEGER NOT NULL DEFAULT 0,
+		failed_targets INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (patch_id) REFERENCES patches(id) ON DELETE CASCADE
+	);
+
+	CREATE TABLE IF NOT EXISTS patch_campaign_targets (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		campaign_id INTEGER NOT NULL,
+		ci_id INTEGER,
+		asset_id INTEGER,
+		status TEXT NOT NULL DEFAULT 'pending',
+		installed_at DATETIME,
+		error_message TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (campaign_id) REFERENCES patch_campaigns(id) ON DELETE CASCADE,
+		FOREIGN KEY (ci_id) REFERENCES configuration_items(id) ON DELETE CASCADE,
+		FOREIGN KEY (asset_id) REFERENCES it_assets(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(patchCampaignsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
