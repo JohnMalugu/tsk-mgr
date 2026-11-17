@@ -369,6 +369,21 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `POST /v2/contracts/{id}/renew` to execute a contract renewal or term extension with updated end date, recurring costs, and automatic active status renewal
 - `GET|POST /v2/contracts/{id}/milestones` to list contract milestones or record a deliverable phase/payment release milestone with due date and amount
 - `GET|PUT|PATCH|DELETE /v2/contracts/milestones/{id}` to fetch milestone details, update status (`pending`, `completed`, `cancelled`) with automatic completion timestamping, or remove a milestone
+- `GET|POST /v2/vulnerabilities` to list CVE security catalog vulnerabilities (`workspace_id`, `severity`, `status`, `min_cvss`, `search`, `limit`, `offset`) or catalog a new vulnerability with automated CVSS v3.1 qualitative severity scoring and affected package specifications
+- `GET|PUT|PATCH|DELETE /v2/vulnerabilities/{id}` to fetch vulnerability details (enriched with active and total finding counts), update advisory properties, or delete a vulnerability entry
+- `GET /v2/vulnerabilities/by-cve/{cveID}?workspace_id={id}` for instant vulnerability lookup by CVE identifier
+- `GET|POST /v2/vulnerabilities/findings` to list vulnerability occurrences across CMDB Configuration Items and IT Assets (`status`, `severity`, `ci_id`, `asset_id`, `assigned_user_id`, `only_sla_breached`) or register a new finding with automated remediation SLA deadline calculation (Critical: 7 days, High: 14 days, Medium: 30 days, Low: 90 days)
+- `GET|PUT|PATCH|DELETE /v2/vulnerabilities/findings/{id}` to fetch finding details (enriched with SLA breach status and days overdue), triage or transition status (`detected`, `triaged`, `in_remediation`, `patched`, `risk_accepted`, `false_positive`), or remove a finding
+- `GET|POST /v2/vulnerabilities/exceptions` to list risk acceptance waivers or request a risk exception with justification (`compensating_control`, `vendor_fix_pending`, `legacy_system`, `low_business_impact`) and future expiration date
+- `GET|DELETE /v2/vulnerabilities/exceptions/{id}` to fetch exception details or revoke an existing waiver
+- `POST /v2/vulnerabilities/exceptions/{id}/review` for security administrators to review (`approved`, `rejected`, `revoked`) risk exceptions with automated finding status synchronization
+- `GET /v2/vulnerabilities/metrics?workspace_id={id}` for SecOps vulnerability posture analytics, total/active findings, severity and status breakdowns, mean time to remediate (MTTR) days, patch compliance rate percentage, and top vulnerable targets
+- `GET|POST /v2/patches` to list software security updates and vendor patches (`workspace_id`, `vendor`, `severity`, `status`, `search`, `limit`, `offset`) or catalog a new patch package with reboot requirements and release dates
+- `GET|PUT|PATCH|DELETE /v2/patches/{id}` to fetch patch details, update metadata, or delete a patch
+- `GET|POST /v2/patches/campaigns` to list patch campaigns (`workspace_id`, `patch_id`, `status`, `target_environment`) or schedule a new multi-target rollout campaign across CIs and Assets
+- `GET|PUT|PATCH|DELETE /v2/patches/campaigns/{id}` to inspect campaign progress (total, successful, failed targets), update execution schedules, or cancel a campaign
+- `GET /v2/patches/campaigns/{id}/targets` to inspect deployment status across all targeted Configuration Items and hardware Assets
+- `PUT|PATCH /v2/patches/targets/{id}` to update rollout status on a target (`installed`, `failed`, `skipped`) with error logging and automated campaign metrics recalculation
 
 ## Current limitations
 
