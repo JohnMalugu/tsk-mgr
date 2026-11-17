@@ -2503,6 +2503,33 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	vulnerabilityFindingsQuery := `
+	CREATE TABLE IF NOT EXISTS vulnerability_findings (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		vulnerability_id INTEGER NOT NULL,
+		ci_id INTEGER,
+		asset_id INTEGER,
+		status TEXT NOT NULL DEFAULT 'detected',
+		detection_source TEXT NOT NULL DEFAULT 'sast',
+		detection_location TEXT NOT NULL DEFAULT '',
+		assigned_user_id TEXT NOT NULL DEFAULT '',
+		remediation_deadline DATETIME NOT NULL,
+		remediated_at DATETIME,
+		remediation_notes TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (vulnerability_id) REFERENCES vulnerabilities(id) ON DELETE CASCADE,
+		FOREIGN KEY (ci_id) REFERENCES configuration_items(id) ON DELETE SET NULL,
+		FOREIGN KEY (asset_id) REFERENCES it_assets(id) ON DELETE SET NULL
+	);`
+
+	_, err = db.Exec(vulnerabilityFindingsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
