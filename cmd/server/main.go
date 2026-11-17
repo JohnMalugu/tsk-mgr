@@ -179,6 +179,10 @@ func main() {
 	vendorSvc := service.NewVendorService(vendorRepo)
 	handler.InitVendorHandler(vendorSvc)
 
+	vulnerabilityRepo := repository.NewVulnerabilityRepository(sqliteDB)
+	vulnerabilitySvc := service.NewVulnerabilityService(vulnerabilityRepo)
+	handler.InitVulnerabilityHandler(vulnerabilitySvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
@@ -207,6 +211,11 @@ func main() {
 	fmt.Printf("   GET    http://localhost:8080/v2/vendors?workspace_id={id}\n")
 	fmt.Printf("   GET    http://localhost:8080/v2/vendors/metrics?workspace_id={id}\n")
 	fmt.Printf("   GET    http://localhost:8080/v2/contracts?workspace_id={id}\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/vulnerabilities?workspace_id={id}\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/vulnerabilities/findings?workspace_id={id}\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/vulnerabilities/metrics?workspace_id={id}\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/patches?workspace_id={id}\n")
+	fmt.Printf("   GET    http://localhost:8080/v2/patches/campaigns?workspace_id={id}\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/ready\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/blocked\n")
 	fmt.Printf("   GET    http://localhost:8080/tasks/upcoming?days=7\n")
