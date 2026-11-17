@@ -241,6 +241,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 Security Vulnerability & Patch Management System
+	if strings.HasPrefix(r.URL.Path, "/v2/vulnerabilities") || strings.HasPrefix(r.URL.Path, "/v2/patches") {
+		if handler.GlobalVulnerabilityHandler == nil {
+			http.Error(w, "Vulnerability handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalVulnerabilityHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return
