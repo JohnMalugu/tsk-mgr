@@ -2871,6 +2871,22 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_contract_milestones_contract ON contract_milestones(contract_id, status);
 	CREATE INDEX IF NOT EXISTS idx_vendor_ci_links_vendor ON vendor_ci_links(vendor_id);
 	CREATE INDEX IF NOT EXISTS idx_vendor_ci_links_ci ON vendor_ci_links(ci_id);
+	CREATE INDEX IF NOT EXISTS idx_vuln_ws_cve ON vulnerabilities(workspace_id, cve_id);
+	CREATE INDEX IF NOT EXISTS idx_vuln_ws_severity ON vulnerabilities(workspace_id, severity);
+	CREATE INDEX IF NOT EXISTS idx_vuln_ws_status ON vulnerabilities(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_vuln_findings_ws_status ON vulnerability_findings(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_vuln_findings_vuln ON vulnerability_findings(vulnerability_id);
+	CREATE INDEX IF NOT EXISTS idx_vuln_findings_ci ON vulnerability_findings(ci_id);
+	CREATE INDEX IF NOT EXISTS idx_vuln_findings_asset ON vulnerability_findings(asset_id);
+	CREATE INDEX IF NOT EXISTS idx_vuln_findings_deadline ON vulnerability_findings(remediation_deadline);
+	CREATE INDEX IF NOT EXISTS idx_patches_ws_ident ON patches(workspace_id, patch_identifier);
+	CREATE INDEX IF NOT EXISTS idx_patches_ws_status ON patches(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_patch_campaigns_ws_status ON patch_campaigns(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_patch_campaigns_patch ON patch_campaigns(patch_id);
+	CREATE INDEX IF NOT EXISTS idx_patch_targets_campaign ON patch_campaign_targets(campaign_id, status);
+	CREATE INDEX IF NOT EXISTS idx_vuln_exceptions_ws_status ON vulnerability_exceptions(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_vuln_exceptions_finding ON vulnerability_exceptions(finding_id);
+	CREATE INDEX IF NOT EXISTS idx_vuln_exceptions_expiry ON vulnerability_exceptions(expires_at);
 	`
 
 	_, err = db.Exec(indexQuery)
