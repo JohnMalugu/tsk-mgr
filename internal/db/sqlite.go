@@ -2596,6 +2596,30 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	vulnerabilityExceptionsQuery := `
+	CREATE TABLE IF NOT EXISTS vulnerability_exceptions (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		finding_id INTEGER NOT NULL,
+		justification_type TEXT NOT NULL,
+		justification_details TEXT NOT NULL,
+		compensating_controls TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'pending',
+		requested_by_user_id TEXT NOT NULL,
+		approved_by_user_id TEXT NOT NULL DEFAULT '',
+		expires_at DATETIME NOT NULL,
+		review_notes TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+		FOREIGN KEY (finding_id) REFERENCES vulnerability_findings(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(vulnerabilityExceptionsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
