@@ -2530,6 +2530,31 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	patchesQuery := `
+	CREATE TABLE IF NOT EXISTS patches (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id INTEGER NOT NULL,
+		patch_identifier TEXT NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		vendor TEXT NOT NULL DEFAULT '',
+		affected_software TEXT NOT NULL DEFAULT '',
+		version TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'available',
+		severity TEXT NOT NULL DEFAULT 'medium',
+		reboot_required INTEGER NOT NULL DEFAULT 0,
+		release_date DATETIME NOT NULL,
+		download_url TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(patchesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
