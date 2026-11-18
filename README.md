@@ -384,6 +384,20 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET|PUT|PATCH|DELETE /v2/patches/campaigns/{id}` to inspect campaign progress (total, successful, failed targets), update execution schedules, or cancel a campaign
 - `GET /v2/patches/campaigns/{id}/targets` to inspect deployment status across all targeted Configuration Items and hardware Assets
 - `PUT|PATCH /v2/patches/targets/{id}` to update rollout status on a target (`installed`, `failed`, `skipped`) with error logging and automated campaign metrics recalculation
+- `GET|POST /v2/dr-plans` to list Disaster Recovery Plans (`workspace_id`, `recovery_tier`, `status`, `search`, `limit`, `offset`) or author a new DR plan (`tier_1_mission_critical`, `tier_2_business_critical`, `tier_3_operational`) with plan code, invocation criteria, document URLs, and coordinator assignments
+- `GET|PUT|DELETE /v2/dr-plans/{id}` to fetch DR plan details (with automatic version tracking), update scope and invocation criteria, or archive/delete a plan
+- `POST /v2/dr-plans/{id}/approve` to execute formal DR plan approval workflow and transition plan status to `approved`
+- `POST /v2/dr-plans/{id}/activate` to activate an approved disaster recovery plan into live operational state (`active`)
+- `GET|POST /v2/dr-plans/{id}/objectives` and `GET|POST /v2/continuity/objectives` to define and map Recovery Time Objectives (RTO in minutes) and Recovery Point Objectives (RPO in minutes) to Configuration Items and business services with target availability SLAs and data loss tolerances
+- `GET|PUT|DELETE /v2/continuity/objectives/{id}` to inspect, update, or remove an RTO/RPO recovery objective
+- `GET|POST /v2/dr-plans/{id}/bias` and `GET|POST /v2/continuity/bias` to record Business Impact Analyses (BIA) evaluating Maximum Tolerable Downtime (MTD minutes), financial loss rates ($/hr), operational severity (`negligible` to `catastrophic`), regulatory impact (`sanctions_possible`, `critical_breach`), and critical recovery windows
+- `GET|PUT|DELETE /v2/continuity/bias/{id}` to inspect, update, or remove a BIA assessment
+- `GET|POST /v2/dr-plans/{id}/runbooks` and `GET|PUT|DELETE /v2/continuity/runbooks/{id}` to author and maintain disaster recovery execution runbooks (`automated`, `manual`, `hybrid`) with step sequences and estimated durations
+- `GET|POST /v2/continuity/runbooks/{id}/steps` and `GET|PUT|DELETE /v2/continuity/runbook-steps/{id}` to configure sequential failover action steps (`infrastructure_failover`, `dns_cutover`, `data_restore`, `health_check`, `notification`, `manual_intervention`) mapped to execution roles (`incident_commander`, `database_admin`, `network_engineer`, `site_reliability_engineer`, `cloud_operator`) with fallback procedures
+- `GET|POST /v2/continuity/drills` to list and schedule disaster recovery exercises (`tabletop`, `walkthrough`, `simulation`, `full_failover`)
+- `GET|PUT|DELETE /v2/continuity/drills/{id}` to inspect drill details (including all identified gaps and post-exercise findings), update recovery duration and outcome success, or log post-mortem summaries
+- `GET|POST /v2/continuity/drills/{id}/findings` and `GET|PUT|DELETE /v2/continuity/findings/{id}` to log and track remediation items and gaps discovered during drills across process, tooling, documentation, and permissions with severity triage and resolution timestamps
+- `GET /v2/continuity/readiness?workspace_id={id}` for executive Business Continuity and IT Disaster Recovery posture analytics, total/active plans by tier, average RTO/RPO minutes, drill pass rate, RTO compliance percentage, open findings count by severity, and composite Readiness Index Score (0-100)
 
 ## Current limitations
 
