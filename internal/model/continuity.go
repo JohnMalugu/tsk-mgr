@@ -41,7 +41,70 @@ var (
 	ErrInvalidOperationalImpact = errors.New("invalid operational impact")
 	ErrInvalidRegulatoryImpact = errors.New("invalid regulatory impact")
 	ErrInvalidCriticalWindow   = errors.New("invalid critical recovery window")
+	ErrRunbookNotFound         = errors.New("recovery runbook not found")
+	ErrRunbookStepNotFound     = errors.New("runbook step not found")
+	ErrRunbookTitleRequired    = errors.New("runbook title is required")
+	ErrStepNameRequired        = errors.New("step name is required")
+	ErrInvalidExecutionMode    = errors.New("invalid runbook execution mode")
+	ErrInvalidActionType       = errors.New("invalid runbook step action type")
+	ErrInvalidExecutionRole    = errors.New("invalid runbook step execution role")
 )
+
+// Runbook Execution Mode constants
+const (
+	RunbookModeAutomated = "automated"
+	RunbookModeManual    = "manual"
+	RunbookModeHybrid    = "hybrid"
+)
+
+// Runbook Step Action Type constants
+const (
+	ActionInfraFailover       = "infrastructure_failover"
+	ActionDNSCutover          = "dns_cutover"
+	ActionDataRestore         = "data_restore"
+	ActionHealthCheck         = "health_check"
+	ActionNotification        = "notification"
+	ActionManualIntervention  = "manual_intervention"
+)
+
+// Runbook Step Execution Role constants
+const (
+	RoleIncidentCommander      = "incident_commander"
+	RoleDatabaseAdmin          = "database_admin"
+	RoleNetworkEngineer        = "network_engineer"
+	RoleSiteReliabilityEngineer = "site_reliability_engineer"
+	RoleCloudOperator          = "cloud_operator"
+)
+
+// ValidateExecutionMode checks whether execution mode is valid
+func ValidateExecutionMode(m string) error {
+	switch strings.ToLower(strings.TrimSpace(m)) {
+	case RunbookModeAutomated, RunbookModeManual, RunbookModeHybrid:
+		return nil
+	default:
+		return ErrInvalidExecutionMode
+	}
+}
+
+// ValidateActionType checks whether step action type is valid
+func ValidateActionType(a string) error {
+	switch strings.ToLower(strings.TrimSpace(a)) {
+	case ActionInfraFailover, ActionDNSCutover, ActionDataRestore, ActionHealthCheck, ActionNotification, ActionManualIntervention:
+		return nil
+	default:
+		return ErrInvalidActionType
+	}
+}
+
+// ValidateExecutionRole checks whether step execution role is valid
+func ValidateExecutionRole(r string) error {
+	switch strings.ToLower(strings.TrimSpace(r)) {
+	case RoleIncidentCommander, RoleDatabaseAdmin, RoleNetworkEngineer, RoleSiteReliabilityEngineer, RoleCloudOperator:
+		return nil
+	default:
+		return ErrInvalidExecutionRole
+	}
+}
 
 // Operational Impact constants
 const (
@@ -224,6 +287,64 @@ func (b *BusinessImpactAnalysis) Validate() error {
 		return err
 	}
 	if err := ValidateCriticalRecoveryWindow(b.CriticalRecoveryWindow); err != nil {
+		return err
+	}
+	return nil
+}
+
+// RecoveryRunbook defines an actionable execution procedure for disaster recovery
+type RecoveryRunbook struct {
+	ID                       string        `json:"id"`
+	WorkspaceID              string        `json:"workspace_id"`
+	PlanID                   string        `json:"plan_id"`
+	RunbookCode              string        `json:"runbook_code"`
+	Title                    string        `json:"title"`
+	Description              string        `json:"description"`
+	ExecutionMode            string        `json:"execution_mode"`
+	EstimatedDurationMinutes int           `json:"estimated_duration_minutes"`
+	Steps                    []RunbookStep `json:"steps,omitempty"`
+	CreatedAt                time.Time     `json:"created_at"`
+	UpdatedAt                time.Time     `json:"updated_at"`
+}
+
+// Validate validates the recovery runbook
+func (r *RecoveryRunbook) Validate() error {
+	if strings.TrimSpace(r.Title) == "" {
+		return ErrRunbookTitleRequired
+	}
+	if r.ExecutionMode != "" {
+		if err := ValidateExecutionMode(r.ExecutionMode); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RunbookStep represents an individual sequential procedure within a disaster recovery runbook
+type RunbookStep struct {
+	ID                       string    `json:"id"`
+	RunbookID                string    `json:"runbook_id"`
+	StepOrder                int       `json:"step_order"`
+	Name                     string    `json:"name"`
+	ActionType               string    `json:"action_type"`
+	ExecutionRole            string    `json:"execution_role"`
+	CommandOrScript          string    `json:"command_or_script"`
+	EstimatedDurationMinutes int       `json:"estimated_duration_minutes"`
+	IsCritical               bool      `json:"is_critical"`
+	FallbackProcedure        string    `json:"fallback_procedure"`
+	CreatedAt                time.Time `json:"created_at"`
+	UpdatedAt                time.Time `json:"updated_at"`
+}
+
+// Validate validates the runbook step
+func (s *RunbookStep) Validate() error {
+	if strings.TrimSpace(s.Name) == "" {
+		return ErrStepNameRequired
+	}
+	if err := ValidateActionType(s.ActionType); err != nil {
+		return err
+	}
+	if err := ValidateExecutionRole(s.ExecutionRole); err != nil {
 		return err
 	}
 	return nil
