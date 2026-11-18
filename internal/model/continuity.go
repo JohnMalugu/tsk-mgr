@@ -520,3 +520,404 @@ func (f *DrillFinding) Validate() error {
 	}
 	return nil
 }
+
+// CreateDRPlanRequest defines payload to create a new disaster recovery plan
+type CreateDRPlanRequest struct {
+	PlanCode             string `json:"plan_code"`
+	Name                 string `json:"name"`
+	Scope                string `json:"scope"`
+	RecoveryTier         string `json:"recovery_tier"`
+	Status               string `json:"status,omitempty"`
+	PrimaryCoordinatorID string `json:"primary_coordinator_id,omitempty"`
+	BackupCoordinatorID  string `json:"backup_coordinator_id,omitempty"`
+	InvocationCriteria   string `json:"invocation_criteria,omitempty"`
+	DocumentURL          string `json:"document_url,omitempty"`
+}
+
+// Validate validates CreateDRPlanRequest
+func (r *CreateDRPlanRequest) Validate() error {
+	if strings.TrimSpace(r.PlanCode) == "" {
+		return ErrDRPlanCodeRequired
+	}
+	if strings.TrimSpace(r.Name) == "" {
+		return ErrDRPlanNameRequired
+	}
+	if err := ValidateRecoveryTier(r.RecoveryTier); err != nil {
+		return err
+	}
+	if r.Status != "" {
+		if err := ValidateDRPlanStatus(r.Status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// UpdateDRPlanRequest defines payload to update an existing disaster recovery plan
+type UpdateDRPlanRequest struct {
+	Name                 *string `json:"name,omitempty"`
+	Scope                *string `json:"scope,omitempty"`
+	RecoveryTier         *string `json:"recovery_tier,omitempty"`
+	Status               *string `json:"status,omitempty"`
+	PrimaryCoordinatorID *string `json:"primary_coordinator_id,omitempty"`
+	BackupCoordinatorID  *string `json:"backup_coordinator_id,omitempty"`
+	InvocationCriteria   *string `json:"invocation_criteria,omitempty"`
+	DocumentURL          *string `json:"document_url,omitempty"`
+}
+
+// Validate validates UpdateDRPlanRequest
+func (r *UpdateDRPlanRequest) Validate() error {
+	if r.Name != nil && strings.TrimSpace(*r.Name) == "" {
+		return ErrDRPlanNameRequired
+	}
+	if r.RecoveryTier != nil {
+		if err := ValidateRecoveryTier(*r.RecoveryTier); err != nil {
+			return err
+		}
+	}
+	if r.Status != nil {
+		if err := ValidateDRPlanStatus(*r.Status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateRecoveryObjectiveRequest defines payload to configure RTO/RPO for a service or CI
+type CreateRecoveryObjectiveRequest struct {
+	PlanID             string  `json:"plan_id"`
+	CIID               string  `json:"ci_id,omitempty"`
+	ServiceName        string  `json:"service_name"`
+	RTOValueMinutes    int     `json:"rto_value_minutes"`
+	RPOValueMinutes    int     `json:"rpo_value_minutes"`
+	TargetAvailability float64 `json:"target_availability,omitempty"`
+	DataLossTolerance  string  `json:"data_loss_tolerance,omitempty"`
+	Notes              string  `json:"notes,omitempty"`
+}
+
+// Validate validates CreateRecoveryObjectiveRequest
+func (r *CreateRecoveryObjectiveRequest) Validate() error {
+	if strings.TrimSpace(r.ServiceName) == "" {
+		return ErrServiceNameRequired
+	}
+	if r.RTOValueMinutes < 0 {
+		return ErrInvalidRTOValue
+	}
+	if r.RPOValueMinutes < 0 {
+		return ErrInvalidRPOValue
+	}
+	if r.TargetAvailability < 0.0 || r.TargetAvailability > 100.0 {
+		return ErrInvalidAvailability
+	}
+	if r.DataLossTolerance != "" {
+		if err := ValidateDataLossTolerance(r.DataLossTolerance); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// UpdateRecoveryObjectiveRequest defines payload to modify recovery objectives
+type UpdateRecoveryObjectiveRequest struct {
+	CIID               *string  `json:"ci_id,omitempty"`
+	ServiceName        *string  `json:"service_name,omitempty"`
+	RTOValueMinutes    *int     `json:"rto_value_minutes,omitempty"`
+	RPOValueMinutes    *int     `json:"rpo_value_minutes,omitempty"`
+	TargetAvailability *float64 `json:"target_availability,omitempty"`
+	DataLossTolerance  *string  `json:"data_loss_tolerance,omitempty"`
+	Notes              *string  `json:"notes,omitempty"`
+}
+
+// Validate validates UpdateRecoveryObjectiveRequest
+func (r *UpdateRecoveryObjectiveRequest) Validate() error {
+	if r.ServiceName != nil && strings.TrimSpace(*r.ServiceName) == "" {
+		return ErrServiceNameRequired
+	}
+	if r.RTOValueMinutes != nil && *r.RTOValueMinutes < 0 {
+		return ErrInvalidRTOValue
+	}
+	if r.RPOValueMinutes != nil && *r.RPOValueMinutes < 0 {
+		return ErrInvalidRPOValue
+	}
+	if r.TargetAvailability != nil && (*r.TargetAvailability < 0.0 || *r.TargetAvailability > 100.0) {
+		return ErrInvalidAvailability
+	}
+	if r.DataLossTolerance != nil && *r.DataLossTolerance != "" {
+		if err := ValidateDataLossTolerance(*r.DataLossTolerance); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateBIARequest defines payload to record a Business Impact Analysis
+type CreateBIARequest struct {
+	PlanID                   string  `json:"plan_id"`
+	CIID                     string  `json:"ci_id,omitempty"`
+	ServiceName              string  `json:"service_name"`
+	MTDMinutes               int     `json:"mtd_minutes"`
+	FinancialLossRatePerHour float64 `json:"financial_loss_rate_per_hour,omitempty"`
+	OperationalImpact        string  `json:"operational_impact"`
+	RegulatoryImpact         string  `json:"regulatory_impact"`
+	CriticalRecoveryWindow   string  `json:"critical_recovery_window"`
+	AssessedBy               string  `json:"assessed_by,omitempty"`
+}
+
+// Validate validates CreateBIARequest
+func (r *CreateBIARequest) Validate() error {
+	if strings.TrimSpace(r.ServiceName) == "" {
+		return ErrServiceNameRequired
+	}
+	if r.MTDMinutes <= 0 {
+		return ErrInvalidMTDValue
+	}
+	if err := ValidateOperationalImpact(r.OperationalImpact); err != nil {
+		return err
+	}
+	if err := ValidateRegulatoryImpact(r.RegulatoryImpact); err != nil {
+		return err
+	}
+	if err := ValidateCriticalRecoveryWindow(r.CriticalRecoveryWindow); err != nil {
+		return err
+	}
+	return nil
+}
+
+// UpdateBIARequest defines payload to modify a Business Impact Analysis
+type UpdateBIARequest struct {
+	CIID                     *string  `json:"ci_id,omitempty"`
+	ServiceName              *string  `json:"service_name,omitempty"`
+	MTDMinutes               *int     `json:"mtd_minutes,omitempty"`
+	FinancialLossRatePerHour *float64 `json:"financial_loss_rate_per_hour,omitempty"`
+	OperationalImpact        *string  `json:"operational_impact,omitempty"`
+	RegulatoryImpact         *string  `json:"regulatory_impact,omitempty"`
+	CriticalRecoveryWindow   *string  `json:"critical_recovery_window,omitempty"`
+	AssessedBy               *string  `json:"assessed_by,omitempty"`
+}
+
+// Validate validates UpdateBIARequest
+func (r *UpdateBIARequest) Validate() error {
+	if r.ServiceName != nil && strings.TrimSpace(*r.ServiceName) == "" {
+		return ErrServiceNameRequired
+	}
+	if r.MTDMinutes != nil && *r.MTDMinutes <= 0 {
+		return ErrInvalidMTDValue
+	}
+	if r.OperationalImpact != nil {
+		if err := ValidateOperationalImpact(*r.OperationalImpact); err != nil {
+			return err
+		}
+	}
+	if r.RegulatoryImpact != nil {
+		if err := ValidateRegulatoryImpact(*r.RegulatoryImpact); err != nil {
+			return err
+		}
+	}
+	if r.CriticalRecoveryWindow != nil {
+		if err := ValidateCriticalRecoveryWindow(*r.CriticalRecoveryWindow); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateRunbookRequest defines payload to create a recovery runbook
+type CreateRunbookRequest struct {
+	PlanID                   string `json:"plan_id"`
+	RunbookCode              string `json:"runbook_code"`
+	Title                    string `json:"title"`
+	Description              string `json:"description,omitempty"`
+	ExecutionMode            string `json:"execution_mode,omitempty"`
+	EstimatedDurationMinutes int    `json:"estimated_duration_minutes,omitempty"`
+}
+
+// Validate validates CreateRunbookRequest
+func (r *CreateRunbookRequest) Validate() error {
+	if strings.TrimSpace(r.Title) == "" {
+		return ErrRunbookTitleRequired
+	}
+	if r.ExecutionMode != "" {
+		if err := ValidateExecutionMode(r.ExecutionMode); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// UpdateRunbookRequest defines payload to modify a recovery runbook
+type UpdateRunbookRequest struct {
+	Title                    *string `json:"title,omitempty"`
+	Description              *string `json:"description,omitempty"`
+	ExecutionMode            *string `json:"execution_mode,omitempty"`
+	EstimatedDurationMinutes *int    `json:"estimated_duration_minutes,omitempty"`
+}
+
+// Validate validates UpdateRunbookRequest
+func (r *UpdateRunbookRequest) Validate() error {
+	if r.Title != nil && strings.TrimSpace(*r.Title) == "" {
+		return ErrRunbookTitleRequired
+	}
+	if r.ExecutionMode != nil && *r.ExecutionMode != "" {
+		if err := ValidateExecutionMode(*r.ExecutionMode); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateRunbookStepRequest defines payload to append a step to a recovery runbook
+type CreateRunbookStepRequest struct {
+	StepOrder                int    `json:"step_order"`
+	Name                     string `json:"name"`
+	ActionType               string `json:"action_type"`
+	ExecutionRole            string `json:"execution_role"`
+	CommandOrScript          string `json:"command_or_script,omitempty"`
+	EstimatedDurationMinutes int    `json:"estimated_duration_minutes,omitempty"`
+	IsCritical               bool   `json:"is_critical,omitempty"`
+	FallbackProcedure        string `json:"fallback_procedure,omitempty"`
+}
+
+// Validate validates CreateRunbookStepRequest
+func (r *CreateRunbookStepRequest) Validate() error {
+	if strings.TrimSpace(r.Name) == "" {
+		return ErrStepNameRequired
+	}
+	if err := ValidateActionType(r.ActionType); err != nil {
+		return err
+	}
+	if err := ValidateExecutionRole(r.ExecutionRole); err != nil {
+		return err
+	}
+	return nil
+}
+
+// UpdateRunbookStepRequest defines payload to update a step in a runbook
+type UpdateRunbookStepRequest struct {
+	StepOrder                *int    `json:"step_order,omitempty"`
+	Name                     *string `json:"name,omitempty"`
+	ActionType               *string `json:"action_type,omitempty"`
+	ExecutionRole            *string `json:"execution_role,omitempty"`
+	CommandOrScript          *string `json:"command_or_script,omitempty"`
+	EstimatedDurationMinutes *int    `json:"estimated_duration_minutes,omitempty"`
+	IsCritical               *bool   `json:"is_critical,omitempty"`
+	FallbackProcedure        *string `json:"fallback_procedure,omitempty"`
+}
+
+// Validate validates UpdateRunbookStepRequest
+func (r *UpdateRunbookStepRequest) Validate() error {
+	if r.Name != nil && strings.TrimSpace(*r.Name) == "" {
+		return ErrStepNameRequired
+	}
+	if r.ActionType != nil {
+		if err := ValidateActionType(*r.ActionType); err != nil {
+			return err
+		}
+	}
+	if r.ExecutionRole != nil {
+		if err := ValidateExecutionRole(*r.ExecutionRole); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateDrillRequest defines payload to schedule a continuity drill
+type CreateDrillRequest struct {
+	PlanID            string    `json:"plan_id"`
+	DrillCode         string    `json:"drill_code"`
+	DrillType         string    `json:"drill_type"`
+	Scenario          string    `json:"scenario"`
+	ScheduledDate     time.Time `json:"scheduled_date"`
+	ConductedBy       string    `json:"conducted_by,omitempty"`
+}
+
+// Validate validates CreateDrillRequest
+func (r *CreateDrillRequest) Validate() error {
+	if strings.TrimSpace(r.Scenario) == "" {
+		return ErrDrillScenarioRequired
+	}
+	if err := ValidateDrillType(r.DrillType); err != nil {
+		return err
+	}
+	return nil
+}
+
+// UpdateDrillRequest defines payload to update a continuity drill status, outcome, and post-mortem
+type UpdateDrillRequest struct {
+	Scenario                      *string    `json:"scenario,omitempty"`
+	ScheduledDate                 *time.Time `json:"scheduled_date,omitempty"`
+	Status                        *string    `json:"status,omitempty"`
+	ActualRecoveryDurationMinutes *int       `json:"actual_recovery_duration_minutes,omitempty"`
+	Success                       *bool      `json:"success,omitempty"`
+	ConductedBy                   *string    `json:"conducted_by,omitempty"`
+	PostMortemSummary             *string    `json:"post_mortem_summary,omitempty"`
+}
+
+// Validate validates UpdateDrillRequest
+func (r *UpdateDrillRequest) Validate() error {
+	if r.Scenario != nil && strings.TrimSpace(*r.Scenario) == "" {
+		return ErrDrillScenarioRequired
+	}
+	if r.Status != nil {
+		if err := ValidateDrillStatus(*r.Status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateDrillFindingRequest defines payload to log a finding or gap during a drill
+type CreateDrillFindingRequest struct {
+	Severity          string `json:"severity"`
+	Category          string `json:"category"`
+	Description       string `json:"description"`
+	RemediationAction string `json:"remediation_action,omitempty"`
+	AssignedTo        string `json:"assigned_to,omitempty"`
+}
+
+// Validate validates CreateDrillFindingRequest
+func (r *CreateDrillFindingRequest) Validate() error {
+	if strings.TrimSpace(r.Description) == "" {
+		return ErrFindingDescRequired
+	}
+	if err := ValidateFindingSeverity(r.Severity); err != nil {
+		return err
+	}
+	if err := ValidateFindingCategory(r.Category); err != nil {
+		return err
+	}
+	return nil
+}
+
+// UpdateDrillFindingRequest defines payload to update finding status or assignment
+type UpdateDrillFindingRequest struct {
+	Severity          *string `json:"severity,omitempty"`
+	Category          *string `json:"category,omitempty"`
+	Description       *string `json:"description,omitempty"`
+	RemediationAction *string `json:"remediation_action,omitempty"`
+	AssignedTo        *string `json:"assigned_to,omitempty"`
+	Status            *string `json:"status,omitempty"`
+}
+
+// Validate validates UpdateDrillFindingRequest
+func (r *UpdateDrillFindingRequest) Validate() error {
+	if r.Description != nil && strings.TrimSpace(*r.Description) == "" {
+		return ErrFindingDescRequired
+	}
+	if r.Severity != nil {
+		if err := ValidateFindingSeverity(*r.Severity); err != nil {
+			return err
+		}
+	}
+	if r.Category != nil {
+		if err := ValidateFindingCategory(*r.Category); err != nil {
+			return err
+		}
+	}
+	if r.Status != nil {
+		if err := ValidateDrillFindingStatus(*r.Status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
