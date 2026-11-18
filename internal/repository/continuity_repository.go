@@ -3,6 +3,12 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 )
@@ -109,27 +115,197 @@ func NewContinuityRepository(db *sql.DB) ContinuityRepository {
 
 // DR Plans
 func (r *sqliteContinuityRepository) CreateDRPlan(ctx context.Context, plan *model.DisasterRecoveryPlan) error {
+	if plan.ID == "" {
+		plan.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if plan.CreatedAt.IsZero() {
+		plan.CreatedAt = now
+	}
+	plan.UpdatedAt = now
+	if plan.Version <= 0 {
+		plan.Version = 1
+	}
+
+	query := `
+	INSERT INTO dr_plans (
+		id, workspace_id, plan_code, name, scope, recovery_tier, status,
+		primary_coordinator_id, backup_coordinator_id, invocation_criteria,
+		document_url, version, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		plan.ID, plan.WorkspaceID, plan.PlanCode, plan.Name, plan.Scope,
+		plan.RecoveryTier, plan.Status, plan.PrimaryCoordinatorID,
+		plan.BackupCoordinatorID, plan.InvocationCriteria, plan.DocumentURL,
+		plan.Version, plan.CreatedAt, plan.UpdatedAt,
+	)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return ErrDRPlanCodeConflict
+		}
+		return err
+	}
 	return nil
 }
 
 func (r *sqliteContinuityRepository) GetDRPlanByID(ctx context.Context, id string) (*model.DisasterRecoveryPlan, error) {
-	return nil, ErrDRPlanNotFound
+	query := `
+	SELECT id, workspace_id, plan_code, name, scope, recovery_tier, status,
+	       primary_coordinator_id, backup_coordinator_id, invocation_criteria,
+	       document_url, version, created_at, updated_at
+	FROM dr_plans WHERE id = ?`
+
+	var p model.DisasterRecoveryPlan
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&p.ID, &p.WorkspaceID, &p.PlanCode, &p.Name, &p.Scope, &p.RecoveryTier, &p.Status,
+		&p.PrimaryCoordinatorID, &p.BackupCoordinatorID, &p.InvocationCriteria,
+		&p.DocumentURL, &p.Version, &p.CreatedAt, &p.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrDRPlanNotFound
+		}
+		return nil, err
+	}
+	return &p, nil
 }
 
 func (r *sqliteContinuityRepository) GetDRPlanByCode(ctx context.Context, workspaceID string, planCode string) (*model.DisasterRecoveryPlan, error) {
-	return nil, ErrDRPlanNotFound
+	query := `
+	SELECT id, workspace_id, plan_code, name, scope, recovery_tier, status,
+	       primary_coordinator_id, backup_coordinator_id, invocation_criteria,
+	       document_url, version, created_at, updated_at
+	FROM dr_plans WHERE workspace_id = ? AND plan_code = ?`
+
+	var p model.DisasterRecoveryPlan
+	err := r.db.QueryRowContext(ctx, query, workspaceID, planCode).Scan(
+		&p.ID, &p.WorkspaceID, &p.PlanCode, &p.Name, &p.Scope, &p.RecoveryTier, &p.Status,
+		&p.PrimaryCoordinatorID, &p.BackupCoordinatorID, &p.InvocationCriteria,
+		&p.DocumentURL, &p.Version, &p.CreatedAt, &p.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrDRPlanNotFound
+		}
+		return nil, err
+	}
+	return &p, nil
 }
 
 func (r *sqliteContinuityRepository) UpdateDRPlan(ctx context.Context, plan *model.DisasterRecoveryPlan) error {
+	plan.UpdatedAt = time.Now().UTC()
+	plan.Version++
+
+	query := `
+	UPDATE dr_plans SET
+		name = ?, scope = ?, recovery_tier = ?, status = ?,
+		primary_coordinator_id = ?, backup_coordinator_id = ?,
+		invocation_criteria = ?, document_url = ?, version = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		plan.Name, plan.Scope, plan.RecoveryTier, plan.Status,
+		plan.PrimaryCoordinatorID, plan.BackupCoordinatorID,
+		plan.InvocationCriteria, plan.DocumentURL, plan.Version, plan.UpdatedAt,
+		plan.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrDRPlanNotFound
+	}
 	return nil
 }
 
 func (r *sqliteContinuityRepository) DeleteDRPlan(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, "DELETE FROM dr_plans WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrDRPlanNotFound
+	}
 	return nil
 }
 
 func (r *sqliteContinuityRepository) ListDRPlans(ctx context.Context, filter model.DRPlanFilterCriteria) ([]model.DisasterRecoveryPlan, int, error) {
-	return nil, 0, nil
+	whereClauses := []string{"1=1"}
+	args := []interface{}{}
+
+	if filter.WorkspaceID != "" {
+		whereClauses = append(whereClauses, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.RecoveryTier != "" {
+		whereClauses = append(whereClauses, "recovery_tier = ?")
+		args = append(args, filter.RecoveryTier)
+	}
+	if filter.Status != "" {
+		whereClauses = append(whereClauses, "status = ?")
+		args = append(args, filter.Status)
+	}
+	if filter.Search != "" {
+		whereClauses = append(whereClauses, "(name LIKE ? OR plan_code LIKE ?)")
+		s := "%" + filter.Search + "%"
+		args = append(args, s, s)
+	}
+
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	var total int
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM dr_plans WHERE %s", whereSQL)
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, workspace_id, plan_code, name, scope, recovery_tier, status,
+	       primary_coordinator_id, backup_coordinator_id, invocation_criteria,
+	       document_url, version, created_at, updated_at
+	FROM dr_plans WHERE %s ORDER BY created_at DESC LIMIT ? OFFSET ?`, whereSQL)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	plans := []model.DisasterRecoveryPlan{}
+	for rows.Next() {
+		var p model.DisasterRecoveryPlan
+		if err := rows.Scan(
+			&p.ID, &p.WorkspaceID, &p.PlanCode, &p.Name, &p.Scope, &p.RecoveryTier, &p.Status,
+			&p.PrimaryCoordinatorID, &p.BackupCoordinatorID, &p.InvocationCriteria,
+			&p.DocumentURL, &p.Version, &p.CreatedAt, &p.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		plans = append(plans, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return plans, total, nil
 }
 
 // Recovery Objectives
