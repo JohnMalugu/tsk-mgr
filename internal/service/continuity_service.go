@@ -395,36 +395,164 @@ func (s *continuityServiceImpl) ListBIAs(ctx context.Context, workspaceID string
 	return s.repo.ListBIAs(ctx, workspaceID)
 }
 
-// Runbooks & Steps Stubs
+// Runbooks & Steps
 func (s *continuityServiceImpl) CreateRunbook(ctx context.Context, workspaceID string, req model.CreateRunbookRequest) (*model.RecoveryRunbook, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	// Verify plan exists
+	if _, err := s.repo.GetDRPlanByID(ctx, req.PlanID); err != nil {
+		return nil, err
+	}
+
+	mode := req.ExecutionMode
+	if mode == "" {
+		mode = model.RunbookModeHybrid
+	}
+
+	rb := &model.RecoveryRunbook{
+		WorkspaceID:              workspaceID,
+		PlanID:                   req.PlanID,
+		RunbookCode:              req.RunbookCode,
+		Title:                    req.Title,
+		Description:              req.Description,
+		ExecutionMode:            mode,
+		EstimatedDurationMinutes: req.EstimatedDurationMinutes,
+	}
+
+	if err := s.repo.CreateRunbook(ctx, rb); err != nil {
+		return nil, err
+	}
+	return rb, nil
 }
+
 func (s *continuityServiceImpl) GetRunbookByID(ctx context.Context, id string) (*model.RecoveryRunbook, error) {
-	return nil, nil
+	return s.repo.GetRunbookByID(ctx, id)
 }
+
 func (s *continuityServiceImpl) UpdateRunbook(ctx context.Context, id string, req model.UpdateRunbookRequest) (*model.RecoveryRunbook, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	rb, err := s.repo.GetRunbookByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Title != nil {
+		rb.Title = *req.Title
+	}
+	if req.Description != nil {
+		rb.Description = *req.Description
+	}
+	if req.ExecutionMode != nil {
+		rb.ExecutionMode = *req.ExecutionMode
+	}
+	if req.EstimatedDurationMinutes != nil {
+		rb.EstimatedDurationMinutes = *req.EstimatedDurationMinutes
+	}
+
+	if err := s.repo.UpdateRunbook(ctx, rb); err != nil {
+		return nil, err
+	}
+	return rb, nil
 }
+
 func (s *continuityServiceImpl) DeleteRunbook(ctx context.Context, id string) error {
-	return nil
+	return s.repo.DeleteRunbook(ctx, id)
 }
+
 func (s *continuityServiceImpl) ListRunbooksByPlan(ctx context.Context, planID string) ([]model.RecoveryRunbook, error) {
-	return nil, nil
+	return s.repo.ListRunbooksByPlan(ctx, planID)
 }
+
 func (s *continuityServiceImpl) CreateRunbookStep(ctx context.Context, runbookID string, req model.CreateRunbookStepRequest) (*model.RunbookStep, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	// Verify runbook exists
+	if _, err := s.repo.GetRunbookByID(ctx, runbookID); err != nil {
+		return nil, err
+	}
+
+	stepOrder := req.StepOrder
+	if stepOrder <= 0 {
+		existing, err := s.repo.ListRunbookSteps(ctx, runbookID)
+		if err == nil {
+			stepOrder = len(existing) + 1
+		} else {
+			stepOrder = 1
+		}
+	}
+
+	step := &model.RunbookStep{
+		RunbookID:                runbookID,
+		StepOrder:                stepOrder,
+		Name:                     req.Name,
+		ActionType:               req.ActionType,
+		ExecutionRole:            req.ExecutionRole,
+		CommandOrScript:          req.CommandOrScript,
+		EstimatedDurationMinutes: req.EstimatedDurationMinutes,
+		IsCritical:               req.IsCritical,
+		FallbackProcedure:        req.FallbackProcedure,
+	}
+
+	if err := s.repo.CreateRunbookStep(ctx, step); err != nil {
+		return nil, err
+	}
+	return step, nil
 }
+
 func (s *continuityServiceImpl) GetRunbookStepByID(ctx context.Context, id string) (*model.RunbookStep, error) {
-	return nil, nil
+	return s.repo.GetRunbookStepByID(ctx, id)
 }
+
 func (s *continuityServiceImpl) UpdateRunbookStep(ctx context.Context, id string, req model.UpdateRunbookStepRequest) (*model.RunbookStep, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	step, err := s.repo.GetRunbookStepByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.StepOrder != nil {
+		step.StepOrder = *req.StepOrder
+	}
+	if req.Name != nil {
+		step.Name = *req.Name
+	}
+	if req.ActionType != nil {
+		step.ActionType = *req.ActionType
+	}
+	if req.ExecutionRole != nil {
+		step.ExecutionRole = *req.ExecutionRole
+	}
+	if req.CommandOrScript != nil {
+		step.CommandOrScript = *req.CommandOrScript
+	}
+	if req.EstimatedDurationMinutes != nil {
+		step.EstimatedDurationMinutes = *req.EstimatedDurationMinutes
+	}
+	if req.IsCritical != nil {
+		step.IsCritical = *req.IsCritical
+	}
+	if req.FallbackProcedure != nil {
+		step.FallbackProcedure = *req.FallbackProcedure
+	}
+
+	if err := s.repo.UpdateRunbookStep(ctx, step); err != nil {
+		return nil, err
+	}
+	return step, nil
 }
+
 func (s *continuityServiceImpl) DeleteRunbookStep(ctx context.Context, id string) error {
-	return nil
+	return s.repo.DeleteRunbookStep(ctx, id)
 }
+
 func (s *continuityServiceImpl) ListRunbookSteps(ctx context.Context, runbookID string) ([]model.RunbookStep, error) {
-	return nil, nil
+	return s.repo.ListRunbookSteps(ctx, runbookID)
 }
 
 // Drills & Findings Stubs
