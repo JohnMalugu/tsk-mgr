@@ -2666,6 +2666,30 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	biaQuery := `
+	CREATE TABLE IF NOT EXISTS business_impact_analyses (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		plan_id TEXT NOT NULL,
+		ci_id TEXT NOT NULL DEFAULT '',
+		service_name TEXT NOT NULL,
+		mtd_minutes INTEGER NOT NULL,
+		financial_loss_rate_per_hour REAL NOT NULL DEFAULT 0.0,
+		operational_impact TEXT NOT NULL,
+		regulatory_impact TEXT NOT NULL,
+		critical_recovery_window TEXT NOT NULL,
+		assessment_date DATETIME NOT NULL,
+		assessed_by TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (plan_id) REFERENCES dr_plans(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(biaQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
