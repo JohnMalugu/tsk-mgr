@@ -2690,6 +2690,44 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	runbooksQuery := `
+	CREATE TABLE IF NOT EXISTS dr_runbooks (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		plan_id TEXT NOT NULL,
+		runbook_code TEXT NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		execution_mode TEXT NOT NULL DEFAULT 'hybrid',
+		estimated_duration_minutes INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (plan_id) REFERENCES dr_plans(id) ON DELETE CASCADE,
+		UNIQUE(workspace_id, runbook_code)
+	);
+
+	CREATE TABLE IF NOT EXISTS dr_runbook_steps (
+		id TEXT PRIMARY KEY,
+		runbook_id TEXT NOT NULL,
+		step_order INTEGER NOT NULL,
+		name TEXT NOT NULL,
+		action_type TEXT NOT NULL,
+		execution_role TEXT NOT NULL,
+		command_or_script TEXT NOT NULL DEFAULT '',
+		estimated_duration_minutes INTEGER NOT NULL DEFAULT 0,
+		is_critical INTEGER NOT NULL DEFAULT 0,
+		fallback_procedure TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (runbook_id) REFERENCES dr_runbooks(id) ON DELETE CASCADE,
+		UNIQUE(runbook_id, step_order)
+	);`
+
+	_, err = db.Exec(runbooksQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
