@@ -619,43 +619,260 @@ func (r *sqliteContinuityRepository) ListBIAs(ctx context.Context, workspaceID s
 
 // Runbooks
 func (r *sqliteContinuityRepository) CreateRunbook(ctx context.Context, rb *model.RecoveryRunbook) error {
-	return nil
+	if rb.ID == "" {
+		rb.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if rb.CreatedAt.IsZero() {
+		rb.CreatedAt = now
+	}
+	rb.UpdatedAt = now
+
+	query := `
+	INSERT INTO dr_runbooks (
+		id, workspace_id, plan_id, runbook_code, title,
+		description, execution_mode, estimated_duration_minutes,
+		created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		rb.ID, rb.WorkspaceID, rb.PlanID, rb.RunbookCode, rb.Title,
+		rb.Description, rb.ExecutionMode, rb.EstimatedDurationMinutes,
+		rb.CreatedAt, rb.UpdatedAt,
+	)
+	return err
 }
 
 func (r *sqliteContinuityRepository) GetRunbookByID(ctx context.Context, id string) (*model.RecoveryRunbook, error) {
-	return nil, ErrRunbookNotFound
+	query := `
+	SELECT id, workspace_id, plan_id, runbook_code, title,
+	       description, execution_mode, estimated_duration_minutes,
+	       created_at, updated_at
+	FROM dr_runbooks WHERE id = ?`
+
+	var rb model.RecoveryRunbook
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&rb.ID, &rb.WorkspaceID, &rb.PlanID, &rb.RunbookCode, &rb.Title,
+		&rb.Description, &rb.ExecutionMode, &rb.EstimatedDurationMinutes,
+		&rb.CreatedAt, &rb.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRunbookNotFound
+		}
+		return nil, err
+	}
+
+	steps, err := r.ListRunbookSteps(ctx, rb.ID)
+	if err != nil {
+		return nil, err
+	}
+	rb.Steps = steps
+	return &rb, nil
 }
 
 func (r *sqliteContinuityRepository) UpdateRunbook(ctx context.Context, rb *model.RecoveryRunbook) error {
+	rb.UpdatedAt = time.Now().UTC()
+
+	query := `
+	UPDATE dr_runbooks SET
+		title = ?, description = ?, execution_mode = ?,
+		estimated_duration_minutes = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		rb.Title, rb.Description, rb.ExecutionMode,
+		rb.EstimatedDurationMinutes, rb.UpdatedAt,
+		rb.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrRunbookNotFound
+	}
 	return nil
 }
 
 func (r *sqliteContinuityRepository) DeleteRunbook(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, "DELETE FROM dr_runbooks WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrRunbookNotFound
+	}
 	return nil
 }
 
 func (r *sqliteContinuityRepository) ListRunbooksByPlan(ctx context.Context, planID string) ([]model.RecoveryRunbook, error) {
-	return nil, nil
+	query := `
+	SELECT id, workspace_id, plan_id, runbook_code, title,
+	       description, execution_mode, estimated_duration_minutes,
+	       created_at, updated_at
+	FROM dr_runbooks WHERE plan_id = ? ORDER BY runbook_code ASC`
+
+	rows, err := r.db.QueryContext(ctx, query, planID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []model.RecoveryRunbook
+	for rows.Next() {
+		var rb model.RecoveryRunbook
+		if err := rows.Scan(
+			&rb.ID, &rb.WorkspaceID, &rb.PlanID, &rb.RunbookCode, &rb.Title,
+			&rb.Description, &rb.ExecutionMode, &rb.EstimatedDurationMinutes,
+			&rb.CreatedAt, &rb.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		list = append(list, rb)
+	}
+	return list, rows.Err()
 }
 
 func (r *sqliteContinuityRepository) CreateRunbookStep(ctx context.Context, step *model.RunbookStep) error {
-	return nil
+	if step.ID == "" {
+		step.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if step.CreatedAt.IsZero() {
+		step.CreatedAt = now
+	}
+	step.UpdatedAt = now
+
+	isCrit := 0
+	if step.IsCritical {
+		isCrit = 1
+	}
+
+	query := `
+	INSERT INTO dr_runbook_steps (
+		id, runbook_id, step_order, name, action_type,
+		execution_role, command_or_script, estimated_duration_minutes,
+		is_critical, fallback_procedure, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		step.ID, step.RunbookID, step.StepOrder, step.Name, step.ActionType,
+		step.ExecutionRole, step.CommandOrScript, step.EstimatedDurationMinutes,
+		isCrit, step.FallbackProcedure, step.CreatedAt, step.UpdatedAt,
+	)
+	return err
 }
 
 func (r *sqliteContinuityRepository) GetRunbookStepByID(ctx context.Context, id string) (*model.RunbookStep, error) {
-	return nil, ErrRunbookStepNotFound
+	query := `
+	SELECT id, runbook_id, step_order, name, action_type,
+	       execution_role, command_or_script, estimated_duration_minutes,
+	       is_critical, fallback_procedure, created_at, updated_at
+	FROM dr_runbook_steps WHERE id = ?`
+
+	var s model.RunbookStep
+	var isCrit int
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&s.ID, &s.RunbookID, &s.StepOrder, &s.Name, &s.ActionType,
+		&s.ExecutionRole, &s.CommandOrScript, &s.EstimatedDurationMinutes,
+		&isCrit, &s.FallbackProcedure, &s.CreatedAt, &s.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRunbookStepNotFound
+		}
+		return nil, err
+	}
+	s.IsCritical = (isCrit == 1)
+	return &s, nil
 }
 
 func (r *sqliteContinuityRepository) UpdateRunbookStep(ctx context.Context, step *model.RunbookStep) error {
+	step.UpdatedAt = time.Now().UTC()
+	isCrit := 0
+	if step.IsCritical {
+		isCrit = 1
+	}
+
+	query := `
+	UPDATE dr_runbook_steps SET
+		step_order = ?, name = ?, action_type = ?,
+		execution_role = ?, command_or_script = ?,
+		estimated_duration_minutes = ?, is_critical = ?,
+		fallback_procedure = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		step.StepOrder, step.Name, step.ActionType,
+		step.ExecutionRole, step.CommandOrScript,
+		step.EstimatedDurationMinutes, isCrit,
+		step.FallbackProcedure, step.UpdatedAt,
+		step.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrRunbookStepNotFound
+	}
 	return nil
 }
 
 func (r *sqliteContinuityRepository) DeleteRunbookStep(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, "DELETE FROM dr_runbook_steps WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrRunbookStepNotFound
+	}
 	return nil
 }
 
 func (r *sqliteContinuityRepository) ListRunbookSteps(ctx context.Context, runbookID string) ([]model.RunbookStep, error) {
-	return nil, nil
+	query := `
+	SELECT id, runbook_id, step_order, name, action_type,
+	       execution_role, command_or_script, estimated_duration_minutes,
+	       is_critical, fallback_procedure, created_at, updated_at
+	FROM dr_runbook_steps WHERE runbook_id = ? ORDER BY step_order ASC`
+
+	rows, err := r.db.QueryContext(ctx, query, runbookID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var steps []model.RunbookStep
+	for rows.Next() {
+		var s model.RunbookStep
+		var isCrit int
+		if err := rows.Scan(
+			&s.ID, &s.RunbookID, &s.StepOrder, &s.Name, &s.ActionType,
+			&s.ExecutionRole, &s.CommandOrScript, &s.EstimatedDurationMinutes,
+			&isCrit, &s.FallbackProcedure, &s.CreatedAt, &s.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		s.IsCritical = (isCrit == 1)
+		steps = append(steps, s)
+	}
+	return steps, rows.Err()
 }
 
 // Drills
