@@ -2753,6 +2753,28 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	drillFindingsQuery := `
+	CREATE TABLE IF NOT EXISTS continuity_drill_findings (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		drill_id TEXT NOT NULL,
+		severity TEXT NOT NULL,
+		category TEXT NOT NULL,
+		description TEXT NOT NULL,
+		remediation_action TEXT NOT NULL DEFAULT '',
+		assigned_to TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'open',
+		resolved_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (drill_id) REFERENCES continuity_drills(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(drillFindingsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
