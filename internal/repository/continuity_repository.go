@@ -310,27 +310,150 @@ func (r *sqliteContinuityRepository) ListDRPlans(ctx context.Context, filter mod
 
 // Recovery Objectives
 func (r *sqliteContinuityRepository) CreateRecoveryObjective(ctx context.Context, obj *model.RecoveryObjective) error {
-	return nil
+	if obj.ID == "" {
+		obj.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if obj.CreatedAt.IsZero() {
+		obj.CreatedAt = now
+	}
+	obj.UpdatedAt = now
+
+	query := `
+	INSERT INTO recovery_objectives (
+		id, workspace_id, plan_id, ci_id, service_name,
+		rto_value_minutes, rpo_value_minutes, target_availability,
+		data_loss_tolerance, notes, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		obj.ID, obj.WorkspaceID, obj.PlanID, obj.CIID, obj.ServiceName,
+		obj.RTOValueMinutes, obj.RPOValueMinutes, obj.TargetAvailability,
+		obj.DataLossTolerance, obj.Notes, obj.CreatedAt, obj.UpdatedAt,
+	)
+	return err
 }
 
 func (r *sqliteContinuityRepository) GetRecoveryObjectiveByID(ctx context.Context, id string) (*model.RecoveryObjective, error) {
-	return nil, ErrRecoveryObjectiveNotFound
+	query := `
+	SELECT id, workspace_id, plan_id, ci_id, service_name,
+	       rto_value_minutes, rpo_value_minutes, target_availability,
+	       data_loss_tolerance, notes, created_at, updated_at
+	FROM recovery_objectives WHERE id = ?`
+
+	var o model.RecoveryObjective
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&o.ID, &o.WorkspaceID, &o.PlanID, &o.CIID, &o.ServiceName,
+		&o.RTOValueMinutes, &o.RPOValueMinutes, &o.TargetAvailability,
+		&o.DataLossTolerance, &o.Notes, &o.CreatedAt, &o.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecoveryObjectiveNotFound
+		}
+		return nil, err
+	}
+	return &o, nil
 }
 
 func (r *sqliteContinuityRepository) UpdateRecoveryObjective(ctx context.Context, obj *model.RecoveryObjective) error {
+	obj.UpdatedAt = time.Now().UTC()
+
+	query := `
+	UPDATE recovery_objectives SET
+		ci_id = ?, service_name = ?, rto_value_minutes = ?,
+		rpo_value_minutes = ?, target_availability = ?,
+		data_loss_tolerance = ?, notes = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		obj.CIID, obj.ServiceName, obj.RTOValueMinutes,
+		obj.RPOValueMinutes, obj.TargetAvailability,
+		obj.DataLossTolerance, obj.Notes, obj.UpdatedAt,
+		obj.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrRecoveryObjectiveNotFound
+	}
 	return nil
 }
 
 func (r *sqliteContinuityRepository) DeleteRecoveryObjective(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, "DELETE FROM recovery_objectives WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrRecoveryObjectiveNotFound
+	}
 	return nil
 }
 
 func (r *sqliteContinuityRepository) ListRecoveryObjectivesByPlan(ctx context.Context, planID string) ([]model.RecoveryObjective, error) {
-	return nil, nil
+	query := `
+	SELECT id, workspace_id, plan_id, ci_id, service_name,
+	       rto_value_minutes, rpo_value_minutes, target_availability,
+	       data_loss_tolerance, notes, created_at, updated_at
+	FROM recovery_objectives WHERE plan_id = ? ORDER BY service_name ASC`
+
+	rows, err := r.db.QueryContext(ctx, query, planID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []model.RecoveryObjective
+	for rows.Next() {
+		var o model.RecoveryObjective
+		if err := rows.Scan(
+			&o.ID, &o.WorkspaceID, &o.PlanID, &o.CIID, &o.ServiceName,
+			&o.RTOValueMinutes, &o.RPOValueMinutes, &o.TargetAvailability,
+			&o.DataLossTolerance, &o.Notes, &o.CreatedAt, &o.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		list = append(list, o)
+	}
+	return list, rows.Err()
 }
 
 func (r *sqliteContinuityRepository) ListRecoveryObjectives(ctx context.Context, workspaceID string) ([]model.RecoveryObjective, error) {
-	return nil, nil
+	query := `
+	SELECT id, workspace_id, plan_id, ci_id, service_name,
+	       rto_value_minutes, rpo_value_minutes, target_availability,
+	       data_loss_tolerance, notes, created_at, updated_at
+	FROM recovery_objectives WHERE workspace_id = ? ORDER BY service_name ASC`
+
+	rows, err := r.db.QueryContext(ctx, query, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []model.RecoveryObjective
+	for rows.Next() {
+		var o model.RecoveryObjective
+		if err := rows.Scan(
+			&o.ID, &o.WorkspaceID, &o.PlanID, &o.CIID, &o.ServiceName,
+			&o.RTOValueMinutes, &o.RPOValueMinutes, &o.TargetAvailability,
+			&o.DataLossTolerance, &o.Notes, &o.CreatedAt, &o.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		list = append(list, o)
+	}
+	return list, rows.Err()
 }
 
 // BIA
