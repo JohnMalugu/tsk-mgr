@@ -458,27 +458,163 @@ func (r *sqliteContinuityRepository) ListRecoveryObjectives(ctx context.Context,
 
 // BIA
 func (r *sqliteContinuityRepository) CreateBIA(ctx context.Context, bia *model.BusinessImpactAnalysis) error {
-	return nil
+	if bia.ID == "" {
+		bia.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if bia.CreatedAt.IsZero() {
+		bia.CreatedAt = now
+	}
+	bia.UpdatedAt = now
+	if bia.AssessmentDate.IsZero() {
+		bia.AssessmentDate = now
+	}
+
+	query := `
+	INSERT INTO business_impact_analyses (
+		id, workspace_id, plan_id, ci_id, service_name,
+		mtd_minutes, financial_loss_rate_per_hour, operational_impact,
+		regulatory_impact, critical_recovery_window, assessment_date,
+		assessed_by, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		bia.ID, bia.WorkspaceID, bia.PlanID, bia.CIID, bia.ServiceName,
+		bia.MTDMinutes, bia.FinancialLossRatePerHour, bia.OperationalImpact,
+		bia.RegulatoryImpact, bia.CriticalRecoveryWindow, bia.AssessmentDate,
+		bia.AssessedBy, bia.CreatedAt, bia.UpdatedAt,
+	)
+	return err
 }
 
 func (r *sqliteContinuityRepository) GetBIAByID(ctx context.Context, id string) (*model.BusinessImpactAnalysis, error) {
-	return nil, ErrBIANotFound
+	query := `
+	SELECT id, workspace_id, plan_id, ci_id, service_name,
+	       mtd_minutes, financial_loss_rate_per_hour, operational_impact,
+	       regulatory_impact, critical_recovery_window, assessment_date,
+	       assessed_by, created_at, updated_at
+	FROM business_impact_analyses WHERE id = ?`
+
+	var b model.BusinessImpactAnalysis
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&b.ID, &b.WorkspaceID, &b.PlanID, &b.CIID, &b.ServiceName,
+		&b.MTDMinutes, &b.FinancialLossRatePerHour, &b.OperationalImpact,
+		&b.RegulatoryImpact, &b.CriticalRecoveryWindow, &b.AssessmentDate,
+		&b.AssessedBy, &b.CreatedAt, &b.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrBIANotFound
+		}
+		return nil, err
+	}
+	return &b, nil
 }
 
 func (r *sqliteContinuityRepository) UpdateBIA(ctx context.Context, bia *model.BusinessImpactAnalysis) error {
+	bia.UpdatedAt = time.Now().UTC()
+
+	query := `
+	UPDATE business_impact_analyses SET
+		ci_id = ?, service_name = ?, mtd_minutes = ?,
+		financial_loss_rate_per_hour = ?, operational_impact = ?,
+		regulatory_impact = ?, critical_recovery_window = ?,
+		assessed_by = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		bia.CIID, bia.ServiceName, bia.MTDMinutes,
+		bia.FinancialLossRatePerHour, bia.OperationalImpact,
+		bia.RegulatoryImpact, bia.CriticalRecoveryWindow,
+		bia.AssessedBy, bia.UpdatedAt,
+		bia.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrBIANotFound
+	}
 	return nil
 }
 
 func (r *sqliteContinuityRepository) DeleteBIA(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, "DELETE FROM business_impact_analyses WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrBIANotFound
+	}
 	return nil
 }
 
 func (r *sqliteContinuityRepository) ListBIAsByPlan(ctx context.Context, planID string) ([]model.BusinessImpactAnalysis, error) {
-	return nil, nil
+	query := `
+	SELECT id, workspace_id, plan_id, ci_id, service_name,
+	       mtd_minutes, financial_loss_rate_per_hour, operational_impact,
+	       regulatory_impact, critical_recovery_window, assessment_date,
+	       assessed_by, created_at, updated_at
+	FROM business_impact_analyses WHERE plan_id = ? ORDER BY service_name ASC`
+
+	rows, err := r.db.QueryContext(ctx, query, planID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []model.BusinessImpactAnalysis
+	for rows.Next() {
+		var b model.BusinessImpactAnalysis
+		if err := rows.Scan(
+			&b.ID, &b.WorkspaceID, &b.PlanID, &b.CIID, &b.ServiceName,
+			&b.MTDMinutes, &b.FinancialLossRatePerHour, &b.OperationalImpact,
+			&b.RegulatoryImpact, &b.CriticalRecoveryWindow, &b.AssessmentDate,
+			&b.AssessedBy, &b.CreatedAt, &b.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		list = append(list, b)
+	}
+	return list, rows.Err()
 }
 
 func (r *sqliteContinuityRepository) ListBIAs(ctx context.Context, workspaceID string) ([]model.BusinessImpactAnalysis, error) {
-	return nil, nil
+	query := `
+	SELECT id, workspace_id, plan_id, ci_id, service_name,
+	       mtd_minutes, financial_loss_rate_per_hour, operational_impact,
+	       regulatory_impact, critical_recovery_window, assessment_date,
+	       assessed_by, created_at, updated_at
+	FROM business_impact_analyses WHERE workspace_id = ? ORDER BY service_name ASC`
+
+	rows, err := r.db.QueryContext(ctx, query, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []model.BusinessImpactAnalysis
+	for rows.Next() {
+		var b model.BusinessImpactAnalysis
+		if err := rows.Scan(
+			&b.ID, &b.WorkspaceID, &b.PlanID, &b.CIID, &b.ServiceName,
+			&b.MTDMinutes, &b.FinancialLossRatePerHour, &b.OperationalImpact,
+			&b.RegulatoryImpact, &b.CriticalRecoveryWindow, &b.AssessmentDate,
+			&b.AssessedBy, &b.CreatedAt, &b.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		list = append(list, b)
+	}
+	return list, rows.Err()
 }
 
 // Runbooks
