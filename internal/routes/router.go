@@ -251,6 +251,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 ITIL Service Continuity & Disaster Recovery Management (ITSCM / BCP)
+	if strings.HasPrefix(r.URL.Path, "/v2/continuity") || strings.HasPrefix(r.URL.Path, "/v2/dr-plans") {
+		if handler.GlobalContinuityHandler == nil {
+			http.Error(w, "Continuity handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalContinuityHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return
