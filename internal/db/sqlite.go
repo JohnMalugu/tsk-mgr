@@ -2620,6 +2620,30 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	drPlansQuery := `
+	CREATE TABLE IF NOT EXISTS dr_plans (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		plan_code TEXT NOT NULL,
+		name TEXT NOT NULL,
+		scope TEXT NOT NULL DEFAULT '',
+		recovery_tier TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'draft',
+		primary_coordinator_id TEXT NOT NULL DEFAULT '',
+		backup_coordinator_id TEXT NOT NULL DEFAULT '',
+		invocation_criteria TEXT NOT NULL DEFAULT '',
+		document_url TEXT NOT NULL DEFAULT '',
+		version INTEGER NOT NULL DEFAULT 1,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		UNIQUE(workspace_id, plan_code)
+	);`
+
+	_, err = db.Exec(drPlansQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
