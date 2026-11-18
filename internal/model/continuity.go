@@ -921,3 +921,56 @@ func (r *UpdateDrillFindingRequest) Validate() error {
 	}
 	return nil
 }
+
+// DRPlanFilterCriteria provides query parameters for listing disaster recovery plans
+type DRPlanFilterCriteria struct {
+	WorkspaceID  string
+	RecoveryTier string
+	Status       string
+	Search       string
+	Limit        int
+	Offset       int
+}
+
+// DrillFilterCriteria provides query parameters for listing continuity drills
+type DrillFilterCriteria struct {
+	WorkspaceID string
+	PlanID      string
+	DrillType   string
+	Status      string
+	Limit       int
+	Offset      int
+}
+
+// DrillFindingFilterCriteria provides query parameters for listing drill findings
+type DrillFindingFilterCriteria struct {
+	WorkspaceID string
+	DrillID     string
+	Severity    string
+	Category    string
+	Status      string
+	Limit       int
+	Offset      int
+}
+
+// ContinuityReadinessReport provides an aggregated executive posture of disaster recovery readiness and resilience
+type ContinuityReadinessReport struct {
+	WorkspaceID             string         `json:"workspace_id"`
+	TotalPlans              int            `json:"total_plans"`
+	ActivePlans             int            `json:"active_plans"`
+	ApprovedPlans           int            `json:"approved_plans"`
+	PlansByTier             map[string]int `json:"plans_by_tier"`
+	TotalObjectives         int            `json:"total_objectives"`
+	AverageRTOMinutes       float64        `json:"average_rto_minutes"`
+	AverageRPOMinutes       float64        `json:"average_rpo_minutes"`
+	TotalDrills             int            `json:"total_drills"`
+	CompletedDrills         int            `json:"completed_drills"`
+	DrillPassRate           float64        `json:"drill_pass_rate"`
+	RTOComplianceRate       float64        `json:"rto_compliance_rate"`
+	AverageRecoveryDuration float64        `json:"average_recovery_duration_minutes"`
+	TotalFindings           int            `json:"total_findings"`
+	OpenFindingsCount       int            `json:"open_findings_count"`
+	FindingsBySeverity      map[string]int `json:"findings_by_severity"`
+	ReadinessScore          float64        `json:"readiness_score"`
+}
+
