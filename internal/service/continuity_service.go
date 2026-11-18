@@ -703,7 +703,7 @@ func (s *continuityServiceImpl) ListDrillFindings(ctx context.Context, filter mo
 	return s.repo.ListDrillFindings(ctx, filter)
 }
 
-// Readiness Analytics Stub
+// Readiness Analytics
 func (s *continuityServiceImpl) GetContinuityReadinessReport(ctx context.Context, workspaceID string) (*model.ContinuityReadinessReport, error) {
-	return nil, nil
+	return s.repo.GetContinuityReadinessReport(ctx, workspaceID)
 }
