@@ -1228,5 +1228,134 @@ func (r *sqliteContinuityRepository) ListDrillFindings(ctx context.Context, filt
 
 // Analytics
 func (r *sqliteContinuityRepository) GetContinuityReadinessReport(ctx context.Context, workspaceID string) (*model.ContinuityReadinessReport, error) {
-	return &model.ContinuityReadinessReport{WorkspaceID: workspaceID}, nil
+	report := &model.ContinuityReadinessReport{
+		WorkspaceID:        workspaceID,
+		PlansByTier:        make(map[string]int),
+		FindingsBySeverity: make(map[string]int),
+	}
+
+	// Plans stats
+	planRows, err := r.db.QueryContext(ctx, `
+		SELECT recovery_tier, status, COUNT(*)
+		FROM dr_plans WHERE workspace_id = ?
+		GROUP BY recovery_tier, status`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer planRows.Close()
+
+	for planRows.Next() {
+		var tier, status string
+		var count int
+		if err := planRows.Scan(&tier, &status, &count); err != nil {
+			return nil, err
+		}
+		report.TotalPlans += count
+		report.PlansByTier[tier] += count
+		if status == model.DRPlanStatusActive {
+			report.ActivePlans += count
+		}
+		if status == model.DRPlanStatusApproved {
+			report.ApprovedPlans += count
+		}
+	}
+
+	// Objectives stats
+	var avgRTO, avgRPO sql.NullFloat64
+	var totalObjectives int
+	err = r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*), AVG(rto_value_minutes), AVG(rpo_value_minutes)
+		FROM recovery_objectives WHERE workspace_id = ?`, workspaceID).Scan(
+		&totalObjectives, &avgRTO, &avgRPO,
+	)
+	if err == nil {
+		report.TotalObjectives = totalObjectives
+		if avgRTO.Valid {
+			report.AverageRTOMinutes = avgRTO.Float64
+		}
+		if avgRPO.Valid {
+			report.AverageRPOMinutes = avgRPO.Float64
+		}
+	}
+
+	// Drills stats
+	var totalDrills, completedDrills, successfulDrills int
+	var avgRecoveryDuration sql.NullFloat64
+	err = r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*),
+		       COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0),
+		       COALESCE(SUM(CASE WHEN status = 'completed' AND success = 1 THEN 1 ELSE 0 END), 0),
+		       AVG(CASE WHEN status = 'completed' THEN actual_recovery_duration_minutes ELSE NULL END)
+		FROM continuity_drills WHERE workspace_id = ?`, workspaceID).Scan(
+		&totalDrills, &completedDrills, &successfulDrills, &avgRecoveryDuration,
+	)
+	if err == nil {
+		report.TotalDrills = totalDrills
+		report.CompletedDrills = completedDrills
+		if completedDrills > 0 {
+			report.DrillPassRate = (float64(successfulDrills) / float64(completedDrills)) * 100.0
+			report.RTOComplianceRate = report.DrillPassRate
+		}
+		if avgRecoveryDuration.Valid {
+			report.AverageRecoveryDuration = avgRecoveryDuration.Float64
+		}
+	}
+
+	// Findings stats
+	findingRows, err := r.db.QueryContext(ctx, `
+		SELECT severity, status, COUNT(*)
+		FROM continuity_drill_findings WHERE workspace_id = ?
+		GROUP BY severity, status`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer findingRows.Close()
+
+	var openCritical, openHigh, openOther int
+	for findingRows.Next() {
+		var sev, st string
+		var cnt int
+		if err := findingRows.Scan(&sev, &st, &cnt); err != nil {
+			return nil, err
+		}
+		report.TotalFindings += cnt
+		report.FindingsBySeverity[sev] += cnt
+		if st != model.DrillFindingStatusResolved && st != model.DrillFindingStatusWaived {
+			report.OpenFindingsCount += cnt
+			switch sev {
+			case model.DrillFindingSeverityCritical:
+				openCritical += cnt
+			case model.DrillFindingSeverityHigh:
+				openHigh += cnt
+			default:
+				openOther += cnt
+			}
+		}
+	}
+
+	// Calculate composite Readiness Score (0 - 100)
+	score := 50.0 // Baseline
+	if report.TotalPlans > 0 {
+		activeRatio := float64(report.ActivePlans+report.ApprovedPlans) / float64(report.TotalPlans)
+		score += activeRatio * 20.0
+	}
+	if report.CompletedDrills > 0 {
+		score += (report.DrillPassRate / 100.0) * 20.0
+	} else if report.TotalPlans > 0 {
+		score -= 10.0 // Penalty for no drills
+	}
+	// Deduct for open findings
+	score -= float64(openCritical * 15)
+	score -= float64(openHigh * 8)
+	score -= float64(openOther * 2)
+
+	if score < 0 {
+		score = 0
+	}
+	if score > 100 {
+		score = 100
+	}
+	report.ReadinessScore = score
+
+	return report, nil
 }
