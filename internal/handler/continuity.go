@@ -235,3 +235,161 @@ func (h *ContinuityHandler) ActivateDRPlan(w http.ResponseWriter, r *http.Reques
 	}
 	writeContinuityJSON(w, http.StatusOK, plan)
 }
+
+// CreateRecoveryObjective handles POST /v2/continuity/objectives
+func (h *ContinuityHandler) CreateRecoveryObjective(w http.ResponseWriter, r *http.Request) {
+	wsID := getContinuityWorkspaceID(r)
+	var req model.CreateRecoveryObjectiveRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeContinuityError(w, http.StatusBadRequest, "invalid json payload")
+		return
+	}
+
+	obj, err := h.svc.CreateRecoveryObjective(r.Context(), wsID, req)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusCreated, obj)
+}
+
+// GetRecoveryObjectiveByID handles GET /v2/continuity/objectives/{id}
+func (h *ContinuityHandler) GetRecoveryObjectiveByID(w http.ResponseWriter, r *http.Request, id string) {
+	obj, err := h.svc.GetRecoveryObjectiveByID(r.Context(), id)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, obj)
+}
+
+// UpdateRecoveryObjective handles PUT /v2/continuity/objectives/{id}
+func (h *ContinuityHandler) UpdateRecoveryObjective(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateRecoveryObjectiveRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeContinuityError(w, http.StatusBadRequest, "invalid json payload")
+		return
+	}
+
+	obj, err := h.svc.UpdateRecoveryObjective(r.Context(), id, req)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, obj)
+}
+
+// DeleteRecoveryObjective handles DELETE /v2/continuity/objectives/{id}
+func (h *ContinuityHandler) DeleteRecoveryObjective(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteRecoveryObjective(r.Context(), id); err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, map[string]string{"message": "recovery objective deleted"})
+}
+
+// ListRecoveryObjectives handles GET /v2/continuity/objectives
+func (h *ContinuityHandler) ListRecoveryObjectives(w http.ResponseWriter, r *http.Request) {
+	wsID := getContinuityWorkspaceID(r)
+	objs, err := h.svc.ListRecoveryObjectives(r.Context(), wsID)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, map[string]interface{}{
+		"objectives": objs,
+		"total":      len(objs),
+	})
+}
+
+// ListRecoveryObjectivesByPlan handles GET /v2/dr-plans/{id}/objectives
+func (h *ContinuityHandler) ListRecoveryObjectivesByPlan(w http.ResponseWriter, r *http.Request, planID string) {
+	objs, err := h.svc.ListRecoveryObjectivesByPlan(r.Context(), planID)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, map[string]interface{}{
+		"objectives": objs,
+		"total":      len(objs),
+	})
+}
+
+// CreateBIA handles POST /v2/continuity/bias
+func (h *ContinuityHandler) CreateBIA(w http.ResponseWriter, r *http.Request) {
+	wsID := getContinuityWorkspaceID(r)
+	var req model.CreateBIARequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeContinuityError(w, http.StatusBadRequest, "invalid json payload")
+		return
+	}
+
+	bia, err := h.svc.CreateBIA(r.Context(), wsID, req)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusCreated, bia)
+}
+
+// GetBIAByID handles GET /v2/continuity/bias/{id}
+func (h *ContinuityHandler) GetBIAByID(w http.ResponseWriter, r *http.Request, id string) {
+	bia, err := h.svc.GetBIAByID(r.Context(), id)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, bia)
+}
+
+// UpdateBIA handles PUT /v2/continuity/bias/{id}
+func (h *ContinuityHandler) UpdateBIA(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateBIARequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeContinuityError(w, http.StatusBadRequest, "invalid json payload")
+		return
+	}
+
+	bia, err := h.svc.UpdateBIA(r.Context(), id, req)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, bia)
+}
+
+// DeleteBIA handles DELETE /v2/continuity/bias/{id}
+func (h *ContinuityHandler) DeleteBIA(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteBIA(r.Context(), id); err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, map[string]string{"message": "business impact analysis deleted"})
+}
+
+// ListBIAs handles GET /v2/continuity/bias
+func (h *ContinuityHandler) ListBIAs(w http.ResponseWriter, r *http.Request) {
+	wsID := getContinuityWorkspaceID(r)
+	bias, err := h.svc.ListBIAs(r.Context(), wsID)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, map[string]interface{}{
+		"bias":  bias,
+		"total": len(bias),
+	})
+}
+
+// ListBIAsByPlan handles GET /v2/dr-plans/{id}/bias
+func (h *ContinuityHandler) ListBIAsByPlan(w http.ResponseWriter, r *http.Request, planID string) {
+	bias, err := h.svc.ListBIAsByPlan(r.Context(), planID)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, map[string]interface{}{
+		"bias":  bias,
+		"total": len(bias),
+	})
+}
