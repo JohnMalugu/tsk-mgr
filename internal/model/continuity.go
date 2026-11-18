@@ -36,7 +36,67 @@ var (
 	ErrInvalidRPOValue         = errors.New("rpo_value_minutes must be non-negative")
 	ErrInvalidAvailability     = errors.New("target availability must be between 0.0 and 100.0 percent")
 	ErrInvalidDataLossTolerance = errors.New("invalid data loss tolerance")
+	ErrBIANotFound             = errors.New("business impact analysis not found")
+	ErrInvalidMTDValue         = errors.New("mtd_minutes must be greater than zero")
+	ErrInvalidOperationalImpact = errors.New("invalid operational impact")
+	ErrInvalidRegulatoryImpact = errors.New("invalid regulatory impact")
+	ErrInvalidCriticalWindow   = errors.New("invalid critical recovery window")
 )
+
+// Operational Impact constants
+const (
+	OpImpactNegligible   = "negligible"
+	OpImpactMinor        = "minor"
+	OpImpactModerate     = "moderate"
+	OpImpactSevere       = "severe"
+	OpImpactCatastrophic = "catastrophic"
+)
+
+// Regulatory Impact constants
+const (
+	RegImpactNone              = "none"
+	RegImpactReportingRequired = "reporting_required"
+	RegImpactSanctionsPossible = "sanctions_possible"
+	RegImpactCriticalBreach    = "critical_breach"
+)
+
+// Critical Recovery Window constants
+const (
+	RecoveryWindowImmediate = "immediate_under_1h"
+	RecoveryWindowSameDay   = "same_day_under_8h"
+	RecoveryWindowNextDay   = "next_day_under_24h"
+	RecoveryWindowExtended  = "extended_over_24h"
+)
+
+// ValidateOperationalImpact checks whether operational impact is recognized
+func ValidateOperationalImpact(imp string) error {
+	switch strings.ToLower(strings.TrimSpace(imp)) {
+	case OpImpactNegligible, OpImpactMinor, OpImpactModerate, OpImpactSevere, OpImpactCatastrophic:
+		return nil
+	default:
+		return ErrInvalidOperationalImpact
+	}
+}
+
+// ValidateRegulatoryImpact checks whether regulatory impact is recognized
+func ValidateRegulatoryImpact(imp string) error {
+	switch strings.ToLower(strings.TrimSpace(imp)) {
+	case RegImpactNone, RegImpactReportingRequired, RegImpactSanctionsPossible, RegImpactCriticalBreach:
+		return nil
+	default:
+		return ErrInvalidRegulatoryImpact
+	}
+}
+
+// ValidateCriticalRecoveryWindow checks whether recovery window is recognized
+func ValidateCriticalRecoveryWindow(w string) error {
+	switch strings.ToLower(strings.TrimSpace(w)) {
+	case RecoveryWindowImmediate, RecoveryWindowSameDay, RecoveryWindowNextDay, RecoveryWindowExtended:
+		return nil
+	default:
+		return ErrInvalidCriticalWindow
+	}
+}
 
 // Data Loss Tolerance constants
 const (
@@ -127,6 +187,44 @@ func (ro *RecoveryObjective) Validate() error {
 		if err := ValidateDataLossTolerance(ro.DataLossTolerance); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// BusinessImpactAnalysis represents a comprehensive BIA record evaluating outage losses and tolerances
+type BusinessImpactAnalysis struct {
+	ID                       string    `json:"id"`
+	WorkspaceID              string    `json:"workspace_id"`
+	PlanID                   string    `json:"plan_id"`
+	CIID                     string    `json:"ci_id,omitempty"`
+	ServiceName              string    `json:"service_name"`
+	MTDMinutes               int       `json:"mtd_minutes"`
+	FinancialLossRatePerHour float64   `json:"financial_loss_rate_per_hour"`
+	OperationalImpact        string    `json:"operational_impact"`
+	RegulatoryImpact         string    `json:"regulatory_impact"`
+	CriticalRecoveryWindow   string    `json:"critical_recovery_window"`
+	AssessmentDate           time.Time `json:"assessment_date"`
+	AssessedBy               string    `json:"assessed_by"`
+	CreatedAt                time.Time `json:"created_at"`
+	UpdatedAt                time.Time `json:"updated_at"`
+}
+
+// Validate validates the business impact analysis fields
+func (b *BusinessImpactAnalysis) Validate() error {
+	if strings.TrimSpace(b.ServiceName) == "" {
+		return ErrServiceNameRequired
+	}
+	if b.MTDMinutes <= 0 {
+		return ErrInvalidMTDValue
+	}
+	if err := ValidateOperationalImpact(b.OperationalImpact); err != nil {
+		return err
+	}
+	if err := ValidateRegulatoryImpact(b.RegulatoryImpact); err != nil {
+		return err
+	}
+	if err := ValidateCriticalRecoveryWindow(b.CriticalRecoveryWindow); err != nil {
+		return err
 	}
 	return nil
 }
