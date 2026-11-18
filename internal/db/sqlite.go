@@ -2644,6 +2644,28 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	recoveryObjectivesQuery := `
+	CREATE TABLE IF NOT EXISTS recovery_objectives (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		plan_id TEXT NOT NULL,
+		ci_id TEXT NOT NULL DEFAULT '',
+		service_name TEXT NOT NULL,
+		rto_value_minutes INTEGER NOT NULL DEFAULT 0,
+		rpo_value_minutes INTEGER NOT NULL DEFAULT 0,
+		target_availability REAL NOT NULL DEFAULT 99.9,
+		data_loss_tolerance TEXT NOT NULL DEFAULT 'minimal_loss',
+		notes TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (plan_id) REFERENCES dr_plans(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(recoveryObjectivesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
