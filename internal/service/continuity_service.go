@@ -220,44 +220,179 @@ func (s *continuityServiceImpl) ActivateDRPlan(ctx context.Context, id string) (
 	return plan, nil
 }
 
-// Recovery Objectives Stubs
+// Recovery Objectives
 func (s *continuityServiceImpl) CreateRecoveryObjective(ctx context.Context, workspaceID string, req model.CreateRecoveryObjectiveRequest) (*model.RecoveryObjective, error) {
-	return nil, nil
-}
-func (s *continuityServiceImpl) GetRecoveryObjectiveByID(ctx context.Context, id string) (*model.RecoveryObjective, error) {
-	return nil, nil
-}
-func (s *continuityServiceImpl) UpdateRecoveryObjective(ctx context.Context, id string, req model.UpdateRecoveryObjectiveRequest) (*model.RecoveryObjective, error) {
-	return nil, nil
-}
-func (s *continuityServiceImpl) DeleteRecoveryObjective(ctx context.Context, id string) error {
-	return nil
-}
-func (s *continuityServiceImpl) ListRecoveryObjectivesByPlan(ctx context.Context, planID string) ([]model.RecoveryObjective, error) {
-	return nil, nil
-}
-func (s *continuityServiceImpl) ListRecoveryObjectives(ctx context.Context, workspaceID string) ([]model.RecoveryObjective, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	// Verify plan exists
+	if _, err := s.repo.GetDRPlanByID(ctx, req.PlanID); err != nil {
+		return nil, err
+	}
+
+	avail := req.TargetAvailability
+	if avail == 0.0 {
+		avail = 99.9
+	}
+	tol := req.DataLossTolerance
+	if tol == "" {
+		tol = model.DataLossToleranceMinimalLoss
+	}
+
+	obj := &model.RecoveryObjective{
+		WorkspaceID:        workspaceID,
+		PlanID:             req.PlanID,
+		CIID:               req.CIID,
+		ServiceName:        req.ServiceName,
+		RTOValueMinutes:    req.RTOValueMinutes,
+		RPOValueMinutes:    req.RPOValueMinutes,
+		TargetAvailability: avail,
+		DataLossTolerance:  tol,
+		Notes:              req.Notes,
+	}
+
+	if err := s.repo.CreateRecoveryObjective(ctx, obj); err != nil {
+		return nil, err
+	}
+	return obj, nil
 }
 
-// BIA Stubs
+func (s *continuityServiceImpl) GetRecoveryObjectiveByID(ctx context.Context, id string) (*model.RecoveryObjective, error) {
+	return s.repo.GetRecoveryObjectiveByID(ctx, id)
+}
+
+func (s *continuityServiceImpl) UpdateRecoveryObjective(ctx context.Context, id string, req model.UpdateRecoveryObjectiveRequest) (*model.RecoveryObjective, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	obj, err := s.repo.GetRecoveryObjectiveByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.CIID != nil {
+		obj.CIID = *req.CIID
+	}
+	if req.ServiceName != nil {
+		obj.ServiceName = *req.ServiceName
+	}
+	if req.RTOValueMinutes != nil {
+		obj.RTOValueMinutes = *req.RTOValueMinutes
+	}
+	if req.RPOValueMinutes != nil {
+		obj.RPOValueMinutes = *req.RPOValueMinutes
+	}
+	if req.TargetAvailability != nil {
+		obj.TargetAvailability = *req.TargetAvailability
+	}
+	if req.DataLossTolerance != nil {
+		obj.DataLossTolerance = *req.DataLossTolerance
+	}
+	if req.Notes != nil {
+		obj.Notes = *req.Notes
+	}
+
+	if err := s.repo.UpdateRecoveryObjective(ctx, obj); err != nil {
+		return nil, err
+	}
+	return obj, nil
+}
+
+func (s *continuityServiceImpl) DeleteRecoveryObjective(ctx context.Context, id string) error {
+	return s.repo.DeleteRecoveryObjective(ctx, id)
+}
+
+func (s *continuityServiceImpl) ListRecoveryObjectivesByPlan(ctx context.Context, planID string) ([]model.RecoveryObjective, error) {
+	return s.repo.ListRecoveryObjectivesByPlan(ctx, planID)
+}
+
+func (s *continuityServiceImpl) ListRecoveryObjectives(ctx context.Context, workspaceID string) ([]model.RecoveryObjective, error) {
+	return s.repo.ListRecoveryObjectives(ctx, workspaceID)
+}
+
+// BIA
 func (s *continuityServiceImpl) CreateBIA(ctx context.Context, workspaceID string, req model.CreateBIARequest) (*model.BusinessImpactAnalysis, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	// Verify plan exists
+	if _, err := s.repo.GetDRPlanByID(ctx, req.PlanID); err != nil {
+		return nil, err
+	}
+
+	bia := &model.BusinessImpactAnalysis{
+		WorkspaceID:              workspaceID,
+		PlanID:                   req.PlanID,
+		CIID:                     req.CIID,
+		ServiceName:              req.ServiceName,
+		MTDMinutes:               req.MTDMinutes,
+		FinancialLossRatePerHour: req.FinancialLossRatePerHour,
+		OperationalImpact:        req.OperationalImpact,
+		RegulatoryImpact:         req.RegulatoryImpact,
+		CriticalRecoveryWindow:   req.CriticalRecoveryWindow,
+		AssessedBy:               req.AssessedBy,
+	}
+
+	if err := s.repo.CreateBIA(ctx, bia); err != nil {
+		return nil, err
+	}
+	return bia, nil
 }
+
 func (s *continuityServiceImpl) GetBIAByID(ctx context.Context, id string) (*model.BusinessImpactAnalysis, error) {
-	return nil, nil
+	return s.repo.GetBIAByID(ctx, id)
 }
+
 func (s *continuityServiceImpl) UpdateBIA(ctx context.Context, id string, req model.UpdateBIARequest) (*model.BusinessImpactAnalysis, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	bia, err := s.repo.GetBIAByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.CIID != nil {
+		bia.CIID = *req.CIID
+	}
+	if req.ServiceName != nil {
+		bia.ServiceName = *req.ServiceName
+	}
+	if req.MTDMinutes != nil {
+		bia.MTDMinutes = *req.MTDMinutes
+	}
+	if req.FinancialLossRatePerHour != nil {
+		bia.FinancialLossRatePerHour = *req.FinancialLossRatePerHour
+	}
+	if req.OperationalImpact != nil {
+		bia.OperationalImpact = *req.OperationalImpact
+	}
+	if req.RegulatoryImpact != nil {
+		bia.RegulatoryImpact = *req.RegulatoryImpact
+	}
+	if req.CriticalRecoveryWindow != nil {
+		bia.CriticalRecoveryWindow = *req.CriticalRecoveryWindow
+	}
+	if req.AssessedBy != nil {
+		bia.AssessedBy = *req.AssessedBy
+	}
+
+	if err := s.repo.UpdateBIA(ctx, bia); err != nil {
+		return nil, err
+	}
+	return bia, nil
 }
+
 func (s *continuityServiceImpl) DeleteBIA(ctx context.Context, id string) error {
-	return nil
+	return s.repo.DeleteBIA(ctx, id)
 }
+
 func (s *continuityServiceImpl) ListBIAsByPlan(ctx context.Context, planID string) ([]model.BusinessImpactAnalysis, error) {
-	return nil, nil
+	return s.repo.ListBIAsByPlan(ctx, planID)
 }
+
 func (s *continuityServiceImpl) ListBIAs(ctx context.Context, workspaceID string) ([]model.BusinessImpactAnalysis, error) {
-	return nil, nil
+	return s.repo.ListBIAs(ctx, workspaceID)
 }
 
 // Runbooks & Steps Stubs
