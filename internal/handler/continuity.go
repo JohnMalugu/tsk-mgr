@@ -393,3 +393,135 @@ func (h *ContinuityHandler) ListBIAsByPlan(w http.ResponseWriter, r *http.Reques
 		"total": len(bias),
 	})
 }
+
+// CreateRunbook handles POST /v2/dr-plans/{id}/runbooks
+func (h *ContinuityHandler) CreateRunbook(w http.ResponseWriter, r *http.Request, planID string) {
+	wsID := getContinuityWorkspaceID(r)
+	var req model.CreateRunbookRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeContinuityError(w, http.StatusBadRequest, "invalid json payload")
+		return
+	}
+	if req.PlanID == "" {
+		req.PlanID = planID
+	}
+
+	rb, err := h.svc.CreateRunbook(r.Context(), wsID, req)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusCreated, rb)
+}
+
+// GetRunbookByID handles GET /v2/continuity/runbooks/{id}
+func (h *ContinuityHandler) GetRunbookByID(w http.ResponseWriter, r *http.Request, id string) {
+	rb, err := h.svc.GetRunbookByID(r.Context(), id)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, rb)
+}
+
+// UpdateRunbook handles PUT /v2/continuity/runbooks/{id}
+func (h *ContinuityHandler) UpdateRunbook(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateRunbookRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeContinuityError(w, http.StatusBadRequest, "invalid json payload")
+		return
+	}
+
+	rb, err := h.svc.UpdateRunbook(r.Context(), id, req)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, rb)
+}
+
+// DeleteRunbook handles DELETE /v2/continuity/runbooks/{id}
+func (h *ContinuityHandler) DeleteRunbook(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteRunbook(r.Context(), id); err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, map[string]string{"message": "recovery runbook deleted"})
+}
+
+// ListRunbooksByPlan handles GET /v2/dr-plans/{id}/runbooks
+func (h *ContinuityHandler) ListRunbooksByPlan(w http.ResponseWriter, r *http.Request, planID string) {
+	rbs, err := h.svc.ListRunbooksByPlan(r.Context(), planID)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, map[string]interface{}{
+		"runbooks": rbs,
+		"total":    len(rbs),
+	})
+}
+
+// CreateRunbookStep handles POST /v2/continuity/runbooks/{id}/steps
+func (h *ContinuityHandler) CreateRunbookStep(w http.ResponseWriter, r *http.Request, runbookID string) {
+	var req model.CreateRunbookStepRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeContinuityError(w, http.StatusBadRequest, "invalid json payload")
+		return
+	}
+
+	step, err := h.svc.CreateRunbookStep(r.Context(), runbookID, req)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusCreated, step)
+}
+
+// GetRunbookStepByID handles GET /v2/continuity/runbook-steps/{id}
+func (h *ContinuityHandler) GetRunbookStepByID(w http.ResponseWriter, r *http.Request, id string) {
+	step, err := h.svc.GetRunbookStepByID(r.Context(), id)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, step)
+}
+
+// UpdateRunbookStep handles PUT /v2/continuity/runbook-steps/{id}
+func (h *ContinuityHandler) UpdateRunbookStep(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateRunbookStepRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeContinuityError(w, http.StatusBadRequest, "invalid json payload")
+		return
+	}
+
+	step, err := h.svc.UpdateRunbookStep(r.Context(), id, req)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, step)
+}
+
+// DeleteRunbookStep handles DELETE /v2/continuity/runbook-steps/{id}
+func (h *ContinuityHandler) DeleteRunbookStep(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteRunbookStep(r.Context(), id); err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, map[string]string{"message": "runbook step deleted"})
+}
+
+// ListRunbookSteps handles GET /v2/continuity/runbooks/{id}/steps
+func (h *ContinuityHandler) ListRunbookSteps(w http.ResponseWriter, r *http.Request, runbookID string) {
+	steps, err := h.svc.ListRunbookSteps(r.Context(), runbookID)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, map[string]interface{}{
+		"steps": steps,
+		"total": len(steps),
+	})
+}
