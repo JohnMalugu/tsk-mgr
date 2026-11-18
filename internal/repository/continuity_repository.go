@@ -877,43 +877,353 @@ func (r *sqliteContinuityRepository) ListRunbookSteps(ctx context.Context, runbo
 
 // Drills
 func (r *sqliteContinuityRepository) CreateDrill(ctx context.Context, drill *model.ContinuityDrill) error {
-	return nil
+	if drill.ID == "" {
+		drill.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if drill.CreatedAt.IsZero() {
+		drill.CreatedAt = now
+	}
+	drill.UpdatedAt = now
+	if drill.Status == "" {
+		drill.Status = model.DrillStatusScheduled
+	}
+
+	successInt := 0
+	if drill.Success {
+		successInt = 1
+	}
+
+	query := `
+	INSERT INTO continuity_drills (
+		id, workspace_id, plan_id, drill_code, drill_type,
+		scenario, scheduled_date, status, actual_recovery_duration_minutes,
+		success, conducted_by, post_mortem_summary, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		drill.ID, drill.WorkspaceID, drill.PlanID, drill.DrillCode, drill.DrillType,
+		drill.Scenario, drill.ScheduledDate, drill.Status, drill.ActualRecoveryDurationMinutes,
+		successInt, drill.ConductedBy, drill.PostMortemSummary, drill.CreatedAt, drill.UpdatedAt,
+	)
+	return err
 }
 
 func (r *sqliteContinuityRepository) GetDrillByID(ctx context.Context, id string) (*model.ContinuityDrill, error) {
-	return nil, ErrDrillNotFound
+	query := `
+	SELECT id, workspace_id, plan_id, drill_code, drill_type,
+	       scenario, scheduled_date, status, actual_recovery_duration_minutes,
+	       success, conducted_by, post_mortem_summary, created_at, updated_at
+	FROM continuity_drills WHERE id = ?`
+
+	var d model.ContinuityDrill
+	var successInt int
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&d.ID, &d.WorkspaceID, &d.PlanID, &d.DrillCode, &d.DrillType,
+		&d.Scenario, &d.ScheduledDate, &d.Status, &d.ActualRecoveryDurationMinutes,
+		&successInt, &d.ConductedBy, &d.PostMortemSummary, &d.CreatedAt, &d.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrDrillNotFound
+		}
+		return nil, err
+	}
+	d.Success = (successInt == 1)
+
+	findings, _, err := r.ListDrillFindings(ctx, model.DrillFindingFilterCriteria{
+		DrillID: d.ID,
+		Limit:   100,
+	})
+	if err != nil {
+		return nil, err
+	}
+	d.Findings = findings
+	return &d, nil
 }
 
 func (r *sqliteContinuityRepository) UpdateDrill(ctx context.Context, drill *model.ContinuityDrill) error {
+	drill.UpdatedAt = time.Now().UTC()
+	successInt := 0
+	if drill.Success {
+		successInt = 1
+	}
+
+	query := `
+	UPDATE continuity_drills SET
+		scenario = ?, scheduled_date = ?, status = ?,
+		actual_recovery_duration_minutes = ?, success = ?,
+		conducted_by = ?, post_mortem_summary = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		drill.Scenario, drill.ScheduledDate, drill.Status,
+		drill.ActualRecoveryDurationMinutes, successInt,
+		drill.ConductedBy, drill.PostMortemSummary, drill.UpdatedAt,
+		drill.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrDrillNotFound
+	}
 	return nil
 }
 
 func (r *sqliteContinuityRepository) DeleteDrill(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, "DELETE FROM continuity_drills WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrDrillNotFound
+	}
 	return nil
 }
 
 func (r *sqliteContinuityRepository) ListDrills(ctx context.Context, filter model.DrillFilterCriteria) ([]model.ContinuityDrill, int, error) {
-	return nil, 0, nil
+	whereClauses := []string{"1=1"}
+	args := []interface{}{}
+
+	if filter.WorkspaceID != "" {
+		whereClauses = append(whereClauses, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.PlanID != "" {
+		whereClauses = append(whereClauses, "plan_id = ?")
+		args = append(args, filter.PlanID)
+	}
+	if filter.DrillType != "" {
+		whereClauses = append(whereClauses, "drill_type = ?")
+		args = append(args, filter.DrillType)
+	}
+	if filter.Status != "" {
+		whereClauses = append(whereClauses, "status = ?")
+		args = append(args, filter.Status)
+	}
+
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	var total int
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM continuity_drills WHERE %s", whereSQL)
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, workspace_id, plan_id, drill_code, drill_type,
+	       scenario, scheduled_date, status, actual_recovery_duration_minutes,
+	       success, conducted_by, post_mortem_summary, created_at, updated_at
+	FROM continuity_drills WHERE %s ORDER BY scheduled_date DESC LIMIT ? OFFSET ?`, whereSQL)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	drills := []model.ContinuityDrill{}
+	for rows.Next() {
+		var d model.ContinuityDrill
+		var successInt int
+		if err := rows.Scan(
+			&d.ID, &d.WorkspaceID, &d.PlanID, &d.DrillCode, &d.DrillType,
+			&d.Scenario, &d.ScheduledDate, &d.Status, &d.ActualRecoveryDurationMinutes,
+			&successInt, &d.ConductedBy, &d.PostMortemSummary, &d.CreatedAt, &d.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		d.Success = (successInt == 1)
+		drills = append(drills, d)
+	}
+	return drills, total, rows.Err()
 }
 
 func (r *sqliteContinuityRepository) CreateDrillFinding(ctx context.Context, finding *model.DrillFinding) error {
-	return nil
+	if finding.ID == "" {
+		finding.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if finding.CreatedAt.IsZero() {
+		finding.CreatedAt = now
+	}
+	finding.UpdatedAt = now
+	if finding.Status == "" {
+		finding.Status = model.DrillFindingStatusOpen
+	}
+
+	query := `
+	INSERT INTO continuity_drill_findings (
+		id, workspace_id, drill_id, severity, category,
+		description, remediation_action, assigned_to, status,
+		resolved_at, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		finding.ID, finding.WorkspaceID, finding.DrillID, finding.Severity, finding.Category,
+		finding.Description, finding.RemediationAction, finding.AssignedTo, finding.Status,
+		finding.ResolvedAt, finding.CreatedAt, finding.UpdatedAt,
+	)
+	return err
 }
 
 func (r *sqliteContinuityRepository) GetDrillFindingByID(ctx context.Context, id string) (*model.DrillFinding, error) {
-	return nil, ErrDrillFindingNotFound
+	query := `
+	SELECT id, workspace_id, drill_id, severity, category,
+	       description, remediation_action, assigned_to, status,
+	       resolved_at, created_at, updated_at
+	FROM continuity_drill_findings WHERE id = ?`
+
+	var f model.DrillFinding
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&f.ID, &f.WorkspaceID, &f.DrillID, &f.Severity, &f.Category,
+		&f.Description, &f.RemediationAction, &f.AssignedTo, &f.Status,
+		&f.ResolvedAt, &f.CreatedAt, &f.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrDrillFindingNotFound
+		}
+		return nil, err
+	}
+	return &f, nil
 }
 
 func (r *sqliteContinuityRepository) UpdateDrillFinding(ctx context.Context, finding *model.DrillFinding) error {
+	finding.UpdatedAt = time.Now().UTC()
+	if finding.Status == model.DrillFindingStatusResolved && finding.ResolvedAt == nil {
+		now := time.Now().UTC()
+		finding.ResolvedAt = &now
+	}
+
+	query := `
+	UPDATE continuity_drill_findings SET
+		severity = ?, category = ?, description = ?,
+		remediation_action = ?, assigned_to = ?, status = ?,
+		resolved_at = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		finding.Severity, finding.Category, finding.Description,
+		finding.RemediationAction, finding.AssignedTo, finding.Status,
+		finding.ResolvedAt, finding.UpdatedAt,
+		finding.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrDrillFindingNotFound
+	}
 	return nil
 }
 
 func (r *sqliteContinuityRepository) DeleteDrillFinding(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, "DELETE FROM continuity_drill_findings WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrDrillFindingNotFound
+	}
 	return nil
 }
 
 func (r *sqliteContinuityRepository) ListDrillFindings(ctx context.Context, filter model.DrillFindingFilterCriteria) ([]model.DrillFinding, int, error) {
-	return nil, 0, nil
+	whereClauses := []string{"1=1"}
+	args := []interface{}{}
+
+	if filter.WorkspaceID != "" {
+		whereClauses = append(whereClauses, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.DrillID != "" {
+		whereClauses = append(whereClauses, "drill_id = ?")
+		args = append(args, filter.DrillID)
+	}
+	if filter.Severity != "" {
+		whereClauses = append(whereClauses, "severity = ?")
+		args = append(args, filter.Severity)
+	}
+	if filter.Category != "" {
+		whereClauses = append(whereClauses, "category = ?")
+		args = append(args, filter.Category)
+	}
+	if filter.Status != "" {
+		whereClauses = append(whereClauses, "status = ?")
+		args = append(args, filter.Status)
+	}
+
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	var total int
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM continuity_drill_findings WHERE %s", whereSQL)
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, workspace_id, drill_id, severity, category,
+	       description, remediation_action, assigned_to, status,
+	       resolved_at, created_at, updated_at
+	FROM continuity_drill_findings WHERE %s ORDER BY created_at DESC LIMIT ? OFFSET ?`, whereSQL)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	findings := []model.DrillFinding{}
+	for rows.Next() {
+		var f model.DrillFinding
+		if err := rows.Scan(
+			&f.ID, &f.WorkspaceID, &f.DrillID, &f.Severity, &f.Category,
+			&f.Description, &f.RemediationAction, &f.AssignedTo, &f.Status,
+			&f.ResolvedAt, &f.CreatedAt, &f.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		findings = append(findings, f)
+	}
+	return findings, total, rows.Err()
 }
 
 // Analytics
