@@ -48,7 +48,108 @@ var (
 	ErrInvalidExecutionMode    = errors.New("invalid runbook execution mode")
 	ErrInvalidActionType       = errors.New("invalid runbook step action type")
 	ErrInvalidExecutionRole    = errors.New("invalid runbook step execution role")
+	ErrDrillNotFound           = errors.New("continuity drill not found")
+	ErrDrillFindingNotFound    = errors.New("continuity drill finding not found")
+	ErrInvalidDrillType        = errors.New("invalid continuity drill type")
+	ErrInvalidDrillStatus      = errors.New("invalid continuity drill status")
+	ErrDrillScenarioRequired   = errors.New("drill scenario is required")
+	ErrFindingDescRequired     = errors.New("drill finding description is required")
+	ErrInvalidFindingSeverity  = errors.New("invalid drill finding severity")
+	ErrInvalidFindingCategory  = errors.New("invalid drill finding category")
+	ErrInvalidDrillFindingStatus = errors.New("invalid drill finding status")
 )
+
+// Continuity Drill Type constants
+const (
+	DrillTypeTabletop     = "tabletop"
+	DrillTypeWalkthrough  = "walkthrough"
+	DrillTypeSimulation   = "simulation"
+	DrillTypeFullFailover = "full_failover"
+)
+
+// Continuity Drill Status constants
+const (
+	DrillStatusScheduled  = "scheduled"
+	DrillStatusInProgress = "in_progress"
+	DrillStatusCompleted  = "completed"
+	DrillStatusFailed     = "failed"
+	DrillStatusCancelled  = "cancelled"
+)
+
+// Drill Finding Severity constants
+const (
+	DrillFindingSeverityCritical = "critical"
+	DrillFindingSeverityHigh     = "high"
+	DrillFindingSeverityMedium   = "medium"
+	DrillFindingSeverityLow      = "low"
+)
+
+// Drill Finding Category constants
+const (
+	DrillFindingCatProcessGap      = "process_gap"
+	DrillFindingCatToolingFailure  = "tooling_failure"
+	DrillFindingCatCommDelay       = "communication_delay"
+	DrillFindingCatDocOutdated     = "documentation_outdated"
+	DrillFindingCatPermissionIssue = "permission_issue"
+)
+
+// Drill Finding Status constants
+const (
+	DrillFindingStatusOpen       = "open"
+	DrillFindingStatusInProgress = "in_progress"
+	DrillFindingStatusResolved   = "resolved"
+	DrillFindingStatusWaived     = "waived"
+)
+
+// ValidateDrillType checks whether drill type is valid
+func ValidateDrillType(t string) error {
+	switch strings.ToLower(strings.TrimSpace(t)) {
+	case DrillTypeTabletop, DrillTypeWalkthrough, DrillTypeSimulation, DrillTypeFullFailover:
+		return nil
+	default:
+		return ErrInvalidDrillType
+	}
+}
+
+// ValidateDrillStatus checks whether drill status is valid
+func ValidateDrillStatus(s string) error {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case DrillStatusScheduled, DrillStatusInProgress, DrillStatusCompleted, DrillStatusFailed, DrillStatusCancelled:
+		return nil
+	default:
+		return ErrInvalidDrillStatus
+	}
+}
+
+// ValidateFindingSeverity checks whether finding severity is valid
+func ValidateFindingSeverity(s string) error {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case DrillFindingSeverityCritical, DrillFindingSeverityHigh, DrillFindingSeverityMedium, DrillFindingSeverityLow:
+		return nil
+	default:
+		return ErrInvalidFindingSeverity
+	}
+}
+
+// ValidateFindingCategory checks whether finding category is valid
+func ValidateFindingCategory(c string) error {
+	switch strings.ToLower(strings.TrimSpace(c)) {
+	case DrillFindingCatProcessGap, DrillFindingCatToolingFailure, DrillFindingCatCommDelay, DrillFindingCatDocOutdated, DrillFindingCatPermissionIssue:
+		return nil
+	default:
+		return ErrInvalidFindingCategory
+	}
+}
+
+// ValidateDrillFindingStatus checks whether finding status is valid
+func ValidateDrillFindingStatus(s string) error {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case DrillFindingStatusOpen, DrillFindingStatusInProgress, DrillFindingStatusResolved, DrillFindingStatusWaived:
+		return nil
+	default:
+		return ErrInvalidDrillFindingStatus
+	}
+}
 
 // Runbook Execution Mode constants
 const (
@@ -346,6 +447,76 @@ func (s *RunbookStep) Validate() error {
 	}
 	if err := ValidateExecutionRole(s.ExecutionRole); err != nil {
 		return err
+	}
+	return nil
+}
+
+// ContinuityDrill represents a planned or executed disaster recovery exercise
+type ContinuityDrill struct {
+	ID                            string         `json:"id"`
+	WorkspaceID                   string         `json:"workspace_id"`
+	PlanID                        string         `json:"plan_id"`
+	DrillCode                     string         `json:"drill_code"`
+	DrillType                     string         `json:"drill_type"`
+	Scenario                      string         `json:"scenario"`
+	ScheduledDate                 time.Time      `json:"scheduled_date"`
+	Status                        string         `json:"status"`
+	ActualRecoveryDurationMinutes int            `json:"actual_recovery_duration_minutes"`
+	Success                       bool           `json:"success"`
+	ConductedBy                   string         `json:"conducted_by"`
+	PostMortemSummary             string         `json:"post_mortem_summary"`
+	Findings                      []DrillFinding `json:"findings,omitempty"`
+	CreatedAt                     time.Time      `json:"created_at"`
+	UpdatedAt                     time.Time      `json:"updated_at"`
+}
+
+// Validate validates the continuity drill
+func (d *ContinuityDrill) Validate() error {
+	if strings.TrimSpace(d.Scenario) == "" {
+		return ErrDrillScenarioRequired
+	}
+	if err := ValidateDrillType(d.DrillType); err != nil {
+		return err
+	}
+	if d.Status != "" {
+		if err := ValidateDrillStatus(d.Status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DrillFinding represents an actionable gap, observation, or remediation item uncovered during a DR drill
+type DrillFinding struct {
+	ID                string     `json:"id"`
+	WorkspaceID       string     `json:"workspace_id"`
+	DrillID           string     `json:"drill_id"`
+	Severity          string     `json:"severity"`
+	Category          string     `json:"category"`
+	Description       string     `json:"description"`
+	RemediationAction string     `json:"remediation_action"`
+	AssignedTo        string     `json:"assigned_to"`
+	Status            string     `json:"status"`
+	ResolvedAt        *time.Time `json:"resolved_at,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+}
+
+// Validate validates the drill finding
+func (f *DrillFinding) Validate() error {
+	if strings.TrimSpace(f.Description) == "" {
+		return ErrFindingDescRequired
+	}
+	if err := ValidateFindingSeverity(f.Severity); err != nil {
+		return err
+	}
+	if err := ValidateFindingCategory(f.Category); err != nil {
+		return err
+	}
+	if f.Status != "" {
+		if err := ValidateDrillFindingStatus(f.Status); err != nil {
+			return err
+		}
 	}
 	return nil
 }
