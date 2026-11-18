@@ -555,36 +555,152 @@ func (s *continuityServiceImpl) ListRunbookSteps(ctx context.Context, runbookID 
 	return s.repo.ListRunbookSteps(ctx, runbookID)
 }
 
-// Drills & Findings Stubs
+// Drills & Findings
 func (s *continuityServiceImpl) CreateDrill(ctx context.Context, workspaceID string, req model.CreateDrillRequest) (*model.ContinuityDrill, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	// Verify plan exists
+	if _, err := s.repo.GetDRPlanByID(ctx, req.PlanID); err != nil {
+		return nil, err
+	}
+
+	drill := &model.ContinuityDrill{
+		WorkspaceID:   workspaceID,
+		PlanID:        req.PlanID,
+		DrillCode:     req.DrillCode,
+		DrillType:     req.DrillType,
+		Scenario:      req.Scenario,
+		ScheduledDate: req.ScheduledDate,
+		ConductedBy:   req.ConductedBy,
+		Status:        model.DrillStatusScheduled,
+	}
+
+	if err := s.repo.CreateDrill(ctx, drill); err != nil {
+		return nil, err
+	}
+	return drill, nil
 }
+
 func (s *continuityServiceImpl) GetDrillByID(ctx context.Context, id string) (*model.ContinuityDrill, error) {
-	return nil, nil
+	return s.repo.GetDrillByID(ctx, id)
 }
+
 func (s *continuityServiceImpl) UpdateDrill(ctx context.Context, id string, req model.UpdateDrillRequest) (*model.ContinuityDrill, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	drill, err := s.repo.GetDrillByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Scenario != nil {
+		drill.Scenario = *req.Scenario
+	}
+	if req.ScheduledDate != nil {
+		drill.ScheduledDate = *req.ScheduledDate
+	}
+	if req.Status != nil {
+		drill.Status = *req.Status
+	}
+	if req.ActualRecoveryDurationMinutes != nil {
+		drill.ActualRecoveryDurationMinutes = *req.ActualRecoveryDurationMinutes
+	}
+	if req.Success != nil {
+		drill.Success = *req.Success
+	}
+	if req.ConductedBy != nil {
+		drill.ConductedBy = *req.ConductedBy
+	}
+	if req.PostMortemSummary != nil {
+		drill.PostMortemSummary = *req.PostMortemSummary
+	}
+
+	if err := s.repo.UpdateDrill(ctx, drill); err != nil {
+		return nil, err
+	}
+	return drill, nil
 }
+
 func (s *continuityServiceImpl) DeleteDrill(ctx context.Context, id string) error {
-	return nil
+	return s.repo.DeleteDrill(ctx, id)
 }
+
 func (s *continuityServiceImpl) ListDrills(ctx context.Context, filter model.DrillFilterCriteria) ([]model.ContinuityDrill, int, error) {
-	return nil, 0, nil
+	return s.repo.ListDrills(ctx, filter)
 }
+
 func (s *continuityServiceImpl) CreateDrillFinding(ctx context.Context, workspaceID string, drillID string, req model.CreateDrillFindingRequest) (*model.DrillFinding, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	// Verify drill exists
+	if _, err := s.repo.GetDrillByID(ctx, drillID); err != nil {
+		return nil, err
+	}
+
+	finding := &model.DrillFinding{
+		WorkspaceID:       workspaceID,
+		DrillID:           drillID,
+		Severity:          req.Severity,
+		Category:          req.Category,
+		Description:       req.Description,
+		RemediationAction: req.RemediationAction,
+		AssignedTo:        req.AssignedTo,
+		Status:            model.DrillFindingStatusOpen,
+	}
+
+	if err := s.repo.CreateDrillFinding(ctx, finding); err != nil {
+		return nil, err
+	}
+	return finding, nil
 }
+
 func (s *continuityServiceImpl) GetDrillFindingByID(ctx context.Context, id string) (*model.DrillFinding, error) {
-	return nil, nil
+	return s.repo.GetDrillFindingByID(ctx, id)
 }
+
 func (s *continuityServiceImpl) UpdateDrillFinding(ctx context.Context, id string, req model.UpdateDrillFindingRequest) (*model.DrillFinding, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	finding, err := s.repo.GetDrillFindingByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Severity != nil {
+		finding.Severity = *req.Severity
+	}
+	if req.Category != nil {
+		finding.Category = *req.Category
+	}
+	if req.Description != nil {
+		finding.Description = *req.Description
+	}
+	if req.RemediationAction != nil {
+		finding.RemediationAction = *req.RemediationAction
+	}
+	if req.AssignedTo != nil {
+		finding.AssignedTo = *req.AssignedTo
+	}
+	if req.Status != nil {
+		finding.Status = *req.Status
+	}
+
+	if err := s.repo.UpdateDrillFinding(ctx, finding); err != nil {
+		return nil, err
+	}
+	return finding, nil
 }
+
 func (s *continuityServiceImpl) DeleteDrillFinding(ctx context.Context, id string) error {
-	return nil
+	return s.repo.DeleteDrillFinding(ctx, id)
 }
+
 func (s *continuityServiceImpl) ListDrillFindings(ctx context.Context, filter model.DrillFindingFilterCriteria) ([]model.DrillFinding, int, error) {
-	return nil, 0, nil
+	return s.repo.ListDrillFindings(ctx, filter)
 }
 
 // Readiness Analytics Stub
