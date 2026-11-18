@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
@@ -524,4 +525,434 @@ func (h *ContinuityHandler) ListRunbookSteps(w http.ResponseWriter, r *http.Requ
 		"steps": steps,
 		"total": len(steps),
 	})
+}
+
+// CreateDrill handles POST /v2/continuity/drills
+func (h *ContinuityHandler) CreateDrill(w http.ResponseWriter, r *http.Request) {
+	wsID := getContinuityWorkspaceID(r)
+	var req model.CreateDrillRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeContinuityError(w, http.StatusBadRequest, "invalid json payload")
+		return
+	}
+
+	drill, err := h.svc.CreateDrill(r.Context(), wsID, req)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusCreated, drill)
+}
+
+// GetDrillByID handles GET /v2/continuity/drills/{id}
+func (h *ContinuityHandler) GetDrillByID(w http.ResponseWriter, r *http.Request, id string) {
+	drill, err := h.svc.GetDrillByID(r.Context(), id)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, drill)
+}
+
+// UpdateDrill handles PUT /v2/continuity/drills/{id}
+func (h *ContinuityHandler) UpdateDrill(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateDrillRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeContinuityError(w, http.StatusBadRequest, "invalid json payload")
+		return
+	}
+
+	drill, err := h.svc.UpdateDrill(r.Context(), id, req)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, drill)
+}
+
+// DeleteDrill handles DELETE /v2/continuity/drills/{id}
+func (h *ContinuityHandler) DeleteDrill(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteDrill(r.Context(), id); err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, map[string]string{"message": "continuity drill deleted"})
+}
+
+// ListDrills handles GET /v2/continuity/drills
+func (h *ContinuityHandler) ListDrills(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.DrillFilterCriteria{
+		WorkspaceID: getContinuityWorkspaceID(r),
+		PlanID:      q.Get("plan_id"),
+		DrillType:   q.Get("drill_type"),
+		Status:      q.Get("status"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	drills, total, err := h.svc.ListDrills(r.Context(), filter)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, map[string]interface{}{
+		"drills": drills,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
+}
+
+// CreateDrillFinding handles POST /v2/continuity/drills/{id}/findings
+func (h *ContinuityHandler) CreateDrillFinding(w http.ResponseWriter, r *http.Request, drillID string) {
+	wsID := getContinuityWorkspaceID(r)
+	var req model.CreateDrillFindingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeContinuityError(w, http.StatusBadRequest, "invalid json payload")
+		return
+	}
+
+	finding, err := h.svc.CreateDrillFinding(r.Context(), wsID, drillID, req)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusCreated, finding)
+}
+
+// GetDrillFindingByID handles GET /v2/continuity/findings/{id}
+func (h *ContinuityHandler) GetDrillFindingByID(w http.ResponseWriter, r *http.Request, id string) {
+	finding, err := h.svc.GetDrillFindingByID(r.Context(), id)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, finding)
+}
+
+// UpdateDrillFinding handles PUT /v2/continuity/findings/{id}
+func (h *ContinuityHandler) UpdateDrillFinding(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateDrillFindingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeContinuityError(w, http.StatusBadRequest, "invalid json payload")
+		return
+	}
+
+	finding, err := h.svc.UpdateDrillFinding(r.Context(), id, req)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, finding)
+}
+
+// DeleteDrillFinding handles DELETE /v2/continuity/findings/{id}
+func (h *ContinuityHandler) DeleteDrillFinding(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteDrillFinding(r.Context(), id); err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, map[string]string{"message": "drill finding deleted"})
+}
+
+// ListDrillFindings handles GET /v2/continuity/drills/{id}/findings
+func (h *ContinuityHandler) ListDrillFindings(w http.ResponseWriter, r *http.Request, drillID string) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.DrillFindingFilterCriteria{
+		WorkspaceID: getContinuityWorkspaceID(r),
+		DrillID:     drillID,
+		Severity:    q.Get("severity"),
+		Category:    q.Get("category"),
+		Status:      q.Get("status"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	findings, total, err := h.svc.ListDrillFindings(r.Context(), filter)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, map[string]interface{}{
+		"findings": findings,
+		"total":    total,
+		"limit":    limit,
+		"offset":   offset,
+	})
+}
+
+// GetContinuityReadinessReport handles GET /v2/continuity/readiness
+func (h *ContinuityHandler) GetContinuityReadinessReport(w http.ResponseWriter, r *http.Request) {
+	wsID := getContinuityWorkspaceID(r)
+	report, err := h.svc.GetContinuityReadinessReport(r.Context(), wsID)
+	if err != nil {
+		handleContinuityError(w, err)
+		return
+	}
+	writeContinuityJSON(w, http.StatusOK, report)
+}
+
+// ServeHTTP routes HTTP requests matching /v2/continuity and /v2/dr-plans
+func (h *ContinuityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/v2/dr-plans") {
+		h.serveDRPlans(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/v2/continuity") {
+		h.serveContinuity(w, r)
+		return
+	}
+	writeContinuityError(w, http.StatusNotFound, "not found")
+}
+
+func (h *ContinuityHandler) serveDRPlans(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/dr-plans")
+	path = strings.TrimPrefix(path, "/")
+
+	if path == "" {
+		switch r.Method {
+		case http.MethodGet:
+			h.ListDRPlans(w, r)
+		case http.MethodPost:
+			h.CreateDRPlan(w, r)
+		default:
+			writeContinuityError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	parts := strings.Split(path, "/")
+	planID := parts[0]
+
+	if len(parts) == 1 {
+		switch r.Method {
+		case http.MethodGet:
+			h.GetDRPlanByID(w, r, planID)
+		case http.MethodPut:
+			h.UpdateDRPlan(w, r, planID)
+		case http.MethodDelete:
+			h.DeleteDRPlan(w, r, planID)
+		default:
+			writeContinuityError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if len(parts) == 2 {
+		switch parts[1] {
+		case "approve":
+			if r.Method == http.MethodPost {
+				h.ApproveDRPlan(w, r, planID)
+				return
+			}
+		case "activate":
+			if r.Method == http.MethodPost {
+				h.ActivateDRPlan(w, r, planID)
+				return
+			}
+		case "objectives":
+			if r.Method == http.MethodGet {
+				h.ListRecoveryObjectivesByPlan(w, r, planID)
+				return
+			}
+		case "bias":
+			if r.Method == http.MethodGet {
+				h.ListBIAsByPlan(w, r, planID)
+				return
+			}
+		case "runbooks":
+			switch r.Method {
+			case http.MethodGet:
+				h.ListRunbooksByPlan(w, r, planID)
+			case http.MethodPost:
+				h.CreateRunbook(w, r, planID)
+			default:
+				writeContinuityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+	}
+
+	writeContinuityError(w, http.StatusNotFound, "route not found")
+}
+
+func (h *ContinuityHandler) serveContinuity(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/continuity")
+	path = strings.TrimPrefix(path, "/")
+
+	if path == "readiness" {
+		if r.Method == http.MethodGet {
+			h.GetContinuityReadinessReport(w, r)
+			return
+		}
+		writeContinuityError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	if strings.HasPrefix(path, "objectives") {
+		sub := strings.TrimPrefix(path, "objectives")
+		sub = strings.TrimPrefix(sub, "/")
+		if sub == "" {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListRecoveryObjectives(w, r)
+			case http.MethodPost:
+				h.CreateRecoveryObjective(w, r)
+			default:
+				writeContinuityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			h.GetRecoveryObjectiveByID(w, r, sub)
+		case http.MethodPut:
+			h.UpdateRecoveryObjective(w, r, sub)
+		case http.MethodDelete:
+			h.DeleteRecoveryObjective(w, r, sub)
+		default:
+			writeContinuityError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if strings.HasPrefix(path, "bias") {
+		sub := strings.TrimPrefix(path, "bias")
+		sub = strings.TrimPrefix(sub, "/")
+		if sub == "" {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListBIAs(w, r)
+			case http.MethodPost:
+				h.CreateBIA(w, r)
+			default:
+				writeContinuityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			h.GetBIAByID(w, r, sub)
+		case http.MethodPut:
+			h.UpdateBIA(w, r, sub)
+		case http.MethodDelete:
+			h.DeleteBIA(w, r, sub)
+		default:
+			writeContinuityError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if strings.HasPrefix(path, "runbook-steps/") {
+		stepID := strings.TrimPrefix(path, "runbook-steps/")
+		switch r.Method {
+		case http.MethodGet:
+			h.GetRunbookStepByID(w, r, stepID)
+		case http.MethodPut:
+			h.UpdateRunbookStep(w, r, stepID)
+		case http.MethodDelete:
+			h.DeleteRunbookStep(w, r, stepID)
+		default:
+			writeContinuityError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if strings.HasPrefix(path, "runbooks/") {
+		sub := strings.TrimPrefix(path, "runbooks/")
+		parts := strings.Split(sub, "/")
+		rbID := parts[0]
+
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetRunbookByID(w, r, rbID)
+			case http.MethodPut:
+				h.UpdateRunbook(w, r, rbID)
+			case http.MethodDelete:
+				h.DeleteRunbook(w, r, rbID)
+			default:
+				writeContinuityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 && parts[1] == "steps" {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListRunbookSteps(w, r, rbID)
+			case http.MethodPost:
+				h.CreateRunbookStep(w, r, rbID)
+			default:
+				writeContinuityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+	}
+
+	if strings.HasPrefix(path, "findings/") {
+		findingID := strings.TrimPrefix(path, "findings/")
+		switch r.Method {
+		case http.MethodGet:
+			h.GetDrillFindingByID(w, r, findingID)
+		case http.MethodPut:
+			h.UpdateDrillFinding(w, r, findingID)
+		case http.MethodDelete:
+			h.DeleteDrillFinding(w, r, findingID)
+		default:
+			writeContinuityError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if strings.HasPrefix(path, "drills") {
+		sub := strings.TrimPrefix(path, "drills")
+		sub = strings.TrimPrefix(sub, "/")
+		if sub == "" {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListDrills(w, r)
+			case http.MethodPost:
+				h.CreateDrill(w, r)
+			default:
+				writeContinuityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+		parts := strings.Split(sub, "/")
+		drillID := parts[0]
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetDrillByID(w, r, drillID)
+			case http.MethodPut:
+				h.UpdateDrill(w, r, drillID)
+			case http.MethodDelete:
+				h.DeleteDrill(w, r, drillID)
+			default:
+				writeContinuityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 && parts[1] == "findings" {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListDrillFindings(w, r, drillID)
+			case http.MethodPost:
+				h.CreateDrillFinding(w, r, drillID)
+			default:
+				writeContinuityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+	}
+
+	writeContinuityError(w, http.StatusNotFound, "route not found")
 }
