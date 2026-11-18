@@ -108,30 +108,116 @@ func NewContinuityService(repo repository.ContinuityRepository) ContinuityServic
 	return &continuityServiceImpl{repo: repo}
 }
 
-// DR Plans Stubs
+// DR Plans
 func (s *continuityServiceImpl) CreateDRPlan(ctx context.Context, workspaceID string, req model.CreateDRPlanRequest) (*model.DisasterRecoveryPlan, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	status := req.Status
+	if status == "" {
+		status = model.DRPlanStatusDraft
+	}
+
+	plan := &model.DisasterRecoveryPlan{
+		WorkspaceID:          workspaceID,
+		PlanCode:             req.PlanCode,
+		Name:                 req.Name,
+		Scope:                req.Scope,
+		RecoveryTier:         req.RecoveryTier,
+		Status:               status,
+		PrimaryCoordinatorID: req.PrimaryCoordinatorID,
+		BackupCoordinatorID:  req.BackupCoordinatorID,
+		InvocationCriteria:   req.InvocationCriteria,
+		DocumentURL:          req.DocumentURL,
+	}
+
+	if err := s.repo.CreateDRPlan(ctx, plan); err != nil {
+		return nil, err
+	}
+	return plan, nil
 }
+
 func (s *continuityServiceImpl) GetDRPlanByID(ctx context.Context, id string) (*model.DisasterRecoveryPlan, error) {
-	return nil, nil
+	return s.repo.GetDRPlanByID(ctx, id)
 }
+
 func (s *continuityServiceImpl) GetDRPlanByCode(ctx context.Context, workspaceID string, planCode string) (*model.DisasterRecoveryPlan, error) {
-	return nil, nil
+	return s.repo.GetDRPlanByCode(ctx, workspaceID, planCode)
 }
+
 func (s *continuityServiceImpl) UpdateDRPlan(ctx context.Context, id string, req model.UpdateDRPlanRequest) (*model.DisasterRecoveryPlan, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	plan, err := s.repo.GetDRPlanByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Name != nil {
+		plan.Name = *req.Name
+	}
+	if req.Scope != nil {
+		plan.Scope = *req.Scope
+	}
+	if req.RecoveryTier != nil {
+		plan.RecoveryTier = *req.RecoveryTier
+	}
+	if req.Status != nil {
+		plan.Status = *req.Status
+	}
+	if req.PrimaryCoordinatorID != nil {
+		plan.PrimaryCoordinatorID = *req.PrimaryCoordinatorID
+	}
+	if req.BackupCoordinatorID != nil {
+		plan.BackupCoordinatorID = *req.BackupCoordinatorID
+	}
+	if req.InvocationCriteria != nil {
+		plan.InvocationCriteria = *req.InvocationCriteria
+	}
+	if req.DocumentURL != nil {
+		plan.DocumentURL = *req.DocumentURL
+	}
+
+	if err := s.repo.UpdateDRPlan(ctx, plan); err != nil {
+		return nil, err
+	}
+	return plan, nil
 }
+
 func (s *continuityServiceImpl) DeleteDRPlan(ctx context.Context, id string) error {
-	return nil
+	return s.repo.DeleteDRPlan(ctx, id)
 }
+
 func (s *continuityServiceImpl) ListDRPlans(ctx context.Context, filter model.DRPlanFilterCriteria) ([]model.DisasterRecoveryPlan, int, error) {
-	return nil, 0, nil
+	return s.repo.ListDRPlans(ctx, filter)
 }
+
 func (s *continuityServiceImpl) ApproveDRPlan(ctx context.Context, id string, approverID string) (*model.DisasterRecoveryPlan, error) {
-	return nil, nil
+	plan, err := s.repo.GetDRPlanByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	plan.Status = model.DRPlanStatusApproved
+	if approverID != "" && plan.PrimaryCoordinatorID == "" {
+		plan.PrimaryCoordinatorID = approverID
+	}
+	if err := s.repo.UpdateDRPlan(ctx, plan); err != nil {
+		return nil, err
+	}
+	return plan, nil
 }
+
 func (s *continuityServiceImpl) ActivateDRPlan(ctx context.Context, id string) (*model.DisasterRecoveryPlan, error) {
-	return nil, nil
+	plan, err := s.repo.GetDRPlanByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	plan.Status = model.DRPlanStatusActive
+	if err := s.repo.UpdateDRPlan(ctx, plan); err != nil {
+		return nil, err
+	}
+	return plan, nil
 }
 
 // Recovery Objectives Stubs
