@@ -3042,6 +3042,20 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_vuln_exceptions_ws_status ON vulnerability_exceptions(workspace_id, status);
 	CREATE INDEX IF NOT EXISTS idx_vuln_exceptions_finding ON vulnerability_exceptions(finding_id);
 	CREATE INDEX IF NOT EXISTS idx_vuln_exceptions_expiry ON vulnerability_exceptions(expires_at);
+	CREATE INDEX IF NOT EXISTS idx_dr_plans_ws_code ON dr_plans(workspace_id, plan_code);
+	CREATE INDEX IF NOT EXISTS idx_dr_plans_ws_tier ON dr_plans(workspace_id, recovery_tier);
+	CREATE INDEX IF NOT EXISTS idx_dr_plans_ws_status ON dr_plans(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_dr_objectives_plan ON recovery_objectives(plan_id);
+	CREATE INDEX IF NOT EXISTS idx_dr_objectives_ws_svc ON recovery_objectives(workspace_id, service_name);
+	CREATE INDEX IF NOT EXISTS idx_dr_bia_plan ON business_impact_analyses(plan_id);
+	CREATE INDEX IF NOT EXISTS idx_dr_bia_ws_svc ON business_impact_analyses(workspace_id, service_name);
+	CREATE INDEX IF NOT EXISTS idx_dr_runbooks_ws_plan ON dr_runbooks(workspace_id, plan_id);
+	CREATE INDEX IF NOT EXISTS idx_dr_runbooks_ws_code ON dr_runbooks(workspace_id, runbook_code);
+	CREATE INDEX IF NOT EXISTS idx_dr_runbook_steps_rb ON dr_runbook_steps(runbook_id, step_order);
+	CREATE INDEX IF NOT EXISTS idx_dr_drills_ws_plan ON continuity_drills(workspace_id, plan_id);
+	CREATE INDEX IF NOT EXISTS idx_dr_drills_ws_status ON continuity_drills(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_dr_drill_findings_drill ON continuity_drill_findings(drill_id);
+	CREATE INDEX IF NOT EXISTS idx_dr_drill_findings_ws_status ON continuity_drill_findings(workspace_id, status);
 	`
 
 	_, err = db.Exec(indexQuery)
