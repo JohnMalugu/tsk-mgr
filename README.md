@@ -398,6 +398,17 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET|PUT|DELETE /v2/continuity/drills/{id}` to inspect drill details (including all identified gaps and post-exercise findings), update recovery duration and outcome success, or log post-mortem summaries
 - `GET|POST /v2/continuity/drills/{id}/findings` and `GET|PUT|DELETE /v2/continuity/findings/{id}` to log and track remediation items and gaps discovered during drills across process, tooling, documentation, and permissions with severity triage and resolution timestamps
 - `GET /v2/continuity/readiness?workspace_id={id}` for executive Business Continuity and IT Disaster Recovery posture analytics, total/active plans by tier, average RTO/RPO minutes, drill pass rate, RTO compliance percentage, open findings count by severity, and composite Readiness Index Score (0-100)
+- `GET|POST /v2/cost-centers` to list Cost Centers (`workspace_id`, `department`, `status`, `search`, `limit`, `offset`) or create a new accounting cost center (`engineering`, `infrastructure`, `security`, `product`, `operations`, `finance`) with unique code constraints (`CC-ENG-101`), manager ID, and status
+- `GET|PUT|DELETE /v2/cost-centers/{id}` to fetch cost center details, update name, department, status, or remove a cost center
+- `GET|POST /v2/finops/budgets` to list and allocate IT budgets by fiscal year, fiscal period (`annual`, `quarterly`, `monthly`), cost center, allocated amount, currency, alert threshold percent, and lifecycle status (`draft`, `approved`, `active`, `exceeded`, `closed`)
+- `GET|PUT|DELETE /v2/finops/budgets/{id}` to inspect budget allocations, update allocated funding and threshold alerts, or close/delete a budget
+- `GET|POST /v2/finops/expenses` to list and log IT expenditures categorized by cost pool (`cloud_infrastructure`, `software_licenses`, `hardware_equipment`, `telecom_network`, `personnel_labor`, `professional_services`), Capex/Opex classification, amount, payment status (`pending`, `approved`, `paid`, `rejected`), with automated budget spend updates and threshold monitoring
+- `GET|PUT|DELETE /v2/finops/expenses/{id}` to fetch expense records with CI and Vendor linkages, update invoice references and payment status, or delete an expense with automatic budget spend adjustment
+- `GET|POST /v2/finops/chargeback/rules` to list and configure department chargeback and showback cost allocation policies by method (`fixed_percent`, `usage_units`, `even_split`), allocation percentage, or unit rate
+- `GET|PUT|DELETE /v2/finops/chargeback/rules/{id}` to inspect, update, or remove chargeback allocation rules
+- `GET|POST /v2/finops/chargeback/statements` to list and issue periodic chargeback billing statements (`statement_period`, `target_business_unit`, `total_charge`, `currency`, `status`)
+- `GET|PUT|DELETE /v2/finops/chargeback/statements/{id}` to inspect statement items, settle billing statements (`settled` with automated settlement timestamps), or remove statements
+- `GET /v2/finops/analytics?workspace_id={id}&fiscal_year={year}` for comprehensive FinOps financial posture reporting, budget utilization %, variance (allocated vs spent), Capex vs Opex breakdown, cost pool distribution, top cost drivers by CI and Vendor, chargeback recovery metrics, and Cost Efficiency Score (0–100)
 
 ## Current limitations
 

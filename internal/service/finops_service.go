@@ -262,8 +262,7 @@ func (s *finopsServiceImpl) CreateITExpense(ctx context.Context, workspaceID str
 	if _, err := s.repo.GetCostCenterByID(ctx, req.CostCenterID); err != nil {
 		return nil, err
 	}
-	budget, err := s.repo.GetITBudgetByID(ctx, req.BudgetID)
-	if err != nil {
+	if _, err := s.repo.GetITBudgetByID(ctx, req.BudgetID); err != nil {
 		return nil, err
 	}
 
@@ -297,10 +296,11 @@ func (s *finopsServiceImpl) CreateITExpense(ctx context.Context, workspaceID str
 	}
 
 	// Check if budget exceeded after expense
-	newSpent := budget.SpentAmount + expense.Amount
-	if budget.AllocatedAmount > 0 && newSpent > budget.AllocatedAmount && budget.Status == model.BudgetStatusActive {
-		budget.Status = model.BudgetStatusExceeded
-		_ = s.repo.UpdateITBudget(ctx, budget)
+	if freshBudget, err := s.repo.GetITBudgetByID(ctx, req.BudgetID); err == nil {
+		if freshBudget.AllocatedAmount > 0 && freshBudget.SpentAmount > freshBudget.AllocatedAmount && freshBudget.Status == model.BudgetStatusActive {
+			freshBudget.Status = model.BudgetStatusExceeded
+			_ = s.repo.UpdateITBudget(ctx, freshBudget)
+		}
 	}
 
 	return expense, nil
