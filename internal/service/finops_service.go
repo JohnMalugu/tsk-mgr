@@ -508,7 +508,10 @@ func (s *finopsServiceImpl) ListChargebackStatements(ctx context.Context, filter
 	return s.repo.ListChargebackStatements(ctx, filter)
 }
 
-// Analytics Stub
+// Analytics
 func (s *finopsServiceImpl) GetFinOpsAnalytics(ctx context.Context, workspaceID string, fiscalYear int) (*model.FinOpsAnalyticsReport, error) {
-	return &model.FinOpsAnalyticsReport{WorkspaceID: workspaceID, FiscalYear: fiscalYear}, nil
+	if fiscalYear <= 0 {
+		fiscalYear = time.Now().UTC().Year()
+	}
+	return s.repo.GetFinOpsAnalytics(ctx, workspaceID, fiscalYear)
 }
