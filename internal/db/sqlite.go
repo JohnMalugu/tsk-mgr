@@ -3170,6 +3170,21 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_dr_drills_ws_status ON continuity_drills(workspace_id, status);
 	CREATE INDEX IF NOT EXISTS idx_dr_drill_findings_drill ON continuity_drill_findings(drill_id);
 	CREATE INDEX IF NOT EXISTS idx_dr_drill_findings_ws_status ON continuity_drill_findings(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_cost_centers_ws_code ON cost_centers(workspace_id, code);
+	CREATE INDEX IF NOT EXISTS idx_cost_centers_ws_dept ON cost_centers(workspace_id, department);
+	CREATE INDEX IF NOT EXISTS idx_cost_centers_ws_status ON cost_centers(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_it_budgets_ws_year ON it_budgets(workspace_id, fiscal_year);
+	CREATE INDEX IF NOT EXISTS idx_it_budgets_cost_center ON it_budgets(cost_center_id, status);
+	CREATE INDEX IF NOT EXISTS idx_it_expenses_ws_date ON it_expenses(workspace_id, expense_date);
+	CREATE INDEX IF NOT EXISTS idx_it_expenses_budget ON it_expenses(budget_id);
+	CREATE INDEX IF NOT EXISTS idx_it_expenses_cost_center ON it_expenses(cost_center_id);
+	CREATE INDEX IF NOT EXISTS idx_it_expenses_cost_pool ON it_expenses(cost_pool);
+	CREATE INDEX IF NOT EXISTS idx_it_expenses_ci ON it_expenses(ci_id);
+	CREATE INDEX IF NOT EXISTS idx_it_expenses_vendor ON it_expenses(vendor_id);
+	CREATE INDEX IF NOT EXISTS idx_chargeback_rules_ws_target ON chargeback_rules(workspace_id, target_business_unit);
+	CREATE INDEX IF NOT EXISTS idx_chargeback_rules_cost_center ON chargeback_rules(cost_center_id);
+	CREATE INDEX IF NOT EXISTS idx_chargeback_stmt_ws_target ON chargeback_statements(workspace_id, target_business_unit);
+	CREATE INDEX IF NOT EXISTS idx_chargeback_stmt_period ON chargeback_statements(statement_period, status);
 	`
 
 	_, err = db.Exec(indexQuery)
