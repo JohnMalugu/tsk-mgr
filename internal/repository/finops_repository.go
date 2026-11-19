@@ -453,21 +453,283 @@ func (r *sqliteFinOpsRepository) ListITBudgets(ctx context.Context, filter model
 	return list, total, rows.Err()
 }
 
-// IT Expense Stubs
+// IT Expenses
 func (r *sqliteFinOpsRepository) CreateITExpense(ctx context.Context, e *model.ITExpense) error {
-	return nil
+	if e.ID == "" {
+		e.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if e.CreatedAt.IsZero() {
+		e.CreatedAt = now
+	}
+	e.UpdatedAt = now
+	if e.ExpenseDate.IsZero() {
+		e.ExpenseDate = now
+	}
+	if e.Currency == "" {
+		e.Currency = "USD"
+	}
+	if e.ExpenseType == "" {
+		e.ExpenseType = model.ExpenseTypeOpex
+	}
+	if e.PaymentStatus == "" {
+		e.PaymentStatus = model.PaymentStatusPending
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	query := `
+	INSERT INTO it_expenses (
+		id, workspace_id, budget_id, cost_center_id, vendor_id,
+		ci_id, invoice_number, description, cost_pool, expense_type,
+		amount, currency, expense_date, payment_status, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err = tx.ExecContext(ctx, query,
+		e.ID, e.WorkspaceID, e.BudgetID, e.CostCenterID, e.VendorID,
+		e.CIID, e.InvoiceNumber, e.Description, e.CostPool, e.ExpenseType,
+		e.Amount, e.Currency, e.ExpenseDate, e.PaymentStatus, e.CreatedAt, e.UpdatedAt,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Update budget spent_amount
+	if e.BudgetID != "" {
+		_, err = tx.ExecContext(ctx, `
+			UPDATE it_budgets
+			SET spent_amount = spent_amount + ?, updated_at = ?
+			WHERE id = ?`,
+			e.Amount, now, e.BudgetID,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
+
 func (r *sqliteFinOpsRepository) GetITExpenseByID(ctx context.Context, id string) (*model.ITExpense, error) {
-	return nil, ErrExpenseNotFound
+	query := `
+	SELECT id, workspace_id, budget_id, cost_center_id, vendor_id,
+	       ci_id, invoice_number, description, cost_pool, expense_type,
+	       amount, currency, expense_date, payment_status, created_at, updated_at
+	FROM it_expenses WHERE id = ?`
+
+	var e model.ITExpense
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&e.ID, &e.WorkspaceID, &e.BudgetID, &e.CostCenterID, &e.VendorID,
+		&e.CIID, &e.InvoiceNumber, &e.Description, &e.CostPool, &e.ExpenseType,
+		&e.Amount, &e.Currency, &e.ExpenseDate, &e.PaymentStatus, &e.CreatedAt, &e.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrExpenseNotFound
+		}
+		return nil, err
+	}
+	return &e, nil
 }
+
 func (r *sqliteFinOpsRepository) UpdateITExpense(ctx context.Context, e *model.ITExpense) error {
-	return nil
+	e.UpdatedAt = time.Now().UTC()
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Fetch old expense to adjust budget spent_amount if amount or budget changed
+	var oldAmount float64
+	var oldBudgetID string
+	err = tx.QueryRowContext(ctx, "SELECT amount, budget_id FROM it_expenses WHERE id = ?", e.ID).Scan(&oldAmount, &oldBudgetID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrExpenseNotFound
+		}
+		return err
+	}
+
+	query := `
+	UPDATE it_expenses SET
+		budget_id = ?, cost_center_id = ?, vendor_id = ?,
+		ci_id = ?, invoice_number = ?, description = ?,
+		cost_pool = ?, expense_type = ?, amount = ?,
+		currency = ?, expense_date = ?, payment_status = ?,
+		updated_at = ?
+	WHERE id = ?`
+
+	_, err = tx.ExecContext(ctx, query,
+		e.BudgetID, e.CostCenterID, e.VendorID,
+		e.CIID, e.InvoiceNumber, e.Description,
+		e.CostPool, e.ExpenseType, e.Amount,
+		e.Currency, e.ExpenseDate, e.PaymentStatus,
+		e.UpdatedAt, e.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Adjust old budget if budget changed or amount changed
+	if oldBudgetID == e.BudgetID {
+		diff := e.Amount - oldAmount
+		if diff != 0 && e.BudgetID != "" {
+			_, err = tx.ExecContext(ctx, "UPDATE it_budgets SET spent_amount = spent_amount + ?, updated_at = ? WHERE id = ?", diff, e.UpdatedAt, e.BudgetID)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		if oldBudgetID != "" {
+			_, err = tx.ExecContext(ctx, "UPDATE it_budgets SET spent_amount = spent_amount - ?, updated_at = ? WHERE id = ?", oldAmount, e.UpdatedAt, oldBudgetID)
+			if err != nil {
+				return err
+			}
+		}
+		if e.BudgetID != "" {
+			_, err = tx.ExecContext(ctx, "UPDATE it_budgets SET spent_amount = spent_amount + ?, updated_at = ? WHERE id = ?", e.Amount, e.UpdatedAt, e.BudgetID)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return tx.Commit()
 }
+
 func (r *sqliteFinOpsRepository) DeleteITExpense(ctx context.Context, id string) error {
-	return nil
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var amount float64
+	var budgetID string
+	err = tx.QueryRowContext(ctx, "SELECT amount, budget_id FROM it_expenses WHERE id = ?", id).Scan(&amount, &budgetID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrExpenseNotFound
+		}
+		return err
+	}
+
+	res, err := tx.ExecContext(ctx, "DELETE FROM it_expenses WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrExpenseNotFound
+	}
+
+	if budgetID != "" {
+		_, err = tx.ExecContext(ctx, "UPDATE it_budgets SET spent_amount = spent_amount - ?, updated_at = ? WHERE id = ?", amount, time.Now().UTC(), budgetID)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
+
 func (r *sqliteFinOpsRepository) ListITExpenses(ctx context.Context, filter model.ITExpenseFilterCriteria) ([]model.ITExpense, int, error) {
-	return nil, 0, nil
+	whereClauses := []string{"1=1"}
+	args := []interface{}{}
+
+	if filter.WorkspaceID != "" {
+		whereClauses = append(whereClauses, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.BudgetID != "" {
+		whereClauses = append(whereClauses, "budget_id = ?")
+		args = append(args, filter.BudgetID)
+	}
+	if filter.CostCenterID != "" {
+		whereClauses = append(whereClauses, "cost_center_id = ?")
+		args = append(args, filter.CostCenterID)
+	}
+	if filter.VendorID != "" {
+		whereClauses = append(whereClauses, "vendor_id = ?")
+		args = append(args, filter.VendorID)
+	}
+	if filter.CIID != "" {
+		whereClauses = append(whereClauses, "ci_id = ?")
+		args = append(args, filter.CIID)
+	}
+	if filter.CostPool != "" {
+		whereClauses = append(whereClauses, "cost_pool = ?")
+		args = append(args, filter.CostPool)
+	}
+	if filter.ExpenseType != "" {
+		whereClauses = append(whereClauses, "expense_type = ?")
+		args = append(args, filter.ExpenseType)
+	}
+	if filter.PaymentStatus != "" {
+		whereClauses = append(whereClauses, "payment_status = ?")
+		args = append(args, filter.PaymentStatus)
+	}
+	if filter.FromDate != nil {
+		whereClauses = append(whereClauses, "expense_date >= ?")
+		args = append(args, *filter.FromDate)
+	}
+	if filter.ToDate != nil {
+		whereClauses = append(whereClauses, "expense_date <= ?")
+		args = append(args, *filter.ToDate)
+	}
+
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	var total int
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM it_expenses WHERE %s", whereSQL)
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, workspace_id, budget_id, cost_center_id, vendor_id,
+	       ci_id, invoice_number, description, cost_pool, expense_type,
+	       amount, currency, expense_date, payment_status, created_at, updated_at
+	FROM it_expenses WHERE %s ORDER BY expense_date DESC LIMIT ? OFFSET ?`, whereSQL)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	list := []model.ITExpense{}
+	for rows.Next() {
+		var e model.ITExpense
+		if err := rows.Scan(
+			&e.ID, &e.WorkspaceID, &e.BudgetID, &e.CostCenterID, &e.VendorID,
+			&e.CIID, &e.InvoiceNumber, &e.Description, &e.CostPool, &e.ExpenseType,
+			&e.Amount, &e.Currency, &e.ExpenseDate, &e.PaymentStatus, &e.CreatedAt, &e.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		list = append(list, e)
+	}
+	return list, total, rows.Err()
 }
 
 // Chargeback Stubs
