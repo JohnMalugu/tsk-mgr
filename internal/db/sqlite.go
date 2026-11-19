@@ -2795,6 +2795,29 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	budgetsQuery := `
+	CREATE TABLE IF NOT EXISTS it_budgets (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		cost_center_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		fiscal_year INTEGER NOT NULL,
+		period_type TEXT NOT NULL DEFAULT 'annual',
+		allocated_amount REAL NOT NULL,
+		spent_amount REAL NOT NULL DEFAULT 0.0,
+		currency TEXT NOT NULL DEFAULT 'USD',
+		alert_threshold_percent REAL NOT NULL DEFAULT 80.0,
+		status TEXT NOT NULL DEFAULT 'draft',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (cost_center_id) REFERENCES cost_centers(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(budgetsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
