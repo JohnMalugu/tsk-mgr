@@ -690,3 +690,79 @@ func (r *UpdateChargebackStatementRequest) Validate() error {
 	}
 	return nil
 }
+
+// CostCenterFilterCriteria specifies filters for cost center queries
+type CostCenterFilterCriteria struct {
+	WorkspaceID string
+	Department  string
+	Status      string
+	Search      string
+	Limit       int
+	Offset      int
+}
+
+// ITBudgetFilterCriteria specifies filters for budget queries
+type ITBudgetFilterCriteria struct {
+	WorkspaceID  string
+	CostCenterID string
+	FiscalYear   int
+	PeriodType   string
+	Status       string
+	Limit        int
+	Offset       int
+}
+
+// ITExpenseFilterCriteria specifies filters for expense queries
+type ITExpenseFilterCriteria struct {
+	WorkspaceID   string
+	BudgetID      string
+	CostCenterID  string
+	VendorID      string
+	CIID          string
+	CostPool      string
+	ExpenseType   string
+	PaymentStatus string
+	FromDate      *time.Time
+	ToDate        *time.Time
+	Limit         int
+	Offset        int
+}
+
+// ChargebackRuleFilterCriteria specifies filters for chargeback rule queries
+type ChargebackRuleFilterCriteria struct {
+	WorkspaceID        string
+	CostCenterID       string
+	TargetBusinessUnit string
+	Limit              int
+	Offset             int
+}
+
+// ChargebackStatementFilterCriteria specifies filters for chargeback statement queries
+type ChargebackStatementFilterCriteria struct {
+	WorkspaceID        string
+	TargetBusinessUnit string
+	StatementPeriod    string
+	Status             string
+	Limit              int
+	Offset             int
+}
+
+// FinOpsAnalyticsReport represents an aggregated financial overview of IT expenditures, budget variances, and cost efficiency
+type FinOpsAnalyticsReport struct {
+	WorkspaceID              string             `json:"workspace_id"`
+	FiscalYear               int                `json:"fiscal_year"`
+	TotalCostCenters         int                `json:"total_cost_centers"`
+	TotalBudgetAllocated     float64            `json:"total_budget_allocated"`
+	TotalActualSpend         float64            `json:"total_actual_spend"`
+	BudgetVariance           float64            `json:"budget_variance"`
+	BudgetUtilizationPercent float64            `json:"budget_utilization_percent"`
+	SpendByCostPool          map[string]float64 `json:"spend_by_cost_pool"`
+	SpendByExpenseType       map[string]float64 `json:"spend_by_expense_type"`
+	SpendByDepartment        map[string]float64 `json:"spend_by_department"`
+	TopCostDriversCI         map[string]float64 `json:"top_cost_drivers_ci"`
+	TopCostDriversVendor     map[string]float64 `json:"top_cost_drivers_vendor"`
+	TotalChargebackIssued    float64            `json:"total_chargeback_issued"`
+	TotalChargebackSettled   float64            `json:"total_chargeback_settled"`
+	CostEfficiencyScore      float64            `json:"cost_efficiency_score"`
+}
+
