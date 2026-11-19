@@ -278,21 +278,179 @@ func (r *sqliteFinOpsRepository) ListCostCenters(ctx context.Context, filter mod
 	return list, total, rows.Err()
 }
 
-// IT Budget Stubs
+// IT Budgets
 func (r *sqliteFinOpsRepository) CreateITBudget(ctx context.Context, b *model.ITBudget) error {
-	return nil
+	if b.ID == "" {
+		b.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if b.CreatedAt.IsZero() {
+		b.CreatedAt = now
+	}
+	b.UpdatedAt = now
+	if b.Currency == "" {
+		b.Currency = "USD"
+	}
+	if b.PeriodType == "" {
+		b.PeriodType = model.BudgetPeriodAnnual
+	}
+	if b.Status == "" {
+		b.Status = model.BudgetStatusDraft
+	}
+	if b.AlertThresholdPercent <= 0 {
+		b.AlertThresholdPercent = 80.0
+	}
+
+	query := `
+	INSERT INTO it_budgets (
+		id, workspace_id, cost_center_id, name, fiscal_year,
+		period_type, allocated_amount, spent_amount, currency,
+		alert_threshold_percent, status, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		b.ID, b.WorkspaceID, b.CostCenterID, b.Name, b.FiscalYear,
+		b.PeriodType, b.AllocatedAmount, b.SpentAmount, b.Currency,
+		b.AlertThresholdPercent, b.Status, b.CreatedAt, b.UpdatedAt,
+	)
+	return err
 }
+
 func (r *sqliteFinOpsRepository) GetITBudgetByID(ctx context.Context, id string) (*model.ITBudget, error) {
-	return nil, ErrBudgetNotFound
+	query := `
+	SELECT id, workspace_id, cost_center_id, name, fiscal_year,
+	       period_type, allocated_amount, spent_amount, currency,
+	       alert_threshold_percent, status, created_at, updated_at
+	FROM it_budgets WHERE id = ?`
+
+	var b model.ITBudget
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&b.ID, &b.WorkspaceID, &b.CostCenterID, &b.Name, &b.FiscalYear,
+		&b.PeriodType, &b.AllocatedAmount, &b.SpentAmount, &b.Currency,
+		&b.AlertThresholdPercent, &b.Status, &b.CreatedAt, &b.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrBudgetNotFound
+		}
+		return nil, err
+	}
+	return &b, nil
 }
+
 func (r *sqliteFinOpsRepository) UpdateITBudget(ctx context.Context, b *model.ITBudget) error {
+	b.UpdatedAt = time.Now().UTC()
+
+	query := `
+	UPDATE it_budgets SET
+		cost_center_id = ?, name = ?, fiscal_year = ?,
+		period_type = ?, allocated_amount = ?, spent_amount = ?,
+		currency = ?, alert_threshold_percent = ?, status = ?,
+		updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		b.CostCenterID, b.Name, b.FiscalYear,
+		b.PeriodType, b.AllocatedAmount, b.SpentAmount,
+		b.Currency, b.AlertThresholdPercent, b.Status,
+		b.UpdatedAt, b.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrBudgetNotFound
+	}
 	return nil
 }
+
 func (r *sqliteFinOpsRepository) DeleteITBudget(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, "DELETE FROM it_budgets WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrBudgetNotFound
+	}
 	return nil
 }
+
 func (r *sqliteFinOpsRepository) ListITBudgets(ctx context.Context, filter model.ITBudgetFilterCriteria) ([]model.ITBudget, int, error) {
-	return nil, 0, nil
+	whereClauses := []string{"1=1"}
+	args := []interface{}{}
+
+	if filter.WorkspaceID != "" {
+		whereClauses = append(whereClauses, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.CostCenterID != "" {
+		whereClauses = append(whereClauses, "cost_center_id = ?")
+		args = append(args, filter.CostCenterID)
+	}
+	if filter.FiscalYear > 0 {
+		whereClauses = append(whereClauses, "fiscal_year = ?")
+		args = append(args, filter.FiscalYear)
+	}
+	if filter.PeriodType != "" {
+		whereClauses = append(whereClauses, "period_type = ?")
+		args = append(args, filter.PeriodType)
+	}
+	if filter.Status != "" {
+		whereClauses = append(whereClauses, "status = ?")
+		args = append(args, filter.Status)
+	}
+
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	var total int
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM it_budgets WHERE %s", whereSQL)
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, workspace_id, cost_center_id, name, fiscal_year,
+	       period_type, allocated_amount, spent_amount, currency,
+	       alert_threshold_percent, status, created_at, updated_at
+	FROM it_budgets WHERE %s ORDER BY fiscal_year DESC, name ASC LIMIT ? OFFSET ?`, whereSQL)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	list := []model.ITBudget{}
+	for rows.Next() {
+		var b model.ITBudget
+		if err := rows.Scan(
+			&b.ID, &b.WorkspaceID, &b.CostCenterID, &b.Name, &b.FiscalYear,
+			&b.PeriodType, &b.AllocatedAmount, &b.SpentAmount, &b.Currency,
+			&b.AlertThresholdPercent, &b.Status, &b.CreatedAt, &b.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		list = append(list, b)
+	}
+	return list, total, rows.Err()
 }
 
 // IT Expense Stubs
