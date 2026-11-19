@@ -732,36 +732,339 @@ func (r *sqliteFinOpsRepository) ListITExpenses(ctx context.Context, filter mode
 	return list, total, rows.Err()
 }
 
-// Chargeback Stubs
+// Chargeback Rules
 func (r *sqliteFinOpsRepository) CreateChargebackRule(ctx context.Context, rule *model.ChargebackRule) error {
-	return nil
+	if rule.ID == "" {
+		rule.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if rule.CreatedAt.IsZero() {
+		rule.CreatedAt = now
+	}
+	rule.UpdatedAt = now
+	if rule.AllocationMethod == "" {
+		rule.AllocationMethod = model.AllocMethodFixedPercent
+	}
+
+	query := `
+	INSERT INTO chargeback_rules (
+		id, workspace_id, cost_center_id, ci_id, rule_name,
+		target_business_unit, allocation_method, allocation_percentage,
+		rate_per_unit, unit_of_measure, is_active, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	isActiveInt := 0
+	if rule.IsActive {
+		isActiveInt = 1
+	}
+
+	_, err := r.db.ExecContext(ctx, query,
+		rule.ID, rule.WorkspaceID, rule.CostCenterID, rule.CIID, rule.RuleName,
+		rule.TargetBusinessUnit, rule.AllocationMethod, rule.AllocationPercentage,
+		rule.RatePerUnit, rule.UnitOfMeasure, isActiveInt, rule.CreatedAt, rule.UpdatedAt,
+	)
+	return err
 }
+
 func (r *sqliteFinOpsRepository) GetChargebackRuleByID(ctx context.Context, id string) (*model.ChargebackRule, error) {
-	return nil, ErrChargebackRuleNotFound
+	query := `
+	SELECT id, workspace_id, cost_center_id, ci_id, rule_name,
+	       target_business_unit, allocation_method, allocation_percentage,
+	       rate_per_unit, unit_of_measure, is_active, created_at, updated_at
+	FROM chargeback_rules WHERE id = ?`
+
+	var rule model.ChargebackRule
+	var isActiveInt int
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&rule.ID, &rule.WorkspaceID, &rule.CostCenterID, &rule.CIID, &rule.RuleName,
+		&rule.TargetBusinessUnit, &rule.AllocationMethod, &rule.AllocationPercentage,
+		&rule.RatePerUnit, &rule.UnitOfMeasure, &isActiveInt, &rule.CreatedAt, &rule.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrChargebackRuleNotFound
+		}
+		return nil, err
+	}
+	rule.IsActive = (isActiveInt == 1)
+	return &rule, nil
 }
+
 func (r *sqliteFinOpsRepository) UpdateChargebackRule(ctx context.Context, rule *model.ChargebackRule) error {
+	rule.UpdatedAt = time.Now().UTC()
+	isActiveInt := 0
+	if rule.IsActive {
+		isActiveInt = 1
+	}
+
+	query := `
+	UPDATE chargeback_rules SET
+		cost_center_id = ?, ci_id = ?, rule_name = ?,
+		target_business_unit = ?, allocation_method = ?, allocation_percentage = ?,
+		rate_per_unit = ?, unit_of_measure = ?, is_active = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		rule.CostCenterID, rule.CIID, rule.RuleName,
+		rule.TargetBusinessUnit, rule.AllocationMethod, rule.AllocationPercentage,
+		rule.RatePerUnit, rule.UnitOfMeasure, isActiveInt, rule.UpdatedAt,
+		rule.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrChargebackRuleNotFound
+	}
 	return nil
 }
+
 func (r *sqliteFinOpsRepository) DeleteChargebackRule(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, "DELETE FROM chargeback_rules WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrChargebackRuleNotFound
+	}
 	return nil
 }
+
 func (r *sqliteFinOpsRepository) ListChargebackRules(ctx context.Context, filter model.ChargebackRuleFilterCriteria) ([]model.ChargebackRule, int, error) {
-	return nil, 0, nil
+	whereClauses := []string{"1=1"}
+	args := []interface{}{}
+
+	if filter.WorkspaceID != "" {
+		whereClauses = append(whereClauses, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.CostCenterID != "" {
+		whereClauses = append(whereClauses, "cost_center_id = ?")
+		args = append(args, filter.CostCenterID)
+	}
+	if filter.TargetBusinessUnit != "" {
+		whereClauses = append(whereClauses, "target_business_unit = ?")
+		args = append(args, filter.TargetBusinessUnit)
+	}
+
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	var total int
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM chargeback_rules WHERE %s", whereSQL)
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, workspace_id, cost_center_id, ci_id, rule_name,
+	       target_business_unit, allocation_method, allocation_percentage,
+	       rate_per_unit, unit_of_measure, is_active, created_at, updated_at
+	FROM chargeback_rules WHERE %s ORDER BY rule_name ASC LIMIT ? OFFSET ?`, whereSQL)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	list := []model.ChargebackRule{}
+	for rows.Next() {
+		var rule model.ChargebackRule
+		var isActiveInt int
+		if err := rows.Scan(
+			&rule.ID, &rule.WorkspaceID, &rule.CostCenterID, &rule.CIID, &rule.RuleName,
+			&rule.TargetBusinessUnit, &rule.AllocationMethod, &rule.AllocationPercentage,
+			&rule.RatePerUnit, &rule.UnitOfMeasure, &isActiveInt, &rule.CreatedAt, &rule.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		rule.IsActive = (isActiveInt == 1)
+		list = append(list, rule)
+	}
+	return list, total, rows.Err()
 }
+
+// Chargeback Statements
 func (r *sqliteFinOpsRepository) CreateChargebackStatement(ctx context.Context, s *model.ChargebackStatement) error {
-	return nil
+	if s.ID == "" {
+		s.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if s.CreatedAt.IsZero() {
+		s.CreatedAt = now
+	}
+	s.UpdatedAt = now
+	if s.GeneratedAt.IsZero() {
+		s.GeneratedAt = now
+	}
+	if s.Currency == "" {
+		s.Currency = "USD"
+	}
+	if s.Status == "" {
+		s.Status = model.StatementStatusDraft
+	}
+
+	query := `
+	INSERT INTO chargeback_statements (
+		id, workspace_id, target_business_unit, statement_period,
+		total_charge, currency, status, notes, generated_at,
+		settled_at, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		s.ID, s.WorkspaceID, s.TargetBusinessUnit, s.StatementPeriod,
+		s.TotalCharge, s.Currency, s.Status, s.Notes, s.GeneratedAt,
+		s.SettledAt, s.CreatedAt, s.UpdatedAt,
+	)
+	return err
 }
+
 func (r *sqliteFinOpsRepository) GetChargebackStatementByID(ctx context.Context, id string) (*model.ChargebackStatement, error) {
-	return nil, ErrStatementNotFound
+	query := `
+	SELECT id, workspace_id, target_business_unit, statement_period,
+	       total_charge, currency, status, notes, generated_at,
+	       settled_at, created_at, updated_at
+	FROM chargeback_statements WHERE id = ?`
+
+	var s model.ChargebackStatement
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&s.ID, &s.WorkspaceID, &s.TargetBusinessUnit, &s.StatementPeriod,
+		&s.TotalCharge, &s.Currency, &s.Status, &s.Notes, &s.GeneratedAt,
+		&s.SettledAt, &s.CreatedAt, &s.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrStatementNotFound
+		}
+		return nil, err
+	}
+	return &s, nil
 }
+
 func (r *sqliteFinOpsRepository) UpdateChargebackStatement(ctx context.Context, s *model.ChargebackStatement) error {
+	s.UpdatedAt = time.Now().UTC()
+
+	query := `
+	UPDATE chargeback_statements SET
+		target_business_unit = ?, statement_period = ?, total_charge = ?,
+		currency = ?, status = ?, notes = ?, settled_at = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		s.TargetBusinessUnit, s.StatementPeriod, s.TotalCharge,
+		s.Currency, s.Status, s.Notes, s.SettledAt, s.UpdatedAt,
+		s.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrStatementNotFound
+	}
 	return nil
 }
+
 func (r *sqliteFinOpsRepository) DeleteChargebackStatement(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, "DELETE FROM chargeback_statements WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrStatementNotFound
+	}
 	return nil
 }
+
 func (r *sqliteFinOpsRepository) ListChargebackStatements(ctx context.Context, filter model.ChargebackStatementFilterCriteria) ([]model.ChargebackStatement, int, error) {
-	return nil, 0, nil
+	whereClauses := []string{"1=1"}
+	args := []interface{}{}
+
+	if filter.WorkspaceID != "" {
+		whereClauses = append(whereClauses, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.TargetBusinessUnit != "" {
+		whereClauses = append(whereClauses, "target_business_unit = ?")
+		args = append(args, filter.TargetBusinessUnit)
+	}
+	if filter.StatementPeriod != "" {
+		whereClauses = append(whereClauses, "statement_period = ?")
+		args = append(args, filter.StatementPeriod)
+	}
+	if filter.Status != "" {
+		whereClauses = append(whereClauses, "status = ?")
+		args = append(args, filter.Status)
+	}
+
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	var total int
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM chargeback_statements WHERE %s", whereSQL)
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, workspace_id, target_business_unit, statement_period,
+	       total_charge, currency, status, notes, generated_at,
+	       settled_at, created_at, updated_at
+	FROM chargeback_statements WHERE %s ORDER BY generated_at DESC LIMIT ? OFFSET ?`, whereSQL)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	list := []model.ChargebackStatement{}
+	for rows.Next() {
+		var s model.ChargebackStatement
+		if err := rows.Scan(
+			&s.ID, &s.WorkspaceID, &s.TargetBusinessUnit, &s.StatementPeriod,
+			&s.TotalCharge, &s.Currency, &s.Status, &s.Notes, &s.GeneratedAt,
+			&s.SettledAt, &s.CreatedAt, &s.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		list = append(list, s)
+	}
+	return list, total, rows.Err()
 }
 
 // Analytics Stub
