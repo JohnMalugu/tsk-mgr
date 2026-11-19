@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
@@ -361,36 +362,150 @@ func (s *finopsServiceImpl) ListITExpenses(ctx context.Context, filter model.ITE
 	return s.repo.ListITExpenses(ctx, filter)
 }
 
-// Chargeback Stubs
+// Chargeback Rules
 func (s *finopsServiceImpl) CreateChargebackRule(ctx context.Context, workspaceID string, req model.CreateChargebackRuleRequest) (*model.ChargebackRule, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Verify cost center exists
+	if _, err := s.repo.GetCostCenterByID(ctx, req.CostCenterID); err != nil {
+		return nil, err
+	}
+
+	rule := &model.ChargebackRule{
+		WorkspaceID:          workspaceID,
+		CostCenterID:         req.CostCenterID,
+		CIID:                 req.CIID,
+		RuleName:             strings.TrimSpace(req.RuleName),
+		TargetBusinessUnit:   strings.TrimSpace(req.TargetBusinessUnit),
+		AllocationMethod:     req.AllocationMethod,
+		AllocationPercentage: req.AllocationPercentage,
+		RatePerUnit:          req.RatePerUnit,
+		UnitOfMeasure:        req.UnitOfMeasure,
+		IsActive:             true,
+	}
+
+	if err := s.repo.CreateChargebackRule(ctx, rule); err != nil {
+		return nil, err
+	}
+	return rule, nil
 }
+
 func (s *finopsServiceImpl) GetChargebackRuleByID(ctx context.Context, id string) (*model.ChargebackRule, error) {
-	return nil, ErrChargebackRuleNotFound
+	return s.repo.GetChargebackRuleByID(ctx, id)
 }
+
 func (s *finopsServiceImpl) UpdateChargebackRule(ctx context.Context, id string, req model.UpdateChargebackRuleRequest) (*model.ChargebackRule, error) {
-	return nil, ErrChargebackRuleNotFound
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	rule, err := s.repo.GetChargebackRuleByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.RuleName != nil {
+		rule.RuleName = strings.TrimSpace(*req.RuleName)
+	}
+	if req.TargetBusinessUnit != nil {
+		rule.TargetBusinessUnit = strings.TrimSpace(*req.TargetBusinessUnit)
+	}
+	if req.AllocationMethod != nil {
+		rule.AllocationMethod = *req.AllocationMethod
+	}
+	if req.AllocationPercentage != nil {
+		rule.AllocationPercentage = *req.AllocationPercentage
+	}
+	if req.RatePerUnit != nil {
+		rule.RatePerUnit = *req.RatePerUnit
+	}
+	if req.UnitOfMeasure != nil {
+		rule.UnitOfMeasure = *req.UnitOfMeasure
+	}
+	if req.IsActive != nil {
+		rule.IsActive = *req.IsActive
+	}
+
+	if err := s.repo.UpdateChargebackRule(ctx, rule); err != nil {
+		return nil, err
+	}
+	return rule, nil
 }
+
 func (s *finopsServiceImpl) DeleteChargebackRule(ctx context.Context, id string) error {
-	return nil
+	return s.repo.DeleteChargebackRule(ctx, id)
 }
+
 func (s *finopsServiceImpl) ListChargebackRules(ctx context.Context, filter model.ChargebackRuleFilterCriteria) ([]model.ChargebackRule, int, error) {
-	return nil, 0, nil
+	return s.repo.ListChargebackRules(ctx, filter)
 }
+
+// Chargeback Statements
 func (s *finopsServiceImpl) CreateChargebackStatement(ctx context.Context, workspaceID string, req model.CreateChargebackStatementRequest) (*model.ChargebackStatement, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	currency := req.Currency
+	if currency == "" {
+		currency = "USD"
+	}
+
+	stmt := &model.ChargebackStatement{
+		WorkspaceID:        workspaceID,
+		TargetBusinessUnit: strings.TrimSpace(req.TargetBusinessUnit),
+		StatementPeriod:    strings.TrimSpace(req.StatementPeriod),
+		TotalCharge:        req.TotalCharge,
+		Currency:           currency,
+		Status:             model.StatementStatusDraft,
+		Notes:              req.Notes,
+	}
+
+	if err := s.repo.CreateChargebackStatement(ctx, stmt); err != nil {
+		return nil, err
+	}
+	return stmt, nil
 }
+
 func (s *finopsServiceImpl) GetChargebackStatementByID(ctx context.Context, id string) (*model.ChargebackStatement, error) {
-	return nil, ErrStatementNotFound
+	return s.repo.GetChargebackStatementByID(ctx, id)
 }
+
 func (s *finopsServiceImpl) UpdateChargebackStatement(ctx context.Context, id string, req model.UpdateChargebackStatementRequest) (*model.ChargebackStatement, error) {
-	return nil, ErrStatementNotFound
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	stmt, err := s.repo.GetChargebackStatementByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Status != nil {
+		stmt.Status = *req.Status
+		if *req.Status == model.StatementStatusSettled && stmt.SettledAt == nil {
+			now := time.Now().UTC()
+			stmt.SettledAt = &now
+		}
+	}
+	if req.Notes != nil {
+		stmt.Notes = *req.Notes
+	}
+
+	if err := s.repo.UpdateChargebackStatement(ctx, stmt); err != nil {
+		return nil, err
+	}
+	return stmt, nil
 }
+
 func (s *finopsServiceImpl) DeleteChargebackStatement(ctx context.Context, id string) error {
-	return nil
+	return s.repo.DeleteChargebackStatement(ctx, id)
 }
+
 func (s *finopsServiceImpl) ListChargebackStatements(ctx context.Context, filter model.ChargebackStatementFilterCriteria) ([]model.ChargebackStatement, int, error) {
-	return nil, 0, nil
+	return s.repo.ListChargebackStatements(ctx, filter)
 }
 
 // Analytics Stub
