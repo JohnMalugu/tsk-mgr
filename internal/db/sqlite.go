@@ -2868,6 +2868,27 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	chargebackStatementsQuery := `
+	CREATE TABLE IF NOT EXISTS chargeback_statements (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		target_business_unit TEXT NOT NULL,
+		statement_period TEXT NOT NULL,
+		total_charge REAL NOT NULL,
+		currency TEXT NOT NULL DEFAULT 'USD',
+		status TEXT NOT NULL DEFAULT 'draft',
+		notes TEXT NOT NULL DEFAULT '',
+		generated_at DATETIME NOT NULL,
+		settled_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);`
+
+	_, err = db.Exec(chargebackStatementsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
