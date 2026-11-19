@@ -2818,6 +2818,33 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	expensesQuery := `
+	CREATE TABLE IF NOT EXISTS it_expenses (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		budget_id TEXT NOT NULL,
+		cost_center_id TEXT NOT NULL,
+		vendor_id TEXT NOT NULL DEFAULT '',
+		ci_id TEXT NOT NULL DEFAULT '',
+		invoice_number TEXT NOT NULL DEFAULT '',
+		description TEXT NOT NULL,
+		cost_pool TEXT NOT NULL,
+		expense_type TEXT NOT NULL DEFAULT 'opex',
+		amount REAL NOT NULL,
+		currency TEXT NOT NULL DEFAULT 'USD',
+		expense_date DATETIME NOT NULL,
+		payment_status TEXT NOT NULL DEFAULT 'pending',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (budget_id) REFERENCES it_budgets(id) ON DELETE CASCADE,
+		FOREIGN KEY (cost_center_id) REFERENCES cost_centers(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(expensesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
