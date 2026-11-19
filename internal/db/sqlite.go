@@ -2775,6 +2775,26 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	costCentersQuery := `
+	CREATE TABLE IF NOT EXISTS cost_centers (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		code TEXT NOT NULL,
+		name TEXT NOT NULL,
+		department TEXT NOT NULL,
+		manager_id TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'active',
+		description TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		UNIQUE(workspace_id, code)
+	);`
+
+	_, err = db.Exec(costCentersQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
