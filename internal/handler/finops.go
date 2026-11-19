@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/service"
@@ -310,6 +311,120 @@ func (h *FinOpsHandler) UpdateITBudget(w http.ResponseWriter, r *http.Request, i
 
 func (h *FinOpsHandler) DeleteITBudget(w http.ResponseWriter, r *http.Request, id string) {
 	if err := h.svc.DeleteITBudget(r.Context(), id); err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// IT Expense HTTP Handlers
+
+func (h *FinOpsHandler) ListITExpenses(w http.ResponseWriter, r *http.Request) {
+	wsID := getFinOpsWorkspaceID(r)
+	q := r.URL.Query()
+
+	limit := 50
+	offset := 0
+	if l := q.Get("limit"); l != "" {
+		if val, err := strconv.Atoi(l); err == nil && val > 0 {
+			limit = val
+		}
+	}
+	if o := q.Get("offset"); o != "" {
+		if val, err := strconv.Atoi(o); err == nil && val >= 0 {
+			offset = val
+		}
+	}
+
+	filter := model.ITExpenseFilterCriteria{
+		WorkspaceID:   wsID,
+		BudgetID:      q.Get("budget_id"),
+		CostCenterID:  q.Get("cost_center_id"),
+		VendorID:      q.Get("vendor_id"),
+		CIID:          q.Get("ci_id"),
+		CostPool:      q.Get("cost_pool"),
+		ExpenseType:   q.Get("expense_type"),
+		PaymentStatus: q.Get("payment_status"),
+		Limit:         limit,
+		Offset:        offset,
+	}
+
+	if fd := q.Get("from_date"); fd != "" {
+		if t, err := time.Parse(time.RFC3339, fd); err == nil {
+			filter.FromDate = &t
+		} else if t, err := time.Parse("2006-01-02", fd); err == nil {
+			filter.FromDate = &t
+		}
+	}
+	if td := q.Get("to_date"); td != "" {
+		if t, err := time.Parse(time.RFC3339, td); err == nil {
+			filter.ToDate = &t
+		} else if t, err := time.Parse("2006-01-02", td); err == nil {
+			filter.ToDate = &t
+		}
+	}
+
+	list, total, err := h.svc.ListITExpenses(r.Context(), filter)
+	if err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusOK, map[string]interface{}{
+		"expenses": list,
+		"total":    total,
+		"limit":    limit,
+		"offset":   offset,
+	})
+}
+
+func (h *FinOpsHandler) CreateITExpense(w http.ResponseWriter, r *http.Request) {
+	wsID := getFinOpsWorkspaceID(r)
+
+	var req model.CreateITExpenseRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeFinOpsError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	expense, err := h.svc.CreateITExpense(r.Context(), wsID, req)
+	if err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusCreated, expense)
+}
+
+func (h *FinOpsHandler) GetITExpenseByID(w http.ResponseWriter, r *http.Request, id string) {
+	expense, err := h.svc.GetITExpenseByID(r.Context(), id)
+	if err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusOK, expense)
+}
+
+func (h *FinOpsHandler) UpdateITExpense(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateITExpenseRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeFinOpsError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	expense, err := h.svc.UpdateITExpense(r.Context(), id, req)
+	if err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusOK, expense)
+}
+
+func (h *FinOpsHandler) DeleteITExpense(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteITExpense(r.Context(), id); err != nil {
 		handleFinOpsError(w, err)
 		return
 	}
