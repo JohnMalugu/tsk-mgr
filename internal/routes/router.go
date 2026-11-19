@@ -261,6 +261,25 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 ITIL IT Service Financial Management & FinOps (ITFM / FinOps Cost Governance)
+	if strings.HasPrefix(r.URL.Path, "/v2/finops") {
+		if handler.GlobalFinOpsHandler == nil {
+			http.Error(w, "FinOps handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalFinOpsHandler.ServeHTTP(w, r)
+		return
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/v2/cost-centers") {
+		if handler.GlobalFinOpsHandler == nil {
+			http.Error(w, "FinOps handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalFinOpsHandler.ServeCostCentersHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return
