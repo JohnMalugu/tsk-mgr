@@ -2845,6 +2845,29 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	chargebackRulesQuery := `
+	CREATE TABLE IF NOT EXISTS chargeback_rules (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		cost_center_id TEXT NOT NULL,
+		ci_id TEXT NOT NULL DEFAULT '',
+		rule_name TEXT NOT NULL,
+		target_business_unit TEXT NOT NULL,
+		allocation_method TEXT NOT NULL DEFAULT 'fixed_percent',
+		allocation_percentage REAL NOT NULL DEFAULT 0.0,
+		rate_per_unit REAL NOT NULL DEFAULT 0.0,
+		unit_of_measure TEXT NOT NULL DEFAULT '',
+		is_active INTEGER NOT NULL DEFAULT 1,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (cost_center_id) REFERENCES cost_centers(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(chargebackRulesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
