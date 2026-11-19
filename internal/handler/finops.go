@@ -214,6 +214,109 @@ func (h *FinOpsHandler) DeleteCostCenter(w http.ResponseWriter, r *http.Request,
 	writeFinOpsJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
+// IT Budget HTTP Handlers
+
+func (h *FinOpsHandler) ListITBudgets(w http.ResponseWriter, r *http.Request) {
+	wsID := getFinOpsWorkspaceID(r)
+	q := r.URL.Query()
+
+	limit := 50
+	offset := 0
+	if l := q.Get("limit"); l != "" {
+		if val, err := strconv.Atoi(l); err == nil && val > 0 {
+			limit = val
+		}
+	}
+	if o := q.Get("offset"); o != "" {
+		if val, err := strconv.Atoi(o); err == nil && val >= 0 {
+			offset = val
+		}
+	}
+
+	var fiscalYear int
+	if fy := q.Get("fiscal_year"); fy != "" {
+		if val, err := strconv.Atoi(fy); err == nil {
+			fiscalYear = val
+		}
+	}
+
+	filter := model.ITBudgetFilterCriteria{
+		WorkspaceID:  wsID,
+		CostCenterID: q.Get("cost_center_id"),
+		FiscalYear:   fiscalYear,
+		PeriodType:   q.Get("period_type"),
+		Status:       q.Get("status"),
+		Limit:        limit,
+		Offset:       offset,
+	}
+
+	list, total, err := h.svc.ListITBudgets(r.Context(), filter)
+	if err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusOK, map[string]interface{}{
+		"budgets": list,
+		"total":   total,
+		"limit":   limit,
+		"offset":  offset,
+	})
+}
+
+func (h *FinOpsHandler) CreateITBudget(w http.ResponseWriter, r *http.Request) {
+	wsID := getFinOpsWorkspaceID(r)
+
+	var req model.CreateITBudgetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeFinOpsError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	budget, err := h.svc.CreateITBudget(r.Context(), wsID, req)
+	if err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusCreated, budget)
+}
+
+func (h *FinOpsHandler) GetITBudgetByID(w http.ResponseWriter, r *http.Request, id string) {
+	budget, err := h.svc.GetITBudgetByID(r.Context(), id)
+	if err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusOK, budget)
+}
+
+func (h *FinOpsHandler) UpdateITBudget(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateITBudgetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeFinOpsError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	budget, err := h.svc.UpdateITBudget(r.Context(), id, req)
+	if err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusOK, budget)
+}
+
+func (h *FinOpsHandler) DeleteITBudget(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteITBudget(r.Context(), id); err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
 // ServeCostCentersHTTP dispatches requests for /v2/cost-centers
 func (h *FinOpsHandler) ServeCostCentersHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/v2/cost-centers")
