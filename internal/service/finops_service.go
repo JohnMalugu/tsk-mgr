@@ -162,38 +162,203 @@ func (s *finopsServiceImpl) ListCostCenters(ctx context.Context, filter model.Co
 	return s.repo.ListCostCenters(ctx, filter)
 }
 
-// IT Budget Stubs
+// IT Budgets
 func (s *finopsServiceImpl) CreateITBudget(ctx context.Context, workspaceID string, req model.CreateITBudgetRequest) (*model.ITBudget, error) {
-	return nil, nil
-}
-func (s *finopsServiceImpl) GetITBudgetByID(ctx context.Context, id string) (*model.ITBudget, error) {
-	return nil, ErrBudgetNotFound
-}
-func (s *finopsServiceImpl) UpdateITBudget(ctx context.Context, id string, req model.UpdateITBudgetRequest) (*model.ITBudget, error) {
-	return nil, ErrBudgetNotFound
-}
-func (s *finopsServiceImpl) DeleteITBudget(ctx context.Context, id string) error {
-	return nil
-}
-func (s *finopsServiceImpl) ListITBudgets(ctx context.Context, filter model.ITBudgetFilterCriteria) ([]model.ITBudget, int, error) {
-	return nil, 0, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Verify cost center exists
+	if _, err := s.repo.GetCostCenterByID(ctx, req.CostCenterID); err != nil {
+		return nil, err
+	}
+
+	currency := req.Currency
+	if currency == "" {
+		currency = "USD"
+	}
+	alertThreshold := req.AlertThresholdPercent
+	if alertThreshold <= 0 {
+		alertThreshold = 80.0
+	}
+	status := req.Status
+	if status == "" {
+		status = model.BudgetStatusDraft
+	}
+
+	b := &model.ITBudget{
+		WorkspaceID:           workspaceID,
+		CostCenterID:          req.CostCenterID,
+		Name:                  strings.TrimSpace(req.Name),
+		FiscalYear:            req.FiscalYear,
+		PeriodType:            req.PeriodType,
+		AllocatedAmount:       req.AllocatedAmount,
+		SpentAmount:           0.0,
+		Currency:              currency,
+		AlertThresholdPercent: alertThreshold,
+		Status:                status,
+	}
+
+	if err := s.repo.CreateITBudget(ctx, b); err != nil {
+		return nil, err
+	}
+	return b, nil
 }
 
-// IT Expense Stubs
+func (s *finopsServiceImpl) GetITBudgetByID(ctx context.Context, id string) (*model.ITBudget, error) {
+	return s.repo.GetITBudgetByID(ctx, id)
+}
+
+func (s *finopsServiceImpl) UpdateITBudget(ctx context.Context, id string, req model.UpdateITBudgetRequest) (*model.ITBudget, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	b, err := s.repo.GetITBudgetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Name != nil {
+		b.Name = strings.TrimSpace(*req.Name)
+	}
+	if req.AllocatedAmount != nil {
+		b.AllocatedAmount = *req.AllocatedAmount
+	}
+	if req.AlertThresholdPercent != nil {
+		b.AlertThresholdPercent = *req.AlertThresholdPercent
+	}
+	if req.Status != nil {
+		b.Status = *req.Status
+	}
+
+	// Update status to exceeded if spent > allocated and currently active
+	if b.AllocatedAmount > 0 && b.SpentAmount > b.AllocatedAmount && b.Status == model.BudgetStatusActive {
+		b.Status = model.BudgetStatusExceeded
+	}
+
+	if err := s.repo.UpdateITBudget(ctx, b); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+func (s *finopsServiceImpl) DeleteITBudget(ctx context.Context, id string) error {
+	return s.repo.DeleteITBudget(ctx, id)
+}
+
+func (s *finopsServiceImpl) ListITBudgets(ctx context.Context, filter model.ITBudgetFilterCriteria) ([]model.ITBudget, int, error) {
+	return s.repo.ListITBudgets(ctx, filter)
+}
+
+// IT Expenses
 func (s *finopsServiceImpl) CreateITExpense(ctx context.Context, workspaceID string, req model.CreateITExpenseRequest) (*model.ITExpense, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Verify cost center and budget exist
+	if _, err := s.repo.GetCostCenterByID(ctx, req.CostCenterID); err != nil {
+		return nil, err
+	}
+	budget, err := s.repo.GetITBudgetByID(ctx, req.BudgetID)
+	if err != nil {
+		return nil, err
+	}
+
+	currency := req.Currency
+	if currency == "" {
+		currency = "USD"
+	}
+	paymentStatus := req.PaymentStatus
+	if paymentStatus == "" {
+		paymentStatus = model.PaymentStatusPending
+	}
+
+	expense := &model.ITExpense{
+		WorkspaceID:   workspaceID,
+		BudgetID:      req.BudgetID,
+		CostCenterID:  req.CostCenterID,
+		VendorID:      req.VendorID,
+		CIID:          req.CIID,
+		InvoiceNumber: req.InvoiceNumber,
+		Description:   strings.TrimSpace(req.Description),
+		CostPool:      req.CostPool,
+		ExpenseType:   req.ExpenseType,
+		Amount:        req.Amount,
+		Currency:      currency,
+		ExpenseDate:   req.ExpenseDate,
+		PaymentStatus: paymentStatus,
+	}
+
+	if err := s.repo.CreateITExpense(ctx, expense); err != nil {
+		return nil, err
+	}
+
+	// Check if budget exceeded after expense
+	newSpent := budget.SpentAmount + expense.Amount
+	if budget.AllocatedAmount > 0 && newSpent > budget.AllocatedAmount && budget.Status == model.BudgetStatusActive {
+		budget.Status = model.BudgetStatusExceeded
+		_ = s.repo.UpdateITBudget(ctx, budget)
+	}
+
+	return expense, nil
 }
+
 func (s *finopsServiceImpl) GetITExpenseByID(ctx context.Context, id string) (*model.ITExpense, error) {
-	return nil, ErrExpenseNotFound
+	return s.repo.GetITExpenseByID(ctx, id)
 }
+
 func (s *finopsServiceImpl) UpdateITExpense(ctx context.Context, id string, req model.UpdateITExpenseRequest) (*model.ITExpense, error) {
-	return nil, ErrExpenseNotFound
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	expense, err := s.repo.GetITExpenseByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.VendorID != nil {
+		expense.VendorID = *req.VendorID
+	}
+	if req.CIID != nil {
+		expense.CIID = *req.CIID
+	}
+	if req.InvoiceNumber != nil {
+		expense.InvoiceNumber = *req.InvoiceNumber
+	}
+	if req.Description != nil {
+		expense.Description = strings.TrimSpace(*req.Description)
+	}
+	if req.CostPool != nil {
+		expense.CostPool = *req.CostPool
+	}
+	if req.ExpenseType != nil {
+		expense.ExpenseType = *req.ExpenseType
+	}
+	if req.Amount != nil {
+		expense.Amount = *req.Amount
+	}
+	if req.PaymentStatus != nil {
+		expense.PaymentStatus = *req.PaymentStatus
+	}
+	if req.ExpenseDate != nil {
+		expense.ExpenseDate = *req.ExpenseDate
+	}
+
+	if err := s.repo.UpdateITExpense(ctx, expense); err != nil {
+		return nil, err
+	}
+	return expense, nil
 }
+
 func (s *finopsServiceImpl) DeleteITExpense(ctx context.Context, id string) error {
-	return nil
+	return s.repo.DeleteITExpense(ctx, id)
 }
+
 func (s *finopsServiceImpl) ListITExpenses(ctx context.Context, filter model.ITExpenseFilterCriteria) ([]model.ITExpense, int, error) {
-	return nil, 0, nil
+	return s.repo.ListITExpenses(ctx, filter)
 }
 
 // Chargeback Stubs
