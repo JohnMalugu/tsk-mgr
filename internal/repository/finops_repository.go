@@ -98,24 +98,184 @@ func NewFinOpsRepository(db *sql.DB) FinOpsRepository {
 	return &sqliteFinOpsRepository{db: db}
 }
 
-// Cost Center Stubs
+// Cost Centers
 func (r *sqliteFinOpsRepository) CreateCostCenter(ctx context.Context, cc *model.CostCenter) error {
+	if cc.ID == "" {
+		cc.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if cc.CreatedAt.IsZero() {
+		cc.CreatedAt = now
+	}
+	cc.UpdatedAt = now
+	if cc.Status == "" {
+		cc.Status = model.CostCenterStatusActive
+	}
+
+	query := `
+	INSERT INTO cost_centers (
+		id, workspace_id, code, name, department, manager_id,
+		status, description, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		cc.ID, cc.WorkspaceID, cc.Code, cc.Name, cc.Department, cc.ManagerID,
+		cc.Status, cc.Description, cc.CreatedAt, cc.UpdatedAt,
+	)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return ErrCostCenterCodeConflict
+		}
+		return err
+	}
 	return nil
 }
+
 func (r *sqliteFinOpsRepository) GetCostCenterByID(ctx context.Context, id string) (*model.CostCenter, error) {
-	return nil, ErrCostCenterNotFound
+	query := `
+	SELECT id, workspace_id, code, name, department, manager_id,
+	       status, description, created_at, updated_at
+	FROM cost_centers WHERE id = ?`
+
+	var cc model.CostCenter
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&cc.ID, &cc.WorkspaceID, &cc.Code, &cc.Name, &cc.Department, &cc.ManagerID,
+		&cc.Status, &cc.Description, &cc.CreatedAt, &cc.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrCostCenterNotFound
+		}
+		return nil, err
+	}
+	return &cc, nil
 }
+
 func (r *sqliteFinOpsRepository) GetCostCenterByCode(ctx context.Context, workspaceID string, code string) (*model.CostCenter, error) {
-	return nil, ErrCostCenterNotFound
+	query := `
+	SELECT id, workspace_id, code, name, department, manager_id,
+	       status, description, created_at, updated_at
+	FROM cost_centers WHERE workspace_id = ? AND code = ?`
+
+	var cc model.CostCenter
+	err := r.db.QueryRowContext(ctx, query, workspaceID, code).Scan(
+		&cc.ID, &cc.WorkspaceID, &cc.Code, &cc.Name, &cc.Department, &cc.ManagerID,
+		&cc.Status, &cc.Description, &cc.CreatedAt, &cc.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrCostCenterNotFound
+		}
+		return nil, err
+	}
+	return &cc, nil
 }
+
 func (r *sqliteFinOpsRepository) UpdateCostCenter(ctx context.Context, cc *model.CostCenter) error {
+	cc.UpdatedAt = time.Now().UTC()
+
+	query := `
+	UPDATE cost_centers SET
+		name = ?, department = ?, manager_id = ?,
+		status = ?, description = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		cc.Name, cc.Department, cc.ManagerID,
+		cc.Status, cc.Description, cc.UpdatedAt,
+		cc.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrCostCenterNotFound
+	}
 	return nil
 }
+
 func (r *sqliteFinOpsRepository) DeleteCostCenter(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, "DELETE FROM cost_centers WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrCostCenterNotFound
+	}
 	return nil
 }
+
 func (r *sqliteFinOpsRepository) ListCostCenters(ctx context.Context, filter model.CostCenterFilterCriteria) ([]model.CostCenter, int, error) {
-	return nil, 0, nil
+	whereClauses := []string{"1=1"}
+	args := []interface{}{}
+
+	if filter.WorkspaceID != "" {
+		whereClauses = append(whereClauses, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.Department != "" {
+		whereClauses = append(whereClauses, "department = ?")
+		args = append(args, filter.Department)
+	}
+	if filter.Status != "" {
+		whereClauses = append(whereClauses, "status = ?")
+		args = append(args, filter.Status)
+	}
+	if filter.Search != "" {
+		whereClauses = append(whereClauses, "(name LIKE ? OR code LIKE ?)")
+		s := "%" + filter.Search + "%"
+		args = append(args, s, s)
+	}
+
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	var total int
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM cost_centers WHERE %s", whereSQL)
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, workspace_id, code, name, department, manager_id,
+	       status, description, created_at, updated_at
+	FROM cost_centers WHERE %s ORDER BY code ASC LIMIT ? OFFSET ?`, whereSQL)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	list := []model.CostCenter{}
+	for rows.Next() {
+		var cc model.CostCenter
+		if err := rows.Scan(
+			&cc.ID, &cc.WorkspaceID, &cc.Code, &cc.Name, &cc.Department, &cc.ManagerID,
+			&cc.Status, &cc.Description, &cc.CreatedAt, &cc.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		list = append(list, cc)
+	}
+	return list, total, rows.Err()
 }
 
 // IT Budget Stubs
