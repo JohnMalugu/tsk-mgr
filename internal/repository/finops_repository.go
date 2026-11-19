@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -1067,7 +1068,176 @@ func (r *sqliteFinOpsRepository) ListChargebackStatements(ctx context.Context, f
 	return list, total, rows.Err()
 }
 
-// Analytics Stub
+// FinOps Analytics
 func (r *sqliteFinOpsRepository) GetFinOpsAnalytics(ctx context.Context, workspaceID string, fiscalYear int) (*model.FinOpsAnalyticsReport, error) {
-	return &model.FinOpsAnalyticsReport{WorkspaceID: workspaceID, FiscalYear: fiscalYear}, nil
+	if fiscalYear <= 0 {
+		fiscalYear = time.Now().UTC().Year()
+	}
+
+	report := &model.FinOpsAnalyticsReport{
+		WorkspaceID:          workspaceID,
+		FiscalYear:           fiscalYear,
+		SpendByCostPool:      make(map[string]float64),
+		SpendByExpenseType:   make(map[string]float64),
+		SpendByDepartment:    make(map[string]float64),
+		TopCostDriversCI:     make(map[string]float64),
+		TopCostDriversVendor: make(map[string]float64),
+	}
+
+	// 1. Total Cost Centers
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM cost_centers WHERE workspace_id = ?", workspaceID).Scan(&report.TotalCostCenters)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Budget Allocation and Spend
+	budgetQuery := `
+	SELECT COALESCE(SUM(allocated_amount), 0.0), COALESCE(SUM(spent_amount), 0.0)
+	FROM it_budgets
+	WHERE workspace_id = ? AND fiscal_year = ?`
+	err = r.db.QueryRowContext(ctx, budgetQuery, workspaceID, fiscalYear).Scan(&report.TotalBudgetAllocated, &report.TotalActualSpend)
+	if err != nil {
+		return nil, err
+	}
+
+	report.BudgetVariance = report.TotalBudgetAllocated - report.TotalActualSpend
+	if report.TotalBudgetAllocated > 0 {
+		report.BudgetUtilizationPercent = math.Round((report.TotalActualSpend/report.TotalBudgetAllocated)*10000) / 100
+	}
+
+	yearStr := fmt.Sprintf("%04d", fiscalYear)
+
+	// 3. Spend by Cost Pool
+	poolRows, err := r.db.QueryContext(ctx, `
+		SELECT cost_pool, COALESCE(SUM(amount), 0.0)
+		FROM it_expenses
+		WHERE workspace_id = ? AND strftime('%Y', expense_date) = ?
+		GROUP BY cost_pool`,
+		workspaceID, yearStr,
+	)
+	if err == nil {
+		defer poolRows.Close()
+		for poolRows.Next() {
+			var pool string
+			var amt float64
+			if err := poolRows.Scan(&pool, &amt); err == nil {
+				report.SpendByCostPool[pool] = amt
+			}
+		}
+	}
+
+	// 4. Spend by Expense Type
+	typeRows, err := r.db.QueryContext(ctx, `
+		SELECT expense_type, COALESCE(SUM(amount), 0.0)
+		FROM it_expenses
+		WHERE workspace_id = ? AND strftime('%Y', expense_date) = ?
+		GROUP BY expense_type`,
+		workspaceID, yearStr,
+	)
+	if err == nil {
+		defer typeRows.Close()
+		for typeRows.Next() {
+			var etype string
+			var amt float64
+			if err := typeRows.Scan(&etype, &amt); err == nil {
+				report.SpendByExpenseType[etype] = amt
+			}
+		}
+	}
+
+	// 5. Spend by Department
+	deptRows, err := r.db.QueryContext(ctx, `
+		SELECT cc.department, COALESCE(SUM(e.amount), 0.0)
+		FROM it_expenses e
+		JOIN cost_centers cc ON e.cost_center_id = cc.id
+		WHERE e.workspace_id = ? AND strftime('%Y', e.expense_date) = ?
+		GROUP BY cc.department`,
+		workspaceID, yearStr,
+	)
+	if err == nil {
+		defer deptRows.Close()
+		for deptRows.Next() {
+			var dept string
+			var amt float64
+			if err := deptRows.Scan(&dept, &amt); err == nil {
+				report.SpendByDepartment[dept] = amt
+			}
+		}
+	}
+
+	// 6. Top Cost Drivers CI
+	ciRows, err := r.db.QueryContext(ctx, `
+		SELECT ci_id, COALESCE(SUM(amount), 0.0)
+		FROM it_expenses
+		WHERE workspace_id = ? AND strftime('%Y', expense_date) = ? AND ci_id != ''
+		GROUP BY ci_id
+		ORDER BY SUM(amount) DESC
+		LIMIT 5`,
+		workspaceID, yearStr,
+	)
+	if err == nil {
+		defer ciRows.Close()
+		for ciRows.Next() {
+			var ci string
+			var amt float64
+			if err := ciRows.Scan(&ci, &amt); err == nil {
+				report.TopCostDriversCI[ci] = amt
+			}
+		}
+	}
+
+	// 7. Top Cost Drivers Vendor
+	vendorRows, err := r.db.QueryContext(ctx, `
+		SELECT vendor_id, COALESCE(SUM(amount), 0.0)
+		FROM it_expenses
+		WHERE workspace_id = ? AND strftime('%Y', expense_date) = ? AND vendor_id != ''
+		GROUP BY vendor_id
+		ORDER BY SUM(amount) DESC
+		LIMIT 5`,
+		workspaceID, yearStr,
+	)
+	if err == nil {
+		defer vendorRows.Close()
+		for vendorRows.Next() {
+			var vendor string
+			var amt float64
+			if err := vendorRows.Scan(&vendor, &amt); err == nil {
+				report.TopCostDriversVendor[vendor] = amt
+			}
+		}
+	}
+
+	// 8. Chargeback Statements
+	chargebackQuery := `
+	SELECT
+		COALESCE(SUM(total_charge), 0.0),
+		COALESCE(SUM(CASE WHEN status = 'settled' THEN total_charge ELSE 0.0 END), 0.0)
+	FROM chargeback_statements
+	WHERE workspace_id = ? AND strftime('%Y', generated_at) = ?`
+	_ = r.db.QueryRowContext(ctx, chargebackQuery, workspaceID, yearStr).Scan(
+		&report.TotalChargebackIssued,
+		&report.TotalChargebackSettled,
+	)
+
+	// 9. Cost Efficiency Score (0-100)
+	score := 100.0
+	if report.TotalBudgetAllocated > 0 {
+		if report.TotalActualSpend > report.TotalBudgetAllocated {
+			overrunPct := ((report.TotalActualSpend - report.TotalBudgetAllocated) / report.TotalBudgetAllocated) * 100.0
+			score -= overrunPct
+		}
+	}
+	if report.TotalChargebackIssued > 0 {
+		unsettledRatio := (report.TotalChargebackIssued - report.TotalChargebackSettled) / report.TotalChargebackIssued
+		score -= unsettledRatio * 15.0
+	}
+	if score < 0.0 {
+		score = 0.0
+	}
+	if score > 100.0 {
+		score = 100.0
+	}
+	report.CostEfficiencyScore = math.Round(score*10) / 10
+
+	return report, nil
 }
