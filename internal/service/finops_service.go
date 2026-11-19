@@ -87,24 +87,79 @@ func NewFinOpsService(repo repository.FinOpsRepository) FinOpsService {
 	return &finopsServiceImpl{repo: repo}
 }
 
-// Cost Center Stubs
+// Cost Centers
 func (s *finopsServiceImpl) CreateCostCenter(ctx context.Context, workspaceID string, req model.CreateCostCenterRequest) (*model.CostCenter, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	status := req.Status
+	if status == "" {
+		status = model.CostCenterStatusActive
+	}
+
+	cc := &model.CostCenter{
+		WorkspaceID: workspaceID,
+		Code:        strings.TrimSpace(req.Code),
+		Name:        strings.TrimSpace(req.Name),
+		Department:  req.Department,
+		ManagerID:   req.ManagerID,
+		Status:      status,
+		Description: req.Description,
+	}
+
+	if err := s.repo.CreateCostCenter(ctx, cc); err != nil {
+		return nil, err
+	}
+	return cc, nil
 }
+
 func (s *finopsServiceImpl) GetCostCenterByID(ctx context.Context, id string) (*model.CostCenter, error) {
-	return nil, ErrCostCenterNotFound
+	return s.repo.GetCostCenterByID(ctx, id)
 }
+
 func (s *finopsServiceImpl) GetCostCenterByCode(ctx context.Context, workspaceID string, code string) (*model.CostCenter, error) {
-	return nil, ErrCostCenterNotFound
+	return s.repo.GetCostCenterByCode(ctx, workspaceID, code)
 }
+
 func (s *finopsServiceImpl) UpdateCostCenter(ctx context.Context, id string, req model.UpdateCostCenterRequest) (*model.CostCenter, error) {
-	return nil, ErrCostCenterNotFound
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	cc, err := s.repo.GetCostCenterByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Name != nil {
+		cc.Name = strings.TrimSpace(*req.Name)
+	}
+	if req.Department != nil {
+		cc.Department = *req.Department
+	}
+	if req.ManagerID != nil {
+		cc.ManagerID = *req.ManagerID
+	}
+	if req.Status != nil {
+		cc.Status = *req.Status
+	}
+	if req.Description != nil {
+		cc.Description = *req.Description
+	}
+
+	if err := s.repo.UpdateCostCenter(ctx, cc); err != nil {
+		return nil, err
+	}
+	return cc, nil
 }
+
 func (s *finopsServiceImpl) DeleteCostCenter(ctx context.Context, id string) error {
-	return nil
+	return s.repo.DeleteCostCenter(ctx, id)
 }
+
 func (s *finopsServiceImpl) ListCostCenters(ctx context.Context, filter model.CostCenterFilterCriteria) ([]model.CostCenter, int, error) {
-	return nil, 0, nil
+	return s.repo.ListCostCenters(ctx, filter)
 }
 
 // IT Budget Stubs
