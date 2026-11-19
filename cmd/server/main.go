@@ -187,6 +187,10 @@ func main() {
 	continuitySvc := service.NewContinuityService(continuityRepo)
 	handler.InitContinuityHandler(continuitySvc)
 
+	finopsRepo := repository.NewFinOpsRepository(sqliteDB)
+	finopsSvc := service.NewFinOpsService(finopsRepo)
+	handler.InitFinOpsHandler(finopsSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
