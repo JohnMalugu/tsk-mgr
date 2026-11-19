@@ -44,7 +44,48 @@ var (
 	ErrInvalidExpenseAmount    = errors.New("expense amount must be greater than zero")
 	ErrInvalidPaymentStatus    = errors.New("invalid payment status")
 	ErrExpenseDateRequired     = errors.New("expense date is required")
+	ErrChargebackRuleNotFound  = errors.New("chargeback rule not found")
+	ErrInvalidAllocationMethod = errors.New("invalid allocation method")
+	ErrInvalidAllocationValue  = errors.New("allocation value must be greater than zero")
+	ErrBusinessUnitRequired    = errors.New("target business unit is required")
+	ErrStatementNotFound       = errors.New("chargeback statement not found")
+	ErrInvalidStatementStatus  = errors.New("invalid chargeback statement status")
 )
+
+// Chargeback Allocation Method constants
+const (
+	AllocMethodFixedPercent = "fixed_percent"
+	AllocMethodUsageUnits   = "usage_units"
+	AllocMethodEvenSplit    = "even_split"
+)
+
+// Chargeback Statement Status constants
+const (
+	StatementStatusDraft    = "draft"
+	StatementStatusIssued   = "issued"
+	StatementStatusSettled  = "settled"
+	StatementStatusDisputed = "disputed"
+)
+
+// ValidateAllocationMethod validates whether the allocation method is recognized
+func ValidateAllocationMethod(method string) error {
+	switch strings.ToLower(strings.TrimSpace(method)) {
+	case AllocMethodFixedPercent, AllocMethodUsageUnits, AllocMethodEvenSplit:
+		return nil
+	default:
+		return ErrInvalidAllocationMethod
+	}
+}
+
+// ValidateStatementStatus validates whether the statement status is recognized
+func ValidateStatementStatus(status string) error {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case StatementStatusDraft, StatementStatusIssued, StatementStatusSettled, StatementStatusDisputed:
+		return nil
+	default:
+		return ErrInvalidStatementStatus
+	}
+}
 
 // Cost Pool constants
 const (
@@ -265,6 +306,75 @@ func (e *ITExpense) Validate() error {
 	}
 	if e.PaymentStatus != "" {
 		if err := ValidatePaymentStatus(e.PaymentStatus); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ChargebackRule defines a policy for attributing IT costs to receiving business units
+type ChargebackRule struct {
+	ID                   string    `json:"id"`
+	WorkspaceID          string    `json:"workspace_id"`
+	CostCenterID         string    `json:"cost_center_id"`
+	CIID                 string    `json:"ci_id,omitempty"`
+	RuleName             string    `json:"rule_name"`
+	TargetBusinessUnit   string    `json:"target_business_unit"`
+	AllocationMethod     string    `json:"allocation_method"`
+	AllocationPercentage float64   `json:"allocation_percentage"`
+	RatePerUnit          float64   `json:"rate_per_unit"`
+	UnitOfMeasure        string    `json:"unit_of_measure,omitempty"`
+	IsActive             bool      `json:"is_active"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
+}
+
+// Validate checks whether the ChargebackRule has sound attributes
+func (r *ChargebackRule) Validate() error {
+	if strings.TrimSpace(r.RuleName) == "" {
+		return errors.New("chargeback rule_name is required")
+	}
+	if strings.TrimSpace(r.TargetBusinessUnit) == "" {
+		return ErrBusinessUnitRequired
+	}
+	if err := ValidateAllocationMethod(r.AllocationMethod); err != nil {
+		return err
+	}
+	if r.AllocationMethod == AllocMethodFixedPercent && (r.AllocationPercentage <= 0.0 || r.AllocationPercentage > 100.0) {
+		return ErrInvalidAllocationValue
+	}
+	return nil
+}
+
+// ChargebackStatement represents an aggregated billing statement issued to a department or business unit
+type ChargebackStatement struct {
+	ID                 string     `json:"id"`
+	WorkspaceID        string     `json:"workspace_id"`
+	TargetBusinessUnit string     `json:"target_business_unit"`
+	StatementPeriod    string     `json:"statement_period"`
+	TotalCharge        float64    `json:"total_charge"`
+	Currency           string     `json:"currency"`
+	Status             string     `json:"status"`
+	Notes              string     `json:"notes,omitempty"`
+	GeneratedAt        time.Time  `json:"generated_at"`
+	SettledAt          *time.Time `json:"settled_at,omitempty"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+}
+
+// Validate checks whether the ChargebackStatement parameters are valid
+func (s *ChargebackStatement) Validate() error {
+	if strings.TrimSpace(s.TargetBusinessUnit) == "" {
+		return ErrBusinessUnitRequired
+	}
+	if strings.TrimSpace(s.StatementPeriod) == "" {
+		return errors.New("statement_period is required")
+	}
+	if s.TotalCharge < 0.0 {
+		return errors.New("total_charge cannot be negative")
+	}
+	if s.Status != "" {
+		if err := ValidateStatementStatus(s.Status); err != nil {
 			return err
 		}
 	}
