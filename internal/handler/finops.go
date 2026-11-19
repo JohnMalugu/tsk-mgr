@@ -432,6 +432,346 @@ func (h *FinOpsHandler) DeleteITExpense(w http.ResponseWriter, r *http.Request, 
 	writeFinOpsJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
+// Chargeback Rule HTTP Handlers
+
+func (h *FinOpsHandler) ListChargebackRules(w http.ResponseWriter, r *http.Request) {
+	wsID := getFinOpsWorkspaceID(r)
+	q := r.URL.Query()
+
+	limit := 50
+	offset := 0
+	if l := q.Get("limit"); l != "" {
+		if val, err := strconv.Atoi(l); err == nil && val > 0 {
+			limit = val
+		}
+	}
+	if o := q.Get("offset"); o != "" {
+		if val, err := strconv.Atoi(o); err == nil && val >= 0 {
+			offset = val
+		}
+	}
+
+	filter := model.ChargebackRuleFilterCriteria{
+		WorkspaceID:        wsID,
+		CostCenterID:       q.Get("cost_center_id"),
+		TargetBusinessUnit: q.Get("target_business_unit"),
+		Limit:              limit,
+		Offset:             offset,
+	}
+
+	list, total, err := h.svc.ListChargebackRules(r.Context(), filter)
+	if err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusOK, map[string]interface{}{
+		"rules":  list,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
+}
+
+func (h *FinOpsHandler) CreateChargebackRule(w http.ResponseWriter, r *http.Request) {
+	wsID := getFinOpsWorkspaceID(r)
+
+	var req model.CreateChargebackRuleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeFinOpsError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	rule, err := h.svc.CreateChargebackRule(r.Context(), wsID, req)
+	if err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusCreated, rule)
+}
+
+func (h *FinOpsHandler) GetChargebackRuleByID(w http.ResponseWriter, r *http.Request, id string) {
+	rule, err := h.svc.GetChargebackRuleByID(r.Context(), id)
+	if err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusOK, rule)
+}
+
+func (h *FinOpsHandler) UpdateChargebackRule(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateChargebackRuleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeFinOpsError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	rule, err := h.svc.UpdateChargebackRule(r.Context(), id, req)
+	if err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusOK, rule)
+}
+
+func (h *FinOpsHandler) DeleteChargebackRule(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteChargebackRule(r.Context(), id); err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// Chargeback Statement HTTP Handlers
+
+func (h *FinOpsHandler) ListChargebackStatements(w http.ResponseWriter, r *http.Request) {
+	wsID := getFinOpsWorkspaceID(r)
+	q := r.URL.Query()
+
+	limit := 50
+	offset := 0
+	if l := q.Get("limit"); l != "" {
+		if val, err := strconv.Atoi(l); err == nil && val > 0 {
+			limit = val
+		}
+	}
+	if o := q.Get("offset"); o != "" {
+		if val, err := strconv.Atoi(o); err == nil && val >= 0 {
+			offset = val
+		}
+	}
+
+	filter := model.ChargebackStatementFilterCriteria{
+		WorkspaceID:        wsID,
+		TargetBusinessUnit: q.Get("target_business_unit"),
+		StatementPeriod:    q.Get("statement_period"),
+		Status:             q.Get("status"),
+		Limit:              limit,
+		Offset:             offset,
+	}
+
+	list, total, err := h.svc.ListChargebackStatements(r.Context(), filter)
+	if err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusOK, map[string]interface{}{
+		"statements": list,
+		"total":      total,
+		"limit":      limit,
+		"offset":     offset,
+	})
+}
+
+func (h *FinOpsHandler) CreateChargebackStatement(w http.ResponseWriter, r *http.Request) {
+	wsID := getFinOpsWorkspaceID(r)
+
+	var req model.CreateChargebackStatementRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeFinOpsError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	stmt, err := h.svc.CreateChargebackStatement(r.Context(), wsID, req)
+	if err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusCreated, stmt)
+}
+
+func (h *FinOpsHandler) GetChargebackStatementByID(w http.ResponseWriter, r *http.Request, id string) {
+	stmt, err := h.svc.GetChargebackStatementByID(r.Context(), id)
+	if err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusOK, stmt)
+}
+
+func (h *FinOpsHandler) UpdateChargebackStatement(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateChargebackStatementRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeFinOpsError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	stmt, err := h.svc.UpdateChargebackStatement(r.Context(), id, req)
+	if err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusOK, stmt)
+}
+
+func (h *FinOpsHandler) DeleteChargebackStatement(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteChargebackStatement(r.Context(), id); err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// FinOps Analytics HTTP Handler
+
+func (h *FinOpsHandler) GetFinOpsAnalytics(w http.ResponseWriter, r *http.Request) {
+	wsID := getFinOpsWorkspaceID(r)
+	q := r.URL.Query()
+
+	var fiscalYear int
+	if fy := q.Get("fiscal_year"); fy != "" {
+		if val, err := strconv.Atoi(fy); err == nil {
+			fiscalYear = val
+		}
+	}
+
+	report, err := h.svc.GetFinOpsAnalytics(r.Context(), wsID, fiscalYear)
+	if err != nil {
+		handleFinOpsError(w, err)
+		return
+	}
+
+	writeFinOpsJSON(w, http.StatusOK, report)
+}
+
+// ServeHTTP dispatches requests for /v2/finops
+func (h *FinOpsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/finops")
+	path = strings.TrimPrefix(path, "/")
+
+	if path == "analytics" {
+		if r.Method == http.MethodGet {
+			h.GetFinOpsAnalytics(w, r)
+		} else {
+			writeFinOpsError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if strings.HasPrefix(path, "chargeback/rules") {
+		sub := strings.TrimPrefix(path, "chargeback/rules")
+		sub = strings.TrimPrefix(sub, "/")
+		if sub == "" {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListChargebackRules(w, r)
+			case http.MethodPost:
+				h.CreateChargebackRule(w, r)
+			default:
+				writeFinOpsError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		ruleID := sub
+		switch r.Method {
+		case http.MethodGet:
+			h.GetChargebackRuleByID(w, r, ruleID)
+		case http.MethodPut:
+			h.UpdateChargebackRule(w, r, ruleID)
+		case http.MethodDelete:
+			h.DeleteChargebackRule(w, r, ruleID)
+		default:
+			writeFinOpsError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if strings.HasPrefix(path, "chargeback/statements") {
+		sub := strings.TrimPrefix(path, "chargeback/statements")
+		sub = strings.TrimPrefix(sub, "/")
+		if sub == "" {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListChargebackStatements(w, r)
+			case http.MethodPost:
+				h.CreateChargebackStatement(w, r)
+			default:
+				writeFinOpsError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		stmtID := sub
+		switch r.Method {
+		case http.MethodGet:
+			h.GetChargebackStatementByID(w, r, stmtID)
+		case http.MethodPut:
+			h.UpdateChargebackStatement(w, r, stmtID)
+		case http.MethodDelete:
+			h.DeleteChargebackStatement(w, r, stmtID)
+		default:
+			writeFinOpsError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if strings.HasPrefix(path, "budgets") {
+		sub := strings.TrimPrefix(path, "budgets")
+		sub = strings.TrimPrefix(sub, "/")
+		if sub == "" {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListITBudgets(w, r)
+			case http.MethodPost:
+				h.CreateITBudget(w, r)
+			default:
+				writeFinOpsError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		budgetID := sub
+		switch r.Method {
+		case http.MethodGet:
+			h.GetITBudgetByID(w, r, budgetID)
+		case http.MethodPut:
+			h.UpdateITBudget(w, r, budgetID)
+		case http.MethodDelete:
+			h.DeleteITBudget(w, r, budgetID)
+		default:
+			writeFinOpsError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if strings.HasPrefix(path, "expenses") {
+		sub := strings.TrimPrefix(path, "expenses")
+		sub = strings.TrimPrefix(sub, "/")
+		if sub == "" {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListITExpenses(w, r)
+			case http.MethodPost:
+				h.CreateITExpense(w, r)
+			default:
+				writeFinOpsError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		expenseID := sub
+		switch r.Method {
+		case http.MethodGet:
+			h.GetITExpenseByID(w, r, expenseID)
+		case http.MethodPut:
+			h.UpdateITExpense(w, r, expenseID)
+		case http.MethodDelete:
+			h.DeleteITExpense(w, r, expenseID)
+		default:
+			writeFinOpsError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	writeFinOpsError(w, http.StatusNotFound, "route not found")
+}
+
 // ServeCostCentersHTTP dispatches requests for /v2/cost-centers
 func (h *FinOpsHandler) ServeCostCentersHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/v2/cost-centers")
