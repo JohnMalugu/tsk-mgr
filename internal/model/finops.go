@@ -38,7 +38,68 @@ var (
 	ErrInvalidBudgetStatus     = errors.New("invalid budget status")
 	ErrInvalidAllocatedAmount  = errors.New("allocated amount must be greater than zero")
 	ErrInvalidAlertThreshold   = errors.New("alert threshold must be between 1 and 100 percent")
+	ErrExpenseNotFound         = errors.New("it expense not found")
+	ErrInvalidCostPool         = errors.New("invalid cost pool")
+	ErrInvalidExpenseType      = errors.New("invalid expense type, must be capex or opex")
+	ErrInvalidExpenseAmount    = errors.New("expense amount must be greater than zero")
+	ErrInvalidPaymentStatus    = errors.New("invalid payment status")
+	ErrExpenseDateRequired     = errors.New("expense date is required")
 )
+
+// Cost Pool constants
+const (
+	CostPoolCloudInfrastructure  = "cloud_infrastructure"
+	CostPoolSoftwareLicenses    = "software_licenses"
+	CostPoolHardwareEquipment    = "hardware_equipment"
+	CostPoolTelecomNetwork       = "telecom_network"
+	CostPoolPersonnelLabor       = "personnel_labor"
+	CostPoolProfessionalServices = "professional_services"
+)
+
+// Expense Accounting Classification constants
+const (
+	ExpenseTypeCapex = "capex"
+	ExpenseTypeOpex  = "opex"
+)
+
+// Payment Status constants
+const (
+	PaymentStatusPending  = "pending"
+	PaymentStatusApproved = "approved"
+	PaymentStatusPaid     = "paid"
+	PaymentStatusRejected = "rejected"
+)
+
+// ValidateCostPool validates whether the given cost pool is valid
+func ValidateCostPool(pool string) error {
+	switch strings.ToLower(strings.TrimSpace(pool)) {
+	case CostPoolCloudInfrastructure, CostPoolSoftwareLicenses, CostPoolHardwareEquipment,
+		CostPoolTelecomNetwork, CostPoolPersonnelLabor, CostPoolProfessionalServices:
+		return nil
+	default:
+		return ErrInvalidCostPool
+	}
+}
+
+// ValidateExpenseType validates whether the given accounting type is capex or opex
+func ValidateExpenseType(expType string) error {
+	switch strings.ToLower(strings.TrimSpace(expType)) {
+	case ExpenseTypeCapex, ExpenseTypeOpex:
+		return nil
+	default:
+		return ErrInvalidExpenseType
+	}
+}
+
+// ValidatePaymentStatus validates whether the payment status is valid
+func ValidatePaymentStatus(status string) error {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case PaymentStatusPending, PaymentStatusApproved, PaymentStatusPaid, PaymentStatusRejected:
+		return nil
+	default:
+		return ErrInvalidPaymentStatus
+	}
+}
 
 // Fiscal Period constants
 const (
@@ -163,4 +224,49 @@ func (b *ITBudget) UtilizationPercent() float64 {
 // IsThresholdBreached checks if the spent ratio has met or passed the early warning threshold
 func (b *ITBudget) IsThresholdBreached() bool {
 	return b.UtilizationPercent() >= b.AlertThresholdPercent
+}
+
+// ITExpense represents an actual financial expenditure, invoice line item, or cloud cost charge
+type ITExpense struct {
+	ID            string    `json:"id"`
+	WorkspaceID   string    `json:"workspace_id"`
+	BudgetID      string    `json:"budget_id"`
+	CostCenterID  string    `json:"cost_center_id"`
+	VendorID      string    `json:"vendor_id,omitempty"`
+	CIID          string    `json:"ci_id,omitempty"`
+	InvoiceNumber string    `json:"invoice_number,omitempty"`
+	Description   string    `json:"description"`
+	CostPool      string    `json:"cost_pool"`
+	ExpenseType   string    `json:"expense_type"`
+	Amount        float64   `json:"amount"`
+	Currency      string    `json:"currency"`
+	ExpenseDate   time.Time `json:"expense_date"`
+	PaymentStatus string    `json:"payment_status"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+// Validate checks whether the ITExpense contains valid parameters
+func (e *ITExpense) Validate() error {
+	if strings.TrimSpace(e.Description) == "" {
+		return errors.New("expense description is required")
+	}
+	if err := ValidateCostPool(e.CostPool); err != nil {
+		return err
+	}
+	if err := ValidateExpenseType(e.ExpenseType); err != nil {
+		return err
+	}
+	if e.Amount <= 0 {
+		return ErrInvalidExpenseAmount
+	}
+	if e.ExpenseDate.IsZero() {
+		return ErrExpenseDateRequired
+	}
+	if e.PaymentStatus != "" {
+		if err := ValidatePaymentStatus(e.PaymentStatus); err != nil {
+			return err
+		}
+	}
+	return nil
 }
