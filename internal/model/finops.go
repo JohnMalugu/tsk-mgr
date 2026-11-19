@@ -380,3 +380,313 @@ func (s *ChargebackStatement) Validate() error {
 	}
 	return nil
 }
+
+// CreateCostCenterRequest defines payload to create a new Cost Center
+type CreateCostCenterRequest struct {
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	Department  string `json:"department"`
+	ManagerID   string `json:"manager_id,omitempty"`
+	Status      string `json:"status,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+// Validate validates CreateCostCenterRequest
+func (r *CreateCostCenterRequest) Validate() error {
+	if strings.TrimSpace(r.Code) == "" {
+		return ErrCostCenterCodeRequired
+	}
+	if strings.TrimSpace(r.Name) == "" {
+		return ErrCostCenterNameRequired
+	}
+	if err := ValidateDepartment(r.Department); err != nil {
+		return err
+	}
+	if r.Status != "" {
+		if err := ValidateCostCenterStatus(r.Status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// UpdateCostCenterRequest defines payload to update an existing Cost Center
+type UpdateCostCenterRequest struct {
+	Name        *string `json:"name,omitempty"`
+	Department  *string `json:"department,omitempty"`
+	ManagerID   *string `json:"manager_id,omitempty"`
+	Status      *string `json:"status,omitempty"`
+	Description *string `json:"description,omitempty"`
+}
+
+// Validate validates UpdateCostCenterRequest
+func (r *UpdateCostCenterRequest) Validate() error {
+	if r.Name != nil && strings.TrimSpace(*r.Name) == "" {
+		return ErrCostCenterNameRequired
+	}
+	if r.Department != nil {
+		if err := ValidateDepartment(*r.Department); err != nil {
+			return err
+		}
+	}
+	if r.Status != nil {
+		if err := ValidateCostCenterStatus(*r.Status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateITBudgetRequest defines payload to create a budget allocation
+type CreateITBudgetRequest struct {
+	CostCenterID          string  `json:"cost_center_id"`
+	Name                  string  `json:"name"`
+	FiscalYear            int     `json:"fiscal_year"`
+	PeriodType            string  `json:"period_type"`
+	AllocatedAmount       float64 `json:"allocated_amount"`
+	Currency              string  `json:"currency,omitempty"`
+	AlertThresholdPercent float64 `json:"alert_threshold_percent,omitempty"`
+	Status                string  `json:"status,omitempty"`
+}
+
+// Validate validates CreateITBudgetRequest
+func (r *CreateITBudgetRequest) Validate() error {
+	if strings.TrimSpace(r.CostCenterID) == "" {
+		return ErrCostCenterNotFound
+	}
+	if strings.TrimSpace(r.Name) == "" {
+		return ErrBudgetNameRequired
+	}
+	if r.FiscalYear < 2000 || r.FiscalYear > 2100 {
+		return ErrInvalidFiscalYear
+	}
+	if err := ValidateBudgetPeriod(r.PeriodType); err != nil {
+		return err
+	}
+	if r.AllocatedAmount <= 0 {
+		return ErrInvalidAllocatedAmount
+	}
+	if r.AlertThresholdPercent != 0.0 && (r.AlertThresholdPercent < 1.0 || r.AlertThresholdPercent > 100.0) {
+		return ErrInvalidAlertThreshold
+	}
+	if r.Status != "" {
+		if err := ValidateBudgetStatus(r.Status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// UpdateITBudgetRequest defines payload to modify budget allocations and thresholds
+type UpdateITBudgetRequest struct {
+	Name                  *string  `json:"name,omitempty"`
+	AllocatedAmount       *float64 `json:"allocated_amount,omitempty"`
+	AlertThresholdPercent *float64 `json:"alert_threshold_percent,omitempty"`
+	Status                *string  `json:"status,omitempty"`
+}
+
+// Validate validates UpdateITBudgetRequest
+func (r *UpdateITBudgetRequest) Validate() error {
+	if r.Name != nil && strings.TrimSpace(*r.Name) == "" {
+		return ErrBudgetNameRequired
+	}
+	if r.AllocatedAmount != nil && *r.AllocatedAmount <= 0 {
+		return ErrInvalidAllocatedAmount
+	}
+	if r.AlertThresholdPercent != nil && (*r.AlertThresholdPercent < 1.0 || *r.AlertThresholdPercent > 100.0) {
+		return ErrInvalidAlertThreshold
+	}
+	if r.Status != nil {
+		if err := ValidateBudgetStatus(*r.Status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateITExpenseRequest defines payload to record an expense
+type CreateITExpenseRequest struct {
+	BudgetID      string    `json:"budget_id"`
+	CostCenterID  string    `json:"cost_center_id"`
+	VendorID      string    `json:"vendor_id,omitempty"`
+	CIID          string    `json:"ci_id,omitempty"`
+	InvoiceNumber string    `json:"invoice_number,omitempty"`
+	Description   string    `json:"description"`
+	CostPool      string    `json:"cost_pool"`
+	ExpenseType   string    `json:"expense_type"`
+	Amount        float64   `json:"amount"`
+	Currency      string    `json:"currency,omitempty"`
+	ExpenseDate   time.Time `json:"expense_date"`
+	PaymentStatus string    `json:"payment_status,omitempty"`
+}
+
+// Validate validates CreateITExpenseRequest
+func (r *CreateITExpenseRequest) Validate() error {
+	if strings.TrimSpace(r.BudgetID) == "" {
+		return ErrBudgetNotFound
+	}
+	if strings.TrimSpace(r.CostCenterID) == "" {
+		return ErrCostCenterNotFound
+	}
+	if strings.TrimSpace(r.Description) == "" {
+		return errors.New("expense description is required")
+	}
+	if err := ValidateCostPool(r.CostPool); err != nil {
+		return err
+	}
+	if err := ValidateExpenseType(r.ExpenseType); err != nil {
+		return err
+	}
+	if r.Amount <= 0 {
+		return ErrInvalidExpenseAmount
+	}
+	if r.ExpenseDate.IsZero() {
+		return ErrExpenseDateRequired
+	}
+	if r.PaymentStatus != "" {
+		if err := ValidatePaymentStatus(r.PaymentStatus); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// UpdateITExpenseRequest defines payload to modify an expense
+type UpdateITExpenseRequest struct {
+	VendorID      *string    `json:"vendor_id,omitempty"`
+	CIID          *string    `json:"ci_id,omitempty"`
+	InvoiceNumber *string    `json:"invoice_number,omitempty"`
+	Description   *string    `json:"description,omitempty"`
+	CostPool      *string    `json:"cost_pool,omitempty"`
+	ExpenseType   *string    `json:"expense_type,omitempty"`
+	Amount        *float64   `json:"amount,omitempty"`
+	PaymentStatus *string    `json:"payment_status,omitempty"`
+	ExpenseDate   *time.Time `json:"expense_date,omitempty"`
+}
+
+// Validate validates UpdateITExpenseRequest
+func (r *UpdateITExpenseRequest) Validate() error {
+	if r.Description != nil && strings.TrimSpace(*r.Description) == "" {
+		return errors.New("expense description is required")
+	}
+	if r.CostPool != nil {
+		if err := ValidateCostPool(*r.CostPool); err != nil {
+			return err
+		}
+	}
+	if r.ExpenseType != nil {
+		if err := ValidateExpenseType(*r.ExpenseType); err != nil {
+			return err
+		}
+	}
+	if r.Amount != nil && *r.Amount <= 0 {
+		return ErrInvalidExpenseAmount
+	}
+	if r.PaymentStatus != nil {
+		if err := ValidatePaymentStatus(*r.PaymentStatus); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateChargebackRuleRequest defines payload to create a cost allocation rule
+type CreateChargebackRuleRequest struct {
+	CostCenterID         string  `json:"cost_center_id"`
+	CIID                 string  `json:"ci_id,omitempty"`
+	RuleName             string  `json:"rule_name"`
+	TargetBusinessUnit   string  `json:"target_business_unit"`
+	AllocationMethod     string  `json:"allocation_method"`
+	AllocationPercentage float64 `json:"allocation_percentage,omitempty"`
+	RatePerUnit          float64 `json:"rate_per_unit,omitempty"`
+	UnitOfMeasure        string  `json:"unit_of_measure,omitempty"`
+}
+
+// Validate validates CreateChargebackRuleRequest
+func (r *CreateChargebackRuleRequest) Validate() error {
+	if strings.TrimSpace(r.CostCenterID) == "" {
+		return ErrCostCenterNotFound
+	}
+	if strings.TrimSpace(r.RuleName) == "" {
+		return errors.New("chargeback rule_name is required")
+	}
+	if strings.TrimSpace(r.TargetBusinessUnit) == "" {
+		return ErrBusinessUnitRequired
+	}
+	if err := ValidateAllocationMethod(r.AllocationMethod); err != nil {
+		return err
+	}
+	if r.AllocationMethod == AllocMethodFixedPercent && (r.AllocationPercentage <= 0.0 || r.AllocationPercentage > 100.0) {
+		return ErrInvalidAllocationValue
+	}
+	return nil
+}
+
+// UpdateChargebackRuleRequest defines payload to update a chargeback rule
+type UpdateChargebackRuleRequest struct {
+	RuleName             *string  `json:"rule_name,omitempty"`
+	TargetBusinessUnit   *string  `json:"target_business_unit,omitempty"`
+	AllocationMethod     *string  `json:"allocation_method,omitempty"`
+	AllocationPercentage *float64 `json:"allocation_percentage,omitempty"`
+	RatePerUnit          *float64 `json:"rate_per_unit,omitempty"`
+	UnitOfMeasure        *string  `json:"unit_of_measure,omitempty"`
+	IsActive             *bool    `json:"is_active,omitempty"`
+}
+
+// Validate validates UpdateChargebackRuleRequest
+func (r *UpdateChargebackRuleRequest) Validate() error {
+	if r.RuleName != nil && strings.TrimSpace(*r.RuleName) == "" {
+		return errors.New("chargeback rule_name is required")
+	}
+	if r.TargetBusinessUnit != nil && strings.TrimSpace(*r.TargetBusinessUnit) == "" {
+		return ErrBusinessUnitRequired
+	}
+	if r.AllocationMethod != nil {
+		if err := ValidateAllocationMethod(*r.AllocationMethod); err != nil {
+			return err
+		}
+	}
+	if r.AllocationPercentage != nil && (*r.AllocationPercentage <= 0.0 || *r.AllocationPercentage > 100.0) {
+		return ErrInvalidAllocationValue
+	}
+	return nil
+}
+
+// CreateChargebackStatementRequest defines payload to generate a statement
+type CreateChargebackStatementRequest struct {
+	TargetBusinessUnit string  `json:"target_business_unit"`
+	StatementPeriod    string  `json:"statement_period"`
+	TotalCharge        float64 `json:"total_charge"`
+	Currency           string  `json:"currency,omitempty"`
+	Notes              string  `json:"notes,omitempty"`
+}
+
+// Validate validates CreateChargebackStatementRequest
+func (r *CreateChargebackStatementRequest) Validate() error {
+	if strings.TrimSpace(r.TargetBusinessUnit) == "" {
+		return ErrBusinessUnitRequired
+	}
+	if strings.TrimSpace(r.StatementPeriod) == "" {
+		return errors.New("statement_period is required")
+	}
+	if r.TotalCharge < 0.0 {
+		return errors.New("total_charge cannot be negative")
+	}
+	return nil
+}
+
+// UpdateChargebackStatementRequest defines payload to update statement status
+type UpdateChargebackStatementRequest struct {
+	Status *string `json:"status,omitempty"`
+	Notes  *string `json:"notes,omitempty"`
+}
+
+// Validate validates UpdateChargebackStatementRequest
+func (r *UpdateChargebackStatementRequest) Validate() error {
+	if r.Status != nil {
+		if err := ValidateStatementStatus(*r.Status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
