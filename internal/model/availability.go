@@ -29,6 +29,20 @@ const (
 	TargetStatusDeprecated = "deprecated"
 )
 
+// Outage type constants
+const (
+	OutageTypeUnplanned            = "unplanned"
+	OutageTypePlannedMaintenance   = "planned_maintenance"
+	OutageTypeThirdPartyDependency = "third_party_dependency"
+)
+
+// Outage severity constants
+const (
+	OutageSeverityCritical = "critical"
+	OutageSeverityMajor    = "major"
+	OutageSeverityMinor    = "minor"
+)
+
 // Availability domain errors for targets
 var (
 	ErrAvailabilityTargetNotFound     = errors.New("availability target not found")
@@ -37,6 +51,11 @@ var (
 	ErrInvalidMeasurementWindow       = errors.New("invalid measurement window")
 	ErrInvalidServiceHours            = errors.New("invalid service hours")
 	ErrInvalidTargetStatus            = errors.New("invalid target status")
+	ErrOutageEventNotFound            = errors.New("outage event not found")
+	ErrOutageTitleRequired            = errors.New("outage title is required")
+	ErrInvalidOutageType              = errors.New("invalid outage type")
+	ErrInvalidOutageSeverity          = errors.New("invalid outage severity")
+	ErrInvalidOutageTimestamps        = errors.New("outage ended_at cannot be before started_at")
 )
 
 // ValidateMeasurementWindow verifies if a window string is recognized
@@ -67,6 +86,26 @@ func ValidateTargetStatus(s string) error {
 		return nil
 	default:
 		return ErrInvalidTargetStatus
+	}
+}
+
+// ValidateOutageType verifies if outage type is recognized
+func ValidateOutageType(ot string) error {
+	switch ot {
+	case OutageTypeUnplanned, OutageTypePlannedMaintenance, OutageTypeThirdPartyDependency:
+		return nil
+	default:
+		return ErrInvalidOutageType
+	}
+}
+
+// ValidateOutageSeverity verifies if outage severity is valid
+func ValidateOutageSeverity(sev string) error {
+	switch sev {
+	case OutageSeverityCritical, OutageSeverityMajor, OutageSeverityMinor:
+		return nil
+	default:
+		return ErrInvalidOutageSeverity
 	}
 }
 
@@ -105,4 +144,53 @@ func (t *AvailabilityTarget) Validate() error {
 		return err
 	}
 	return nil
+}
+
+// OutageEvent represents an incident, planned maintenance, or third-party outage affecting service availability
+type OutageEvent struct {
+	ID              string     `json:"id"`
+	WorkspaceID     string     `json:"workspace_id"`
+	TargetID        string     `json:"target_id,omitempty"`
+	CIID            string     `json:"ci_id,omitempty"`
+	Title           string     `json:"title"`
+	OutageType      string     `json:"outage_type"`
+	Severity        string     `json:"severity"`
+	StartedAt       time.Time  `json:"started_at"`
+	EndedAt         *time.Time `json:"ended_at,omitempty"`
+	DurationMinutes float64    `json:"duration_minutes"`
+	RootCause       string     `json:"root_cause,omitempty"`
+	IsSLAExempt     bool       `json:"is_sla_exempt"`
+	ExemptionReason string     `json:"exemption_reason,omitempty"`
+	ReportedBy      string     `json:"reported_by,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
+// Validate validates the OutageEvent entity
+func (o *OutageEvent) Validate() error {
+	if strings.TrimSpace(o.Title) == "" {
+		return ErrOutageTitleRequired
+	}
+	if err := ValidateOutageType(o.OutageType); err != nil {
+		return err
+	}
+	if err := ValidateOutageSeverity(o.Severity); err != nil {
+		return err
+	}
+	if o.EndedAt != nil && o.EndedAt.Before(o.StartedAt) {
+		return ErrInvalidOutageTimestamps
+	}
+	return nil
+}
+
+// CalculateDuration computes duration in minutes if EndedAt is present
+func (o *OutageEvent) CalculateDuration() float64 {
+	if o.EndedAt == nil {
+		return 0
+	}
+	dur := o.EndedAt.Sub(o.StartedAt).Minutes()
+	if dur < 0 {
+		return 0
+	}
+	return dur
 }
