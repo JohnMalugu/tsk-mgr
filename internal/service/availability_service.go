@@ -13,6 +13,7 @@ import (
 var (
 	_ = strings.TrimSpace
 	_ = time.Now
+	_ = errors.New
 )
 
 var (
@@ -294,20 +295,134 @@ func (s *availabilityService) ListOutages(ctx context.Context, filter model.Avai
 	return s.repo.ListOutages(ctx, filter)
 }
 
+// RecordMeasurement manually records or overwrites a periodic availability calculation
 func (s *availabilityService) RecordMeasurement(ctx context.Context, workspaceID string, req model.CreateMeasurementRequest) (*model.AvailabilityMeasurement, error) {
-	return nil, errors.New("not implemented")
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	target, err := s.repo.GetTargetByID(ctx, req.TargetID)
+	if err != nil {
+		return nil, err
+	}
+
+	m := &model.AvailabilityMeasurement{
+		WorkspaceID:             workspaceID,
+		TargetID:                req.TargetID,
+		Period:                  strings.TrimSpace(req.Period),
+		TotalOperationalMinutes: req.TotalOperationalMinutes,
+		TotalDowntimeMinutes:   req.TotalDowntimeMinutes,
+		ExemptDowntimeMinutes:  req.ExemptDowntimeMinutes,
+		MTBFHours:              req.MTBFHours,
+		MTTRMinutes:            req.MTTRMinutes,
+		OutageCount:            req.OutageCount,
+		CalculatedAt:           time.Now().UTC(),
+	}
+
+	m.ActualUptimePercentage = m.ComputeUptimePercentage()
+	m.IsSLABreached = m.CheckSLABreach(target.TargetPercentage)
+
+	if err := s.repo.SaveMeasurement(ctx, m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
+// CalculatePeriodMeasurement automates measurement rollup from outages for a specific target and period
 func (s *availabilityService) CalculatePeriodMeasurement(ctx context.Context, workspaceID string, targetID string, period string, totalOperationalMinutes float64) (*model.AvailabilityMeasurement, error) {
-	return nil, errors.New("not implemented")
+	target, err := s.repo.GetTargetByID(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	if totalOperationalMinutes <= 0 {
+		switch target.MeasurementWindow {
+		case model.MeasurementWindowDaily:
+			totalOperationalMinutes = 24.0 * 60.0
+		case model.MeasurementWindowWeekly:
+			totalOperationalMinutes = 7.0 * 24.0 * 60.0
+		case model.MeasurementWindowQuarterly:
+			totalOperationalMinutes = 90.0 * 24.0 * 60.0
+		case model.MeasurementWindowAnnual:
+			totalOperationalMinutes = 365.0 * 24.0 * 60.0
+		default: // Monthly
+			totalOperationalMinutes = 30.0 * 24.0 * 60.0
+		}
+	}
+
+	// Fetch outages for this target
+	outages, _, err := s.repo.ListOutages(ctx, model.AvailabilityFilterCriteria{
+		WorkspaceID: workspaceID,
+		TargetID:    targetID,
+		Limit:       500,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	totalDowntime := 0.0
+	exemptDowntime := 0.0
+	outageCount := len(outages)
+
+	for _, o := range outages {
+		dur := o.DurationMinutes
+		if dur <= 0 && o.EndedAt != nil {
+			dur = o.CalculateDuration()
+		}
+		totalDowntime += dur
+		if o.IsSLAExempt {
+			exemptDowntime += dur
+		}
+	}
+
+	var mttr float64
+	var mtbf float64
+	if outageCount > 0 {
+		mttr = totalDowntime / float64(outageCount)
+		uptimeMins := totalOperationalMinutes - totalDowntime
+		if uptimeMins < 0 {
+			uptimeMins = 0
+		}
+		mtbf = (uptimeMins / float64(outageCount)) / 60.0
+	} else {
+		mtbf = totalOperationalMinutes / 60.0
+	}
+
+	m := &model.AvailabilityMeasurement{
+		WorkspaceID:             workspaceID,
+		TargetID:                targetID,
+		Period:                  strings.TrimSpace(period),
+		TotalOperationalMinutes: totalOperationalMinutes,
+		TotalDowntimeMinutes:   totalDowntime,
+		ExemptDowntimeMinutes:  exemptDowntime,
+		MTBFHours:              mtbf,
+		MTTRMinutes:            mttr,
+		OutageCount:            outageCount,
+		CalculatedAt:           time.Now().UTC(),
+	}
+
+	m.ActualUptimePercentage = m.ComputeUptimePercentage()
+	m.IsSLABreached = m.CheckSLABreach(target.TargetPercentage)
+
+	if err := s.repo.SaveMeasurement(ctx, m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
+// GetMeasurementByID retrieves an availability measurement by ID
 func (s *availabilityService) GetMeasurementByID(ctx context.Context, id string) (*model.AvailabilityMeasurement, error) {
-	return nil, errors.New("not implemented")
+	return s.repo.GetMeasurementByID(ctx, id)
 }
 
+// ListMeasurements returns measurements matching filter criteria
 func (s *availabilityService) ListMeasurements(ctx context.Context, filter model.AvailabilityFilterCriteria) ([]model.AvailabilityMeasurement, int, error) {
-	return nil, 0, errors.New("not implemented")
+	return s.repo.ListMeasurements(ctx, filter)
+}
+
+// GetAvailabilityAnalytics computes executive posture, resilience health index, and SLA compliance
+func (s *availabilityService) GetAvailabilityAnalytics(ctx context.Context, workspaceID string) (*model.AvailabilityAnalytics, error) {
+	return s.repo.GetAvailabilityAnalytics(ctx, workspaceID)
 }
 
 // RegisterSPOF logs a new architectural single point of failure
@@ -510,6 +625,4 @@ func (s *availabilityService) ListTests(ctx context.Context, filter model.Availa
 	return s.repo.ListTests(ctx, filter)
 }
 
-func (s *availabilityService) GetAvailabilityAnalytics(ctx context.Context, workspaceID string) (*model.AvailabilityAnalytics, error) {
-	return nil, errors.New("not implemented")
-}
+
