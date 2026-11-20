@@ -1,0 +1,196 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"time"
+
+	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
+	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
+)
+
+var (
+	_ = strings.TrimSpace
+	_ = time.Now
+)
+
+var (
+	ErrAvailabilityTargetNotFound      = repository.ErrAvailabilityTargetNotFound
+	ErrAvailabilityTargetNameRequired  = repository.ErrAvailabilityTargetNameRequired
+	ErrAvailabilityTargetNameConflict  = repository.ErrAvailabilityTargetNameConflict
+	ErrOutageEventNotFound             = repository.ErrOutageEventNotFound
+	ErrAvailabilityMeasurementNotFound = repository.ErrAvailabilityMeasurementNotFound
+	ErrSPOFRecordNotFound              = repository.ErrSPOFRecordNotFound
+	ErrAvailabilityTestNotFound        = repository.ErrAvailabilityTestNotFound
+)
+
+// AvailabilityService defines business logic and orchestration for ITIL Availability Management
+type AvailabilityService interface {
+	// Targets
+	CreateTarget(ctx context.Context, workspaceID string, req model.CreateAvailabilityTargetRequest) (*model.AvailabilityTarget, error)
+	GetTargetByID(ctx context.Context, id string) (*model.AvailabilityTarget, error)
+	GetTargetByName(ctx context.Context, workspaceID string, name string) (*model.AvailabilityTarget, error)
+	UpdateTarget(ctx context.Context, id string, req model.UpdateAvailabilityTargetRequest) (*model.AvailabilityTarget, error)
+	DeleteTarget(ctx context.Context, id string) error
+	ListTargets(ctx context.Context, filter model.AvailabilityFilterCriteria) ([]model.AvailabilityTarget, int, error)
+
+	// Outages
+	RecordOutage(ctx context.Context, workspaceID string, req model.CreateOutageEventRequest) (*model.OutageEvent, error)
+	GetOutageByID(ctx context.Context, id string) (*model.OutageEvent, error)
+	UpdateOutage(ctx context.Context, id string, req model.UpdateOutageEventRequest) (*model.OutageEvent, error)
+	ResolveOutage(ctx context.Context, id string, req model.ResolveOutageRequest) (*model.OutageEvent, error)
+	DeleteOutage(ctx context.Context, id string) error
+	ListOutages(ctx context.Context, filter model.AvailabilityFilterCriteria) ([]model.OutageEvent, int, error)
+
+	// Measurements
+	RecordMeasurement(ctx context.Context, workspaceID string, req model.CreateMeasurementRequest) (*model.AvailabilityMeasurement, error)
+	CalculatePeriodMeasurement(ctx context.Context, workspaceID string, targetID string, period string, totalOperationalMinutes float64) (*model.AvailabilityMeasurement, error)
+	GetMeasurementByID(ctx context.Context, id string) (*model.AvailabilityMeasurement, error)
+	ListMeasurements(ctx context.Context, filter model.AvailabilityFilterCriteria) ([]model.AvailabilityMeasurement, int, error)
+
+	// SPOFs
+	RegisterSPOF(ctx context.Context, workspaceID string, req model.CreateSPOFRequest) (*model.SPOFRecord, error)
+	GetSPOFByID(ctx context.Context, id string) (*model.SPOFRecord, error)
+	UpdateSPOF(ctx context.Context, id string, req model.UpdateSPOFRequest) (*model.SPOFRecord, error)
+	MitigateSPOF(ctx context.Context, id string, mitigationPlan string) (*model.SPOFRecord, error)
+	DeleteSPOF(ctx context.Context, id string) error
+	ListSPOFs(ctx context.Context, filter model.AvailabilityFilterCriteria) ([]model.SPOFRecord, int, error)
+
+	// Availability Tests
+	ScheduleTest(ctx context.Context, workspaceID string, req model.CreateAvailabilityTestRequest) (*model.AvailabilityTest, error)
+	GetTestByID(ctx context.Context, id string) (*model.AvailabilityTest, error)
+	UpdateTest(ctx context.Context, id string, req model.UpdateAvailabilityTestRequest) (*model.AvailabilityTest, error)
+	RecordTestResult(ctx context.Context, id string, req model.RecordTestResultRequest) (*model.AvailabilityTest, error)
+	DeleteTest(ctx context.Context, id string) error
+	ListTests(ctx context.Context, filter model.AvailabilityFilterCriteria) ([]model.AvailabilityTest, int, error)
+
+	// Posture Analytics
+	GetAvailabilityAnalytics(ctx context.Context, workspaceID string) (*model.AvailabilityAnalytics, error)
+}
+
+type availabilityService struct {
+	repo repository.AvailabilityRepository
+}
+
+// NewAvailabilityService instantiates the availability management service
+func NewAvailabilityService(repo repository.AvailabilityRepository) AvailabilityService {
+	return &availabilityService{repo: repo}
+}
+
+// Stubs to be implemented in subsequent commits
+func (s *availabilityService) CreateTarget(ctx context.Context, workspaceID string, req model.CreateAvailabilityTargetRequest) (*model.AvailabilityTarget, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *availabilityService) GetTargetByID(ctx context.Context, id string) (*model.AvailabilityTarget, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *availabilityService) GetTargetByName(ctx context.Context, workspaceID string, name string) (*model.AvailabilityTarget, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *availabilityService) UpdateTarget(ctx context.Context, id string, req model.UpdateAvailabilityTargetRequest) (*model.AvailabilityTarget, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *availabilityService) DeleteTarget(ctx context.Context, id string) error {
+	return errors.New("not implemented")
+}
+
+func (s *availabilityService) ListTargets(ctx context.Context, filter model.AvailabilityFilterCriteria) ([]model.AvailabilityTarget, int, error) {
+	return nil, 0, errors.New("not implemented")
+}
+
+func (s *availabilityService) RecordOutage(ctx context.Context, workspaceID string, req model.CreateOutageEventRequest) (*model.OutageEvent, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *availabilityService) GetOutageByID(ctx context.Context, id string) (*model.OutageEvent, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *availabilityService) UpdateOutage(ctx context.Context, id string, req model.UpdateOutageEventRequest) (*model.OutageEvent, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *availabilityService) ResolveOutage(ctx context.Context, id string, req model.ResolveOutageRequest) (*model.OutageEvent, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *availabilityService) DeleteOutage(ctx context.Context, id string) error {
+	return errors.New("not implemented")
+}
+
+func (s *availabilityService) ListOutages(ctx context.Context, filter model.AvailabilityFilterCriteria) ([]model.OutageEvent, int, error) {
+	return nil, 0, errors.New("not implemented")
+}
+
+func (s *availabilityService) RecordMeasurement(ctx context.Context, workspaceID string, req model.CreateMeasurementRequest) (*model.AvailabilityMeasurement, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *availabilityService) CalculatePeriodMeasurement(ctx context.Context, workspaceID string, targetID string, period string, totalOperationalMinutes float64) (*model.AvailabilityMeasurement, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *availabilityService) GetMeasurementByID(ctx context.Context, id string) (*model.AvailabilityMeasurement, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *availabilityService) ListMeasurements(ctx context.Context, filter model.AvailabilityFilterCriteria) ([]model.AvailabilityMeasurement, int, error) {
+	return nil, 0, errors.New("not implemented")
+}
+
+func (s *availabilityService) RegisterSPOF(ctx context.Context, workspaceID string, req model.CreateSPOFRequest) (*model.SPOFRecord, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *availabilityService) GetSPOFByID(ctx context.Context, id string) (*model.SPOFRecord, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *availabilityService) UpdateSPOF(ctx context.Context, id string, req model.UpdateSPOFRequest) (*model.SPOFRecord, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *availabilityService) MitigateSPOF(ctx context.Context, id string, mitigationPlan string) (*model.SPOFRecord, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *availabilityService) DeleteSPOF(ctx context.Context, id string) error {
+	return errors.New("not implemented")
+}
+
+func (s *availabilityService) ListSPOFs(ctx context.Context, filter model.AvailabilityFilterCriteria) ([]model.SPOFRecord, int, error) {
+	return nil, 0, errors.New("not implemented")
+}
+
+func (s *availabilityService) ScheduleTest(ctx context.Context, workspaceID string, req model.CreateAvailabilityTestRequest) (*model.AvailabilityTest, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *availabilityService) GetTestByID(ctx context.Context, id string) (*model.AvailabilityTest, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *availabilityService) UpdateTest(ctx context.Context, id string, req model.UpdateAvailabilityTestRequest) (*model.AvailabilityTest, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *availabilityService) RecordTestResult(ctx context.Context, id string, req model.RecordTestResultRequest) (*model.AvailabilityTest, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *availabilityService) DeleteTest(ctx context.Context, id string) error {
+	return errors.New("not implemented")
+}
+
+func (s *availabilityService) ListTests(ctx context.Context, filter model.AvailabilityFilterCriteria) ([]model.AvailabilityTest, int, error) {
+	return nil, 0, errors.New("not implemented")
+}
+
+func (s *availabilityService) GetAvailabilityAnalytics(ctx context.Context, workspaceID string) (*model.AvailabilityAnalytics, error) {
+	return nil, errors.New("not implemented")
+}
