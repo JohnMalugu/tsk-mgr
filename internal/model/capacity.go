@@ -178,3 +178,58 @@ func (m *CapacityMetric) Validate() error {
 	}
 	return nil
 }
+
+// Recommended scaling action constants
+const (
+	ActionScaleUp   = "scale_up"
+	ActionScaleOut  = "scale_out"
+	ActionScaleDown = "scale_down"
+	ActionRebalance = "rebalance"
+	ActionOptimize  = "optimize"
+)
+
+// ValidateRecommendedAction verifies that a scaling recommendation is valid
+func ValidateRecommendedAction(action string) error {
+	switch action {
+	case ActionScaleUp, ActionScaleOut, ActionScaleDown, ActionRebalance, ActionOptimize:
+		return nil
+	default:
+		return errors.New("invalid recommended scaling action")
+	}
+}
+
+// CapacityForecast models trend analysis, capacity runway, and sizing recommendations
+type CapacityForecast struct {
+	ID                          string    `json:"id"`
+	WorkspaceID                 string    `json:"workspace_id"`
+	PoolID                      string    `json:"pool_id"`
+	ForecastHorizonDays         int       `json:"forecast_horizon_days"`
+	CurrentUtilizationPercent   float64   `json:"current_utilization_percent"`
+	ProjectedUtilizationPercent float64   `json:"projected_utilization_percent"`
+	GrowthRateMonthlyPercent    float64   `json:"growth_rate_monthly_percent"`
+	DaysToExhaustion            int       `json:"days_to_exhaustion"`
+	ConfidenceScore             float64   `json:"confidence_score"`
+	RecommendedAction           string    `json:"recommended_action"`
+	RecommendationNotes         string    `json:"recommendation_notes,omitempty"`
+	CreatedAt                   time.Time `json:"created_at"`
+	UpdatedAt                   time.Time `json:"updated_at"`
+}
+
+// Validate checks whether the CapacityForecast parameters are valid
+func (f *CapacityForecast) Validate() error {
+	if strings.TrimSpace(f.PoolID) == "" {
+		return ErrCapacityPoolNotFound
+	}
+	if f.ForecastHorizonDays <= 0 {
+		return errors.New("forecast_horizon_days must be greater than zero")
+	}
+	if f.ConfidenceScore < 0.0 || f.ConfidenceScore > 1.0 {
+		return errors.New("confidence_score must be between 0.0 and 1.0")
+	}
+	if f.RecommendedAction != "" {
+		if err := ValidateRecommendedAction(f.RecommendedAction); err != nil {
+			return err
+		}
+	}
+	return nil
+}
