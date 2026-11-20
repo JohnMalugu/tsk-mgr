@@ -43,6 +43,29 @@ const (
 	OutageSeverityMinor    = "minor"
 )
 
+// Redundancy mechanism constants
+const (
+	RedundancyMechanismNone          = "none"
+	RedundancyMechanismActiveActive  = "active_active"
+	RedundancyMechanismActivePassive = "active_passive"
+	RedundancyMechanismNPlusOne      = "n_plus_one"
+)
+
+// SPOF risk level constants
+const (
+	SPOFRiskLow      = "low"
+	SPOFRiskMedium   = "medium"
+	SPOFRiskHigh     = "high"
+	SPOFRiskCritical = "critical"
+)
+
+// SPOF status constants
+const (
+	SPOFStatusOpen         = "open"
+	SPOFStatusMitigated    = "mitigated"
+	SPOFStatusAcceptedRisk = "accepted_risk"
+)
+
 // Availability domain errors for targets
 var (
 	ErrAvailabilityTargetNotFound     = errors.New("availability target not found")
@@ -59,6 +82,11 @@ var (
 	ErrAvailabilityMeasurementNotFound = errors.New("availability measurement not found")
 	ErrPeriodRequired                 = errors.New("measurement period is required")
 	ErrInvalidOperationalMinutes      = errors.New("total operational minutes must be greater than zero")
+	ErrSPOFRecordNotFound             = errors.New("single point of failure record not found")
+	ErrSPOFComponentNameRequired      = errors.New("SPOF component name is required")
+	ErrInvalidRedundancyMechanism     = errors.New("invalid redundancy mechanism")
+	ErrInvalidSPOFRiskLevel           = errors.New("invalid SPOF risk level")
+	ErrInvalidSPOFStatus              = errors.New("invalid SPOF status")
 )
 
 // ValidateMeasurementWindow verifies if a window string is recognized
@@ -109,6 +137,37 @@ func ValidateOutageSeverity(sev string) error {
 		return nil
 	default:
 		return ErrInvalidOutageSeverity
+	}
+}
+
+// ValidateRedundancyMechanism verifies if redundancy mechanism is supported
+func ValidateRedundancyMechanism(rm string) error {
+	switch rm {
+	case RedundancyMechanismNone, RedundancyMechanismActiveActive,
+		RedundancyMechanismActivePassive, RedundancyMechanismNPlusOne:
+		return nil
+	default:
+		return ErrInvalidRedundancyMechanism
+	}
+}
+
+// ValidateSPOFRiskLevel verifies if SPOF risk level is recognized
+func ValidateSPOFRiskLevel(rl string) error {
+	switch rl {
+	case SPOFRiskLow, SPOFRiskMedium, SPOFRiskHigh, SPOFRiskCritical:
+		return nil
+	default:
+		return ErrInvalidSPOFRiskLevel
+	}
+}
+
+// ValidateSPOFStatus verifies if SPOF status is valid
+func ValidateSPOFStatus(st string) error {
+	switch st {
+	case SPOFStatusOpen, SPOFStatusMitigated, SPOFStatusAcceptedRisk:
+		return nil
+	default:
+		return ErrInvalidSPOFStatus
 	}
 }
 
@@ -257,4 +316,37 @@ func (m *AvailabilityMeasurement) ComputeUptimePercentage() float64 {
 // CheckSLABreach checks whether the actual uptime percentage fell below the target percentage
 func (m *AvailabilityMeasurement) CheckSLABreach(targetPercentage float64) bool {
 	return m.ActualUptimePercentage < targetPercentage
+}
+
+// SPOFRecord represents an identified Single Point of Failure in system architecture
+type SPOFRecord struct {
+	ID                  string    `json:"id"`
+	WorkspaceID         string    `json:"workspace_id"`
+	ComponentName       string    `json:"component_name"`
+	CIID                string    `json:"ci_id,omitempty"`
+	RiskLevel           string    `json:"risk_level"`
+	RedundancyMechanism string    `json:"redundancy_mechanism"`
+	MitigationPlan      string    `json:"mitigation_plan,omitempty"`
+	Status              string    `json:"status"`
+	ReviewDate          time.Time `json:"review_date"`
+	OwnerID             string    `json:"owner_id,omitempty"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
+}
+
+// Validate validates the SPOFRecord entity
+func (s *SPOFRecord) Validate() error {
+	if strings.TrimSpace(s.ComponentName) == "" {
+		return ErrSPOFComponentNameRequired
+	}
+	if err := ValidateSPOFRiskLevel(s.RiskLevel); err != nil {
+		return err
+	}
+	if err := ValidateRedundancyMechanism(s.RedundancyMechanism); err != nil {
+		return err
+	}
+	if err := ValidateSPOFStatus(s.Status); err != nil {
+		return err
+	}
+	return nil
 }
