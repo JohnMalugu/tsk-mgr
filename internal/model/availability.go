@@ -789,3 +789,77 @@ func (r *RecordTestResultRequest) Validate() error {
 	}
 	return nil
 }
+
+// AvailabilityFilterCriteria defines search, filter, and pagination options for availability resources
+type AvailabilityFilterCriteria struct {
+	WorkspaceID string `json:"workspace_id"`
+	TargetID    string `json:"target_id,omitempty"`
+	CIID        string `json:"ci_id,omitempty"`
+	Status      string `json:"status,omitempty"`
+	OutageType  string `json:"outage_type,omitempty"`
+	Severity    string `json:"severity,omitempty"`
+	RiskLevel   string `json:"risk_level,omitempty"`
+	Outcome     string `json:"outcome,omitempty"`
+	Period      string `json:"period,omitempty"`
+	Limit       int    `json:"limit,omitempty"`
+	Offset      int    `json:"offset,omitempty"`
+}
+
+// TopOutageSummary represents outage frequency and downtime statistics grouped by CI
+type TopOutageSummary struct {
+	CIID                 string  `json:"ci_id"`
+	OutageCount          int     `json:"outage_count"`
+	TotalDowntimeMinutes float64 `json:"total_downtime_minutes"`
+}
+
+// AvailabilityAnalytics represents executive posture, SLA compliance rate, and operational resilience
+type AvailabilityAnalytics struct {
+	TotalTargets                  int                `json:"total_targets"`
+	ActiveTargets                 int                `json:"active_targets"`
+	OverallAvailabilityPercentage float64            `json:"overall_availability_percentage"`
+	SLABreachCount                int                `json:"sla_breach_count"`
+	SLAComplianceRate             float64            `json:"sla_compliance_rate"`
+	AverageMTBFHours              float64            `json:"average_mtbf_hours"`
+	AverageMTTRMinutes            float64            `json:"average_mttr_minutes"`
+	TotalOutagesRecorded          int                `json:"total_outages_recorded"`
+	ActiveOutages                 int                `json:"active_outages"`
+	CriticalSPOFCount             int                `json:"critical_spof_count"`
+	TotalSPOFCount                int                `json:"total_spof_count"`
+	UpcomingTestsCount            int                `json:"upcoming_tests_count"`
+	HealthIndexScore              float64            `json:"health_index_score"`
+	TopOutagesByCI                []TopOutageSummary `json:"top_outages_by_ci"`
+}
+
+// CalculateHealthIndex derives a composite resilience score (0-100) based on availability, SLA compliance, active outages, and SPOFs
+func (a *AvailabilityAnalytics) CalculateHealthIndex() float64 {
+	score := 100.0
+
+	// Deduct for active outages (15 points each, up to 30)
+	activePenalty := float64(a.ActiveOutages) * 15.0
+	if activePenalty > 30.0 {
+		activePenalty = 30.0
+	}
+	score -= activePenalty
+
+	// Deduct for critical SPOFs (10 points each, up to 30)
+	spofPenalty := float64(a.CriticalSPOFCount) * 10.0
+	if spofPenalty > 30.0 {
+		spofPenalty = 30.0
+	}
+	score -= spofPenalty
+
+	// Deduct for SLA compliance deficit
+	if a.SLAComplianceRate < 100.0 {
+		deficit := (100.0 - a.SLAComplianceRate) * 0.4
+		score -= deficit
+	}
+
+	if score < 0.0 {
+		score = 0.0
+	}
+	if score > 100.0 {
+		score = 100.0
+	}
+	a.HealthIndexScore = score
+	return score
+}
