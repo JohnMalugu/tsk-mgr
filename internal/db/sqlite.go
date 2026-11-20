@@ -2889,6 +2889,31 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	capacityPoolsQuery := `
+	CREATE TABLE IF NOT EXISTS capacity_pools (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		resource_type TEXT NOT NULL,
+		ci_id TEXT NOT NULL DEFAULT '',
+		total_capacity REAL NOT NULL,
+		allocated_capacity REAL NOT NULL DEFAULT 0.0,
+		utilized_capacity REAL NOT NULL DEFAULT 0.0,
+		unit_of_measure TEXT NOT NULL DEFAULT '',
+		warning_threshold_percent REAL NOT NULL DEFAULT 75.0,
+		critical_threshold_percent REAL NOT NULL DEFAULT 90.0,
+		status TEXT NOT NULL DEFAULT 'optimal',
+		description TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		UNIQUE(workspace_id, name)
+	);`
+
+	_, err = db.Exec(capacityPoolsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
