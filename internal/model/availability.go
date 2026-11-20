@@ -66,6 +66,31 @@ const (
 	SPOFStatusAcceptedRisk = "accepted_risk"
 )
 
+// Availability test type constants
+const (
+	TestTypeFailover              = "failover"
+	TestTypeLoadBalancerIsolation = "load_balancer_isolation"
+	TestTypePowerSimulation       = "power_simulation"
+	TestTypeChaosDrill            = "chaos_drill"
+)
+
+// Availability test frequency constants
+const (
+	TestFrequencyWeekly     = "weekly"
+	TestFrequencyMonthly    = "monthly"
+	TestFrequencyQuarterly  = "quarterly"
+	TestFrequencySemiAnnual = "semi_annual"
+	TestFrequencyAnnual     = "annual"
+)
+
+// Availability test outcome constants
+const (
+	TestOutcomePassed  = "passed"
+	TestOutcomeFailed  = "failed"
+	TestOutcomePartial = "partial"
+	TestOutcomePending = "pending"
+)
+
 // Availability domain errors for targets
 var (
 	ErrAvailabilityTargetNotFound     = errors.New("availability target not found")
@@ -87,6 +112,11 @@ var (
 	ErrInvalidRedundancyMechanism     = errors.New("invalid redundancy mechanism")
 	ErrInvalidSPOFRiskLevel           = errors.New("invalid SPOF risk level")
 	ErrInvalidSPOFStatus              = errors.New("invalid SPOF status")
+	ErrAvailabilityTestNotFound       = errors.New("availability test not found")
+	ErrAvailabilityTestNameRequired   = errors.New("availability test name is required")
+	ErrInvalidTestType                = errors.New("invalid availability test type")
+	ErrInvalidTestFrequency           = errors.New("invalid availability test frequency")
+	ErrInvalidTestOutcome             = errors.New("invalid availability test outcome")
 )
 
 // ValidateMeasurementWindow verifies if a window string is recognized
@@ -168,6 +198,37 @@ func ValidateSPOFStatus(st string) error {
 		return nil
 	default:
 		return ErrInvalidSPOFStatus
+	}
+}
+
+// ValidateTestType verifies if availability test type is recognized
+func ValidateTestType(tt string) error {
+	switch tt {
+	case TestTypeFailover, TestTypeLoadBalancerIsolation, TestTypePowerSimulation, TestTypeChaosDrill:
+		return nil
+	default:
+		return ErrInvalidTestType
+	}
+}
+
+// ValidateTestFrequency verifies if availability test frequency is supported
+func ValidateTestFrequency(tf string) error {
+	switch tf {
+	case TestFrequencyWeekly, TestFrequencyMonthly, TestFrequencyQuarterly,
+		TestFrequencySemiAnnual, TestFrequencyAnnual:
+		return nil
+	default:
+		return ErrInvalidTestFrequency
+	}
+}
+
+// ValidateTestOutcome verifies if availability test outcome is valid
+func ValidateTestOutcome(to string) error {
+	switch to {
+	case TestOutcomePassed, TestOutcomeFailed, TestOutcomePartial, TestOutcomePending:
+		return nil
+	default:
+		return ErrInvalidTestOutcome
 	}
 }
 
@@ -346,6 +407,40 @@ func (s *SPOFRecord) Validate() error {
 		return err
 	}
 	if err := ValidateSPOFStatus(s.Status); err != nil {
+		return err
+	}
+	return nil
+}
+
+// AvailabilityTest records planned and historical failover, load balancing, and disaster drills
+type AvailabilityTest struct {
+	ID          string     `json:"id"`
+	WorkspaceID string     `json:"workspace_id"`
+	TargetID    string     `json:"target_id,omitempty"`
+	Name        string     `json:"name"`
+	TestType    string     `json:"test_type"`
+	Frequency   string     `json:"frequency"`
+	LastTestedAt *time.Time `json:"last_tested_at,omitempty"`
+	NextTestDue time.Time  `json:"next_test_due"`
+	Outcome     string     `json:"outcome"`
+	Findings    string     `json:"findings,omitempty"`
+	ConductedBy string     `json:"conducted_by,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
+// Validate validates the AvailabilityTest entity
+func (t *AvailabilityTest) Validate() error {
+	if strings.TrimSpace(t.Name) == "" {
+		return ErrAvailabilityTestNameRequired
+	}
+	if err := ValidateTestType(t.TestType); err != nil {
+		return err
+	}
+	if err := ValidateTestFrequency(t.Frequency); err != nil {
+		return err
+	}
+	if err := ValidateTestOutcome(t.Outcome); err != nil {
 		return err
 	}
 	return nil
