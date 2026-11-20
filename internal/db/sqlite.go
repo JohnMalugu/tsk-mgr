@@ -3056,6 +3056,31 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	availabilityMeasurementsQuery := `
+	CREATE TABLE IF NOT EXISTS availability_measurements (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		target_id TEXT NOT NULL,
+		period TEXT NOT NULL,
+		total_operational_minutes REAL NOT NULL,
+		total_downtime_minutes REAL NOT NULL,
+		exempt_downtime_minutes REAL NOT NULL,
+		actual_uptime_percentage REAL NOT NULL,
+		mtbf_hours REAL NOT NULL DEFAULT 0.0,
+		mttr_minutes REAL NOT NULL DEFAULT 0.0,
+		outage_count INTEGER NOT NULL DEFAULT 0,
+		is_sla_breached INTEGER NOT NULL DEFAULT 0,
+		calculated_at DATETIME NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (target_id) REFERENCES availability_targets(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(availabilityMeasurementsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
