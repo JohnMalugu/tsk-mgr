@@ -654,3 +654,200 @@ func (h *AvailabilityHandler) DeleteTest(w http.ResponseWriter, r *http.Request,
 	}
 	writeAvailabilityJSON(w, http.StatusOK, map[string]string{"message": "availability test deleted successfully"})
 }
+
+// Analytics Endpoints
+
+// GetAnalytics handles GET /v2/availability/analytics
+func (h *AvailabilityHandler) GetAnalytics(w http.ResponseWriter, r *http.Request) {
+	wsID := getAvailabilityWorkspaceID(r)
+
+	analytics, err := h.svc.GetAvailabilityAnalytics(r.Context(), wsID)
+	if err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+	writeAvailabilityJSON(w, http.StatusOK, analytics)
+}
+
+// ServeHTTP multiplexes sub-routes under /v2/availability
+func (h *AvailabilityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/availability")
+	path = strings.TrimPrefix(path, "/")
+
+	// Analytics
+	if path == "analytics" {
+		if r.Method == http.MethodGet {
+			h.GetAnalytics(w, r)
+		} else {
+			writeAvailabilityError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	// Targets
+	if strings.HasPrefix(path, "targets") {
+		sub := strings.TrimPrefix(path, "targets")
+		sub = strings.TrimPrefix(sub, "/")
+		if sub == "" {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListTargets(w, r)
+			case http.MethodPost:
+				h.CreateTarget(w, r)
+			default:
+				writeAvailabilityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		targetID := sub
+		switch r.Method {
+		case http.MethodGet:
+			h.GetTargetByID(w, r, targetID)
+		case http.MethodPut:
+			h.UpdateTarget(w, r, targetID)
+		case http.MethodDelete:
+			h.DeleteTarget(w, r, targetID)
+		default:
+			writeAvailabilityError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	// Outages
+	if strings.HasPrefix(path, "outages") {
+		sub := strings.TrimPrefix(path, "outages")
+		sub = strings.TrimPrefix(sub, "/")
+		if sub == "" {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListOutages(w, r)
+			case http.MethodPost:
+				h.CreateOutage(w, r)
+			default:
+				writeAvailabilityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		parts := strings.Split(sub, "/")
+		outageID := parts[0]
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetOutageByID(w, r, outageID)
+			case http.MethodPut:
+				h.UpdateOutage(w, r, outageID)
+			case http.MethodDelete:
+				h.DeleteOutage(w, r, outageID)
+			default:
+				writeAvailabilityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 && parts[1] == "resolve" && r.Method == http.MethodPost {
+			h.ResolveOutage(w, r, outageID)
+			return
+		}
+	}
+
+	// Measurements
+	if strings.HasPrefix(path, "measurements") {
+		sub := strings.TrimPrefix(path, "measurements")
+		sub = strings.TrimPrefix(sub, "/")
+		if sub == "" {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListMeasurements(w, r)
+			case http.MethodPost:
+				h.RecordMeasurement(w, r)
+			default:
+				writeAvailabilityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if sub == "calculate" && r.Method == http.MethodPost {
+			h.CalculateMeasurement(w, r)
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			h.GetMeasurementByID(w, r, sub)
+		default:
+			writeAvailabilityError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	// SPOFs
+	if strings.HasPrefix(path, "spofs") {
+		sub := strings.TrimPrefix(path, "spofs")
+		sub = strings.TrimPrefix(sub, "/")
+		if sub == "" {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListSPOFs(w, r)
+			case http.MethodPost:
+				h.CreateSPOF(w, r)
+			default:
+				writeAvailabilityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		parts := strings.Split(sub, "/")
+		spofID := parts[0]
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetSPOFByID(w, r, spofID)
+			case http.MethodPut:
+				h.UpdateSPOF(w, r, spofID)
+			case http.MethodDelete:
+				h.DeleteSPOF(w, r, spofID)
+			default:
+				writeAvailabilityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 && parts[1] == "mitigate" && r.Method == http.MethodPost {
+			h.MitigateSPOF(w, r, spofID)
+			return
+		}
+	}
+
+	// Availability Tests
+	if strings.HasPrefix(path, "tests") {
+		sub := strings.TrimPrefix(path, "tests")
+		sub = strings.TrimPrefix(sub, "/")
+		if sub == "" {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListTests(w, r)
+			case http.MethodPost:
+				h.CreateTest(w, r)
+			default:
+				writeAvailabilityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		parts := strings.Split(sub, "/")
+		testID := parts[0]
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetTestByID(w, r, testID)
+			case http.MethodPut:
+				h.UpdateTest(w, r, testID)
+			case http.MethodDelete:
+				h.DeleteTest(w, r, testID)
+			default:
+				writeAvailabilityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 && parts[1] == "result" && r.Method == http.MethodPost {
+			h.RecordTestResult(w, r, testID)
+			return
+		}
+	}
+
+	writeAvailabilityError(w, http.StatusNotFound, "route not found")
+}
