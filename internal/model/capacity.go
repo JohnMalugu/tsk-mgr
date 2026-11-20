@@ -389,3 +389,210 @@ func (b *BottleneckRecord) Validate() error {
 	}
 	return nil
 }
+
+// CreateCapacityPoolRequest defines payload to create a new capacity resource pool
+type CreateCapacityPoolRequest struct {
+	Name                     string  `json:"name"`
+	ResourceType             string  `json:"resource_type"`
+	CIID                     string  `json:"ci_id,omitempty"`
+	TotalCapacity            float64 `json:"total_capacity"`
+	AllocatedCapacity        float64 `json:"allocated_capacity,omitempty"`
+	UtilizedCapacity         float64 `json:"utilized_capacity,omitempty"`
+	UnitOfMeasure            string  `json:"unit_of_measure"`
+	WarningThresholdPercent  float64 `json:"warning_threshold_percent,omitempty"`
+	CriticalThresholdPercent float64 `json:"critical_threshold_percent,omitempty"`
+	Description              string  `json:"description,omitempty"`
+}
+
+// Validate validates CreateCapacityPoolRequest
+func (r *CreateCapacityPoolRequest) Validate() error {
+	if strings.TrimSpace(r.Name) == "" {
+		return ErrCapacityPoolNameRequired
+	}
+	if err := ValidateResourceType(r.ResourceType); err != nil {
+		return err
+	}
+	if r.TotalCapacity <= 0 {
+		return ErrInvalidTotalCapacity
+	}
+	if r.WarningThresholdPercent != 0.0 && (r.WarningThresholdPercent < 1.0 || r.WarningThresholdPercent > 100.0) {
+		return ErrInvalidThresholdPercent
+	}
+	if r.CriticalThresholdPercent != 0.0 && (r.CriticalThresholdPercent < 1.0 || r.CriticalThresholdPercent > 100.0) {
+		return ErrInvalidThresholdPercent
+	}
+	if r.WarningThresholdPercent > 0 && r.CriticalThresholdPercent > 0 && r.CriticalThresholdPercent < r.WarningThresholdPercent {
+		return errors.New("critical threshold percent must be greater than or equal to warning threshold")
+	}
+	return nil
+}
+
+// UpdateCapacityPoolRequest defines payload to modify an existing capacity pool
+type UpdateCapacityPoolRequest struct {
+	Name                     *string  `json:"name,omitempty"`
+	TotalCapacity            *float64 `json:"total_capacity,omitempty"`
+	AllocatedCapacity        *float64 `json:"allocated_capacity,omitempty"`
+	UtilizedCapacity         *float64 `json:"utilized_capacity,omitempty"`
+	WarningThresholdPercent  *float64 `json:"warning_threshold_percent,omitempty"`
+	CriticalThresholdPercent *float64 `json:"critical_threshold_percent,omitempty"`
+	Description              *string  `json:"description,omitempty"`
+}
+
+// Validate validates UpdateCapacityPoolRequest
+func (r *UpdateCapacityPoolRequest) Validate() error {
+	if r.Name != nil && strings.TrimSpace(*r.Name) == "" {
+		return ErrCapacityPoolNameRequired
+	}
+	if r.TotalCapacity != nil && *r.TotalCapacity <= 0 {
+		return ErrInvalidTotalCapacity
+	}
+	if r.WarningThresholdPercent != nil && (*r.WarningThresholdPercent < 1.0 || *r.WarningThresholdPercent > 100.0) {
+		return ErrInvalidThresholdPercent
+	}
+	if r.CriticalThresholdPercent != nil && (*r.CriticalThresholdPercent < 1.0 || *r.CriticalThresholdPercent > 100.0) {
+		return ErrInvalidThresholdPercent
+	}
+	return nil
+}
+
+// RecordCapacityMetricRequest defines payload to ingest a telemetry metric sample
+type RecordCapacityMetricRequest struct {
+	PoolID       string     `json:"pool_id"`
+	MetricName   string     `json:"metric_name"`
+	SampledAt    *time.Time `json:"sampled_at,omitempty"`
+	AverageValue float64    `json:"average_value"`
+	PeakValue    float64    `json:"peak_value"`
+	P95Value     float64    `json:"p95_value,omitempty"`
+	P99Value     float64    `json:"p99_value,omitempty"`
+	IsAnomaly    bool       `json:"is_anomaly,omitempty"`
+	AnomalyScore float64    `json:"anomaly_score,omitempty"`
+}
+
+// Validate validates RecordCapacityMetricRequest
+func (r *RecordCapacityMetricRequest) Validate() error {
+	if strings.TrimSpace(r.PoolID) == "" {
+		return ErrCapacityPoolNotFound
+	}
+	if strings.TrimSpace(r.MetricName) == "" {
+		return errors.New("metric_name is required")
+	}
+	if r.AverageValue < 0 || r.PeakValue < 0 {
+		return errors.New("metric values cannot be negative")
+	}
+	return nil
+}
+
+// CreateCapacityPlanRequest defines payload to create a capacity expansion plan
+type CreateCapacityPlanRequest struct {
+	PoolID           string     `json:"pool_id"`
+	Title            string     `json:"title"`
+	PlanningHorizon  string     `json:"planning_horizon"`
+	RequiredCapacity float64    `json:"required_capacity"`
+	EstimatedCost    float64    `json:"estimated_cost,omitempty"`
+	Currency         string     `json:"currency,omitempty"`
+	Justification    string     `json:"justification"`
+	TargetDate       *time.Time `json:"target_date,omitempty"`
+}
+
+// Validate validates CreateCapacityPlanRequest
+func (r *CreateCapacityPlanRequest) Validate() error {
+	if strings.TrimSpace(r.PoolID) == "" {
+		return ErrCapacityPoolNotFound
+	}
+	if strings.TrimSpace(r.Title) == "" {
+		return errors.New("capacity plan title is required")
+	}
+	if err := ValidatePlanHorizon(r.PlanningHorizon); err != nil {
+		return err
+	}
+	if r.RequiredCapacity <= 0 {
+		return errors.New("required_capacity must be greater than zero")
+	}
+	if r.EstimatedCost < 0 {
+		return errors.New("estimated_cost cannot be negative")
+	}
+	return nil
+}
+
+// UpdateCapacityPlanRequest defines payload to update a capacity plan
+type UpdateCapacityPlanRequest struct {
+	Title            *string    `json:"title,omitempty"`
+	RequiredCapacity *float64   `json:"required_capacity,omitempty"`
+	EstimatedCost    *float64   `json:"estimated_cost,omitempty"`
+	Justification    *string    `json:"justification,omitempty"`
+	Status           *string    `json:"status,omitempty"`
+	ApprovedBy       *string    `json:"approved_by,omitempty"`
+	TargetDate       *time.Time `json:"target_date,omitempty"`
+}
+
+// Validate validates UpdateCapacityPlanRequest
+func (r *UpdateCapacityPlanRequest) Validate() error {
+	if r.Title != nil && strings.TrimSpace(*r.Title) == "" {
+		return errors.New("capacity plan title is required")
+	}
+	if r.RequiredCapacity != nil && *r.RequiredCapacity <= 0 {
+		return errors.New("required_capacity must be greater than zero")
+	}
+	if r.EstimatedCost != nil && *r.EstimatedCost < 0 {
+		return errors.New("estimated_cost cannot be negative")
+	}
+	if r.Status != nil {
+		if err := ValidatePlanStatus(*r.Status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateBottleneckRequest defines payload to report a capacity constraint
+type CreateBottleneckRequest struct {
+	PoolID            string  `json:"pool_id"`
+	AffectedCIID      string  `json:"affected_ci_id,omitempty"`
+	Title             string  `json:"title"`
+	Description       string  `json:"description"`
+	Severity          string  `json:"severity"`
+	SaturationPercent float64 `json:"saturation_percent"`
+	MitigationPlan    string  `json:"mitigation_plan,omitempty"`
+}
+
+// Validate validates CreateBottleneckRequest
+func (r *CreateBottleneckRequest) Validate() error {
+	if strings.TrimSpace(r.PoolID) == "" {
+		return ErrCapacityPoolNotFound
+	}
+	if strings.TrimSpace(r.Title) == "" {
+		return errors.New("bottleneck title is required")
+	}
+	if err := ValidateBottleneckSeverity(r.Severity); err != nil {
+		return err
+	}
+	if r.SaturationPercent < 0 {
+		return errors.New("saturation_percent cannot be negative")
+	}
+	return nil
+}
+
+// UpdateBottleneckRequest defines payload to update a bottleneck record
+type UpdateBottleneckRequest struct {
+	Title             *string  `json:"title,omitempty"`
+	Description       *string  `json:"description,omitempty"`
+	Severity          *string  `json:"severity,omitempty"`
+	SaturationPercent *float64 `json:"saturation_percent,omitempty"`
+	Status            *string  `json:"status,omitempty"`
+	MitigationPlan    *string  `json:"mitigation_plan,omitempty"`
+}
+
+// Validate validates UpdateBottleneckRequest
+func (r *UpdateBottleneckRequest) Validate() error {
+	if r.Severity != nil {
+		if err := ValidateBottleneckSeverity(*r.Severity); err != nil {
+			return err
+		}
+	}
+	if r.Status != nil {
+		if err := ValidateBottleneckStatus(*r.Status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
