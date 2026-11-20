@@ -168,28 +168,130 @@ func (s *availabilityService) ListTargets(ctx context.Context, filter model.Avai
 	return s.repo.ListTargets(ctx, filter)
 }
 
+// RecordOutage records a new outage event, calculating duration if already concluded
 func (s *availabilityService) RecordOutage(ctx context.Context, workspaceID string, req model.CreateOutageEventRequest) (*model.OutageEvent, error) {
-	return nil, errors.New("not implemented")
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	outage := &model.OutageEvent{
+		WorkspaceID:     workspaceID,
+		TargetID:        strings.TrimSpace(req.TargetID),
+		CIID:            strings.TrimSpace(req.CIID),
+		Title:           strings.TrimSpace(req.Title),
+		OutageType:      req.OutageType,
+		Severity:        req.Severity,
+		StartedAt:       req.StartedAt,
+		EndedAt:         req.EndedAt,
+		RootCause:       strings.TrimSpace(req.RootCause),
+		IsSLAExempt:     req.IsSLAExempt,
+		ExemptionReason: strings.TrimSpace(req.ExemptionReason),
+		ReportedBy:      strings.TrimSpace(req.ReportedBy),
+	}
+
+	if outage.EndedAt != nil {
+		outage.DurationMinutes = outage.CalculateDuration()
+	}
+
+	if err := s.repo.CreateOutage(ctx, outage); err != nil {
+		return nil, err
+	}
+	return outage, nil
 }
 
+// GetOutageByID retrieves an outage event by ID
 func (s *availabilityService) GetOutageByID(ctx context.Context, id string) (*model.OutageEvent, error) {
-	return nil, errors.New("not implemented")
+	return s.repo.GetOutageByID(ctx, id)
 }
 
+// UpdateOutage modifies details of an ongoing or concluded outage event
 func (s *availabilityService) UpdateOutage(ctx context.Context, id string, req model.UpdateOutageEventRequest) (*model.OutageEvent, error) {
-	return nil, errors.New("not implemented")
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	outage, err := s.repo.GetOutageByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Title != nil {
+		outage.Title = strings.TrimSpace(*req.Title)
+	}
+	if req.OutageType != nil {
+		outage.OutageType = *req.OutageType
+	}
+	if req.Severity != nil {
+		outage.Severity = *req.Severity
+	}
+	if req.StartedAt != nil {
+		outage.StartedAt = *req.StartedAt
+	}
+	if req.EndedAt != nil {
+		outage.EndedAt = req.EndedAt
+	}
+	if req.RootCause != nil {
+		outage.RootCause = strings.TrimSpace(*req.RootCause)
+	}
+	if req.IsSLAExempt != nil {
+		outage.IsSLAExempt = *req.IsSLAExempt
+	}
+	if req.ExemptionReason != nil {
+		outage.ExemptionReason = strings.TrimSpace(*req.ExemptionReason)
+	}
+
+	if outage.EndedAt != nil {
+		outage.DurationMinutes = outage.CalculateDuration()
+	}
+
+	if err := s.repo.UpdateOutage(ctx, outage); err != nil {
+		return nil, err
+	}
+	return outage, nil
 }
 
+// ResolveOutage marks an active outage as resolved and updates duration
 func (s *availabilityService) ResolveOutage(ctx context.Context, id string, req model.ResolveOutageRequest) (*model.OutageEvent, error) {
-	return nil, errors.New("not implemented")
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	outage, err := s.repo.GetOutageByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	endTime := req.EndedAt
+	if endTime.IsZero() {
+		endTime = time.Now().UTC()
+	}
+	outage.EndedAt = &endTime
+	if req.RootCause != "" {
+		outage.RootCause = strings.TrimSpace(req.RootCause)
+	}
+	if req.IsSLAExempt != nil {
+		outage.IsSLAExempt = *req.IsSLAExempt
+	}
+	if req.ExemptionReason != "" {
+		outage.ExemptionReason = strings.TrimSpace(req.ExemptionReason)
+	}
+
+	outage.DurationMinutes = outage.CalculateDuration()
+
+	if err := s.repo.UpdateOutage(ctx, outage); err != nil {
+		return nil, err
+	}
+	return outage, nil
 }
 
+// DeleteOutage deletes an outage record
 func (s *availabilityService) DeleteOutage(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	return s.repo.DeleteOutage(ctx, id)
 }
 
+// ListOutages returns outages matching query filter
 func (s *availabilityService) ListOutages(ctx context.Context, filter model.AvailabilityFilterCriteria) ([]model.OutageEvent, int, error) {
-	return nil, 0, errors.New("not implemented")
+	return s.repo.ListOutages(ctx, filter)
 }
 
 func (s *availabilityService) RecordMeasurement(ctx context.Context, workspaceID string, req model.CreateMeasurementRequest) (*model.AvailabilityMeasurement, error) {
