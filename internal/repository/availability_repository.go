@@ -287,24 +287,259 @@ func (r *availabilityRepository) ListTargets(ctx context.Context, filter model.A
 	return targets, total, nil
 }
 
+// CreateOutage inserts a new outage event
 func (r *availabilityRepository) CreateOutage(ctx context.Context, outage *model.OutageEvent) error {
-	return errors.New("not implemented")
+	if err := outage.Validate(); err != nil {
+		return err
+	}
+	if outage.ID == "" {
+		outage.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if outage.CreatedAt.IsZero() {
+		outage.CreatedAt = now
+	}
+	outage.UpdatedAt = now
+
+	if outage.EndedAt != nil {
+		outage.DurationMinutes = outage.CalculateDuration()
+	}
+
+	slaExemptInt := 0
+	if outage.IsSLAExempt {
+		slaExemptInt = 1
+	}
+
+	query := `
+	INSERT INTO availability_outages (
+		id, workspace_id, target_id, ci_id, title,
+		outage_type, severity, started_at, ended_at,
+		duration_minutes, root_cause, is_sla_exempt,
+		exemption_reason, reported_by, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		outage.ID, outage.WorkspaceID, outage.TargetID, outage.CIID, outage.Title,
+		outage.OutageType, outage.Severity, outage.StartedAt, outage.EndedAt,
+		outage.DurationMinutes, outage.RootCause, slaExemptInt,
+		outage.ExemptionReason, outage.ReportedBy, outage.CreatedAt, outage.UpdatedAt,
+	)
+	return err
 }
 
+// GetOutageByID retrieves an outage event by ID
 func (r *availabilityRepository) GetOutageByID(ctx context.Context, id string) (*model.OutageEvent, error) {
-	return nil, errors.New("not implemented")
+	query := `
+	SELECT id, workspace_id, target_id, ci_id, title,
+	       outage_type, severity, started_at, ended_at,
+	       duration_minutes, root_cause, is_sla_exempt,
+	       exemption_reason, reported_by, created_at, updated_at
+	FROM availability_outages WHERE id = ?`
+
+	var o model.OutageEvent
+	var slaExemptInt int
+	var targetID, ciID, rootCause, exemptReason, reportedBy sql.NullString
+	var endedAt sql.NullTime
+
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&o.ID, &o.WorkspaceID, &targetID, &ciID, &o.Title,
+		&o.OutageType, &o.Severity, &o.StartedAt, &endedAt,
+		&o.DurationMinutes, &rootCause, &slaExemptInt,
+		&exemptReason, &reportedBy, &o.CreatedAt, &o.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrOutageEventNotFound
+		}
+		return nil, err
+	}
+	if targetID.Valid {
+		o.TargetID = targetID.String
+	}
+	if ciID.Valid {
+		o.CIID = ciID.String
+	}
+	if endedAt.Valid {
+		t := endedAt.Time
+		o.EndedAt = &t
+	}
+	if rootCause.Valid {
+		o.RootCause = rootCause.String
+	}
+	if exemptReason.Valid {
+		o.ExemptionReason = exemptReason.String
+	}
+	if reportedBy.Valid {
+		o.ReportedBy = reportedBy.String
+	}
+	o.IsSLAExempt = slaExemptInt == 1
+
+	return &o, nil
 }
 
+// UpdateOutage updates an existing outage event
 func (r *availabilityRepository) UpdateOutage(ctx context.Context, outage *model.OutageEvent) error {
-	return errors.New("not implemented")
+	if err := outage.Validate(); err != nil {
+		return err
+	}
+	outage.UpdatedAt = time.Now().UTC()
+	if outage.EndedAt != nil {
+		outage.DurationMinutes = outage.CalculateDuration()
+	}
+
+	slaExemptInt := 0
+	if outage.IsSLAExempt {
+		slaExemptInt = 1
+	}
+
+	query := `
+	UPDATE availability_outages SET
+		title = ?, outage_type = ?, severity = ?, started_at = ?, ended_at = ?,
+		duration_minutes = ?, root_cause = ?, is_sla_exempt = ?,
+		exemption_reason = ?, reported_by = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		outage.Title, outage.OutageType, outage.Severity, outage.StartedAt, outage.EndedAt,
+		outage.DurationMinutes, outage.RootCause, slaExemptInt,
+		outage.ExemptionReason, outage.ReportedBy, outage.UpdatedAt,
+		outage.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrOutageEventNotFound
+	}
+	return nil
 }
 
+// DeleteOutage deletes an outage by ID
 func (r *availabilityRepository) DeleteOutage(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	query := `DELETE FROM availability_outages WHERE id = ?`
+	res, err := r.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrOutageEventNotFound
+	}
+	return nil
 }
 
+// ListOutages lists outage events matching criteria
 func (r *availabilityRepository) ListOutages(ctx context.Context, filter model.AvailabilityFilterCriteria) ([]model.OutageEvent, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.TargetID != "" {
+		conditions = append(conditions, "target_id = ?")
+		args = append(args, filter.TargetID)
+	}
+	if filter.CIID != "" {
+		conditions = append(conditions, "ci_id = ?")
+		args = append(args, filter.CIID)
+	}
+	if filter.OutageType != "" {
+		conditions = append(conditions, "outage_type = ?")
+		args = append(args, filter.OutageType)
+	}
+	if filter.Severity != "" {
+		conditions = append(conditions, "severity = ?")
+		args = append(args, filter.Severity)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM availability_outages %s", whereClause)
+	var total int
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, workspace_id, target_id, ci_id, title,
+	       outage_type, severity, started_at, ended_at,
+	       duration_minutes, root_cause, is_sla_exempt,
+	       exemption_reason, reported_by, created_at, updated_at
+	FROM availability_outages %s
+	ORDER BY started_at DESC
+	LIMIT ? OFFSET ?`, whereClause)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var outages []model.OutageEvent
+	for rows.Next() {
+		var o model.OutageEvent
+		var slaExemptInt int
+		var targetID, ciID, rootCause, exemptReason, reportedBy sql.NullString
+		var endedAt sql.NullTime
+
+		err := rows.Scan(
+			&o.ID, &o.WorkspaceID, &targetID, &ciID, &o.Title,
+			&o.OutageType, &o.Severity, &o.StartedAt, &endedAt,
+			&o.DurationMinutes, &rootCause, &slaExemptInt,
+			&exemptReason, &reportedBy, &o.CreatedAt, &o.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		if targetID.Valid {
+			o.TargetID = targetID.String
+		}
+		if ciID.Valid {
+			o.CIID = ciID.String
+		}
+		if endedAt.Valid {
+			t := endedAt.Time
+			o.EndedAt = &t
+		}
+		if rootCause.Valid {
+			o.RootCause = rootCause.String
+		}
+		if exemptReason.Valid {
+			o.ExemptionReason = exemptReason.String
+		}
+		if reportedBy.Valid {
+			o.ReportedBy = reportedBy.String
+		}
+		o.IsSLAExempt = slaExemptInt == 1
+
+		outages = append(outages, o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return outages, total, nil
 }
 
 func (r *availabilityRepository) SaveMeasurement(ctx context.Context, m *model.AvailabilityMeasurement) error {
