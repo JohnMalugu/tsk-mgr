@@ -2936,6 +2936,29 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	capacityForecastsQuery := `
+	CREATE TABLE IF NOT EXISTS capacity_forecasts (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		pool_id TEXT NOT NULL,
+		forecast_horizon_days INTEGER NOT NULL,
+		current_utilization_percent REAL NOT NULL,
+		projected_utilization_percent REAL NOT NULL,
+		growth_rate_monthly_percent REAL NOT NULL,
+		days_to_exhaustion INTEGER NOT NULL DEFAULT -1,
+		confidence_score REAL NOT NULL DEFAULT 0.0,
+		recommended_action TEXT NOT NULL DEFAULT 'scale_up',
+		recommendation_notes TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (pool_id) REFERENCES capacity_pools(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(capacityForecastsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
