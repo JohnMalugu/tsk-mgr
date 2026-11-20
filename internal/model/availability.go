@@ -445,3 +445,347 @@ func (t *AvailabilityTest) Validate() error {
 	}
 	return nil
 }
+
+// CreateAvailabilityTargetRequest contains parameters for registering a new availability SLA target
+type CreateAvailabilityTargetRequest struct {
+	Name               string  `json:"name"`
+	TargetPercentage   float64 `json:"target_percentage"`
+	MeasurementWindow  string  `json:"measurement_window"`
+	ServiceHours       string  `json:"service_hours"`
+	CommittedMTBFHours float64 `json:"committed_mtbf_hours"`
+	TargetMTTRMinutes  float64 `json:"target_mttr_minutes"`
+	CIID               string  `json:"ci_id,omitempty"`
+	Status             string  `json:"status,omitempty"`
+	Description        string  `json:"description,omitempty"`
+}
+
+// Validate validates CreateAvailabilityTargetRequest
+func (r *CreateAvailabilityTargetRequest) Validate() error {
+	if strings.TrimSpace(r.Name) == "" {
+		return ErrAvailabilityTargetNameRequired
+	}
+	if r.TargetPercentage <= 0 || r.TargetPercentage > 100.0 {
+		return ErrInvalidTargetPercentage
+	}
+	if r.MeasurementWindow == "" {
+		r.MeasurementWindow = MeasurementWindowMonthly
+	} else if err := ValidateMeasurementWindow(r.MeasurementWindow); err != nil {
+		return err
+	}
+	if r.ServiceHours == "" {
+		r.ServiceHours = ServiceHours24x7
+	} else if err := ValidateServiceHours(r.ServiceHours); err != nil {
+		return err
+	}
+	if r.Status == "" {
+		r.Status = TargetStatusActive
+	} else if err := ValidateTargetStatus(r.Status); err != nil {
+		return err
+	}
+	return nil
+}
+
+// UpdateAvailabilityTargetRequest contains fields to update on an existing target
+type UpdateAvailabilityTargetRequest struct {
+	Name               *string  `json:"name,omitempty"`
+	TargetPercentage   *float64 `json:"target_percentage,omitempty"`
+	MeasurementWindow  *string  `json:"measurement_window,omitempty"`
+	ServiceHours       *string  `json:"service_hours,omitempty"`
+	CommittedMTBFHours *float64 `json:"committed_mtbf_hours,omitempty"`
+	TargetMTTRMinutes  *float64 `json:"target_mttr_minutes,omitempty"`
+	CIID               *string  `json:"ci_id,omitempty"`
+	Status             *string  `json:"status,omitempty"`
+	Description        *string  `json:"description,omitempty"`
+}
+
+// Validate validates UpdateAvailabilityTargetRequest
+func (r *UpdateAvailabilityTargetRequest) Validate() error {
+	if r.Name != nil && strings.TrimSpace(*r.Name) == "" {
+		return ErrAvailabilityTargetNameRequired
+	}
+	if r.TargetPercentage != nil && (*r.TargetPercentage <= 0 || *r.TargetPercentage > 100.0) {
+		return ErrInvalidTargetPercentage
+	}
+	if r.MeasurementWindow != nil {
+		if err := ValidateMeasurementWindow(*r.MeasurementWindow); err != nil {
+			return err
+		}
+	}
+	if r.ServiceHours != nil {
+		if err := ValidateServiceHours(*r.ServiceHours); err != nil {
+			return err
+		}
+	}
+	if r.Status != nil {
+		if err := ValidateTargetStatus(*r.Status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateOutageEventRequest contains parameters for creating an outage event
+type CreateOutageEventRequest struct {
+	TargetID        string     `json:"target_id,omitempty"`
+	CIID            string     `json:"ci_id,omitempty"`
+	Title           string     `json:"title"`
+	OutageType      string     `json:"outage_type"`
+	Severity        string     `json:"severity"`
+	StartedAt       time.Time  `json:"started_at"`
+	EndedAt         *time.Time `json:"ended_at,omitempty"`
+	RootCause       string     `json:"root_cause,omitempty"`
+	IsSLAExempt     bool       `json:"is_sla_exempt"`
+	ExemptionReason string     `json:"exemption_reason,omitempty"`
+	ReportedBy      string     `json:"reported_by,omitempty"`
+}
+
+// Validate validates CreateOutageEventRequest
+func (r *CreateOutageEventRequest) Validate() error {
+	if strings.TrimSpace(r.Title) == "" {
+		return ErrOutageTitleRequired
+	}
+	if r.OutageType == "" {
+		r.OutageType = OutageTypeUnplanned
+	} else if err := ValidateOutageType(r.OutageType); err != nil {
+		return err
+	}
+	if r.Severity == "" {
+		r.Severity = OutageSeverityMajor
+	} else if err := ValidateOutageSeverity(r.Severity); err != nil {
+		return err
+	}
+	if r.StartedAt.IsZero() {
+		r.StartedAt = time.Now().UTC()
+	}
+	if r.EndedAt != nil && r.EndedAt.Before(r.StartedAt) {
+		return ErrInvalidOutageTimestamps
+	}
+	return nil
+}
+
+// UpdateOutageEventRequest contains fields to modify an existing outage event
+type UpdateOutageEventRequest struct {
+	Title           *string    `json:"title,omitempty"`
+	OutageType      *string    `json:"outage_type,omitempty"`
+	Severity        *string    `json:"severity,omitempty"`
+	StartedAt       *time.Time `json:"started_at,omitempty"`
+	EndedAt         *time.Time `json:"ended_at,omitempty"`
+	RootCause       *string    `json:"root_cause,omitempty"`
+	IsSLAExempt     *bool      `json:"is_sla_exempt,omitempty"`
+	ExemptionReason *string    `json:"exemption_reason,omitempty"`
+}
+
+// Validate validates UpdateOutageEventRequest
+func (r *UpdateOutageEventRequest) Validate() error {
+	if r.Title != nil && strings.TrimSpace(*r.Title) == "" {
+		return ErrOutageTitleRequired
+	}
+	if r.OutageType != nil {
+		if err := ValidateOutageType(*r.OutageType); err != nil {
+			return err
+		}
+	}
+	if r.Severity != nil {
+		if err := ValidateOutageSeverity(*r.Severity); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ResolveOutageRequest contains parameters to resolve an ongoing outage
+type ResolveOutageRequest struct {
+	EndedAt         time.Time `json:"ended_at"`
+	RootCause       string    `json:"root_cause,omitempty"`
+	IsSLAExempt     *bool     `json:"is_sla_exempt,omitempty"`
+	ExemptionReason string    `json:"exemption_reason,omitempty"`
+}
+
+// Validate validates ResolveOutageRequest
+func (r *ResolveOutageRequest) Validate() error {
+	if r.EndedAt.IsZero() {
+		r.EndedAt = time.Now().UTC()
+	}
+	return nil
+}
+
+// CreateMeasurementRequest contains parameters to record or recalculate availability measurement
+type CreateMeasurementRequest struct {
+	TargetID                string  `json:"target_id"`
+	Period                  string  `json:"period"`
+	TotalOperationalMinutes float64 `json:"total_operational_minutes"`
+	TotalDowntimeMinutes    float64 `json:"total_downtime_minutes"`
+	ExemptDowntimeMinutes   float64 `json:"exempt_downtime_minutes"`
+	MTBFHours               float64 `json:"mtbf_hours"`
+	MTTRMinutes             float64 `json:"mttr_minutes"`
+	OutageCount             int     `json:"outage_count"`
+}
+
+// Validate validates CreateMeasurementRequest
+func (r *CreateMeasurementRequest) Validate() error {
+	if strings.TrimSpace(r.TargetID) == "" {
+		return ErrAvailabilityTargetNotFound
+	}
+	if strings.TrimSpace(r.Period) == "" {
+		return ErrPeriodRequired
+	}
+	if r.TotalOperationalMinutes <= 0 {
+		return ErrInvalidOperationalMinutes
+	}
+	return nil
+}
+
+// CreateSPOFRequest contains parameters for logging a single point of failure
+type CreateSPOFRequest struct {
+	ComponentName       string    `json:"component_name"`
+	CIID                string    `json:"ci_id,omitempty"`
+	RiskLevel           string    `json:"risk_level"`
+	RedundancyMechanism string    `json:"redundancy_mechanism"`
+	MitigationPlan      string    `json:"mitigation_plan,omitempty"`
+	Status              string    `json:"status,omitempty"`
+	ReviewDate          time.Time `json:"review_date"`
+	OwnerID             string    `json:"owner_id,omitempty"`
+}
+
+// Validate validates CreateSPOFRequest
+func (r *CreateSPOFRequest) Validate() error {
+	if strings.TrimSpace(r.ComponentName) == "" {
+		return ErrSPOFComponentNameRequired
+	}
+	if r.RiskLevel == "" {
+		r.RiskLevel = SPOFRiskMedium
+	} else if err := ValidateSPOFRiskLevel(r.RiskLevel); err != nil {
+		return err
+	}
+	if r.RedundancyMechanism == "" {
+		r.RedundancyMechanism = RedundancyMechanismNone
+	} else if err := ValidateRedundancyMechanism(r.RedundancyMechanism); err != nil {
+		return err
+	}
+	if r.Status == "" {
+		r.Status = SPOFStatusOpen
+	} else if err := ValidateSPOFStatus(r.Status); err != nil {
+		return err
+	}
+	if r.ReviewDate.IsZero() {
+		r.ReviewDate = time.Now().UTC().AddDate(0, 3, 0)
+	}
+	return nil
+}
+
+// UpdateSPOFRequest contains fields to update a SPOF entry
+type UpdateSPOFRequest struct {
+	ComponentName       *string    `json:"component_name,omitempty"`
+	RiskLevel           *string    `json:"risk_level,omitempty"`
+	RedundancyMechanism *string    `json:"redundancy_mechanism,omitempty"`
+	MitigationPlan      *string    `json:"mitigation_plan,omitempty"`
+	Status              *string    `json:"status,omitempty"`
+	ReviewDate          *time.Time `json:"review_date,omitempty"`
+	OwnerID             *string    `json:"owner_id,omitempty"`
+}
+
+// Validate validates UpdateSPOFRequest
+func (r *UpdateSPOFRequest) Validate() error {
+	if r.ComponentName != nil && strings.TrimSpace(*r.ComponentName) == "" {
+		return ErrSPOFComponentNameRequired
+	}
+	if r.RiskLevel != nil {
+		if err := ValidateSPOFRiskLevel(*r.RiskLevel); err != nil {
+			return err
+		}
+	}
+	if r.RedundancyMechanism != nil {
+		if err := ValidateRedundancyMechanism(*r.RedundancyMechanism); err != nil {
+			return err
+		}
+	}
+	if r.Status != nil {
+		if err := ValidateSPOFStatus(*r.Status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateAvailabilityTestRequest contains parameters for creating an availability test schedule
+type CreateAvailabilityTestRequest struct {
+	TargetID    string    `json:"target_id,omitempty"`
+	Name        string    `json:"name"`
+	TestType    string    `json:"test_type"`
+	Frequency   string    `json:"frequency"`
+	NextTestDue time.Time `json:"next_test_due"`
+	Findings    string    `json:"findings,omitempty"`
+	ConductedBy string    `json:"conducted_by,omitempty"`
+}
+
+// Validate validates CreateAvailabilityTestRequest
+func (r *CreateAvailabilityTestRequest) Validate() error {
+	if strings.TrimSpace(r.Name) == "" {
+		return ErrAvailabilityTestNameRequired
+	}
+	if r.TestType == "" {
+		r.TestType = TestTypeFailover
+	} else if err := ValidateTestType(r.TestType); err != nil {
+		return err
+	}
+	if r.Frequency == "" {
+		r.Frequency = TestFrequencyQuarterly
+	} else if err := ValidateTestFrequency(r.Frequency); err != nil {
+		return err
+	}
+	if r.NextTestDue.IsZero() {
+		r.NextTestDue = time.Now().UTC().AddDate(0, 1, 0)
+	}
+	return nil
+}
+
+// UpdateAvailabilityTestRequest contains fields to update an availability test schedule
+type UpdateAvailabilityTestRequest struct {
+	Name        *string    `json:"name,omitempty"`
+	TestType    *string    `json:"test_type,omitempty"`
+	Frequency   *string    `json:"frequency,omitempty"`
+	NextTestDue *time.Time `json:"next_test_due,omitempty"`
+	Findings    *string    `json:"findings,omitempty"`
+	ConductedBy *string    `json:"conducted_by,omitempty"`
+}
+
+// Validate validates UpdateAvailabilityTestRequest
+func (r *UpdateAvailabilityTestRequest) Validate() error {
+	if r.Name != nil && strings.TrimSpace(*r.Name) == "" {
+		return ErrAvailabilityTestNameRequired
+	}
+	if r.TestType != nil {
+		if err := ValidateTestType(*r.TestType); err != nil {
+			return err
+		}
+	}
+	if r.Frequency != nil {
+		if err := ValidateTestFrequency(*r.Frequency); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RecordTestResultRequest captures the outcome and findings after conducting an availability test
+type RecordTestResultRequest struct {
+	TestedAt    time.Time `json:"tested_at"`
+	Outcome     string    `json:"outcome"`
+	Findings    string    `json:"findings,omitempty"`
+	NextTestDue time.Time `json:"next_test_due"`
+	ConductedBy string    `json:"conducted_by,omitempty"`
+}
+
+// Validate validates RecordTestResultRequest
+func (r *RecordTestResultRequest) Validate() error {
+	if r.TestedAt.IsZero() {
+		r.TestedAt = time.Now().UTC()
+	}
+	if err := ValidateTestOutcome(r.Outcome); err != nil {
+		return err
+	}
+	if r.NextTestDue.IsZero() {
+		r.NextTestDue = r.TestedAt.AddDate(0, 3, 0)
+	}
+	return nil
+}
