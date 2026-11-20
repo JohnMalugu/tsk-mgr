@@ -195,6 +195,10 @@ func main() {
 	capacitySvc := service.NewCapacityService(capacityRepo)
 	handler.InitCapacityHandler(capacitySvc)
 
+	availabilityRepo := repository.NewAvailabilityRepository(sqliteDB)
+	availabilitySvc := service.NewAvailabilityService(availabilityRepo)
+	handler.InitAvailabilityHandler(availabilitySvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
