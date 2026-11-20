@@ -320,3 +320,391 @@ func (h *CapacityHandler) GetLatestForecast(w http.ResponseWriter, r *http.Reque
 
 	writeCapacityJSON(w, http.StatusOK, forecast)
 }
+
+// Capacity Plan HTTP Handlers
+
+func (h *CapacityHandler) ListPlans(w http.ResponseWriter, r *http.Request) {
+	wsID := getCapacityWorkspaceID(r)
+	q := r.URL.Query()
+
+	limit := 50
+	offset := 0
+	if l := q.Get("limit"); l != "" {
+		if val, err := strconv.Atoi(l); err == nil && val > 0 {
+			limit = val
+		}
+	}
+	if o := q.Get("offset"); o != "" {
+		if val, err := strconv.Atoi(o); err == nil && val >= 0 {
+			offset = val
+		}
+	}
+
+	filter := model.CapacityPlanFilterCriteria{
+		WorkspaceID:     wsID,
+		PoolID:          q.Get("pool_id"),
+		PlanningHorizon: q.Get("planning_horizon"),
+		Status:          q.Get("status"),
+		Limit:           limit,
+		Offset:          offset,
+	}
+
+	list, total, err := h.svc.ListPlans(r.Context(), filter)
+	if err != nil {
+		handleCapacityError(w, err)
+		return
+	}
+
+	writeCapacityJSON(w, http.StatusOK, map[string]interface{}{
+		"plans":  list,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
+}
+
+func (h *CapacityHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
+	wsID := getCapacityWorkspaceID(r)
+
+	var req model.CreateCapacityPlanRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeCapacityError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	plan, err := h.svc.CreatePlan(r.Context(), wsID, req)
+	if err != nil {
+		handleCapacityError(w, err)
+		return
+	}
+
+	writeCapacityJSON(w, http.StatusCreated, plan)
+}
+
+func (h *CapacityHandler) GetPlanByID(w http.ResponseWriter, r *http.Request, id string) {
+	plan, err := h.svc.GetPlanByID(r.Context(), id)
+	if err != nil {
+		handleCapacityError(w, err)
+		return
+	}
+
+	writeCapacityJSON(w, http.StatusOK, plan)
+}
+
+func (h *CapacityHandler) UpdatePlan(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateCapacityPlanRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeCapacityError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	plan, err := h.svc.UpdatePlan(r.Context(), id, req)
+	if err != nil {
+		handleCapacityError(w, err)
+		return
+	}
+
+	writeCapacityJSON(w, http.StatusOK, plan)
+}
+
+func (h *CapacityHandler) ApprovePlan(w http.ResponseWriter, r *http.Request, id string) {
+	approverID := getCapacityUser(r)
+
+	plan, err := h.svc.ApprovePlan(r.Context(), id, approverID)
+	if err != nil {
+		handleCapacityError(w, err)
+		return
+	}
+
+	writeCapacityJSON(w, http.StatusOK, plan)
+}
+
+func (h *CapacityHandler) DeletePlan(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeletePlan(r.Context(), id); err != nil {
+		handleCapacityError(w, err)
+		return
+	}
+
+	writeCapacityJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// Bottleneck HTTP Handlers
+
+func (h *CapacityHandler) ListBottlenecks(w http.ResponseWriter, r *http.Request) {
+	wsID := getCapacityWorkspaceID(r)
+	q := r.URL.Query()
+
+	limit := 50
+	offset := 0
+	if l := q.Get("limit"); l != "" {
+		if val, err := strconv.Atoi(l); err == nil && val > 0 {
+			limit = val
+		}
+	}
+	if o := q.Get("offset"); o != "" {
+		if val, err := strconv.Atoi(o); err == nil && val >= 0 {
+			offset = val
+		}
+	}
+
+	filter := model.BottleneckFilterCriteria{
+		WorkspaceID:  wsID,
+		PoolID:       q.Get("pool_id"),
+		AffectedCIID: q.Get("affected_ci_id"),
+		Severity:     q.Get("severity"),
+		Status:       q.Get("status"),
+		Limit:        limit,
+		Offset:       offset,
+	}
+
+	list, total, err := h.svc.ListBottlenecks(r.Context(), filter)
+	if err != nil {
+		handleCapacityError(w, err)
+		return
+	}
+
+	writeCapacityJSON(w, http.StatusOK, map[string]interface{}{
+		"bottlenecks": list,
+		"total":       total,
+		"limit":       limit,
+		"offset":      offset,
+	})
+}
+
+func (h *CapacityHandler) CreateBottleneck(w http.ResponseWriter, r *http.Request) {
+	wsID := getCapacityWorkspaceID(r)
+
+	var req model.CreateBottleneckRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeCapacityError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	b, err := h.svc.CreateBottleneck(r.Context(), wsID, req)
+	if err != nil {
+		handleCapacityError(w, err)
+		return
+	}
+
+	writeCapacityJSON(w, http.StatusCreated, b)
+}
+
+func (h *CapacityHandler) GetBottleneckByID(w http.ResponseWriter, r *http.Request, id string) {
+	b, err := h.svc.GetBottleneckByID(r.Context(), id)
+	if err != nil {
+		handleCapacityError(w, err)
+		return
+	}
+
+	writeCapacityJSON(w, http.StatusOK, b)
+}
+
+func (h *CapacityHandler) UpdateBottleneck(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateBottleneckRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeCapacityError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	b, err := h.svc.UpdateBottleneck(r.Context(), id, req)
+	if err != nil {
+		handleCapacityError(w, err)
+		return
+	}
+
+	writeCapacityJSON(w, http.StatusOK, b)
+}
+
+func (h *CapacityHandler) ResolveBottleneck(w http.ResponseWriter, r *http.Request, id string) {
+	var req struct {
+		MitigationPlan string `json:"mitigation_plan"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	b, err := h.svc.ResolveBottleneck(r.Context(), id, req.MitigationPlan)
+	if err != nil {
+		handleCapacityError(w, err)
+		return
+	}
+
+	writeCapacityJSON(w, http.StatusOK, b)
+}
+
+func (h *CapacityHandler) DeleteBottleneck(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteBottleneck(r.Context(), id); err != nil {
+		handleCapacityError(w, err)
+		return
+	}
+
+	writeCapacityJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// Analytics HTTP Handler
+
+func (h *CapacityHandler) GetCapacityAnalytics(w http.ResponseWriter, r *http.Request) {
+	wsID := getCapacityWorkspaceID(r)
+
+	report, err := h.svc.GetCapacityAnalytics(r.Context(), wsID)
+	if err != nil {
+		handleCapacityError(w, err)
+		return
+	}
+
+	writeCapacityJSON(w, http.StatusOK, report)
+}
+
+// ServeHTTP dispatches requests for /v2/capacity
+func (h *CapacityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/capacity")
+	path = strings.TrimPrefix(path, "/")
+
+	if path == "analytics" {
+		if r.Method == http.MethodGet {
+			h.GetCapacityAnalytics(w, r)
+		} else {
+			writeCapacityError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if strings.HasPrefix(path, "forecasts") {
+		sub := strings.TrimPrefix(path, "forecasts")
+		sub = strings.TrimPrefix(sub, "/")
+		if sub == "" {
+			if r.Method == http.MethodPost {
+				h.GenerateForecast(w, r)
+			} else {
+				writeCapacityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if r.Method == http.MethodGet {
+			h.GetLatestForecast(w, r, sub)
+		} else {
+			writeCapacityError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if strings.HasPrefix(path, "metrics") {
+		sub := strings.TrimPrefix(path, "metrics")
+		sub = strings.TrimPrefix(sub, "/")
+		if sub == "" {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListMetrics(w, r)
+			case http.MethodPost:
+				h.RecordMetric(w, r)
+			default:
+				writeCapacityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if r.Method == http.MethodGet {
+			h.GetMetricByID(w, r, sub)
+		} else {
+			writeCapacityError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if strings.HasPrefix(path, "plans") {
+		sub := strings.TrimPrefix(path, "plans")
+		sub = strings.TrimPrefix(sub, "/")
+		if sub == "" {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListPlans(w, r)
+			case http.MethodPost:
+				h.CreatePlan(w, r)
+			default:
+				writeCapacityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		parts := strings.Split(sub, "/")
+		planID := parts[0]
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetPlanByID(w, r, planID)
+			case http.MethodPut:
+				h.UpdatePlan(w, r, planID)
+			case http.MethodDelete:
+				h.DeletePlan(w, r, planID)
+			default:
+				writeCapacityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 && parts[1] == "approve" && r.Method == http.MethodPost {
+			h.ApprovePlan(w, r, planID)
+			return
+		}
+	}
+
+	if strings.HasPrefix(path, "bottlenecks") {
+		sub := strings.TrimPrefix(path, "bottlenecks")
+		sub = strings.TrimPrefix(sub, "/")
+		if sub == "" {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListBottlenecks(w, r)
+			case http.MethodPost:
+				h.CreateBottleneck(w, r)
+			default:
+				writeCapacityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		parts := strings.Split(sub, "/")
+		bID := parts[0]
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetBottleneckByID(w, r, bID)
+			case http.MethodPut:
+				h.UpdateBottleneck(w, r, bID)
+			case http.MethodDelete:
+				h.DeleteBottleneck(w, r, bID)
+			default:
+				writeCapacityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 && parts[1] == "resolve" && r.Method == http.MethodPost {
+			h.ResolveBottleneck(w, r, bID)
+			return
+		}
+	}
+
+	if strings.HasPrefix(path, "pools") {
+		sub := strings.TrimPrefix(path, "pools")
+		sub = strings.TrimPrefix(sub, "/")
+		if sub == "" {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListPools(w, r)
+			case http.MethodPost:
+				h.CreatePool(w, r)
+			default:
+				writeCapacityError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		poolID := sub
+		switch r.Method {
+		case http.MethodGet:
+			h.GetPoolByID(w, r, poolID)
+		case http.MethodPut:
+			h.UpdatePool(w, r, poolID)
+		case http.MethodDelete:
+			h.DeletePool(w, r, poolID)
+		default:
+			writeCapacityError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	writeCapacityError(w, http.StatusNotFound, "route not found")
+}
