@@ -3431,6 +3431,14 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_capacity_plans_pool ON capacity_plans(pool_id);
 	CREATE INDEX IF NOT EXISTS idx_capacity_bottlenecks_ws_status ON capacity_bottlenecks(workspace_id, status);
 	CREATE INDEX IF NOT EXISTS idx_capacity_bottlenecks_pool ON capacity_bottlenecks(pool_id);
+	CREATE INDEX IF NOT EXISTS idx_avail_targets_ws_status ON availability_targets(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_avail_targets_ci ON availability_targets(ci_id);
+	CREATE INDEX IF NOT EXISTS idx_avail_outages_ws_type ON availability_outages(workspace_id, outage_type);
+	CREATE INDEX IF NOT EXISTS idx_avail_outages_target ON availability_outages(target_id);
+	CREATE INDEX IF NOT EXISTS idx_avail_outages_ci ON availability_outages(ci_id);
+	CREATE INDEX IF NOT EXISTS idx_avail_outages_dates ON availability_outages(started_at, ended_at);
+	CREATE INDEX IF NOT EXISTS idx_avail_measurements_target_period ON availability_measurements(target_id, period);
+	CREATE INDEX IF NOT EXISTS idx_avail_measurements_ws_period ON availability_measurements(workspace_id, period);
 	`
 
 	_, err = db.Exec(indexQuery)
