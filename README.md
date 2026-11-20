@@ -422,6 +422,21 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET|PUT|DELETE /v2/capacity/bottlenecks/{id}` to inspect, update, or delete bottleneck records
 - `POST /v2/capacity/bottlenecks/{id}/resolve` to resolve bottleneck constraints with mitigation documentation and automated resolution timestamps
 - `GET /v2/capacity/analytics?workspace_id={id}` for executive Capacity & Performance Management posture reporting, overall utilization %, breakdown by resource type, top saturated pools, anomaly detections, active capacity plan commitments, and Capacity Health Index (0–100)
+- `GET|POST /v2/availability/targets` to list Service Availability Targets/SLAs (`workspace_id`, `status`, `ci_id`, `limit`, `offset`) or create targets with committed availability % (e.g. 99.9%, 99.99%), measurement windows (`daily`, `weekly`, `monthly`, `quarterly`, `annual`), service hours (`24x7`, `9x5_business_hours`), committed MTBF hours, and target MTTR minutes
+- `GET|PUT|DELETE /v2/availability/targets/{id}` to fetch, update, or remove availability targets
+- `GET|POST /v2/availability/outages` to list and record outage and downtime events (`unplanned`, `planned_maintenance`, `third_party_dependency`) with severity (`critical`, `major`, `minor`), root cause, and SLA exemption status
+- `GET|PUT|DELETE /v2/availability/outages/{id}` to inspect, update, or delete outage records
+- `POST /v2/availability/outages/{id}/resolve` to resolve active outages with automated downtime duration calculation and resolution timestamps
+- `GET|POST /v2/availability/measurements` to list periodic availability calculations or manually record operational metrics
+- `POST /v2/availability/measurements/calculate` to automate periodic measurement rollups, calculate actual uptime %, MTBF, MTTR, and detect SLA breaches
+- `GET /v2/availability/measurements/{id}` to fetch individual availability measurement records
+- `GET|POST /v2/availability/spofs` to list Single Point of Failure (SPOF) registers (`workspace_id`, `risk_level`, `status`, `ci_id`) or log architectural failure risks with redundancy mechanisms (`none`, `active_active`, `active_passive`, `n_plus_one`)
+- `GET|PUT|DELETE /v2/availability/spofs/{id}` to inspect, update, or remove SPOF records
+- `POST /v2/availability/spofs/{id}/mitigate` to mark SPOFs as mitigated with remediation details
+- `GET|POST /v2/availability/tests` to list availability and failover test schedules (`failover`, `load_balancer_isolation`, `power_simulation`, `chaos_drill`) or register upcoming drill schedules
+- `GET|PUT|DELETE /v2/availability/tests/{id}` to inspect, update, or remove availability tests
+- `POST /v2/availability/tests/{id}/result` to record failover drill outcomes (`passed`, `failed`, `partial`), findings, and automated next test schedules
+- `GET /v2/availability/analytics?workspace_id={id}` for executive Availability Management posture reporting, cross-service uptime %, SLA compliance rate %, MTBF/MTTR averages, top recurring outage services by CI, active critical SPOFs, and Availability Health Index (0–100)
 
 ## Current limitations
 
