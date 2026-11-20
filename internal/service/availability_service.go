@@ -78,29 +78,94 @@ func NewAvailabilityService(repo repository.AvailabilityRepository) Availability
 	return &availabilityService{repo: repo}
 }
 
-// Stubs to be implemented in subsequent commits
+// CreateTarget creates and registers an availability target with default or configured SLA parameters
 func (s *availabilityService) CreateTarget(ctx context.Context, workspaceID string, req model.CreateAvailabilityTargetRequest) (*model.AvailabilityTarget, error) {
-	return nil, errors.New("not implemented")
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	target := &model.AvailabilityTarget{
+		WorkspaceID:        workspaceID,
+		Name:               strings.TrimSpace(req.Name),
+		TargetPercentage:   req.TargetPercentage,
+		MeasurementWindow:  req.MeasurementWindow,
+		ServiceHours:       req.ServiceHours,
+		CommittedMTBFHours: req.CommittedMTBFHours,
+		TargetMTTRMinutes:  req.TargetMTTRMinutes,
+		CIID:               strings.TrimSpace(req.CIID),
+		Status:             req.Status,
+		Description:        strings.TrimSpace(req.Description),
+	}
+
+	if err := s.repo.CreateTarget(ctx, target); err != nil {
+		return nil, err
+	}
+	return target, nil
 }
 
+// GetTargetByID retrieves an availability target by ID
 func (s *availabilityService) GetTargetByID(ctx context.Context, id string) (*model.AvailabilityTarget, error) {
-	return nil, errors.New("not implemented")
+	return s.repo.GetTargetByID(ctx, id)
 }
 
+// GetTargetByName retrieves a target by name within a workspace
 func (s *availabilityService) GetTargetByName(ctx context.Context, workspaceID string, name string) (*model.AvailabilityTarget, error) {
-	return nil, errors.New("not implemented")
+	return s.repo.GetTargetByName(ctx, workspaceID, name)
 }
 
+// UpdateTarget applies updates to an existing availability target
 func (s *availabilityService) UpdateTarget(ctx context.Context, id string, req model.UpdateAvailabilityTargetRequest) (*model.AvailabilityTarget, error) {
-	return nil, errors.New("not implemented")
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	target, err := s.repo.GetTargetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Name != nil {
+		target.Name = strings.TrimSpace(*req.Name)
+	}
+	if req.TargetPercentage != nil {
+		target.TargetPercentage = *req.TargetPercentage
+	}
+	if req.MeasurementWindow != nil {
+		target.MeasurementWindow = *req.MeasurementWindow
+	}
+	if req.ServiceHours != nil {
+		target.ServiceHours = *req.ServiceHours
+	}
+	if req.CommittedMTBFHours != nil {
+		target.CommittedMTBFHours = *req.CommittedMTBFHours
+	}
+	if req.TargetMTTRMinutes != nil {
+		target.TargetMTTRMinutes = *req.TargetMTTRMinutes
+	}
+	if req.CIID != nil {
+		target.CIID = strings.TrimSpace(*req.CIID)
+	}
+	if req.Status != nil {
+		target.Status = *req.Status
+	}
+	if req.Description != nil {
+		target.Description = strings.TrimSpace(*req.Description)
+	}
+
+	if err := s.repo.UpdateTarget(ctx, target); err != nil {
+		return nil, err
+	}
+	return target, nil
 }
 
+// DeleteTarget deletes an availability target
 func (s *availabilityService) DeleteTarget(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	return s.repo.DeleteTarget(ctx, id)
 }
 
+// ListTargets returns targets matching filter criteria
 func (s *availabilityService) ListTargets(ctx context.Context, filter model.AvailabilityFilterCriteria) ([]model.AvailabilityTarget, int, error) {
-	return nil, 0, errors.New("not implemented")
+	return s.repo.ListTargets(ctx, filter)
 }
 
 func (s *availabilityService) RecordOutage(ctx context.Context, workspaceID string, req model.CreateOutageEventRequest) (*model.OutageEvent, error) {
