@@ -191,6 +191,10 @@ func main() {
 	finopsSvc := service.NewFinOpsService(finopsRepo)
 	handler.InitFinOpsHandler(finopsSvc)
 
+	capacityRepo := repository.NewCapacityRepository(sqliteDB)
+	capacitySvc := service.NewCapacityService(capacityRepo)
+	handler.InitCapacityHandler(capacitySvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
