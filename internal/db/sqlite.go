@@ -3008,6 +3008,28 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	availabilityTargetsQuery := `
+	CREATE TABLE IF NOT EXISTS availability_targets (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		target_percentage REAL NOT NULL,
+		measurement_window TEXT NOT NULL,
+		service_hours TEXT NOT NULL,
+		committed_mtbf_hours REAL NOT NULL DEFAULT 0.0,
+		target_mttr_minutes REAL NOT NULL DEFAULT 0.0,
+		ci_id TEXT,
+		status TEXT NOT NULL,
+		description TEXT,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);`
+
+	_, err = db.Exec(availabilityTargetsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
