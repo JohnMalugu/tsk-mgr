@@ -3102,6 +3102,29 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	availabilityTestsQuery := `
+	CREATE TABLE IF NOT EXISTS availability_tests (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		target_id TEXT,
+		name TEXT NOT NULL,
+		test_type TEXT NOT NULL,
+		frequency TEXT NOT NULL,
+		last_tested_at DATETIME,
+		next_test_due DATETIME NOT NULL,
+		outcome TEXT NOT NULL,
+		findings TEXT,
+		conducted_by TEXT,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (target_id) REFERENCES availability_targets(id) ON DELETE SET NULL
+	);`
+
+	_, err = db.Exec(availabilityTestsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
