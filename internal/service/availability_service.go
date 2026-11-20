@@ -310,52 +310,204 @@ func (s *availabilityService) ListMeasurements(ctx context.Context, filter model
 	return nil, 0, errors.New("not implemented")
 }
 
+// RegisterSPOF logs a new architectural single point of failure
 func (s *availabilityService) RegisterSPOF(ctx context.Context, workspaceID string, req model.CreateSPOFRequest) (*model.SPOFRecord, error) {
-	return nil, errors.New("not implemented")
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	spof := &model.SPOFRecord{
+		WorkspaceID:         workspaceID,
+		ComponentName:       strings.TrimSpace(req.ComponentName),
+		CIID:                strings.TrimSpace(req.CIID),
+		RiskLevel:           req.RiskLevel,
+		RedundancyMechanism: req.RedundancyMechanism,
+		MitigationPlan:      strings.TrimSpace(req.MitigationPlan),
+		Status:              req.Status,
+		ReviewDate:          req.ReviewDate,
+		OwnerID:             strings.TrimSpace(req.OwnerID),
+	}
+
+	if err := s.repo.CreateSPOF(ctx, spof); err != nil {
+		return nil, err
+	}
+	return spof, nil
 }
 
+// GetSPOFByID retrieves a SPOF record by ID
 func (s *availabilityService) GetSPOFByID(ctx context.Context, id string) (*model.SPOFRecord, error) {
-	return nil, errors.New("not implemented")
+	return s.repo.GetSPOFByID(ctx, id)
 }
 
+// UpdateSPOF updates fields of an existing SPOF record
 func (s *availabilityService) UpdateSPOF(ctx context.Context, id string, req model.UpdateSPOFRequest) (*model.SPOFRecord, error) {
-	return nil, errors.New("not implemented")
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	spof, err := s.repo.GetSPOFByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.ComponentName != nil {
+		spof.ComponentName = strings.TrimSpace(*req.ComponentName)
+	}
+	if req.RiskLevel != nil {
+		spof.RiskLevel = *req.RiskLevel
+	}
+	if req.RedundancyMechanism != nil {
+		spof.RedundancyMechanism = *req.RedundancyMechanism
+	}
+	if req.MitigationPlan != nil {
+		spof.MitigationPlan = strings.TrimSpace(*req.MitigationPlan)
+	}
+	if req.Status != nil {
+		spof.Status = *req.Status
+	}
+	if req.ReviewDate != nil {
+		spof.ReviewDate = *req.ReviewDate
+	}
+	if req.OwnerID != nil {
+		spof.OwnerID = strings.TrimSpace(*req.OwnerID)
+	}
+
+	if err := s.repo.UpdateSPOF(ctx, spof); err != nil {
+		return nil, err
+	}
+	return spof, nil
 }
 
+// MitigateSPOF updates a SPOF's status to mitigated and stores the plan
 func (s *availabilityService) MitigateSPOF(ctx context.Context, id string, mitigationPlan string) (*model.SPOFRecord, error) {
-	return nil, errors.New("not implemented")
+	spof, err := s.repo.GetSPOFByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	spof.Status = model.SPOFStatusMitigated
+	if mitigationPlan != "" {
+		spof.MitigationPlan = strings.TrimSpace(mitigationPlan)
+	}
+	if err := s.repo.UpdateSPOF(ctx, spof); err != nil {
+		return nil, err
+	}
+	return spof, nil
 }
 
+// DeleteSPOF deletes a SPOF record
 func (s *availabilityService) DeleteSPOF(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	return s.repo.DeleteSPOF(ctx, id)
 }
 
+// ListSPOFs returns SPOF records matching filter criteria
 func (s *availabilityService) ListSPOFs(ctx context.Context, filter model.AvailabilityFilterCriteria) ([]model.SPOFRecord, int, error) {
-	return nil, 0, errors.New("not implemented")
+	return s.repo.ListSPOFs(ctx, filter)
 }
 
+// ScheduleTest registers a new failover test schedule
 func (s *availabilityService) ScheduleTest(ctx context.Context, workspaceID string, req model.CreateAvailabilityTestRequest) (*model.AvailabilityTest, error) {
-	return nil, errors.New("not implemented")
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	test := &model.AvailabilityTest{
+		WorkspaceID: workspaceID,
+		TargetID:    strings.TrimSpace(req.TargetID),
+		Name:        strings.TrimSpace(req.Name),
+		TestType:    req.TestType,
+		Frequency:   req.Frequency,
+		NextTestDue: req.NextTestDue,
+		Outcome:     model.TestOutcomePending,
+		Findings:    strings.TrimSpace(req.Findings),
+		ConductedBy: strings.TrimSpace(req.ConductedBy),
+	}
+
+	if err := s.repo.CreateTest(ctx, test); err != nil {
+		return nil, err
+	}
+	return test, nil
 }
 
+// GetTestByID retrieves an availability test by ID
 func (s *availabilityService) GetTestByID(ctx context.Context, id string) (*model.AvailabilityTest, error) {
-	return nil, errors.New("not implemented")
+	return s.repo.GetTestByID(ctx, id)
 }
 
+// UpdateTest modifies test schedule details
 func (s *availabilityService) UpdateTest(ctx context.Context, id string, req model.UpdateAvailabilityTestRequest) (*model.AvailabilityTest, error) {
-	return nil, errors.New("not implemented")
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	test, err := s.repo.GetTestByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Name != nil {
+		test.Name = strings.TrimSpace(*req.Name)
+	}
+	if req.TestType != nil {
+		test.TestType = *req.TestType
+	}
+	if req.Frequency != nil {
+		test.Frequency = *req.Frequency
+	}
+	if req.NextTestDue != nil {
+		test.NextTestDue = *req.NextTestDue
+	}
+	if req.Findings != nil {
+		test.Findings = strings.TrimSpace(*req.Findings)
+	}
+	if req.ConductedBy != nil {
+		test.ConductedBy = strings.TrimSpace(*req.ConductedBy)
+	}
+
+	if err := s.repo.UpdateTest(ctx, test); err != nil {
+		return nil, err
+	}
+	return test, nil
 }
 
+// RecordTestResult records the outcome, conducted timestamp, and next test date
 func (s *availabilityService) RecordTestResult(ctx context.Context, id string, req model.RecordTestResultRequest) (*model.AvailabilityTest, error) {
-	return nil, errors.New("not implemented")
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	test, err := s.repo.GetTestByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	testedAt := req.TestedAt
+	if testedAt.IsZero() {
+		testedAt = time.Now().UTC()
+	}
+	test.LastTestedAt = &testedAt
+	test.Outcome = req.Outcome
+	if req.Findings != "" {
+		test.Findings = strings.TrimSpace(req.Findings)
+	}
+	test.NextTestDue = req.NextTestDue
+	if req.ConductedBy != "" {
+		test.ConductedBy = strings.TrimSpace(req.ConductedBy)
+	}
+
+	if err := s.repo.UpdateTest(ctx, test); err != nil {
+		return nil, err
+	}
+	return test, nil
 }
 
+// DeleteTest deletes an availability test record
 func (s *availabilityService) DeleteTest(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	return s.repo.DeleteTest(ctx, id)
 }
 
+// ListTests returns availability tests matching filter criteria
 func (s *availabilityService) ListTests(ctx context.Context, filter model.AvailabilityFilterCriteria) ([]model.AvailabilityTest, int, error) {
-	return nil, 0, errors.New("not implemented")
+	return s.repo.ListTests(ctx, filter)
 }
 
 func (s *availabilityService) GetAvailabilityAnalytics(ctx context.Context, workspaceID string) (*model.AvailabilityAnalytics, error) {
