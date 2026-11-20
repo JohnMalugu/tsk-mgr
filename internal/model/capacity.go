@@ -142,3 +142,39 @@ func (p *CapacityPool) RecalculateStatus() {
 		p.Status = PoolStatusOptimal
 	}
 }
+
+// CapacityMetric represents time-series utilization telemetry sampled for a capacity pool
+type CapacityMetric struct {
+	ID           string    `json:"id"`
+	WorkspaceID  string    `json:"workspace_id"`
+	PoolID       string    `json:"pool_id"`
+	MetricName   string    `json:"metric_name"`
+	SampledAt    time.Time `json:"sampled_at"`
+	AverageValue float64   `json:"average_value"`
+	PeakValue    float64   `json:"peak_value"`
+	P95Value     float64   `json:"p95_value"`
+	P99Value     float64   `json:"p99_value"`
+	IsAnomaly    bool      `json:"is_anomaly"`
+	AnomalyScore float64   `json:"anomaly_score"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// Validate checks whether the CapacityMetric fields are valid
+func (m *CapacityMetric) Validate() error {
+	if strings.TrimSpace(m.PoolID) == "" {
+		return ErrCapacityPoolNotFound
+	}
+	if strings.TrimSpace(m.MetricName) == "" {
+		return errors.New("metric_name is required")
+	}
+	if m.SampledAt.IsZero() {
+		return errors.New("sampled_at timestamp is required")
+	}
+	if m.AverageValue < 0 || m.PeakValue < 0 {
+		return errors.New("metric values cannot be negative")
+	}
+	if m.PeakValue < m.AverageValue {
+		m.PeakValue = m.AverageValue
+	}
+	return nil
+}
