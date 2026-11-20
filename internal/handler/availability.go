@@ -427,3 +427,230 @@ func (h *AvailabilityHandler) GetMeasurementByID(w http.ResponseWriter, r *http.
 	}
 	writeAvailabilityJSON(w, http.StatusOK, m)
 }
+
+// SPOF Endpoints
+
+// ListSPOFs handles GET /v2/availability/spofs
+func (h *AvailabilityHandler) ListSPOFs(w http.ResponseWriter, r *http.Request) {
+	wsID := getAvailabilityWorkspaceID(r)
+	q := r.URL.Query()
+
+	limit := 50
+	offset := 0
+	if l := q.Get("limit"); l != "" {
+		if val, err := strconv.Atoi(l); err == nil && val > 0 {
+			limit = val
+		}
+	}
+	if o := q.Get("offset"); o != "" {
+		if val, err := strconv.Atoi(o); err == nil && val >= 0 {
+			offset = val
+		}
+	}
+
+	filter := model.AvailabilityFilterCriteria{
+		WorkspaceID: wsID,
+		RiskLevel:   q.Get("risk_level"),
+		Status:      q.Get("status"),
+		CIID:        q.Get("ci_id"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	spofs, total, err := h.svc.ListSPOFs(r.Context(), filter)
+	if err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+
+	writeAvailabilityJSON(w, http.StatusOK, map[string]interface{}{
+		"spofs":  spofs,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
+}
+
+// CreateSPOF handles POST /v2/availability/spofs
+func (h *AvailabilityHandler) CreateSPOF(w http.ResponseWriter, r *http.Request) {
+	wsID := getAvailabilityWorkspaceID(r)
+
+	var req model.CreateSPOFRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAvailabilityError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	spof, err := h.svc.RegisterSPOF(r.Context(), wsID, req)
+	if err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+
+	writeAvailabilityJSON(w, http.StatusCreated, spof)
+}
+
+// GetSPOFByID handles GET /v2/availability/spofs/:id
+func (h *AvailabilityHandler) GetSPOFByID(w http.ResponseWriter, r *http.Request, id string) {
+	spof, err := h.svc.GetSPOFByID(r.Context(), id)
+	if err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+	writeAvailabilityJSON(w, http.StatusOK, spof)
+}
+
+// UpdateSPOF handles PUT /v2/availability/spofs/:id
+func (h *AvailabilityHandler) UpdateSPOF(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateSPOFRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAvailabilityError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	spof, err := h.svc.UpdateSPOF(r.Context(), id, req)
+	if err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+	writeAvailabilityJSON(w, http.StatusOK, spof)
+}
+
+// MitigateSPOF handles POST /v2/availability/spofs/:id/mitigate
+func (h *AvailabilityHandler) MitigateSPOF(w http.ResponseWriter, r *http.Request, id string) {
+	var req struct {
+		MitigationPlan string `json:"mitigation_plan"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAvailabilityError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	spof, err := h.svc.MitigateSPOF(r.Context(), id, req.MitigationPlan)
+	if err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+	writeAvailabilityJSON(w, http.StatusOK, spof)
+}
+
+// DeleteSPOF handles DELETE /v2/availability/spofs/:id
+func (h *AvailabilityHandler) DeleteSPOF(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteSPOF(r.Context(), id); err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+	writeAvailabilityJSON(w, http.StatusOK, map[string]string{"message": "SPOF record deleted successfully"})
+}
+
+// Test Endpoints
+
+// ListTests handles GET /v2/availability/tests
+func (h *AvailabilityHandler) ListTests(w http.ResponseWriter, r *http.Request) {
+	wsID := getAvailabilityWorkspaceID(r)
+	q := r.URL.Query()
+
+	limit := 50
+	offset := 0
+	if l := q.Get("limit"); l != "" {
+		if val, err := strconv.Atoi(l); err == nil && val > 0 {
+			limit = val
+		}
+	}
+	if o := q.Get("offset"); o != "" {
+		if val, err := strconv.Atoi(o); err == nil && val >= 0 {
+			offset = val
+		}
+	}
+
+	filter := model.AvailabilityFilterCriteria{
+		WorkspaceID: wsID,
+		TargetID:    q.Get("target_id"),
+		Outcome:     q.Get("outcome"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	tests, total, err := h.svc.ListTests(r.Context(), filter)
+	if err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+
+	writeAvailabilityJSON(w, http.StatusOK, map[string]interface{}{
+		"tests":  tests,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
+}
+
+// CreateTest handles POST /v2/availability/tests
+func (h *AvailabilityHandler) CreateTest(w http.ResponseWriter, r *http.Request) {
+	wsID := getAvailabilityWorkspaceID(r)
+
+	var req model.CreateAvailabilityTestRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAvailabilityError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	test, err := h.svc.ScheduleTest(r.Context(), wsID, req)
+	if err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+
+	writeAvailabilityJSON(w, http.StatusCreated, test)
+}
+
+// GetTestByID handles GET /v2/availability/tests/:id
+func (h *AvailabilityHandler) GetTestByID(w http.ResponseWriter, r *http.Request, id string) {
+	test, err := h.svc.GetTestByID(r.Context(), id)
+	if err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+	writeAvailabilityJSON(w, http.StatusOK, test)
+}
+
+// UpdateTest handles PUT /v2/availability/tests/:id
+func (h *AvailabilityHandler) UpdateTest(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateAvailabilityTestRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAvailabilityError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	test, err := h.svc.UpdateTest(r.Context(), id, req)
+	if err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+	writeAvailabilityJSON(w, http.StatusOK, test)
+}
+
+// RecordTestResult handles POST /v2/availability/tests/:id/result
+func (h *AvailabilityHandler) RecordTestResult(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.RecordTestResultRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAvailabilityError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	test, err := h.svc.RecordTestResult(r.Context(), id, req)
+	if err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+	writeAvailabilityJSON(w, http.StatusOK, test)
+}
+
+// DeleteTest handles DELETE /v2/availability/tests/:id
+func (h *AvailabilityHandler) DeleteTest(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteTest(r.Context(), id); err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+	writeAvailabilityJSON(w, http.StatusOK, map[string]string{"message": "availability test deleted successfully"})
+}
