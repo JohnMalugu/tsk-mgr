@@ -409,6 +409,19 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET|POST /v2/finops/chargeback/statements` to list and issue periodic chargeback billing statements (`statement_period`, `target_business_unit`, `total_charge`, `currency`, `status`)
 - `GET|PUT|DELETE /v2/finops/chargeback/statements/{id}` to inspect statement items, settle billing statements (`settled` with automated settlement timestamps), or remove statements
 - `GET /v2/finops/analytics?workspace_id={id}&fiscal_year={year}` for comprehensive FinOps financial posture reporting, budget utilization %, variance (allocated vs spent), Capex vs Opex breakdown, cost pool distribution, top cost drivers by CI and Vendor, chargeback recovery metrics, and Cost Efficiency Score (0–100)
+- `GET|POST /v2/capacity/pools` to list Resource Capacity Pools (`workspace_id`, `resource_type`, `status`, `ci_id`, `search`, `limit`, `offset`) or create a new capacity pool (`compute_cpu`, `memory_ram`, `storage_disk`, `network_bandwidth`, `database_iops`, `license_seats`) with total capacity, warning/critical thresholds (75%/90%), and automated utilization status recalculation (`optimal`, `warning`, `critical`, `exhausted`)
+- `GET|PUT|DELETE /v2/capacity/pools/{id}` to inspect capacity pool details, update allocated/utilized resources and threshold alerts, or remove a pool
+- `GET|POST /v2/capacity/metrics` to list and ingest time-series performance metrics and telemetry samples (`metric_name`, `sampled_at`, `average_value`, `peak_value`, `p95_value`, `p99_value`, `is_anomaly`, `anomaly_score`) with automatic pool utilization synchronization
+- `GET /v2/capacity/metrics/{id}` to fetch an individual telemetry metric sample
+- `POST /v2/capacity/forecasts` to generate predictive capacity runway models, projected growth rate, days until exhaustion, and sizing recommendations (`scale_up`, `scale_out`, `scale_down`, `rebalance`, `optimize`)
+- `GET /v2/capacity/forecasts/{pool_id}` to retrieve the latest capacity forecast and runway estimate for a pool
+- `GET|POST /v2/capacity/plans` to list and author ITIL capacity plans across planning horizons (`short_term_30d`, `medium_term_90d`, `long_term_annual`) with required capacity additions, estimated costs, justifications, and lifecycle status (`draft`, `in_review`, `approved`, `implemented`, `rejected`)
+- `GET|PUT|DELETE /v2/capacity/plans/{id}` to inspect, update, or remove capacity plans
+- `POST /v2/capacity/plans/{id}/approve` to execute formal capacity plan approval workflows
+- `GET|POST /v2/capacity/bottlenecks` to list and record resource saturation events and bottleneck incidents (`pool_id`, `affected_ci_id`, `severity`, `saturation_percent`, `status`)
+- `GET|PUT|DELETE /v2/capacity/bottlenecks/{id}` to inspect, update, or delete bottleneck records
+- `POST /v2/capacity/bottlenecks/{id}/resolve` to resolve bottleneck constraints with mitigation documentation and automated resolution timestamps
+- `GET /v2/capacity/analytics?workspace_id={id}` for executive Capacity & Performance Management posture reporting, overall utilization %, breakdown by resource type, top saturated pools, anomaly detections, active capacity plan commitments, and Capacity Health Index (0–100)
 
 ## Current limitations
 
