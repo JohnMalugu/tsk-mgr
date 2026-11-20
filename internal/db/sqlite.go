@@ -3081,6 +3081,27 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	availabilitySPOFsQuery := `
+	CREATE TABLE IF NOT EXISTS availability_spofs (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		component_name TEXT NOT NULL,
+		ci_id TEXT,
+		risk_level TEXT NOT NULL,
+		redundancy_mechanism TEXT NOT NULL,
+		mitigation_plan TEXT,
+		status TEXT NOT NULL,
+		review_date DATETIME NOT NULL,
+		owner_id TEXT,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);`
+
+	_, err = db.Exec(availabilitySPOFsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
