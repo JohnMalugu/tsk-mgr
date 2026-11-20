@@ -56,6 +56,9 @@ var (
 	ErrInvalidOutageType              = errors.New("invalid outage type")
 	ErrInvalidOutageSeverity          = errors.New("invalid outage severity")
 	ErrInvalidOutageTimestamps        = errors.New("outage ended_at cannot be before started_at")
+	ErrAvailabilityMeasurementNotFound = errors.New("availability measurement not found")
+	ErrPeriodRequired                 = errors.New("measurement period is required")
+	ErrInvalidOperationalMinutes      = errors.New("total operational minutes must be greater than zero")
 )
 
 // ValidateMeasurementWindow verifies if a window string is recognized
@@ -193,4 +196,65 @@ func (o *OutageEvent) CalculateDuration() float64 {
 		return 0
 	}
 	return dur
+}
+
+// AvailabilityMeasurement tracks periodic uptime calculations, MTBF, and MTTR records
+type AvailabilityMeasurement struct {
+	ID                     string    `json:"id"`
+	WorkspaceID            string    `json:"workspace_id"`
+	TargetID               string    `json:"target_id"`
+	Period                 string    `json:"period"` // e.g. "2026-M11", "2026-Q4", "2026-W47"
+	TotalOperationalMinutes float64   `json:"total_operational_minutes"`
+	TotalDowntimeMinutes   float64   `json:"total_downtime_minutes"`
+	ExemptDowntimeMinutes  float64   `json:"exempt_downtime_minutes"`
+	ActualUptimePercentage float64   `json:"actual_uptime_percentage"`
+	MTBFHours              float64   `json:"mtbf_hours"`
+	MTTRMinutes            float64   `json:"mttr_minutes"`
+	OutageCount            int       `json:"outage_count"`
+	IsSLABreached          bool      `json:"is_sla_breached"`
+	CalculatedAt           time.Time `json:"calculated_at"`
+	CreatedAt              time.Time `json:"created_at"`
+	UpdatedAt              time.Time `json:"updated_at"`
+}
+
+// Validate validates the AvailabilityMeasurement entity
+func (m *AvailabilityMeasurement) Validate() error {
+	if strings.TrimSpace(m.TargetID) == "" {
+		return ErrAvailabilityTargetNotFound
+	}
+	if strings.TrimSpace(m.Period) == "" {
+		return ErrPeriodRequired
+	}
+	if m.TotalOperationalMinutes <= 0 {
+		return ErrInvalidOperationalMinutes
+	}
+	return nil
+}
+
+// ComputeUptimePercentage computes the actual uptime percentage accounting for SLA exemptions
+func (m *AvailabilityMeasurement) ComputeUptimePercentage() float64 {
+	if m.TotalOperationalMinutes <= 0 {
+		return 100.0
+	}
+	effectiveDowntime := m.TotalDowntimeMinutes - m.ExemptDowntimeMinutes
+	if effectiveDowntime < 0 {
+		effectiveDowntime = 0
+	}
+	if effectiveDowntime > m.TotalOperationalMinutes {
+		effectiveDowntime = m.TotalOperationalMinutes
+	}
+	uptimeMinutes := m.TotalOperationalMinutes - effectiveDowntime
+	pct := (uptimeMinutes / m.TotalOperationalMinutes) * 100.0
+	if pct < 0 {
+		return 0
+	}
+	if pct > 100.0 {
+		return 100.0
+	}
+	return pct
+}
+
+// CheckSLABreach checks whether the actual uptime percentage fell below the target percentage
+func (m *AvailabilityMeasurement) CheckSLABreach(targetPercentage float64) bool {
+	return m.ActualUptimePercentage < targetPercentage
 }
