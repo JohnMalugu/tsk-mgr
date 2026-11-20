@@ -79,24 +79,114 @@ func NewCapacityService(repo repository.CapacityRepository) CapacityService {
 	return &capacityServiceImpl{repo: repo}
 }
 
-// Pool Stubs
+// Pools
 func (s *capacityServiceImpl) CreatePool(ctx context.Context, workspaceID string, req model.CreateCapacityPoolRequest) (*model.CapacityPool, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	warnThresh := req.WarningThresholdPercent
+	if warnThresh <= 0 {
+		warnThresh = 75.0
+	}
+	critThresh := req.CriticalThresholdPercent
+	if critThresh <= 0 {
+		critThresh = 90.0
+	}
+	uom := req.UnitOfMeasure
+	if uom == "" {
+		switch req.ResourceType {
+		case model.ResourceTypeComputeCPU:
+			uom = model.UnitCores
+		case model.ResourceTypeMemoryRAM:
+			uom = model.UnitGB
+		case model.ResourceTypeStorageDisk:
+			uom = model.UnitGB
+		case model.ResourceTypeNetworkBandwidth:
+			uom = model.UnitMbps
+		case model.ResourceTypeDatabaseIOPS:
+			uom = model.UnitIOPS
+		case model.ResourceTypeLicenseSeats:
+			uom = model.UnitSeats
+		default:
+			uom = "units"
+		}
+	}
+
+	pool := &model.CapacityPool{
+		WorkspaceID:              workspaceID,
+		Name:                     strings.TrimSpace(req.Name),
+		ResourceType:             req.ResourceType,
+		CIID:                     req.CIID,
+		TotalCapacity:            req.TotalCapacity,
+		AllocatedCapacity:        req.AllocatedCapacity,
+		UtilizedCapacity:         req.UtilizedCapacity,
+		UnitOfMeasure:            uom,
+		WarningThresholdPercent:  warnThresh,
+		CriticalThresholdPercent: critThresh,
+		Description:              req.Description,
+	}
+	pool.RecalculateStatus()
+
+	if err := s.repo.CreatePool(ctx, pool); err != nil {
+		return nil, err
+	}
+	return pool, nil
 }
+
 func (s *capacityServiceImpl) GetPoolByID(ctx context.Context, id string) (*model.CapacityPool, error) {
-	return nil, ErrCapacityPoolNotFound
+	return s.repo.GetPoolByID(ctx, id)
 }
+
 func (s *capacityServiceImpl) GetPoolByName(ctx context.Context, workspaceID string, name string) (*model.CapacityPool, error) {
-	return nil, ErrCapacityPoolNotFound
+	return s.repo.GetPoolByName(ctx, workspaceID, name)
 }
+
 func (s *capacityServiceImpl) UpdatePool(ctx context.Context, id string, req model.UpdateCapacityPoolRequest) (*model.CapacityPool, error) {
-	return nil, ErrCapacityPoolNotFound
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	pool, err := s.repo.GetPoolByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Name != nil {
+		pool.Name = strings.TrimSpace(*req.Name)
+	}
+	if req.TotalCapacity != nil {
+		pool.TotalCapacity = *req.TotalCapacity
+	}
+	if req.AllocatedCapacity != nil {
+		pool.AllocatedCapacity = *req.AllocatedCapacity
+	}
+	if req.UtilizedCapacity != nil {
+		pool.UtilizedCapacity = *req.UtilizedCapacity
+	}
+	if req.WarningThresholdPercent != nil {
+		pool.WarningThresholdPercent = *req.WarningThresholdPercent
+	}
+	if req.CriticalThresholdPercent != nil {
+		pool.CriticalThresholdPercent = *req.CriticalThresholdPercent
+	}
+	if req.Description != nil {
+		pool.Description = *req.Description
+	}
+	pool.RecalculateStatus()
+
+	if err := s.repo.UpdatePool(ctx, pool); err != nil {
+		return nil, err
+	}
+	return pool, nil
 }
+
 func (s *capacityServiceImpl) DeletePool(ctx context.Context, id string) error {
-	return nil
+	return s.repo.DeletePool(ctx, id)
 }
+
 func (s *capacityServiceImpl) ListPools(ctx context.Context, filter model.CapacityPoolFilterCriteria) ([]model.CapacityPool, int, error) {
-	return nil, 0, nil
+	return s.repo.ListPools(ctx, filter)
 }
 
 // Metric & Forecast Stubs
