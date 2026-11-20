@@ -3030,6 +3030,32 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	availabilityOutagesQuery := `
+	CREATE TABLE IF NOT EXISTS availability_outages (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		target_id TEXT,
+		ci_id TEXT,
+		title TEXT NOT NULL,
+		outage_type TEXT NOT NULL,
+		severity TEXT NOT NULL,
+		started_at DATETIME NOT NULL,
+		ended_at DATETIME,
+		duration_minutes REAL NOT NULL DEFAULT 0.0,
+		root_cause TEXT,
+		is_sla_exempt INTEGER NOT NULL DEFAULT 0,
+		exemption_reason TEXT,
+		reported_by TEXT,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (target_id) REFERENCES availability_targets(id) ON DELETE SET NULL
+	);`
+
+	_, err = db.Exec(availabilityOutagesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
