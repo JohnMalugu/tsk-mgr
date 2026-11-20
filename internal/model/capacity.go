@@ -596,3 +596,66 @@ func (r *UpdateBottleneckRequest) Validate() error {
 	}
 	return nil
 }
+
+// CapacityPoolFilterCriteria specifies filters for capacity pool queries
+type CapacityPoolFilterCriteria struct {
+	WorkspaceID  string
+	ResourceType string
+	Status       string
+	CIID         string
+	Search       string
+	Limit        int
+	Offset       int
+}
+
+// CapacityMetricFilterCriteria specifies filters for telemetry sampling queries
+type CapacityMetricFilterCriteria struct {
+	WorkspaceID string
+	PoolID      string
+	MetricName  string
+	IsAnomaly   *bool
+	FromDate    *time.Time
+	ToDate      *time.Time
+	Limit       int
+	Offset      int
+}
+
+// CapacityPlanFilterCriteria specifies filters for capacity plan queries
+type CapacityPlanFilterCriteria struct {
+	WorkspaceID     string
+	PoolID          string
+	PlanningHorizon string
+	Status          string
+	Limit           int
+	Offset          int
+}
+
+// BottleneckFilterCriteria specifies filters for bottleneck incident queries
+type BottleneckFilterCriteria struct {
+	WorkspaceID  string
+	PoolID       string
+	AffectedCIID string
+	Severity     string
+	Status       string
+	Limit        int
+	Offset       int
+}
+
+// CapacityAnalyticsReport aggregates cross-pool resource posture and efficiency scores
+type CapacityAnalyticsReport struct {
+	WorkspaceID                 string             `json:"workspace_id"`
+	TotalPools                  int                `json:"total_pools"`
+	OptimalPoolsCount           int                `json:"optimal_pools_count"`
+	WarningPoolsCount           int                `json:"warning_pools_count"`
+	CriticalPoolsCount          int                `json:"critical_pools_count"`
+	ExhaustedPoolsCount         int                `json:"exhausted_pools_count"`
+	AverageUtilizationPercent    float64            `json:"average_utilization_percent"`
+	UtilizationByResourceType   map[string]float64 `json:"utilization_by_resource_type"`
+	TopSaturatedPools           []CapacityPool     `json:"top_saturated_pools"`
+	TotalAnomaliesDetected      int                `json:"total_anomalies_detected"`
+	OpenBottlenecksCount        int                `json:"open_bottlenecks_count"`
+	CriticalBottlenecksCount    int                `json:"critical_bottlenecks_count"`
+	TotalPlansActive            int                `json:"total_plans_active"`
+	TotalEstimatedPlanCost      float64            `json:"total_estimated_plan_cost"`
+	CapacityHealthIndex         float64            `json:"capacity_health_index"`
+}
