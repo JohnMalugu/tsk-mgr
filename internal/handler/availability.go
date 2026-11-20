@@ -219,3 +219,211 @@ func (h *AvailabilityHandler) DeleteTarget(w http.ResponseWriter, r *http.Reques
 	}
 	writeAvailabilityJSON(w, http.StatusOK, map[string]string{"message": "availability target deleted successfully"})
 }
+
+// Outage Endpoints
+
+// ListOutages handles GET /v2/availability/outages
+func (h *AvailabilityHandler) ListOutages(w http.ResponseWriter, r *http.Request) {
+	wsID := getAvailabilityWorkspaceID(r)
+	q := r.URL.Query()
+
+	limit := 50
+	offset := 0
+	if l := q.Get("limit"); l != "" {
+		if val, err := strconv.Atoi(l); err == nil && val > 0 {
+			limit = val
+		}
+	}
+	if o := q.Get("offset"); o != "" {
+		if val, err := strconv.Atoi(o); err == nil && val >= 0 {
+			offset = val
+		}
+	}
+
+	filter := model.AvailabilityFilterCriteria{
+		WorkspaceID: wsID,
+		TargetID:    q.Get("target_id"),
+		CIID:        q.Get("ci_id"),
+		OutageType:  q.Get("outage_type"),
+		Severity:    q.Get("severity"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	outages, total, err := h.svc.ListOutages(r.Context(), filter)
+	if err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+
+	writeAvailabilityJSON(w, http.StatusOK, map[string]interface{}{
+		"outages": outages,
+		"total":   total,
+		"limit":   limit,
+		"offset":  offset,
+	})
+}
+
+// CreateOutage handles POST /v2/availability/outages
+func (h *AvailabilityHandler) CreateOutage(w http.ResponseWriter, r *http.Request) {
+	wsID := getAvailabilityWorkspaceID(r)
+
+	var req model.CreateOutageEventRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAvailabilityError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	outage, err := h.svc.RecordOutage(r.Context(), wsID, req)
+	if err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+
+	writeAvailabilityJSON(w, http.StatusCreated, outage)
+}
+
+// GetOutageByID handles GET /v2/availability/outages/:id
+func (h *AvailabilityHandler) GetOutageByID(w http.ResponseWriter, r *http.Request, id string) {
+	outage, err := h.svc.GetOutageByID(r.Context(), id)
+	if err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+	writeAvailabilityJSON(w, http.StatusOK, outage)
+}
+
+// UpdateOutage handles PUT /v2/availability/outages/:id
+func (h *AvailabilityHandler) UpdateOutage(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateOutageEventRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAvailabilityError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	outage, err := h.svc.UpdateOutage(r.Context(), id, req)
+	if err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+	writeAvailabilityJSON(w, http.StatusOK, outage)
+}
+
+// ResolveOutage handles POST /v2/availability/outages/:id/resolve
+func (h *AvailabilityHandler) ResolveOutage(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.ResolveOutageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAvailabilityError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	outage, err := h.svc.ResolveOutage(r.Context(), id, req)
+	if err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+	writeAvailabilityJSON(w, http.StatusOK, outage)
+}
+
+// DeleteOutage handles DELETE /v2/availability/outages/:id
+func (h *AvailabilityHandler) DeleteOutage(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteOutage(r.Context(), id); err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+	writeAvailabilityJSON(w, http.StatusOK, map[string]string{"message": "outage event deleted successfully"})
+}
+
+// Measurement Endpoints
+
+// ListMeasurements handles GET /v2/availability/measurements
+func (h *AvailabilityHandler) ListMeasurements(w http.ResponseWriter, r *http.Request) {
+	wsID := getAvailabilityWorkspaceID(r)
+	q := r.URL.Query()
+
+	limit := 50
+	offset := 0
+	if l := q.Get("limit"); l != "" {
+		if val, err := strconv.Atoi(l); err == nil && val > 0 {
+			limit = val
+		}
+	}
+	if o := q.Get("offset"); o != "" {
+		if val, err := strconv.Atoi(o); err == nil && val >= 0 {
+			offset = val
+		}
+	}
+
+	filter := model.AvailabilityFilterCriteria{
+		WorkspaceID: wsID,
+		TargetID:    q.Get("target_id"),
+		Period:      q.Get("period"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	measurements, total, err := h.svc.ListMeasurements(r.Context(), filter)
+	if err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+
+	writeAvailabilityJSON(w, http.StatusOK, map[string]interface{}{
+		"measurements": measurements,
+		"total":        total,
+		"limit":        limit,
+		"offset":       offset,
+	})
+}
+
+// RecordMeasurement handles POST /v2/availability/measurements
+func (h *AvailabilityHandler) RecordMeasurement(w http.ResponseWriter, r *http.Request) {
+	wsID := getAvailabilityWorkspaceID(r)
+
+	var req model.CreateMeasurementRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAvailabilityError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	m, err := h.svc.RecordMeasurement(r.Context(), wsID, req)
+	if err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+
+	writeAvailabilityJSON(w, http.StatusCreated, m)
+}
+
+// CalculateMeasurement handles POST /v2/availability/measurements/calculate
+func (h *AvailabilityHandler) CalculateMeasurement(w http.ResponseWriter, r *http.Request) {
+	wsID := getAvailabilityWorkspaceID(r)
+
+	var req struct {
+		TargetID                string  `json:"target_id"`
+		Period                  string  `json:"period"`
+		TotalOperationalMinutes float64 `json:"total_operational_minutes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAvailabilityError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	m, err := h.svc.CalculatePeriodMeasurement(r.Context(), wsID, req.TargetID, req.Period, req.TotalOperationalMinutes)
+	if err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+
+	writeAvailabilityJSON(w, http.StatusOK, m)
+}
+
+// GetMeasurementByID handles GET /v2/availability/measurements/:id
+func (h *AvailabilityHandler) GetMeasurementByID(w http.ResponseWriter, r *http.Request, id string) {
+	m, err := h.svc.GetMeasurementByID(r.Context(), id)
+	if err != nil {
+		handleAvailabilityError(w, err)
+		return
+	}
+	writeAvailabilityJSON(w, http.StatusOK, m)
+}
