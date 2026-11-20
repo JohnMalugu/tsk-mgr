@@ -744,44 +744,406 @@ func (r *availabilityRepository) ListMeasurements(ctx context.Context, filter mo
 	return measurements, total, nil
 }
 
+// CreateSPOF logs a new Single Point of Failure
 func (r *availabilityRepository) CreateSPOF(ctx context.Context, spof *model.SPOFRecord) error {
-	return errors.New("not implemented")
+	if err := spof.Validate(); err != nil {
+		return err
+	}
+	if spof.ID == "" {
+		spof.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if spof.CreatedAt.IsZero() {
+		spof.CreatedAt = now
+	}
+	spof.UpdatedAt = now
+
+	query := `
+	INSERT INTO availability_spofs (
+		id, workspace_id, component_name, ci_id,
+		risk_level, redundancy_mechanism, mitigation_plan,
+		status, review_date, owner_id, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		spof.ID, spof.WorkspaceID, spof.ComponentName, spof.CIID,
+		spof.RiskLevel, spof.RedundancyMechanism, spof.MitigationPlan,
+		spof.Status, spof.ReviewDate, spof.OwnerID, spof.CreatedAt, spof.UpdatedAt,
+	)
+	return err
 }
 
+// GetSPOFByID retrieves a SPOF record by ID
 func (r *availabilityRepository) GetSPOFByID(ctx context.Context, id string) (*model.SPOFRecord, error) {
-	return nil, errors.New("not implemented")
+	query := `
+	SELECT id, workspace_id, component_name, ci_id,
+	       risk_level, redundancy_mechanism, mitigation_plan,
+	       status, review_date, owner_id, created_at, updated_at
+	FROM availability_spofs WHERE id = ?`
+
+	var s model.SPOFRecord
+	var ciID, mitigation, ownerID sql.NullString
+
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&s.ID, &s.WorkspaceID, &s.ComponentName, &ciID,
+		&s.RiskLevel, &s.RedundancyMechanism, &mitigation,
+		&s.Status, &s.ReviewDate, &ownerID, &s.CreatedAt, &s.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrSPOFRecordNotFound
+		}
+		return nil, err
+	}
+	if ciID.Valid {
+		s.CIID = ciID.String
+	}
+	if mitigation.Valid {
+		s.MitigationPlan = mitigation.String
+	}
+	if ownerID.Valid {
+		s.OwnerID = ownerID.String
+	}
+	return &s, nil
 }
 
+// UpdateSPOF modifies an existing SPOF record
 func (r *availabilityRepository) UpdateSPOF(ctx context.Context, spof *model.SPOFRecord) error {
-	return errors.New("not implemented")
+	if err := spof.Validate(); err != nil {
+		return err
+	}
+	spof.UpdatedAt = time.Now().UTC()
+
+	query := `
+	UPDATE availability_spofs SET
+		component_name = ?, ci_id = ?, risk_level = ?,
+		redundancy_mechanism = ?, mitigation_plan = ?, status = ?,
+		review_date = ?, owner_id = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		spof.ComponentName, spof.CIID, spof.RiskLevel,
+		spof.RedundancyMechanism, spof.MitigationPlan, spof.Status,
+		spof.ReviewDate, spof.OwnerID, spof.UpdatedAt,
+		spof.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrSPOFRecordNotFound
+	}
+	return nil
 }
 
+// DeleteSPOF removes a SPOF record
 func (r *availabilityRepository) DeleteSPOF(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	query := `DELETE FROM availability_spofs WHERE id = ?`
+	res, err := r.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrSPOFRecordNotFound
+	}
+	return nil
 }
 
+// ListSPOFs lists SPOF records matching filter criteria
 func (r *availabilityRepository) ListSPOFs(ctx context.Context, filter model.AvailabilityFilterCriteria) ([]model.SPOFRecord, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.RiskLevel != "" {
+		conditions = append(conditions, "risk_level = ?")
+		args = append(args, filter.RiskLevel)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+	if filter.CIID != "" {
+		conditions = append(conditions, "ci_id = ?")
+		args = append(args, filter.CIID)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM availability_spofs %s", whereClause)
+	var total int
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, workspace_id, component_name, ci_id,
+	       risk_level, redundancy_mechanism, mitigation_plan,
+	       status, review_date, owner_id, created_at, updated_at
+	FROM availability_spofs %s
+	ORDER BY created_at DESC
+	LIMIT ? OFFSET ?`, whereClause)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var spofs []model.SPOFRecord
+	for rows.Next() {
+		var s model.SPOFRecord
+		var ciID, mitigation, ownerID sql.NullString
+		err := rows.Scan(
+			&s.ID, &s.WorkspaceID, &s.ComponentName, &ciID,
+			&s.RiskLevel, &s.RedundancyMechanism, &mitigation,
+			&s.Status, &s.ReviewDate, &ownerID, &s.CreatedAt, &s.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		if ciID.Valid {
+			s.CIID = ciID.String
+		}
+		if mitigation.Valid {
+			s.MitigationPlan = mitigation.String
+		}
+		if ownerID.Valid {
+			s.OwnerID = ownerID.String
+		}
+		spofs = append(spofs, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return spofs, total, nil
 }
 
+// CreateTest logs a new availability failover test schedule
 func (r *availabilityRepository) CreateTest(ctx context.Context, test *model.AvailabilityTest) error {
-	return errors.New("not implemented")
+	if err := test.Validate(); err != nil {
+		return err
+	}
+	if test.ID == "" {
+		test.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if test.CreatedAt.IsZero() {
+		test.CreatedAt = now
+	}
+	test.UpdatedAt = now
+
+	query := `
+	INSERT INTO availability_tests (
+		id, workspace_id, target_id, name, test_type,
+		frequency, last_tested_at, next_test_due,
+		outcome, findings, conducted_by, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		test.ID, test.WorkspaceID, test.TargetID, test.Name, test.TestType,
+		test.Frequency, test.LastTestedAt, test.NextTestDue,
+		test.Outcome, test.Findings, test.ConductedBy, test.CreatedAt, test.UpdatedAt,
+	)
+	return err
 }
 
+// GetTestByID retrieves an availability test by ID
 func (r *availabilityRepository) GetTestByID(ctx context.Context, id string) (*model.AvailabilityTest, error) {
-	return nil, errors.New("not implemented")
+	query := `
+	SELECT id, workspace_id, target_id, name, test_type,
+	       frequency, last_tested_at, next_test_due,
+	       outcome, findings, conducted_by, created_at, updated_at
+	FROM availability_tests WHERE id = ?`
+
+	var t model.AvailabilityTest
+	var targetID, findings, conductedBy sql.NullString
+	var lastTested sql.NullTime
+
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&t.ID, &t.WorkspaceID, &targetID, &t.Name, &t.TestType,
+		&t.Frequency, &lastTested, &t.NextTestDue,
+		&t.Outcome, &findings, &conductedBy, &t.CreatedAt, &t.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrAvailabilityTestNotFound
+		}
+		return nil, err
+	}
+	if targetID.Valid {
+		t.TargetID = targetID.String
+	}
+	if lastTested.Valid {
+		val := lastTested.Time
+		t.LastTestedAt = &val
+	}
+	if findings.Valid {
+		t.Findings = findings.String
+	}
+	if conductedBy.Valid {
+		t.ConductedBy = conductedBy.String
+	}
+	return &t, nil
 }
 
+// UpdateTest updates an availability test
 func (r *availabilityRepository) UpdateTest(ctx context.Context, test *model.AvailabilityTest) error {
-	return errors.New("not implemented")
+	if err := test.Validate(); err != nil {
+		return err
+	}
+	test.UpdatedAt = time.Now().UTC()
+
+	query := `
+	UPDATE availability_tests SET
+		name = ?, test_type = ?, frequency = ?, last_tested_at = ?,
+		next_test_due = ?, outcome = ?, findings = ?, conducted_by = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		test.Name, test.TestType, test.Frequency, test.LastTestedAt,
+		test.NextTestDue, test.Outcome, test.Findings, test.ConductedBy, test.UpdatedAt,
+		test.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrAvailabilityTestNotFound
+	}
+	return nil
 }
 
+// DeleteTest removes an availability test schedule
 func (r *availabilityRepository) DeleteTest(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	query := `DELETE FROM availability_tests WHERE id = ?`
+	res, err := r.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrAvailabilityTestNotFound
+	}
+	return nil
 }
 
+// ListTests lists availability tests matching filter criteria
 func (r *availabilityRepository) ListTests(ctx context.Context, filter model.AvailabilityFilterCriteria) ([]model.AvailabilityTest, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.TargetID != "" {
+		conditions = append(conditions, "target_id = ?")
+		args = append(args, filter.TargetID)
+	}
+	if filter.Outcome != "" {
+		conditions = append(conditions, "outcome = ?")
+		args = append(args, filter.Outcome)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM availability_tests %s", whereClause)
+	var total int
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, workspace_id, target_id, name, test_type,
+	       frequency, last_tested_at, next_test_due,
+	       outcome, findings, conducted_by, created_at, updated_at
+	FROM availability_tests %s
+	ORDER BY next_test_due ASC
+	LIMIT ? OFFSET ?`, whereClause)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var tests []model.AvailabilityTest
+	for rows.Next() {
+		var t model.AvailabilityTest
+		var targetID, findings, conductedBy sql.NullString
+		var lastTested sql.NullTime
+		err := rows.Scan(
+			&t.ID, &t.WorkspaceID, &targetID, &t.Name, &t.TestType,
+			&t.Frequency, &lastTested, &t.NextTestDue,
+			&t.Outcome, &findings, &conductedBy, &t.CreatedAt, &t.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		if targetID.Valid {
+			t.TargetID = targetID.String
+		}
+		if lastTested.Valid {
+			val := lastTested.Time
+			t.LastTestedAt = &val
+		}
+		if findings.Valid {
+			t.Findings = findings.String
+		}
+		if conductedBy.Valid {
+			t.ConductedBy = conductedBy.String
+		}
+		tests = append(tests, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return tests, total, nil
 }
 
 func (r *availabilityRepository) GetAvailabilityAnalytics(ctx context.Context, workspaceID string) (*model.AvailabilityAnalytics, error) {
