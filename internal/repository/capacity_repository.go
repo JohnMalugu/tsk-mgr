@@ -296,23 +296,199 @@ func (r *sqliteCapacityRepository) ListPools(ctx context.Context, filter model.C
 	return list, total, rows.Err()
 }
 
-// Metric Stubs
+// Metrics & Telemetry
 func (r *sqliteCapacityRepository) RecordMetric(ctx context.Context, metric *model.CapacityMetric) error {
-	return nil
-}
-func (r *sqliteCapacityRepository) GetMetricByID(ctx context.Context, id string) (*model.CapacityMetric, error) {
-	return nil, ErrCapacityMetricNotFound
-}
-func (r *sqliteCapacityRepository) ListMetrics(ctx context.Context, filter model.CapacityMetricFilterCriteria) ([]model.CapacityMetric, int, error) {
-	return nil, 0, nil
+	if metric.ID == "" {
+		metric.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if metric.CreatedAt.IsZero() {
+		metric.CreatedAt = now
+	}
+	if metric.SampledAt.IsZero() {
+		metric.SampledAt = now
+	}
+	if metric.PeakValue < metric.AverageValue {
+		metric.PeakValue = metric.AverageValue
+	}
+
+	isAnomalyInt := 0
+	if metric.IsAnomaly {
+		isAnomalyInt = 1
+	}
+
+	query := `
+	INSERT INTO capacity_metrics (
+		id, workspace_id, pool_id, metric_name, sampled_at,
+		average_value, peak_value, p95_value, p99_value,
+		is_anomaly, anomaly_score, created_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		metric.ID, metric.WorkspaceID, metric.PoolID, metric.MetricName, metric.SampledAt,
+		metric.AverageValue, metric.PeakValue, metric.P95Value, metric.P99Value,
+		isAnomalyInt, metric.AnomalyScore, metric.CreatedAt,
+	)
+	return err
 }
 
-// Forecast Stubs
-func (r *sqliteCapacityRepository) SaveForecast(ctx context.Context, forecast *model.CapacityForecast) error {
-	return nil
+func (r *sqliteCapacityRepository) GetMetricByID(ctx context.Context, id string) (*model.CapacityMetric, error) {
+	query := `
+	SELECT id, workspace_id, pool_id, metric_name, sampled_at,
+	       average_value, peak_value, p95_value, p99_value,
+	       is_anomaly, anomaly_score, created_at
+	FROM capacity_metrics WHERE id = ?`
+
+	var m model.CapacityMetric
+	var isAnomalyInt int
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&m.ID, &m.WorkspaceID, &m.PoolID, &m.MetricName, &m.SampledAt,
+		&m.AverageValue, &m.PeakValue, &m.P95Value, &m.P99Value,
+		&isAnomalyInt, &m.AnomalyScore, &m.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrCapacityMetricNotFound
+		}
+		return nil, err
+	}
+	m.IsAnomaly = (isAnomalyInt == 1)
+	return &m, nil
 }
+
+func (r *sqliteCapacityRepository) ListMetrics(ctx context.Context, filter model.CapacityMetricFilterCriteria) ([]model.CapacityMetric, int, error) {
+	whereClauses := []string{"1=1"}
+	args := []interface{}{}
+
+	if filter.WorkspaceID != "" {
+		whereClauses = append(whereClauses, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.PoolID != "" {
+		whereClauses = append(whereClauses, "pool_id = ?")
+		args = append(args, filter.PoolID)
+	}
+	if filter.MetricName != "" {
+		whereClauses = append(whereClauses, "metric_name = ?")
+		args = append(args, filter.MetricName)
+	}
+	if filter.IsAnomaly != nil {
+		whereClauses = append(whereClauses, "is_anomaly = ?")
+		val := 0
+		if *filter.IsAnomaly {
+			val = 1
+		}
+		args = append(args, val)
+	}
+	if filter.FromDate != nil {
+		whereClauses = append(whereClauses, "sampled_at >= ?")
+		args = append(args, *filter.FromDate)
+	}
+	if filter.ToDate != nil {
+		whereClauses = append(whereClauses, "sampled_at <= ?")
+		args = append(args, *filter.ToDate)
+	}
+
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	var total int
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM capacity_metrics WHERE %s", whereSQL)
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, workspace_id, pool_id, metric_name, sampled_at,
+	       average_value, peak_value, p95_value, p99_value,
+	       is_anomaly, anomaly_score, created_at
+	FROM capacity_metrics WHERE %s ORDER BY sampled_at DESC LIMIT ? OFFSET ?`, whereSQL)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	list := []model.CapacityMetric{}
+	for rows.Next() {
+		var m model.CapacityMetric
+		var isAnomalyInt int
+		if err := rows.Scan(
+			&m.ID, &m.WorkspaceID, &m.PoolID, &m.MetricName, &m.SampledAt,
+			&m.AverageValue, &m.PeakValue, &m.P95Value, &m.P99Value,
+			&isAnomalyInt, &m.AnomalyScore, &m.CreatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		m.IsAnomaly = (isAnomalyInt == 1)
+		list = append(list, m)
+	}
+	return list, total, rows.Err()
+}
+
+// Forecasts
+func (r *sqliteCapacityRepository) SaveForecast(ctx context.Context, forecast *model.CapacityForecast) error {
+	if forecast.ID == "" {
+		forecast.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if forecast.CreatedAt.IsZero() {
+		forecast.CreatedAt = now
+	}
+	forecast.UpdatedAt = now
+	if forecast.RecommendedAction == "" {
+		forecast.RecommendedAction = model.ActionScaleUp
+	}
+
+	query := `
+	INSERT OR REPLACE INTO capacity_forecasts (
+		id, workspace_id, pool_id, forecast_horizon_days,
+		current_utilization_percent, projected_utilization_percent,
+		growth_rate_monthly_percent, days_to_exhaustion, confidence_score,
+		recommended_action, recommendation_notes, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		forecast.ID, forecast.WorkspaceID, forecast.PoolID, forecast.ForecastHorizonDays,
+		forecast.CurrentUtilizationPercent, forecast.ProjectedUtilizationPercent,
+		forecast.GrowthRateMonthlyPercent, forecast.DaysToExhaustion, forecast.ConfidenceScore,
+		forecast.RecommendedAction, forecast.RecommendationNotes, forecast.CreatedAt, forecast.UpdatedAt,
+	)
+	return err
+}
+
 func (r *sqliteCapacityRepository) GetLatestForecastByPoolID(ctx context.Context, poolID string) (*model.CapacityForecast, error) {
-	return nil, nil
+	query := `
+	SELECT id, workspace_id, pool_id, forecast_horizon_days,
+	       current_utilization_percent, projected_utilization_percent,
+	       growth_rate_monthly_percent, days_to_exhaustion, confidence_score,
+	       recommended_action, recommendation_notes, created_at, updated_at
+	FROM capacity_forecasts WHERE pool_id = ? ORDER BY created_at DESC LIMIT 1`
+
+	var f model.CapacityForecast
+	err := r.db.QueryRowContext(ctx, query, poolID).Scan(
+		&f.ID, &f.WorkspaceID, &f.PoolID, &f.ForecastHorizonDays,
+		&f.CurrentUtilizationPercent, &f.ProjectedUtilizationPercent,
+		&f.GrowthRateMonthlyPercent, &f.DaysToExhaustion, &f.ConfidenceScore,
+		&f.RecommendedAction, &f.RecommendationNotes, &f.CreatedAt, &f.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &f, nil
 }
 
 // Plan Stubs
