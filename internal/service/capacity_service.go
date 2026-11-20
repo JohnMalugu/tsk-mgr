@@ -189,21 +189,123 @@ func (s *capacityServiceImpl) ListPools(ctx context.Context, filter model.Capaci
 	return s.repo.ListPools(ctx, filter)
 }
 
-// Metric & Forecast Stubs
+// Metrics & Telemetry
 func (s *capacityServiceImpl) RecordMetric(ctx context.Context, workspaceID string, req model.RecordCapacityMetricRequest) (*model.CapacityMetric, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	pool, err := s.repo.GetPoolByID(ctx, req.PoolID)
+	if err != nil {
+		return nil, err
+	}
+
+	sampledAt := time.Now().UTC()
+	if req.SampledAt != nil && !req.SampledAt.IsZero() {
+		sampledAt = *req.SampledAt
+	}
+	peak := req.PeakValue
+	if peak < req.AverageValue {
+		peak = req.AverageValue
+	}
+
+	metric := &model.CapacityMetric{
+		WorkspaceID:  workspaceID,
+		PoolID:       req.PoolID,
+		MetricName:   strings.TrimSpace(req.MetricName),
+		SampledAt:    sampledAt,
+		AverageValue: req.AverageValue,
+		PeakValue:    peak,
+		P95Value:     req.P95Value,
+		P99Value:     req.P99Value,
+		IsAnomaly:    req.IsAnomaly,
+		AnomalyScore: req.AnomalyScore,
+	}
+
+	if err := s.repo.RecordMetric(ctx, metric); err != nil {
+		return nil, err
+	}
+
+	// If metric measures pool resource utilization, update pool's utilized capacity
+	if strings.Contains(metric.MetricName, "utilization") || strings.Contains(metric.MetricName, "used") {
+		if req.AverageValue <= pool.TotalCapacity {
+			pool.UtilizedCapacity = req.AverageValue
+			pool.RecalculateStatus()
+			_ = s.repo.UpdatePool(ctx, pool)
+		}
+	}
+
+	return metric, nil
 }
+
 func (s *capacityServiceImpl) GetMetricByID(ctx context.Context, id string) (*model.CapacityMetric, error) {
-	return nil, ErrCapacityMetricNotFound
+	return s.repo.GetMetricByID(ctx, id)
 }
+
 func (s *capacityServiceImpl) ListMetrics(ctx context.Context, filter model.CapacityMetricFilterCriteria) ([]model.CapacityMetric, int, error) {
-	return nil, 0, nil
+	return s.repo.ListMetrics(ctx, filter)
 }
+
+// Forecasting
 func (s *capacityServiceImpl) GenerateForecast(ctx context.Context, workspaceID string, poolID string, horizonDays int) (*model.CapacityForecast, error) {
-	return nil, nil
+	pool, err := s.repo.GetPoolByID(ctx, poolID)
+	if err != nil {
+		return nil, err
+	}
+
+	if horizonDays <= 0 {
+		horizonDays = 90
+	}
+
+	currentUtil := pool.UtilizationPercent()
+	growthRate := 5.0 // baseline 5% monthly growth
+	if currentUtil > 80.0 {
+		growthRate = 8.5
+	}
+
+	months := float64(horizonDays) / 30.0
+	projectedUtil := currentUtil + (growthRate * months)
+
+	daysToExhaustion := -1
+	if currentUtil < 100.0 && growthRate > 0.0 {
+		dailyGrowth := growthRate / 30.0
+		daysToExhaustion = int((100.0 - currentUtil) / dailyGrowth)
+	}
+
+	recAction := model.ActionOptimize
+	recNotes := "Current capacity is sufficient under projected growth rate"
+	if daysToExhaustion > 0 && daysToExhaustion <= 30 {
+		recAction = model.ActionScaleUp
+		recNotes = "Immediate scale-up required: exhaustion projected within 30 days"
+	} else if daysToExhaustion > 30 && daysToExhaustion <= 90 {
+		recAction = model.ActionScaleOut
+		recNotes = "Plan horizontal scale-out expansion within current quarter"
+	} else if currentUtil < 20.0 {
+		recAction = model.ActionScaleDown
+		recNotes = "Pool is substantially under-utilized; consider right-sizing down"
+	}
+
+	forecast := &model.CapacityForecast{
+		WorkspaceID:                 workspaceID,
+		PoolID:                      poolID,
+		ForecastHorizonDays:         horizonDays,
+		CurrentUtilizationPercent:   currentUtil,
+		ProjectedUtilizationPercent: projectedUtil,
+		GrowthRateMonthlyPercent:    growthRate,
+		DaysToExhaustion:            daysToExhaustion,
+		ConfidenceScore:             0.90,
+		RecommendedAction:           recAction,
+		RecommendationNotes:         recNotes,
+	}
+
+	if err := s.repo.SaveForecast(ctx, forecast); err != nil {
+		return nil, err
+	}
+	return forecast, nil
 }
+
 func (s *capacityServiceImpl) GetLatestForecast(ctx context.Context, poolID string) (*model.CapacityForecast, error) {
-	return nil, nil
+	return s.repo.GetLatestForecastByPoolID(ctx, poolID)
 }
 
 // Plan Stubs
@@ -226,24 +328,102 @@ func (s *capacityServiceImpl) ListPlans(ctx context.Context, filter model.Capaci
 	return nil, 0, nil
 }
 
-// Bottleneck Stubs
+// Bottlenecks
 func (s *capacityServiceImpl) CreateBottleneck(ctx context.Context, workspaceID string, req model.CreateBottleneckRequest) (*model.BottleneckRecord, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	if _, err := s.repo.GetPoolByID(ctx, req.PoolID); err != nil {
+		return nil, err
+	}
+
+	b := &model.BottleneckRecord{
+		WorkspaceID:       workspaceID,
+		PoolID:            req.PoolID,
+		AffectedCIID:      req.AffectedCIID,
+		Title:             strings.TrimSpace(req.Title),
+		Description:       req.Description,
+		Severity:          req.Severity,
+		SaturationPercent: req.SaturationPercent,
+		Status:            model.BottleneckStatusOpen,
+		MitigationPlan:    req.MitigationPlan,
+	}
+
+	if err := s.repo.CreateBottleneck(ctx, b); err != nil {
+		return nil, err
+	}
+	return b, nil
 }
+
 func (s *capacityServiceImpl) GetBottleneckByID(ctx context.Context, id string) (*model.BottleneckRecord, error) {
-	return nil, ErrBottleneckNotFound
+	return s.repo.GetBottleneckByID(ctx, id)
 }
+
 func (s *capacityServiceImpl) UpdateBottleneck(ctx context.Context, id string, req model.UpdateBottleneckRequest) (*model.BottleneckRecord, error) {
-	return nil, ErrBottleneckNotFound
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	b, err := s.repo.GetBottleneckByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Title != nil {
+		b.Title = strings.TrimSpace(*req.Title)
+	}
+	if req.Description != nil {
+		b.Description = *req.Description
+	}
+	if req.Severity != nil {
+		b.Severity = *req.Severity
+	}
+	if req.SaturationPercent != nil {
+		b.SaturationPercent = *req.SaturationPercent
+	}
+	if req.Status != nil {
+		b.Status = *req.Status
+		if *req.Status == model.BottleneckStatusResolved && b.ResolvedAt == nil {
+			now := time.Now().UTC()
+			b.ResolvedAt = &now
+		}
+	}
+	if req.MitigationPlan != nil {
+		b.MitigationPlan = *req.MitigationPlan
+	}
+
+	if err := s.repo.UpdateBottleneck(ctx, b); err != nil {
+		return nil, err
+	}
+	return b, nil
 }
+
 func (s *capacityServiceImpl) ResolveBottleneck(ctx context.Context, id string, mitigationPlan string) (*model.BottleneckRecord, error) {
-	return nil, ErrBottleneckNotFound
+	b, err := s.repo.GetBottleneckByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	b.Status = model.BottleneckStatusResolved
+	b.ResolvedAt = &now
+	if mitigationPlan != "" {
+		b.MitigationPlan = mitigationPlan
+	}
+
+	if err := s.repo.UpdateBottleneck(ctx, b); err != nil {
+		return nil, err
+	}
+	return b, nil
 }
+
 func (s *capacityServiceImpl) DeleteBottleneck(ctx context.Context, id string) error {
-	return nil
+	return s.repo.DeleteBottleneck(ctx, id)
 }
+
 func (s *capacityServiceImpl) ListBottlenecks(ctx context.Context, filter model.BottleneckFilterCriteria) ([]model.BottleneckRecord, int, error) {
-	return nil, 0, nil
+	return s.repo.ListBottlenecks(ctx, filter)
 }
 
 // Analytics Stub
