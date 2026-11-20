@@ -233,3 +233,159 @@ func (f *CapacityForecast) Validate() error {
 	}
 	return nil
 }
+
+// Capacity plan horizon constants
+const (
+	PlanHorizonShortTerm  = "short_term_30d"
+	PlanHorizonMediumTerm = "medium_term_90d"
+	PlanHorizonLongTerm   = "long_term_annual"
+)
+
+// Capacity plan status constants
+const (
+	PlanStatusDraft       = "draft"
+	PlanStatusInReview    = "in_review"
+	PlanStatusApproved    = "approved"
+	PlanStatusImplemented = "implemented"
+	PlanStatusRejected    = "rejected"
+)
+
+// ValidatePlanHorizon checks if a plan planning horizon is recognized
+func ValidatePlanHorizon(horizon string) error {
+	switch horizon {
+	case PlanHorizonShortTerm, PlanHorizonMediumTerm, PlanHorizonLongTerm:
+		return nil
+	default:
+		return ErrInvalidPlanHorizon
+	}
+}
+
+// ValidatePlanStatus checks if a plan lifecycle status is recognized
+func ValidatePlanStatus(status string) error {
+	switch status {
+	case PlanStatusDraft, PlanStatusInReview, PlanStatusApproved, PlanStatusImplemented, PlanStatusRejected:
+		return nil
+	default:
+		return ErrInvalidPlanStatus
+	}
+}
+
+// CapacityPlan represents a formal ITIL capacity plan proposing scaling and sizing actions
+type CapacityPlan struct {
+	ID               string     `json:"id"`
+	WorkspaceID      string     `json:"workspace_id"`
+	PoolID           string     `json:"pool_id"`
+	Title            string     `json:"title"`
+	PlanningHorizon  string     `json:"planning_horizon"`
+	CurrentCapacity  float64    `json:"current_capacity"`
+	RequiredCapacity float64    `json:"required_capacity"`
+	EstimatedCost    float64    `json:"estimated_cost"`
+	Currency         string     `json:"currency"`
+	Justification    string     `json:"justification"`
+	Status           string     `json:"status"`
+	TargetDate       *time.Time `json:"target_date,omitempty"`
+	ApprovedBy       string     `json:"approved_by,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+// Validate checks whether the CapacityPlan fields are valid
+func (p *CapacityPlan) Validate() error {
+	if strings.TrimSpace(p.PoolID) == "" {
+		return ErrCapacityPoolNotFound
+	}
+	if strings.TrimSpace(p.Title) == "" {
+		return errors.New("capacity plan title is required")
+	}
+	if err := ValidatePlanHorizon(p.PlanningHorizon); err != nil {
+		return err
+	}
+	if p.RequiredCapacity <= 0 {
+		return errors.New("required_capacity must be greater than zero")
+	}
+	if p.EstimatedCost < 0 {
+		return errors.New("estimated_cost cannot be negative")
+	}
+	if p.Status != "" {
+		if err := ValidatePlanStatus(p.Status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Bottleneck severity constants
+const (
+	BottleneckSeverityLow      = "low"
+	BottleneckSeverityMedium   = "medium"
+	BottleneckSeverityHigh     = "high"
+	BottleneckSeverityCritical = "critical"
+)
+
+// Bottleneck status constants
+const (
+	BottleneckStatusOpen          = "open"
+	BottleneckStatusInvestigating = "investigating"
+	BottleneckStatusMitigated     = "mitigated"
+	BottleneckStatusResolved      = "resolved"
+)
+
+// ValidateBottleneckSeverity verifies bottleneck severity
+func ValidateBottleneckSeverity(sev string) error {
+	switch sev {
+	case BottleneckSeverityLow, BottleneckSeverityMedium, BottleneckSeverityHigh, BottleneckSeverityCritical:
+		return nil
+	default:
+		return ErrInvalidBottleneckSeverity
+	}
+}
+
+// ValidateBottleneckStatus verifies bottleneck status
+func ValidateBottleneckStatus(status string) error {
+	switch status {
+	case BottleneckStatusOpen, BottleneckStatusInvestigating, BottleneckStatusMitigated, BottleneckStatusResolved:
+		return nil
+	default:
+		return ErrInvalidBottleneckStatus
+	}
+}
+
+// BottleneckRecord logs a resource constraint, saturation event, or performance degradation
+type BottleneckRecord struct {
+	ID                string     `json:"id"`
+	WorkspaceID       string     `json:"workspace_id"`
+	PoolID            string     `json:"pool_id"`
+	AffectedCIID      string     `json:"affected_ci_id,omitempty"`
+	Title             string     `json:"title"`
+	Description       string     `json:"description"`
+	Severity          string     `json:"severity"`
+	SaturationPercent float64    `json:"saturation_percent"`
+	Status            string     `json:"status"`
+	MitigationPlan    string     `json:"mitigation_plan,omitempty"`
+	DetectedAt        time.Time  `json:"detected_at"`
+	ResolvedAt        *time.Time `json:"resolved_at,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+}
+
+// Validate checks whether the BottleneckRecord fields are valid
+func (b *BottleneckRecord) Validate() error {
+	if strings.TrimSpace(b.PoolID) == "" {
+		return ErrCapacityPoolNotFound
+	}
+	if strings.TrimSpace(b.Title) == "" {
+		return errors.New("bottleneck title is required")
+	}
+	if err := ValidateBottleneckSeverity(b.Severity); err != nil {
+		return err
+	}
+	if b.SaturationPercent < 0 {
+		return errors.New("saturation_percent cannot be negative")
+	}
+	if b.Status != "" {
+		if err := ValidateBottleneckStatus(b.Status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
