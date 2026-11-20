@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -834,7 +835,124 @@ func (r *sqliteCapacityRepository) ListBottlenecks(ctx context.Context, filter m
 	return list, total, rows.Err()
 }
 
-// Analytics Stub
+// Posture Analytics
 func (r *sqliteCapacityRepository) GetCapacityAnalytics(ctx context.Context, workspaceID string) (*model.CapacityAnalyticsReport, error) {
-	return &model.CapacityAnalyticsReport{WorkspaceID: workspaceID}, nil
+	report := &model.CapacityAnalyticsReport{
+		WorkspaceID:               workspaceID,
+		UtilizationByResourceType: make(map[string]float64),
+		TopSaturatedPools:         make([]model.CapacityPool, 0),
+	}
+
+	// 1. Pool Status Counts
+	poolCountsQuery := `
+	SELECT
+		COUNT(*),
+		COALESCE(SUM(CASE WHEN status = 'optimal' THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN status = 'warning' THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN status = 'critical' THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN status = 'exhausted' THEN 1 ELSE 0 END), 0)
+	FROM capacity_pools WHERE workspace_id = ?`
+
+	err := r.db.QueryRowContext(ctx, poolCountsQuery, workspaceID).Scan(
+		&report.TotalPools,
+		&report.OptimalPoolsCount,
+		&report.WarningPoolsCount,
+		&report.CriticalPoolsCount,
+		&report.ExhaustedPoolsCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Average Utilization & Per-Resource-Type Utilization
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT resource_type, COALESCE(SUM(total_capacity), 0.0), COALESCE(SUM(utilized_capacity), 0.0)
+		FROM capacity_pools WHERE workspace_id = ?
+		GROUP BY resource_type`, workspaceID,
+	)
+	if err == nil {
+		defer rows.Close()
+		var globalTotal, globalUtilized float64
+		for rows.Next() {
+			var rType string
+			var tot, util float64
+			if err := rows.Scan(&rType, &tot, &util); err == nil {
+				globalTotal += tot
+				globalUtilized += util
+				if tot > 0 {
+					report.UtilizationByResourceType[rType] = math.Round((util/tot)*10000) / 100
+				}
+			}
+		}
+		if globalTotal > 0 {
+			report.AverageUtilizationPercent = math.Round((globalUtilized/globalTotal)*10000) / 100
+		}
+	}
+
+	// 3. Top Saturated Pools
+	topRows, err := r.db.QueryContext(ctx, `
+		SELECT id, workspace_id, name, resource_type, ci_id,
+		       total_capacity, allocated_capacity, utilized_capacity,
+		       unit_of_measure, warning_threshold_percent, critical_threshold_percent,
+		       status, description, created_at, updated_at
+		FROM capacity_pools WHERE workspace_id = ?
+		ORDER BY (utilized_capacity / total_capacity) DESC LIMIT 5`, workspaceID,
+	)
+	if err == nil {
+		defer topRows.Close()
+		for topRows.Next() {
+			var p model.CapacityPool
+			if err := topRows.Scan(
+				&p.ID, &p.WorkspaceID, &p.Name, &p.ResourceType, &p.CIID,
+				&p.TotalCapacity, &p.AllocatedCapacity, &p.UtilizedCapacity,
+				&p.UnitOfMeasure, &p.WarningThresholdPercent, &p.CriticalThresholdPercent,
+				&p.Status, &p.Description, &p.CreatedAt, &p.UpdatedAt,
+			); err == nil {
+				report.TopSaturatedPools = append(report.TopSaturatedPools, p)
+			}
+		}
+	}
+
+	// 4. Anomalies
+	_ = r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM capacity_metrics WHERE workspace_id = ? AND is_anomaly = 1`,
+		workspaceID,
+	).Scan(&report.TotalAnomaliesDetected)
+
+	// 5. Bottlenecks
+	_ = r.db.QueryRowContext(ctx, `
+		SELECT
+			COALESCE(SUM(CASE WHEN status IN ('open', 'investigating') THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN status IN ('open', 'investigating') AND severity = 'critical' THEN 1 ELSE 0 END), 0)
+		FROM capacity_bottlenecks WHERE workspace_id = ?`,
+		workspaceID,
+	).Scan(&report.OpenBottlenecksCount, &report.CriticalBottlenecksCount)
+
+	// 6. Active Capacity Plans & Cost
+	_ = r.db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*),
+			COALESCE(SUM(estimated_cost), 0.0)
+		FROM capacity_plans WHERE workspace_id = ? AND status IN ('draft', 'in_review', 'approved')`,
+		workspaceID,
+	).Scan(&report.TotalPlansActive, &report.TotalEstimatedPlanCost)
+
+	// 7. Capacity Health Index (0-100)
+	score := 100.0
+	score -= float64(report.ExhaustedPoolsCount) * 25.0
+	score -= float64(report.CriticalPoolsCount) * 15.0
+	score -= float64(report.WarningPoolsCount) * 5.0
+	score -= float64(report.CriticalBottlenecksCount) * 10.0
+	score -= float64(report.OpenBottlenecksCount) * 2.0
+	score -= float64(report.TotalAnomaliesDetected) * 1.0
+
+	if score < 0.0 {
+		score = 0.0
+	}
+	if score > 100.0 {
+		score = 100.0
+	}
+	report.CapacityHealthIndex = math.Round(score*10) / 10
+
+	return report, nil
 }
