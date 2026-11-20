@@ -491,38 +491,347 @@ func (r *sqliteCapacityRepository) GetLatestForecastByPoolID(ctx context.Context
 	return &f, nil
 }
 
-// Plan Stubs
+// Capacity Plans
 func (r *sqliteCapacityRepository) CreatePlan(ctx context.Context, plan *model.CapacityPlan) error {
-	return nil
-}
-func (r *sqliteCapacityRepository) GetPlanByID(ctx context.Context, id string) (*model.CapacityPlan, error) {
-	return nil, ErrCapacityPlanNotFound
-}
-func (r *sqliteCapacityRepository) UpdatePlan(ctx context.Context, plan *model.CapacityPlan) error {
-	return nil
-}
-func (r *sqliteCapacityRepository) DeletePlan(ctx context.Context, id string) error {
-	return nil
-}
-func (r *sqliteCapacityRepository) ListPlans(ctx context.Context, filter model.CapacityPlanFilterCriteria) ([]model.CapacityPlan, int, error) {
-	return nil, 0, nil
+	if plan.ID == "" {
+		plan.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if plan.CreatedAt.IsZero() {
+		plan.CreatedAt = now
+	}
+	plan.UpdatedAt = now
+	if plan.PlanningHorizon == "" {
+		plan.PlanningHorizon = model.PlanHorizonShortTerm
+	}
+	if plan.Status == "" {
+		plan.Status = model.PlanStatusDraft
+	}
+	if plan.Currency == "" {
+		plan.Currency = "USD"
+	}
+
+	query := `
+	INSERT INTO capacity_plans (
+		id, workspace_id, pool_id, title, planning_horizon,
+		current_capacity, required_capacity, estimated_cost,
+		currency, justification, status, target_date, approved_by,
+		created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		plan.ID, plan.WorkspaceID, plan.PoolID, plan.Title, plan.PlanningHorizon,
+		plan.CurrentCapacity, plan.RequiredCapacity, plan.EstimatedCost,
+		plan.Currency, plan.Justification, plan.Status, plan.TargetDate, plan.ApprovedBy,
+		plan.CreatedAt, plan.UpdatedAt,
+	)
+	return err
 }
 
-// Bottleneck Stubs
+func (r *sqliteCapacityRepository) GetPlanByID(ctx context.Context, id string) (*model.CapacityPlan, error) {
+	query := `
+	SELECT id, workspace_id, pool_id, title, planning_horizon,
+	       current_capacity, required_capacity, estimated_cost,
+	       currency, justification, status, target_date, approved_by,
+	       created_at, updated_at
+	FROM capacity_plans WHERE id = ?`
+
+	var plan model.CapacityPlan
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&plan.ID, &plan.WorkspaceID, &plan.PoolID, &plan.Title, &plan.PlanningHorizon,
+		&plan.CurrentCapacity, &plan.RequiredCapacity, &plan.EstimatedCost,
+		&plan.Currency, &plan.Justification, &plan.Status, &plan.TargetDate, &plan.ApprovedBy,
+		&plan.CreatedAt, &plan.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrCapacityPlanNotFound
+		}
+		return nil, err
+	}
+	return &plan, nil
+}
+
+func (r *sqliteCapacityRepository) UpdatePlan(ctx context.Context, plan *model.CapacityPlan) error {
+	plan.UpdatedAt = time.Now().UTC()
+
+	query := `
+	UPDATE capacity_plans SET
+		title = ?, planning_horizon = ?, required_capacity = ?,
+		estimated_cost = ?, currency = ?, justification = ?,
+		status = ?, target_date = ?, approved_by = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		plan.Title, plan.PlanningHorizon, plan.RequiredCapacity,
+		plan.EstimatedCost, plan.Currency, plan.Justification,
+		plan.Status, plan.TargetDate, plan.ApprovedBy, plan.UpdatedAt,
+		plan.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrCapacityPlanNotFound
+	}
+	return nil
+}
+
+func (r *sqliteCapacityRepository) DeletePlan(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, "DELETE FROM capacity_plans WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrCapacityPlanNotFound
+	}
+	return nil
+}
+
+func (r *sqliteCapacityRepository) ListPlans(ctx context.Context, filter model.CapacityPlanFilterCriteria) ([]model.CapacityPlan, int, error) {
+	whereClauses := []string{"1=1"}
+	args := []interface{}{}
+
+	if filter.WorkspaceID != "" {
+		whereClauses = append(whereClauses, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.PoolID != "" {
+		whereClauses = append(whereClauses, "pool_id = ?")
+		args = append(args, filter.PoolID)
+	}
+	if filter.PlanningHorizon != "" {
+		whereClauses = append(whereClauses, "planning_horizon = ?")
+		args = append(args, filter.PlanningHorizon)
+	}
+	if filter.Status != "" {
+		whereClauses = append(whereClauses, "status = ?")
+		args = append(args, filter.Status)
+	}
+
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	var total int
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM capacity_plans WHERE %s", whereSQL)
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, workspace_id, pool_id, title, planning_horizon,
+	       current_capacity, required_capacity, estimated_cost,
+	       currency, justification, status, target_date, approved_by,
+	       created_at, updated_at
+	FROM capacity_plans WHERE %s ORDER BY created_at DESC LIMIT ? OFFSET ?`, whereSQL)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	list := []model.CapacityPlan{}
+	for rows.Next() {
+		var plan model.CapacityPlan
+		if err := rows.Scan(
+			&plan.ID, &plan.WorkspaceID, &plan.PoolID, &plan.Title, &plan.PlanningHorizon,
+			&plan.CurrentCapacity, &plan.RequiredCapacity, &plan.EstimatedCost,
+			&plan.Currency, &plan.Justification, &plan.Status, &plan.TargetDate, &plan.ApprovedBy,
+			&plan.CreatedAt, &plan.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		list = append(list, plan)
+	}
+	return list, total, rows.Err()
+}
+
+// Bottlenecks
 func (r *sqliteCapacityRepository) CreateBottleneck(ctx context.Context, b *model.BottleneckRecord) error {
-	return nil
+	if b.ID == "" {
+		b.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if b.CreatedAt.IsZero() {
+		b.CreatedAt = now
+	}
+	b.UpdatedAt = now
+	if b.DetectedAt.IsZero() {
+		b.DetectedAt = now
+	}
+	if b.Severity == "" {
+		b.Severity = model.BottleneckSeverityMedium
+	}
+	if b.Status == "" {
+		b.Status = model.BottleneckStatusOpen
+	}
+
+	query := `
+	INSERT INTO capacity_bottlenecks (
+		id, workspace_id, pool_id, affected_ci_id, title,
+		description, severity, saturation_percent, status,
+		mitigation_plan, detected_at, resolved_at, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		b.ID, b.WorkspaceID, b.PoolID, b.AffectedCIID, b.Title,
+		b.Description, b.Severity, b.SaturationPercent, b.Status,
+		b.MitigationPlan, b.DetectedAt, b.ResolvedAt, b.CreatedAt, b.UpdatedAt,
+	)
+	return err
 }
+
 func (r *sqliteCapacityRepository) GetBottleneckByID(ctx context.Context, id string) (*model.BottleneckRecord, error) {
-	return nil, ErrBottleneckNotFound
+	query := `
+	SELECT id, workspace_id, pool_id, affected_ci_id, title,
+	       description, severity, saturation_percent, status,
+	       mitigation_plan, detected_at, resolved_at, created_at, updated_at
+	FROM capacity_bottlenecks WHERE id = ?`
+
+	var b model.BottleneckRecord
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&b.ID, &b.WorkspaceID, &b.PoolID, &b.AffectedCIID, &b.Title,
+		&b.Description, &b.Severity, &b.SaturationPercent, &b.Status,
+		&b.MitigationPlan, &b.DetectedAt, &b.ResolvedAt, &b.CreatedAt, &b.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrBottleneckNotFound
+		}
+		return nil, err
+	}
+	return &b, nil
 }
+
 func (r *sqliteCapacityRepository) UpdateBottleneck(ctx context.Context, b *model.BottleneckRecord) error {
+	b.UpdatedAt = time.Now().UTC()
+
+	query := `
+	UPDATE capacity_bottlenecks SET
+		title = ?, description = ?, severity = ?,
+		saturation_percent = ?, status = ?, mitigation_plan = ?,
+		resolved_at = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		b.Title, b.Description, b.Severity,
+		b.SaturationPercent, b.Status, b.MitigationPlan,
+		b.ResolvedAt, b.UpdatedAt, b.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrBottleneckNotFound
+	}
 	return nil
 }
+
 func (r *sqliteCapacityRepository) DeleteBottleneck(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, "DELETE FROM capacity_bottlenecks WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrBottleneckNotFound
+	}
 	return nil
 }
+
 func (r *sqliteCapacityRepository) ListBottlenecks(ctx context.Context, filter model.BottleneckFilterCriteria) ([]model.BottleneckRecord, int, error) {
-	return nil, 0, nil
+	whereClauses := []string{"1=1"}
+	args := []interface{}{}
+
+	if filter.WorkspaceID != "" {
+		whereClauses = append(whereClauses, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.PoolID != "" {
+		whereClauses = append(whereClauses, "pool_id = ?")
+		args = append(args, filter.PoolID)
+	}
+	if filter.AffectedCIID != "" {
+		whereClauses = append(whereClauses, "affected_ci_id = ?")
+		args = append(args, filter.AffectedCIID)
+	}
+	if filter.Severity != "" {
+		whereClauses = append(whereClauses, "severity = ?")
+		args = append(args, filter.Severity)
+	}
+	if filter.Status != "" {
+		whereClauses = append(whereClauses, "status = ?")
+		args = append(args, filter.Status)
+	}
+
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	var total int
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM capacity_bottlenecks WHERE %s", whereSQL)
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, workspace_id, pool_id, affected_ci_id, title,
+	       description, severity, saturation_percent, status,
+	       mitigation_plan, detected_at, resolved_at, created_at, updated_at
+	FROM capacity_bottlenecks WHERE %s ORDER BY detected_at DESC LIMIT ? OFFSET ?`, whereSQL)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	list := []model.BottleneckRecord{}
+	for rows.Next() {
+		var b model.BottleneckRecord
+		if err := rows.Scan(
+			&b.ID, &b.WorkspaceID, &b.PoolID, &b.AffectedCIID, &b.Title,
+			&b.Description, &b.Severity, &b.SaturationPercent, &b.Status,
+			&b.MitigationPlan, &b.DetectedAt, &b.ResolvedAt, &b.CreatedAt, &b.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		list = append(list, b)
+	}
+	return list, total, rows.Err()
 }
 
 // Analytics Stub
