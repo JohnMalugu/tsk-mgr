@@ -542,20 +542,206 @@ func (r *availabilityRepository) ListOutages(ctx context.Context, filter model.A
 	return outages, total, nil
 }
 
+// SaveMeasurement creates or updates an availability measurement record for a target and period
 func (r *availabilityRepository) SaveMeasurement(ctx context.Context, m *model.AvailabilityMeasurement) error {
-	return errors.New("not implemented")
+	if err := m.Validate(); err != nil {
+		return err
+	}
+	if m.ID == "" {
+		m.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if m.CreatedAt.IsZero() {
+		m.CreatedAt = now
+	}
+	m.UpdatedAt = now
+	if m.CalculatedAt.IsZero() {
+		m.CalculatedAt = now
+	}
+
+	breachedInt := 0
+	if m.IsSLABreached {
+		breachedInt = 1
+	}
+
+	// Check if already exists for target + period
+	existing, err := r.GetMeasurementByPeriod(ctx, m.TargetID, m.Period)
+	if err == nil && existing != nil {
+		m.ID = existing.ID
+		m.CreatedAt = existing.CreatedAt
+		updateQuery := `
+		UPDATE availability_measurements SET
+			total_operational_minutes = ?, total_downtime_minutes = ?,
+			exempt_downtime_minutes = ?, actual_uptime_percentage = ?,
+			mtbf_hours = ?, mttr_minutes = ?, outage_count = ?,
+			is_sla_breached = ?, calculated_at = ?, updated_at = ?
+		WHERE id = ?`
+
+		_, err = r.db.ExecContext(ctx, updateQuery,
+			m.TotalOperationalMinutes, m.TotalDowntimeMinutes,
+			m.ExemptDowntimeMinutes, m.ActualUptimePercentage,
+			m.MTBFHours, m.MTTRMinutes, m.OutageCount,
+			breachedInt, m.CalculatedAt, m.UpdatedAt,
+			m.ID,
+		)
+		return err
+	}
+
+	insertQuery := `
+	INSERT INTO availability_measurements (
+		id, workspace_id, target_id, period,
+		total_operational_minutes, total_downtime_minutes,
+		exempt_downtime_minutes, actual_uptime_percentage,
+		mtbf_hours, mttr_minutes, outage_count,
+		is_sla_breached, calculated_at, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err = r.db.ExecContext(ctx, insertQuery,
+		m.ID, m.WorkspaceID, m.TargetID, m.Period,
+		m.TotalOperationalMinutes, m.TotalDowntimeMinutes,
+		m.ExemptDowntimeMinutes, m.ActualUptimePercentage,
+		m.MTBFHours, m.MTTRMinutes, m.OutageCount,
+		breachedInt, m.CalculatedAt, m.CreatedAt, m.UpdatedAt,
+	)
+	return err
 }
 
+// GetMeasurementByID retrieves an availability measurement by its ID
 func (r *availabilityRepository) GetMeasurementByID(ctx context.Context, id string) (*model.AvailabilityMeasurement, error) {
-	return nil, errors.New("not implemented")
+	query := `
+	SELECT id, workspace_id, target_id, period,
+	       total_operational_minutes, total_downtime_minutes,
+	       exempt_downtime_minutes, actual_uptime_percentage,
+	       mtbf_hours, mttr_minutes, outage_count,
+	       is_sla_breached, calculated_at, created_at, updated_at
+	FROM availability_measurements WHERE id = ?`
+
+	var m model.AvailabilityMeasurement
+	var breachedInt int
+
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&m.ID, &m.WorkspaceID, &m.TargetID, &m.Period,
+		&m.TotalOperationalMinutes, &m.TotalDowntimeMinutes,
+		&m.ExemptDowntimeMinutes, &m.ActualUptimePercentage,
+		&m.MTBFHours, &m.MTTRMinutes, &m.OutageCount,
+		&breachedInt, &m.CalculatedAt, &m.CreatedAt, &m.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrAvailabilityMeasurementNotFound
+		}
+		return nil, err
+	}
+	m.IsSLABreached = breachedInt == 1
+	return &m, nil
 }
 
+// GetMeasurementByPeriod retrieves an availability measurement for a specific target and period string
 func (r *availabilityRepository) GetMeasurementByPeriod(ctx context.Context, targetID string, period string) (*model.AvailabilityMeasurement, error) {
-	return nil, errors.New("not implemented")
+	query := `
+	SELECT id, workspace_id, target_id, period,
+	       total_operational_minutes, total_downtime_minutes,
+	       exempt_downtime_minutes, actual_uptime_percentage,
+	       mtbf_hours, mttr_minutes, outage_count,
+	       is_sla_breached, calculated_at, created_at, updated_at
+	FROM availability_measurements WHERE target_id = ? AND period = ?`
+
+	var m model.AvailabilityMeasurement
+	var breachedInt int
+
+	err := r.db.QueryRowContext(ctx, query, targetID, period).Scan(
+		&m.ID, &m.WorkspaceID, &m.TargetID, &m.Period,
+		&m.TotalOperationalMinutes, &m.TotalDowntimeMinutes,
+		&m.ExemptDowntimeMinutes, &m.ActualUptimePercentage,
+		&m.MTBFHours, &m.MTTRMinutes, &m.OutageCount,
+		&breachedInt, &m.CalculatedAt, &m.CreatedAt, &m.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrAvailabilityMeasurementNotFound
+		}
+		return nil, err
+	}
+	m.IsSLABreached = breachedInt == 1
+	return &m, nil
 }
 
+// ListMeasurements returns a filtered list of availability measurements
 func (r *availabilityRepository) ListMeasurements(ctx context.Context, filter model.AvailabilityFilterCriteria) ([]model.AvailabilityMeasurement, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.TargetID != "" {
+		conditions = append(conditions, "target_id = ?")
+		args = append(args, filter.TargetID)
+	}
+	if filter.Period != "" {
+		conditions = append(conditions, "period = ?")
+		args = append(args, filter.Period)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM availability_measurements %s", whereClause)
+	var total int
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+	SELECT id, workspace_id, target_id, period,
+	       total_operational_minutes, total_downtime_minutes,
+	       exempt_downtime_minutes, actual_uptime_percentage,
+	       mtbf_hours, mttr_minutes, outage_count,
+	       is_sla_breached, calculated_at, created_at, updated_at
+	FROM availability_measurements %s
+	ORDER BY calculated_at DESC
+	LIMIT ? OFFSET ?`, whereClause)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var measurements []model.AvailabilityMeasurement
+	for rows.Next() {
+		var m model.AvailabilityMeasurement
+		var breachedInt int
+		err := rows.Scan(
+			&m.ID, &m.WorkspaceID, &m.TargetID, &m.Period,
+			&m.TotalOperationalMinutes, &m.TotalDowntimeMinutes,
+			&m.ExemptDowntimeMinutes, &m.ActualUptimePercentage,
+			&m.MTBFHours, &m.MTTRMinutes, &m.OutageCount,
+			&breachedInt, &m.CalculatedAt, &m.CreatedAt, &m.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		m.IsSLABreached = breachedInt == 1
+		measurements = append(measurements, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return measurements, total, nil
 }
 
 func (r *availabilityRepository) CreateSPOF(ctx context.Context, spof *model.SPOFRecord) error {
