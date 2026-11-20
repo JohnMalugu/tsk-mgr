@@ -3304,6 +3304,16 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_chargeback_rules_cost_center ON chargeback_rules(cost_center_id);
 	CREATE INDEX IF NOT EXISTS idx_chargeback_stmt_ws_target ON chargeback_statements(workspace_id, target_business_unit);
 	CREATE INDEX IF NOT EXISTS idx_chargeback_stmt_period ON chargeback_statements(statement_period, status);
+	CREATE INDEX IF NOT EXISTS idx_capacity_pools_ws_res ON capacity_pools(workspace_id, resource_type);
+	CREATE INDEX IF NOT EXISTS idx_capacity_pools_ws_status ON capacity_pools(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_capacity_pools_ci ON capacity_pools(ci_id);
+	CREATE INDEX IF NOT EXISTS idx_capacity_metrics_pool_sampled ON capacity_metrics(pool_id, sampled_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_capacity_metrics_ws_metric ON capacity_metrics(workspace_id, metric_name);
+	CREATE INDEX IF NOT EXISTS idx_capacity_forecasts_pool ON capacity_forecasts(pool_id);
+	CREATE INDEX IF NOT EXISTS idx_capacity_plans_ws_status ON capacity_plans(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_capacity_plans_pool ON capacity_plans(pool_id);
+	CREATE INDEX IF NOT EXISTS idx_capacity_bottlenecks_ws_status ON capacity_bottlenecks(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_capacity_bottlenecks_pool ON capacity_bottlenecks(pool_id);
 	`
 
 	_, err = db.Exec(indexQuery)
