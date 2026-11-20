@@ -2914,6 +2914,28 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	capacityMetricsQuery := `
+	CREATE TABLE IF NOT EXISTS capacity_metrics (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		pool_id TEXT NOT NULL,
+		metric_name TEXT NOT NULL,
+		sampled_at DATETIME NOT NULL,
+		average_value REAL NOT NULL,
+		peak_value REAL NOT NULL,
+		p95_value REAL NOT NULL DEFAULT 0.0,
+		p99_value REAL NOT NULL DEFAULT 0.0,
+		is_anomaly INTEGER NOT NULL DEFAULT 0,
+		anomaly_score REAL NOT NULL DEFAULT 0.0,
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (pool_id) REFERENCES capacity_pools(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(capacityMetricsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
