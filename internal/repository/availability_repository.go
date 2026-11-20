@@ -1146,6 +1146,74 @@ func (r *availabilityRepository) ListTests(ctx context.Context, filter model.Ava
 	return tests, total, nil
 }
 
+// GetAvailabilityAnalytics aggregates resilience, SLA compliance, MTBF/MTTR, and SPOFs into an executive summary
 func (r *availabilityRepository) GetAvailabilityAnalytics(ctx context.Context, workspaceID string) (*model.AvailabilityAnalytics, error) {
-	return nil, errors.New("not implemented")
+	analytics := &model.AvailabilityAnalytics{
+		OverallAvailabilityPercentage: 100.0,
+		SLAComplianceRate:             100.0,
+		TopOutagesByCI:                []model.TopOutageSummary{},
+	}
+
+	// 1. Targets count
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM availability_targets WHERE workspace_id = ?", workspaceID).Scan(&analytics.TotalTargets)
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM availability_targets WHERE workspace_id = ? AND status = 'active'", workspaceID).Scan(&analytics.ActiveTargets)
+
+	// 2. Measurements aggregation
+	var totalMeasurements int
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM availability_measurements WHERE workspace_id = ?", workspaceID).Scan(&totalMeasurements)
+
+	if totalMeasurements > 0 {
+		var avgUptime, avgMTBF, avgMTTR sql.NullFloat64
+		_ = r.db.QueryRowContext(ctx, `
+			SELECT AVG(actual_uptime_percentage), AVG(NULLIF(mtbf_hours, 0)), AVG(NULLIF(mttr_minutes, 0))
+			FROM availability_measurements WHERE workspace_id = ?`, workspaceID).Scan(&avgUptime, &avgMTBF, &avgMTTR)
+
+		if avgUptime.Valid {
+			analytics.OverallAvailabilityPercentage = avgUptime.Float64
+		}
+		if avgMTBF.Valid {
+			analytics.AverageMTBFHours = avgMTBF.Float64
+		}
+		if avgMTTR.Valid {
+			analytics.AverageMTTRMinutes = avgMTTR.Float64
+		}
+
+		_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM availability_measurements WHERE workspace_id = ? AND is_sla_breached = 1", workspaceID).Scan(&analytics.SLABreachCount)
+		compliant := totalMeasurements - analytics.SLABreachCount
+		analytics.SLAComplianceRate = (float64(compliant) / float64(totalMeasurements)) * 100.0
+	}
+
+	// 3. Outages
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM availability_outages WHERE workspace_id = ?", workspaceID).Scan(&analytics.TotalOutagesRecorded)
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM availability_outages WHERE workspace_id = ? AND ended_at IS NULL", workspaceID).Scan(&analytics.ActiveOutages)
+
+	// 4. SPOFs
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM availability_spofs WHERE workspace_id = ?", workspaceID).Scan(&analytics.TotalSPOFCount)
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM availability_spofs WHERE workspace_id = ? AND risk_level = 'critical' AND status = 'open'", workspaceID).Scan(&analytics.CriticalSPOFCount)
+
+	// 5. Tests
+	now := time.Now().UTC()
+	future30Days := now.AddDate(0, 1, 0)
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM availability_tests WHERE workspace_id = ? AND next_test_due <= ?", workspaceID, future30Days).Scan(&analytics.UpcomingTestsCount)
+
+	// 6. Top outages by CI
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT ci_id, COUNT(*), COALESCE(SUM(duration_minutes), 0)
+		FROM availability_outages
+		WHERE workspace_id = ? AND ci_id IS NOT NULL AND ci_id != ''
+		GROUP BY ci_id
+		ORDER BY SUM(duration_minutes) DESC
+		LIMIT 5`, workspaceID)
+	if err == nil && rows != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var top model.TopOutageSummary
+			if scanErr := rows.Scan(&top.CIID, &top.OutageCount, &top.TotalDowntimeMinutes); scanErr == nil {
+				analytics.TopOutagesByCI = append(analytics.TopOutagesByCI, top)
+			}
+		}
+	}
+
+	analytics.CalculateHealthIndex()
+	return analytics, nil
 }
