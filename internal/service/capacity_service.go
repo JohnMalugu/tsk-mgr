@@ -308,24 +308,105 @@ func (s *capacityServiceImpl) GetLatestForecast(ctx context.Context, poolID stri
 	return s.repo.GetLatestForecastByPoolID(ctx, poolID)
 }
 
-// Plan Stubs
+// Capacity Plans
 func (s *capacityServiceImpl) CreatePlan(ctx context.Context, workspaceID string, req model.CreateCapacityPlanRequest) (*model.CapacityPlan, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	pool, err := s.repo.GetPoolByID(ctx, req.PoolID)
+	if err != nil {
+		return nil, err
+	}
+
+	currency := req.Currency
+	if currency == "" {
+		currency = "USD"
+	}
+
+	plan := &model.CapacityPlan{
+		WorkspaceID:      workspaceID,
+		PoolID:           req.PoolID,
+		Title:            strings.TrimSpace(req.Title),
+		PlanningHorizon:  req.PlanningHorizon,
+		CurrentCapacity:  pool.TotalCapacity,
+		RequiredCapacity: req.RequiredCapacity,
+		EstimatedCost:    req.EstimatedCost,
+		Currency:         currency,
+		Justification:    req.Justification,
+		Status:           model.PlanStatusDraft,
+		TargetDate:       req.TargetDate,
+	}
+
+	if err := s.repo.CreatePlan(ctx, plan); err != nil {
+		return nil, err
+	}
+	return plan, nil
 }
+
 func (s *capacityServiceImpl) GetPlanByID(ctx context.Context, id string) (*model.CapacityPlan, error) {
-	return nil, ErrCapacityPlanNotFound
+	return s.repo.GetPlanByID(ctx, id)
 }
+
 func (s *capacityServiceImpl) UpdatePlan(ctx context.Context, id string, req model.UpdateCapacityPlanRequest) (*model.CapacityPlan, error) {
-	return nil, ErrCapacityPlanNotFound
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	plan, err := s.repo.GetPlanByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Title != nil {
+		plan.Title = strings.TrimSpace(*req.Title)
+	}
+	if req.RequiredCapacity != nil {
+		plan.RequiredCapacity = *req.RequiredCapacity
+	}
+	if req.EstimatedCost != nil {
+		plan.EstimatedCost = *req.EstimatedCost
+	}
+	if req.Justification != nil {
+		plan.Justification = *req.Justification
+	}
+	if req.Status != nil {
+		plan.Status = *req.Status
+	}
+	if req.ApprovedBy != nil {
+		plan.ApprovedBy = *req.ApprovedBy
+	}
+	if req.TargetDate != nil {
+		plan.TargetDate = req.TargetDate
+	}
+
+	if err := s.repo.UpdatePlan(ctx, plan); err != nil {
+		return nil, err
+	}
+	return plan, nil
 }
+
 func (s *capacityServiceImpl) ApprovePlan(ctx context.Context, id string, approverID string) (*model.CapacityPlan, error) {
-	return nil, ErrCapacityPlanNotFound
+	plan, err := s.repo.GetPlanByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	plan.Status = model.PlanStatusApproved
+	plan.ApprovedBy = approverID
+
+	if err := s.repo.UpdatePlan(ctx, plan); err != nil {
+		return nil, err
+	}
+	return plan, nil
 }
+
 func (s *capacityServiceImpl) DeletePlan(ctx context.Context, id string) error {
-	return nil
+	return s.repo.DeletePlan(ctx, id)
 }
+
 func (s *capacityServiceImpl) ListPlans(ctx context.Context, filter model.CapacityPlanFilterCriteria) ([]model.CapacityPlan, int, error) {
-	return nil, 0, nil
+	return s.repo.ListPlans(ctx, filter)
 }
 
 // Bottlenecks
@@ -426,7 +507,7 @@ func (s *capacityServiceImpl) ListBottlenecks(ctx context.Context, filter model.
 	return s.repo.ListBottlenecks(ctx, filter)
 }
 
-// Analytics Stub
+// Analytics
 func (s *capacityServiceImpl) GetCapacityAnalytics(ctx context.Context, workspaceID string) (*model.CapacityAnalyticsReport, error) {
-	return &model.CapacityAnalyticsReport{WorkspaceID: workspaceID}, nil
+	return s.repo.GetCapacityAnalytics(ctx, workspaceID)
 }
