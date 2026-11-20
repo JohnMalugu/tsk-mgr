@@ -2984,6 +2984,30 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	capacityBottlenecksQuery := `
+	CREATE TABLE IF NOT EXISTS capacity_bottlenecks (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		pool_id TEXT NOT NULL,
+		affected_ci_id TEXT NOT NULL DEFAULT '',
+		title TEXT NOT NULL,
+		description TEXT NOT NULL,
+		severity TEXT NOT NULL DEFAULT 'medium',
+		saturation_percent REAL NOT NULL,
+		status TEXT NOT NULL DEFAULT 'open',
+		mitigation_plan TEXT NOT NULL DEFAULT '',
+		detected_at DATETIME NOT NULL,
+		resolved_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (pool_id) REFERENCES capacity_pools(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(capacityBottlenecksQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
