@@ -280,6 +280,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 ITIL Capacity & Performance Management (Capacity Management)
+	if strings.HasPrefix(r.URL.Path, "/v2/capacity") {
+		if handler.GlobalCapacityHandler == nil {
+			http.Error(w, "Capacity handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalCapacityHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return
