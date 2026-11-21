@@ -184,40 +184,172 @@ func (s *csiService) ListInitiatives(ctx context.Context, filter model.CSIFilter
 	return s.repo.ListInitiatives(ctx, filter)
 }
 
+// AddBenchmark associates a target and baseline metric with an initiative
 func (s *csiService) AddBenchmark(ctx context.Context, workspaceID string, initiativeID string, req model.CreateCSIBenchmarkRequest) (*model.CSIBenchmark, error) {
-	return nil, errors.New("not implemented")
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Verify initiative exists
+	if _, err := s.repo.GetInitiativeByID(ctx, initiativeID); err != nil {
+		return nil, err
+	}
+
+	benchmark := &model.CSIBenchmark{
+		WorkspaceID:   workspaceID,
+		InitiativeID:  initiativeID,
+		MetricName:    strings.TrimSpace(req.MetricName),
+		UnitOfMeasure: req.UnitOfMeasure,
+		BaselineValue: req.BaselineValue,
+		CurrentValue:  req.CurrentValue,
+		TargetValue:   req.TargetValue,
+		Notes:         strings.TrimSpace(req.Notes),
+	}
+
+	if err := s.repo.CreateBenchmark(ctx, benchmark); err != nil {
+		return nil, err
+	}
+	return benchmark, nil
 }
 
+// GetBenchmarkByID retrieves a benchmark by ID
 func (s *csiService) GetBenchmarkByID(ctx context.Context, id string) (*model.CSIBenchmark, error) {
-	return nil, errors.New("not implemented")
+	return s.repo.GetBenchmarkByID(ctx, id)
 }
 
+// UpdateBenchmark updates values on a benchmark
 func (s *csiService) UpdateBenchmark(ctx context.Context, id string, req model.UpdateCSIBenchmarkRequest) (*model.CSIBenchmark, error) {
-	return nil, errors.New("not implemented")
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	benchmark, err := s.repo.GetBenchmarkByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.CurrentValue != nil {
+		benchmark.CurrentValue = *req.CurrentValue
+	}
+	if req.TargetValue != nil {
+		benchmark.TargetValue = *req.TargetValue
+	}
+	if req.Notes != nil {
+		benchmark.Notes = strings.TrimSpace(*req.Notes)
+	}
+
+	if err := s.repo.UpdateBenchmark(ctx, benchmark); err != nil {
+		return nil, err
+	}
+	return benchmark, nil
 }
 
+// VerifyBenchmark marks a metric as formally measured with timestamp
 func (s *csiService) VerifyBenchmark(ctx context.Context, id string, currentValue float64, notes string) (*model.CSIBenchmark, error) {
-	return nil, errors.New("not implemented")
+	benchmark, err := s.repo.GetBenchmarkByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	benchmark.CurrentValue = currentValue
+	now := time.Now().UTC()
+	benchmark.VerifiedAt = &now
+	if notes != "" {
+		benchmark.Notes = strings.TrimSpace(notes)
+	}
+
+	if err := s.repo.UpdateBenchmark(ctx, benchmark); err != nil {
+		return nil, err
+	}
+	return benchmark, nil
 }
 
+// DeleteBenchmark removes a benchmark metric
 func (s *csiService) DeleteBenchmark(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	return s.repo.DeleteBenchmark(ctx, id)
 }
 
+// ListBenchmarks lists all benchmarks for an initiative
 func (s *csiService) ListBenchmarks(ctx context.Context, initiativeID string) ([]model.CSIBenchmark, error) {
-	return nil, errors.New("not implemented")
+	return s.repo.ListBenchmarks(ctx, initiativeID)
 }
 
+// RecordBenefit records or updates benefit parameters and ROI projections
 func (s *csiService) RecordBenefit(ctx context.Context, workspaceID string, initiativeID string, req model.RecordCSIBenefitRequest) (*model.CSIBenefit, error) {
-	return nil, errors.New("not implemented")
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Verify initiative exists
+	if _, err := s.repo.GetInitiativeByID(ctx, initiativeID); err != nil {
+		return nil, err
+	}
+
+	benefit := &model.CSIBenefit{
+		WorkspaceID:               workspaceID,
+		InitiativeID:              initiativeID,
+		ProjectedFinancialSavings: req.ProjectedFinancialSavings,
+		RealizedFinancialSavings:  req.RealizedFinancialSavings,
+		EffortHoursInvested:       req.EffortHoursInvested,
+		HoursSavedPerMonth:        req.HoursSavedPerMonth,
+		RiskReductionPercentage:   req.RiskReductionPercentage,
+		Status:                    req.Status,
+	}
+
+	if benefit.Status == model.CSIBenefitFullyRealized && benefit.RealizedAt == nil {
+		now := time.Now().UTC()
+		benefit.RealizedAt = &now
+	}
+
+	if err := s.repo.SaveBenefit(ctx, benefit); err != nil {
+		return nil, err
+	}
+	return benefit, nil
 }
 
+// GetBenefit retrieves benefit tracking for an initiative
 func (s *csiService) GetBenefit(ctx context.Context, initiativeID string) (*model.CSIBenefit, error) {
-	return nil, errors.New("not implemented")
+	return s.repo.GetBenefitByInitiativeID(ctx, initiativeID)
 }
 
+// UpdateBenefit updates benefit metrics
 func (s *csiService) UpdateBenefit(ctx context.Context, initiativeID string, req model.UpdateCSIBenefitRequest) (*model.CSIBenefit, error) {
-	return nil, errors.New("not implemented")
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	benefit, err := s.repo.GetBenefitByInitiativeID(ctx, initiativeID)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.ProjectedFinancialSavings != nil {
+		benefit.ProjectedFinancialSavings = *req.ProjectedFinancialSavings
+	}
+	if req.RealizedFinancialSavings != nil {
+		benefit.RealizedFinancialSavings = *req.RealizedFinancialSavings
+	}
+	if req.EffortHoursInvested != nil {
+		benefit.EffortHoursInvested = *req.EffortHoursInvested
+	}
+	if req.HoursSavedPerMonth != nil {
+		benefit.HoursSavedPerMonth = *req.HoursSavedPerMonth
+	}
+	if req.RiskReductionPercentage != nil {
+		benefit.RiskReductionPercentage = *req.RiskReductionPercentage
+	}
+	if req.Status != nil {
+		benefit.Status = *req.Status
+		if *req.Status == model.CSIBenefitFullyRealized && benefit.RealizedAt == nil {
+			now := time.Now().UTC()
+			benefit.RealizedAt = &now
+		}
+	}
+
+	if err := s.repo.UpdateBenefit(ctx, benefit); err != nil {
+		return nil, err
+	}
+	return benefit, nil
 }
 
 func (s *csiService) CreateAction(ctx context.Context, workspaceID string, initiativeID string, req model.CreateCSIActionRequest) (*model.CSIAction, error) {
