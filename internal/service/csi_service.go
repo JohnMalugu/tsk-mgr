@@ -479,6 +479,7 @@ func (s *csiService) ListReviews(ctx context.Context, initiativeID string) ([]mo
 	return s.repo.ListReviews(ctx, initiativeID)
 }
 
+// GetCSIAnalytics computes executive continual improvement metrics, realized financial savings, and maturity index
 func (s *csiService) GetCSIAnalytics(ctx context.Context, workspaceID string) (*model.CSIAnalytics, error) {
-	return nil, errors.New("not implemented")
+	return s.repo.GetCSIAnalytics(ctx, workspaceID)
 }
