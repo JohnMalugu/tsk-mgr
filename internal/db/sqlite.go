@@ -3286,6 +3286,28 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	deploymentGatesQuery := `
+	CREATE TABLE IF NOT EXISTS deployment_gates (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		run_id TEXT NOT NULL,
+		gate_type TEXT NOT NULL,
+		gate_name TEXT NOT NULL,
+		status TEXT NOT NULL,
+		evaluator_id TEXT,
+		evaluated_at DATETIME,
+		waiver_reason TEXT,
+		evidence_details TEXT,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (run_id) REFERENCES deployment_runs(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(deploymentGatesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
