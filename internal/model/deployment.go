@@ -506,3 +506,71 @@ func (r *ExecuteRollbackRequest) Validate() error {
 	}
 	return nil
 }
+
+// Filter and query criteria structs
+
+// DeploymentPipelineFilter defines query criteria for listing pipelines
+type DeploymentPipelineFilter struct {
+	WorkspaceID        string
+	TargetEnvironment  string
+	DeploymentStrategy string
+	Status             string
+	Limit              int
+	Offset             int
+}
+
+// DeploymentRunFilter defines query criteria for listing deployment runs
+type DeploymentRunFilter struct {
+	WorkspaceID string
+	PipelineID  string
+	Environment string
+	Status      string
+	TriggerType string
+	Limit       int
+	Offset      int
+}
+
+// DeploymentGateFilter defines query criteria for listing deployment gates
+type DeploymentGateFilter struct {
+	WorkspaceID string
+	RunID       string
+	GateType    string
+	Status      string
+	Limit       int
+	Offset      int
+}
+
+// DeploymentStepFilter defines query criteria for listing deployment steps
+type DeploymentStepFilter struct {
+	WorkspaceID string
+	RunID       string
+	Status      string
+	Limit       int
+	Offset      int
+}
+
+// RollbackPolicyFilter defines query criteria for listing rollback policies
+type RollbackPolicyFilter struct {
+	WorkspaceID     string
+	PipelineID      string
+	ExecutionStatus string
+	Limit           int
+	Offset          int
+}
+
+// DeploymentAnalytics represents executive delivery metrics and DORA KPIs
+type DeploymentAnalytics struct {
+	TotalPipelines              int            `json:"total_pipelines"`
+	ActivePipelines             int            `json:"active_pipelines"`
+	TotalRuns                   int            `json:"total_runs"`
+	SuccessfulRuns              int            `json:"successful_runs"`
+	FailedRuns                  int            `json:"failed_runs"`
+	RolledBackRuns              int            `json:"rolled_back_runs"`
+	DeploymentFrequencyPerWeek  float64        `json:"deployment_frequency_per_week"`
+	LeadTimeForChangesHours     float64        `json:"lead_time_for_changes_hours"`
+	ChangeFailureRate           float64        `json:"change_failure_rate"`
+	MTTRMinutes                 float64        `json:"mttr_minutes"`
+	RollbacksCount              int            `json:"rollbacks_count"`
+	EnvironmentDistribution     map[string]int `json:"environment_distribution"`
+	DeploymentHealthIndex       float64        `json:"deployment_health_index"`
+}
