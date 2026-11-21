@@ -3172,6 +3172,28 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	csiBenefitsQuery := `
+	CREATE TABLE IF NOT EXISTS csi_benefits (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		initiative_id TEXT NOT NULL,
+		projected_financial_savings REAL NOT NULL DEFAULT 0.0,
+		realized_financial_savings REAL NOT NULL DEFAULT 0.0,
+		effort_hours_invested REAL NOT NULL DEFAULT 0.0,
+		hours_saved_per_month REAL NOT NULL DEFAULT 0.0,
+		risk_reduction_percentage REAL NOT NULL DEFAULT 0.0,
+		status TEXT NOT NULL,
+		realized_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (initiative_id) REFERENCES csi_initiatives(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(csiBenefitsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
