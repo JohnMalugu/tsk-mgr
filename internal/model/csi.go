@@ -46,14 +46,27 @@ const (
 	CSISourceOther               = "other"
 )
 
+// Metric unit constants
+const (
+	CSIMetricUnitPercent      = "percent"
+	CSIMetricUnitMilliseconds = "milliseconds"
+	CSIMetricUnitSeconds      = "seconds"
+	CSIMetricUnitDollars      = "dollars"
+	CSIMetricUnitHours        = "hours"
+	CSIMetricUnitCount        = "count"
+)
+
 // CSI domain errors
 var (
-	ErrCSIInitiativeNotFound      = errors.New("continual improvement initiative not found")
-	ErrCSIInitiativeTitleRequired = errors.New("initiative title is required")
-	ErrInvalidCSIAlignment        = errors.New("invalid strategic alignment category")
-	ErrInvalidCSIStatus           = errors.New("invalid CSI initiative status")
-	ErrInvalidCSIPriority         = errors.New("invalid CSI initiative priority")
-	ErrInvalidCSISource           = errors.New("invalid CSI initiative source")
+	ErrCSIInitiativeNotFound          = errors.New("continual improvement initiative not found")
+	ErrCSIInitiativeTitleRequired     = errors.New("initiative title is required")
+	ErrInvalidCSIAlignment            = errors.New("invalid strategic alignment category")
+	ErrInvalidCSIStatus               = errors.New("invalid CSI initiative status")
+	ErrInvalidCSIPriority             = errors.New("invalid CSI initiative priority")
+	ErrInvalidCSISource               = errors.New("invalid CSI initiative source")
+	ErrCSIBenchmarkNotFound           = errors.New("CSI benchmark metric not found")
+	ErrCSIBenchmarkMetricNameRequired = errors.New("benchmark metric name is required")
+	ErrInvalidCSIMetricUnit           = errors.New("invalid CSI benchmark metric unit")
 )
 
 // ValidateCSIAlignment verifies if an alignment category is recognized
@@ -100,6 +113,17 @@ func ValidateCSISource(s string) error {
 	}
 }
 
+// ValidateCSIMetricUnit verifies if a unit of measure is supported
+func ValidateCSIMetricUnit(u string) error {
+	switch u {
+	case CSIMetricUnitPercent, CSIMetricUnitMilliseconds, CSIMetricUnitSeconds,
+		CSIMetricUnitDollars, CSIMetricUnitHours, CSIMetricUnitCount:
+		return nil
+	default:
+		return ErrInvalidCSIMetricUnit
+	}
+}
+
 // CSIInitiative represents an improvement entry in the ITIL Continual Improvement Register (CIR)
 type CSIInitiative struct {
 	ID                   string     `json:"id"`
@@ -138,4 +162,41 @@ func (i *CSIInitiative) Validate() error {
 		return err
 	}
 	return nil
+}
+
+// CSIBenchmark tracks baseline vs current vs target metrics for an improvement initiative
+type CSIBenchmark struct {
+	ID            string     `json:"id"`
+	WorkspaceID   string     `json:"workspace_id"`
+	InitiativeID  string     `json:"initiative_id"`
+	MetricName    string     `json:"metric_name"`
+	UnitOfMeasure string     `json:"unit_of_measure"`
+	BaselineValue float64    `json:"baseline_value"`
+	CurrentValue  float64    `json:"current_value"`
+	TargetValue   float64    `json:"target_value"`
+	VerifiedAt    *time.Time `json:"verified_at,omitempty"`
+	Notes         string     `json:"notes,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+}
+
+// Validate validates the CSIBenchmark entity
+func (b *CSIBenchmark) Validate() error {
+	if strings.TrimSpace(b.MetricName) == "" {
+		return ErrCSIBenchmarkMetricNameRequired
+	}
+	if err := ValidateCSIMetricUnit(b.UnitOfMeasure); err != nil {
+		return err
+	}
+	return nil
+}
+
+// HasAchievedTarget evaluates whether CurrentValue meets or surpasses TargetValue
+func (b *CSIBenchmark) HasAchievedTarget() bool {
+	// If baseline was higher than target (e.g. latency, error rate, cost), lower or equal is better
+	if b.BaselineValue > b.TargetValue {
+		return b.CurrentValue <= b.TargetValue
+	}
+	// If baseline was lower than target (e.g. availability, throughput, coverage), higher or equal is better
+	return b.CurrentValue >= b.TargetValue
 }
