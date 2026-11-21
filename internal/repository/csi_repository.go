@@ -367,36 +367,245 @@ func (r *csiRepository) ListInitiatives(ctx context.Context, filter model.CSIFil
 	return initiatives, total, nil
 }
 
+// CreateBenchmark adds a baseline/target metric to an initiative
 func (r *csiRepository) CreateBenchmark(ctx context.Context, benchmark *model.CSIBenchmark) error {
-	return errors.New("not implemented")
+	if err := benchmark.Validate(); err != nil {
+		return err
+	}
+	if benchmark.ID == "" {
+		benchmark.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if benchmark.CreatedAt.IsZero() {
+		benchmark.CreatedAt = now
+	}
+	benchmark.UpdatedAt = now
+
+	query := `
+	INSERT INTO csi_benchmarks (
+		id, workspace_id, initiative_id, metric_name, unit_of_measure,
+		baseline_value, current_value, target_value, verified_at,
+		notes, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		benchmark.ID, benchmark.WorkspaceID, benchmark.InitiativeID, benchmark.MetricName, benchmark.UnitOfMeasure,
+		benchmark.BaselineValue, benchmark.CurrentValue, benchmark.TargetValue, benchmark.VerifiedAt,
+		benchmark.Notes, benchmark.CreatedAt, benchmark.UpdatedAt,
+	)
+	return err
 }
 
+// GetBenchmarkByID retrieves a benchmark metric by ID
 func (r *csiRepository) GetBenchmarkByID(ctx context.Context, id string) (*model.CSIBenchmark, error) {
-	return nil, errors.New("not implemented")
+	query := `
+	SELECT id, workspace_id, initiative_id, metric_name, unit_of_measure,
+	       baseline_value, current_value, target_value, verified_at,
+	       notes, created_at, updated_at
+	FROM csi_benchmarks WHERE id = ?`
+
+	var b model.CSIBenchmark
+	var notes sql.NullString
+	var verifiedAt sql.NullTime
+
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&b.ID, &b.WorkspaceID, &b.InitiativeID, &b.MetricName, &b.UnitOfMeasure,
+		&b.BaselineValue, &b.CurrentValue, &b.TargetValue, &verifiedAt,
+		&notes, &b.CreatedAt, &b.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrCSIBenchmarkNotFound
+		}
+		return nil, err
+	}
+	if notes.Valid {
+		b.Notes = notes.String
+	}
+	if verifiedAt.Valid {
+		t := verifiedAt.Time
+		b.VerifiedAt = &t
+	}
+	return &b, nil
 }
 
+// UpdateBenchmark updates current value, target, and verification timestamp of a benchmark
 func (r *csiRepository) UpdateBenchmark(ctx context.Context, benchmark *model.CSIBenchmark) error {
-	return errors.New("not implemented")
+	if err := benchmark.Validate(); err != nil {
+		return err
+	}
+	benchmark.UpdatedAt = time.Now().UTC()
+
+	query := `
+	UPDATE csi_benchmarks SET
+		metric_name = ?, unit_of_measure = ?, baseline_value = ?,
+		current_value = ?, target_value = ?, verified_at = ?,
+		notes = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		benchmark.MetricName, benchmark.UnitOfMeasure, benchmark.BaselineValue,
+		benchmark.CurrentValue, benchmark.TargetValue, benchmark.VerifiedAt,
+		benchmark.Notes, benchmark.UpdatedAt,
+		benchmark.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrCSIBenchmarkNotFound
+	}
+	return nil
 }
 
+// DeleteBenchmark removes a benchmark metric
 func (r *csiRepository) DeleteBenchmark(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	query := `DELETE FROM csi_benchmarks WHERE id = ?`
+	res, err := r.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrCSIBenchmarkNotFound
+	}
+	return nil
 }
 
+// ListBenchmarks lists all benchmark metrics associated with an initiative
 func (r *csiRepository) ListBenchmarks(ctx context.Context, initiativeID string) ([]model.CSIBenchmark, error) {
-	return nil, errors.New("not implemented")
+	query := `
+	SELECT id, workspace_id, initiative_id, metric_name, unit_of_measure,
+	       baseline_value, current_value, target_value, verified_at,
+	       notes, created_at, updated_at
+	FROM csi_benchmarks WHERE initiative_id = ?
+	ORDER BY created_at ASC`
+
+	rows, err := r.db.QueryContext(ctx, query, initiativeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var benchmarks []model.CSIBenchmark
+	for rows.Next() {
+		var b model.CSIBenchmark
+		var notes sql.NullString
+		var verifiedAt sql.NullTime
+
+		err := rows.Scan(
+			&b.ID, &b.WorkspaceID, &b.InitiativeID, &b.MetricName, &b.UnitOfMeasure,
+			&b.BaselineValue, &b.CurrentValue, &b.TargetValue, &verifiedAt,
+			&notes, &b.CreatedAt, &b.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if notes.Valid {
+			b.Notes = notes.String
+		}
+		if verifiedAt.Valid {
+			t := verifiedAt.Time
+			b.VerifiedAt = &t
+		}
+		benchmarks = append(benchmarks, b)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return benchmarks, nil
 }
 
+// SaveBenefit records or updates benefit realization parameters for an initiative
 func (r *csiRepository) SaveBenefit(ctx context.Context, benefit *model.CSIBenefit) error {
-	return errors.New("not implemented")
+	if err := benefit.Validate(); err != nil {
+		return err
+	}
+	if benefit.ID == "" {
+		benefit.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if benefit.CreatedAt.IsZero() {
+		benefit.CreatedAt = now
+	}
+	benefit.UpdatedAt = now
+
+	existing, err := r.GetBenefitByInitiativeID(ctx, benefit.InitiativeID)
+	if err == nil && existing != nil {
+		benefit.ID = existing.ID
+		benefit.CreatedAt = existing.CreatedAt
+		updateQuery := `
+		UPDATE csi_benefits SET
+			projected_financial_savings = ?, realized_financial_savings = ?,
+			effort_hours_invested = ?, hours_saved_per_month = ?,
+			risk_reduction_percentage = ?, status = ?,
+			realized_at = ?, updated_at = ?
+		WHERE id = ?`
+
+		_, err = r.db.ExecContext(ctx, updateQuery,
+			benefit.ProjectedFinancialSavings, benefit.RealizedFinancialSavings,
+			benefit.EffortHoursInvested, benefit.HoursSavedPerMonth,
+			benefit.RiskReductionPercentage, benefit.Status,
+			benefit.RealizedAt, benefit.UpdatedAt,
+			benefit.ID,
+		)
+		return err
+	}
+
+	insertQuery := `
+	INSERT INTO csi_benefits (
+		id, workspace_id, initiative_id, projected_financial_savings,
+		realized_financial_savings, effort_hours_invested, hours_saved_per_month,
+		risk_reduction_percentage, status, realized_at, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err = r.db.ExecContext(ctx, insertQuery,
+		benefit.ID, benefit.WorkspaceID, benefit.InitiativeID, benefit.ProjectedFinancialSavings,
+		benefit.RealizedFinancialSavings, benefit.EffortHoursInvested, benefit.HoursSavedPerMonth,
+		benefit.RiskReductionPercentage, benefit.Status, benefit.RealizedAt, benefit.CreatedAt, benefit.UpdatedAt,
+	)
+	return err
 }
 
+// GetBenefitByInitiativeID retrieves benefit tracking for an initiative
 func (r *csiRepository) GetBenefitByInitiativeID(ctx context.Context, initiativeID string) (*model.CSIBenefit, error) {
-	return nil, errors.New("not implemented")
+	query := `
+	SELECT id, workspace_id, initiative_id, projected_financial_savings,
+	       realized_financial_savings, effort_hours_invested, hours_saved_per_month,
+	       risk_reduction_percentage, status, realized_at, created_at, updated_at
+	FROM csi_benefits WHERE initiative_id = ?`
+
+	var b model.CSIBenefit
+	var realizedAt sql.NullTime
+
+	err := r.db.QueryRowContext(ctx, query, initiativeID).Scan(
+		&b.ID, &b.WorkspaceID, &b.InitiativeID, &b.ProjectedFinancialSavings,
+		&b.RealizedFinancialSavings, &b.EffortHoursInvested, &b.HoursSavedPerMonth,
+		&b.RiskReductionPercentage, &b.Status, &realizedAt, &b.CreatedAt, &b.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrCSIBenefitNotFound
+		}
+		return nil, err
+	}
+	if realizedAt.Valid {
+		t := realizedAt.Time
+		b.RealizedAt = &t
+	}
+	return &b, nil
 }
 
+// UpdateBenefit updates benefit metrics
 func (r *csiRepository) UpdateBenefit(ctx context.Context, benefit *model.CSIBenefit) error {
-	return errors.New("not implemented")
+	return r.SaveBenefit(ctx, benefit)
 }
 
 func (r *csiRepository) CreateAction(ctx context.Context, action *model.CSIAction) error {
