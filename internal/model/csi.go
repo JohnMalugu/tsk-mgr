@@ -358,3 +358,246 @@ func (r *CSIReview) Validate() error {
 	}
 	return nil
 }
+
+// CreateCSIInitiativeRequest contains payload to create a new continual improvement initiative
+type CreateCSIInitiativeRequest struct {
+	InitiativeCode       string    `json:"initiative_code,omitempty"`
+	Title                string    `json:"title"`
+	Description          string    `json:"description,omitempty"`
+	StrategicAlignment   string    `json:"strategic_alignment"`
+	Priority             string    `json:"priority,omitempty"`
+	Status               string    `json:"status,omitempty"`
+	Source               string    `json:"source,omitempty"`
+	SourceReferenceID    string    `json:"source_reference_id,omitempty"`
+	CIID                 string    `json:"ci_id,omitempty"`
+	OwnerID              string    `json:"owner_id,omitempty"`
+	TargetCompletionDate time.Time `json:"target_completion_date"`
+}
+
+// Validate validates CreateCSIInitiativeRequest
+func (r *CreateCSIInitiativeRequest) Validate() error {
+	if strings.TrimSpace(r.Title) == "" {
+		return ErrCSIInitiativeTitleRequired
+	}
+	if r.StrategicAlignment == "" {
+		r.StrategicAlignment = CSIAlignmentReliability
+	} else if err := ValidateCSIAlignment(r.StrategicAlignment); err != nil {
+		return err
+	}
+	if r.Priority == "" {
+		r.Priority = CSIPriorityMedium
+	} else if err := ValidateCSIPriority(r.Priority); err != nil {
+		return err
+	}
+	if r.Status == "" {
+		r.Status = CSIStatusIdentified
+	} else if err := ValidateCSIStatus(r.Status); err != nil {
+		return err
+	}
+	if r.Source == "" {
+		r.Source = CSISourceOther
+	} else if err := ValidateCSISource(r.Source); err != nil {
+		return err
+	}
+	if r.TargetCompletionDate.IsZero() {
+		r.TargetCompletionDate = time.Now().UTC().AddDate(0, 3, 0)
+	}
+	return nil
+}
+
+// UpdateCSIInitiativeRequest contains fields to update on an existing initiative
+type UpdateCSIInitiativeRequest struct {
+	Title                *string    `json:"title,omitempty"`
+	Description          *string    `json:"description,omitempty"`
+	StrategicAlignment   *string    `json:"strategic_alignment,omitempty"`
+	Priority             *string    `json:"priority,omitempty"`
+	Status               *string    `json:"status,omitempty"`
+	Source               *string    `json:"source,omitempty"`
+	SourceReferenceID    *string    `json:"source_reference_id,omitempty"`
+	CIID                 *string    `json:"ci_id,omitempty"`
+	OwnerID              *string    `json:"owner_id,omitempty"`
+	TargetCompletionDate *time.Time `json:"target_completion_date,omitempty"`
+}
+
+// Validate validates UpdateCSIInitiativeRequest
+func (r *UpdateCSIInitiativeRequest) Validate() error {
+	if r.Title != nil && strings.TrimSpace(*r.Title) == "" {
+		return ErrCSIInitiativeTitleRequired
+	}
+	if r.StrategicAlignment != nil {
+		if err := ValidateCSIAlignment(*r.StrategicAlignment); err != nil {
+			return err
+		}
+	}
+	if r.Priority != nil {
+		if err := ValidateCSIPriority(*r.Priority); err != nil {
+			return err
+		}
+	}
+	if r.Status != nil {
+		if err := ValidateCSIStatus(*r.Status); err != nil {
+			return err
+		}
+	}
+	if r.Source != nil {
+		if err := ValidateCSISource(*r.Source); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateCSIBenchmarkRequest contains parameters for creating a baseline/target metric
+type CreateCSIBenchmarkRequest struct {
+	MetricName    string  `json:"metric_name"`
+	UnitOfMeasure string  `json:"unit_of_measure"`
+	BaselineValue float64 `json:"baseline_value"`
+	CurrentValue  float64 `json:"current_value"`
+	TargetValue   float64 `json:"target_value"`
+	Notes         string  `json:"notes,omitempty"`
+}
+
+// Validate validates CreateCSIBenchmarkRequest
+func (r *CreateCSIBenchmarkRequest) Validate() error {
+	if strings.TrimSpace(r.MetricName) == "" {
+		return ErrCSIBenchmarkMetricNameRequired
+	}
+	if r.UnitOfMeasure == "" {
+		r.UnitOfMeasure = CSIMetricUnitPercent
+	} else if err := ValidateCSIMetricUnit(r.UnitOfMeasure); err != nil {
+		return err
+	}
+	return nil
+}
+
+// UpdateCSIBenchmarkRequest contains fields to update on a benchmark metric
+type UpdateCSIBenchmarkRequest struct {
+	CurrentValue *float64 `json:"current_value,omitempty"`
+	TargetValue  *float64 `json:"target_value,omitempty"`
+	Notes        *string  `json:"notes,omitempty"`
+}
+
+// Validate validates UpdateCSIBenchmarkRequest
+func (r *UpdateCSIBenchmarkRequest) Validate() error {
+	return nil
+}
+
+// RecordCSIBenefitRequest captures ROI projections and realized financial savings
+type RecordCSIBenefitRequest struct {
+	ProjectedFinancialSavings float64 `json:"projected_financial_savings"`
+	RealizedFinancialSavings  float64 `json:"realized_financial_savings"`
+	EffortHoursInvested       float64 `json:"effort_hours_invested"`
+	HoursSavedPerMonth        float64 `json:"hours_saved_per_month"`
+	RiskReductionPercentage   float64 `json:"risk_reduction_percentage"`
+	Status                    string  `json:"status,omitempty"`
+}
+
+// Validate validates RecordCSIBenefitRequest
+func (r *RecordCSIBenefitRequest) Validate() error {
+	if r.EffortHoursInvested < 0 {
+		return ErrInvalidEffortHours
+	}
+	if r.Status == "" {
+		r.Status = CSIBenefitProjected
+	} else if err := ValidateCSIBenefitStatus(r.Status); err != nil {
+		return err
+	}
+	return nil
+}
+
+// UpdateCSIBenefitRequest modifies existing benefit metrics
+type UpdateCSIBenefitRequest struct {
+	ProjectedFinancialSavings *float64 `json:"projected_financial_savings,omitempty"`
+	RealizedFinancialSavings  *float64 `json:"realized_financial_savings,omitempty"`
+	EffortHoursInvested       *float64 `json:"effort_hours_invested,omitempty"`
+	HoursSavedPerMonth        *float64 `json:"hours_saved_per_month,omitempty"`
+	RiskReductionPercentage   *float64 `json:"risk_reduction_percentage,omitempty"`
+	Status                    *string  `json:"status,omitempty"`
+}
+
+// Validate validates UpdateCSIBenefitRequest
+func (r *UpdateCSIBenefitRequest) Validate() error {
+	if r.EffortHoursInvested != nil && *r.EffortHoursInvested < 0 {
+		return ErrInvalidEffortHours
+	}
+	if r.Status != nil {
+		if err := ValidateCSIBenefitStatus(*r.Status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateCSIActionRequest contains parameters to create a step in an improvement plan
+type CreateCSIActionRequest struct {
+	StepNumber           int       `json:"step_number"`
+	Description          string    `json:"description"`
+	AssigneeID           string    `json:"assignee_id,omitempty"`
+	DueDate              time.Time `json:"due_date"`
+	Status               string    `json:"status,omitempty"`
+	VerificationEvidence string    `json:"verification_evidence,omitempty"`
+}
+
+// Validate validates CreateCSIActionRequest
+func (r *CreateCSIActionRequest) Validate() error {
+	if strings.TrimSpace(r.Description) == "" {
+		return ErrCSIActionDescriptionRequired
+	}
+	if r.Status == "" {
+		r.Status = CSIActionPending
+	} else if err := ValidateCSIActionStatus(r.Status); err != nil {
+		return err
+	}
+	if r.DueDate.IsZero() {
+		r.DueDate = time.Now().UTC().AddDate(0, 1, 0)
+	}
+	return nil
+}
+
+// UpdateCSIActionRequest updates an action step
+type UpdateCSIActionRequest struct {
+	Description          *string    `json:"description,omitempty"`
+	AssigneeID           *string    `json:"assignee_id,omitempty"`
+	DueDate              *time.Time `json:"due_date,omitempty"`
+	Status               *string    `json:"status,omitempty"`
+	VerificationEvidence *string    `json:"verification_evidence,omitempty"`
+}
+
+// Validate validates UpdateCSIActionRequest
+func (r *UpdateCSIActionRequest) Validate() error {
+	if r.Description != nil && strings.TrimSpace(*r.Description) == "" {
+		return ErrCSIActionDescriptionRequired
+	}
+	if r.Status != nil {
+		if err := ValidateCSIActionStatus(*r.Status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RecordCSIReviewRequest records governance findings and retrospective notes
+type RecordCSIReviewRequest struct {
+	ReviewDate     time.Time  `json:"review_date"`
+	ReviewerID     string     `json:"reviewer_id"`
+	Outcome        string     `json:"outcome"`
+	Findings       string     `json:"findings"`
+	LessonsLearned string     `json:"lessons_learned,omitempty"`
+	NextReviewDate *time.Time `json:"next_review_date,omitempty"`
+}
+
+// Validate validates RecordCSIReviewRequest
+func (r *RecordCSIReviewRequest) Validate() error {
+	if strings.TrimSpace(r.Findings) == "" {
+		return ErrCSIReviewNotesRequired
+	}
+	if r.ReviewDate.IsZero() {
+		r.ReviewDate = time.Now().UTC()
+	}
+	if r.Outcome == "" {
+		r.Outcome = CSIReviewOutcomeOnTrack
+	} else if err := ValidateCSIReviewOutcome(r.Outcome); err != nil {
+		return err
+	}
+	return nil
+}
