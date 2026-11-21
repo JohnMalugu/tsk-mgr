@@ -3308,6 +3308,30 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	deploymentStepsQuery := `
+	CREATE TABLE IF NOT EXISTS deployment_steps (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		run_id TEXT NOT NULL,
+		step_order INTEGER NOT NULL,
+		step_name TEXT NOT NULL,
+		traffic_percentage REAL NOT NULL DEFAULT 0.0,
+		soak_time_minutes INTEGER NOT NULL DEFAULT 0,
+		error_rate_threshold REAL NOT NULL DEFAULT 0.0,
+		actual_error_rate REAL NOT NULL DEFAULT 0.0,
+		status TEXT NOT NULL,
+		started_at DATETIME,
+		completed_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (run_id) REFERENCES deployment_runs(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(deploymentStepsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
