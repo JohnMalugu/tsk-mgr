@@ -3557,6 +3557,12 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_avail_tests_ws_outcome ON availability_tests(workspace_id, outcome);
 	CREATE INDEX IF NOT EXISTS idx_avail_tests_target ON availability_tests(target_id);
 	CREATE INDEX IF NOT EXISTS idx_avail_tests_next_due ON availability_tests(next_test_due);
+	CREATE INDEX IF NOT EXISTS idx_csi_initiatives_ws_status ON csi_initiatives(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_csi_initiatives_ws_code ON csi_initiatives(workspace_id, initiative_code);
+	CREATE INDEX IF NOT EXISTS idx_csi_initiatives_align ON csi_initiatives(strategic_alignment);
+	CREATE INDEX IF NOT EXISTS idx_csi_initiatives_ci ON csi_initiatives(ci_id);
+	CREATE INDEX IF NOT EXISTS idx_csi_benchmarks_initiative ON csi_benchmarks(initiative_id);
+	CREATE INDEX IF NOT EXISTS idx_csi_benefits_initiative ON csi_benefits(initiative_id, status);
 	`
 
 	_, err = db.Exec(indexQuery)
