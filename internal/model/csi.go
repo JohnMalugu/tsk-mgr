@@ -71,6 +71,14 @@ const (
 	CSIActionBlocked    = "blocked"
 )
 
+// Review outcome constants
+const (
+	CSIReviewOutcomeOnTrack         = "on_track"
+	CSIReviewOutcomeNeedsAdjustment = "needs_adjustment"
+	CSIReviewOutcomeGoalsAchieved   = "goals_achieved"
+	CSIReviewOutcomeTerminated      = "terminated"
+)
+
 // CSI domain errors
 var (
 	ErrCSIInitiativeNotFound          = errors.New("continual improvement initiative not found")
@@ -88,6 +96,9 @@ var (
 	ErrCSIActionNotFound              = errors.New("CSI action item not found")
 	ErrCSIActionDescriptionRequired   = errors.New("action description is required")
 	ErrInvalidCSIActionStatus         = errors.New("invalid CSI action status")
+	ErrCSIReviewNotFound              = errors.New("CSI review record not found")
+	ErrCSIReviewNotesRequired         = errors.New("review notes or findings are required")
+	ErrInvalidCSIReviewOutcome        = errors.New("invalid CSI review outcome")
 )
 
 // ValidateCSIAlignment verifies if an alignment category is recognized
@@ -162,6 +173,17 @@ func ValidateCSIActionStatus(s string) error {
 		return nil
 	default:
 		return ErrInvalidCSIActionStatus
+	}
+}
+
+// ValidateCSIReviewOutcome verifies if review outcome is recognized
+func ValidateCSIReviewOutcome(o string) error {
+	switch o {
+	case CSIReviewOutcomeOnTrack, CSIReviewOutcomeNeedsAdjustment,
+		CSIReviewOutcomeGoalsAchieved, CSIReviewOutcomeTerminated:
+		return nil
+	default:
+		return ErrInvalidCSIReviewOutcome
 	}
 }
 
@@ -306,6 +328,32 @@ func (a *CSIAction) Validate() error {
 		return ErrCSIActionDescriptionRequired
 	}
 	if err := ValidateCSIActionStatus(a.Status); err != nil {
+		return err
+	}
+	return nil
+}
+
+// CSIReview represents a governance evaluation, post-implementation audit, or retrospective review
+type CSIReview struct {
+	ID             string     `json:"id"`
+	WorkspaceID    string     `json:"workspace_id"`
+	InitiativeID   string     `json:"initiative_id"`
+	ReviewDate     time.Time  `json:"review_date"`
+	ReviewerID     string     `json:"reviewer_id"`
+	Outcome        string     `json:"outcome"`
+	Findings       string     `json:"findings"`
+	LessonsLearned string     `json:"lessons_learned,omitempty"`
+	NextReviewDate *time.Time `json:"next_review_date,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}
+
+// Validate validates the CSIReview entity
+func (r *CSIReview) Validate() error {
+	if strings.TrimSpace(r.Findings) == "" {
+		return ErrCSIReviewNotesRequired
+	}
+	if err := ValidateCSIReviewOutcome(r.Outcome); err != nil {
 		return err
 	}
 	return nil
