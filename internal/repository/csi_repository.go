@@ -882,6 +882,78 @@ func (r *csiRepository) ListReviews(ctx context.Context, initiativeID string) ([
 	return reviews, nil
 }
 
+// GetCSIAnalytics computes executive continual improvement metrics, realized financial savings, and maturity index
 func (r *csiRepository) GetCSIAnalytics(ctx context.Context, workspaceID string) (*model.CSIAnalytics, error) {
-	return nil, errors.New("not implemented")
+	analytics := &model.CSIAnalytics{
+		InitiativesByAlignment: []model.AlignmentSummary{},
+	}
+
+	// 1. Initiative counts
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM csi_initiatives WHERE workspace_id = ?", workspaceID).Scan(&analytics.TotalInitiatives)
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM csi_initiatives WHERE workspace_id = ?", workspaceID).Scan(&analytics.TotalInitiatives)
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM csi_initiatives WHERE workspace_id = ? AND status IN ('identified', 'approved', 'in_progress', 'on_hold')", workspaceID).Scan(&analytics.ActiveInitiatives)
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM csi_initiatives WHERE workspace_id = ? AND status = 'completed'", workspaceID).Scan(&analytics.CompletedInitiatives)
+
+	if analytics.TotalInitiatives > 0 {
+		analytics.CompletionRate = (float64(analytics.CompletedInitiatives) / float64(analytics.TotalInitiatives)) * 100.0
+	}
+
+	// 2. Financial and Effort Benefits
+	var projSavings, realSavings, hoursSaved, effortHours sql.NullFloat64
+	_ = r.db.QueryRowContext(ctx, `
+		SELECT SUM(projected_financial_savings), SUM(realized_financial_savings),
+		       SUM(hours_saved_per_month), SUM(effort_hours_invested)
+		FROM csi_benefits WHERE workspace_id = ?`, workspaceID).Scan(&projSavings, &realSavings, &hoursSaved, &effortHours)
+
+	if projSavings.Valid {
+		analytics.TotalProjectedSavings = projSavings.Float64
+	}
+	if realSavings.Valid {
+		analytics.TotalRealizedSavings = realSavings.Float64
+	}
+	if hoursSaved.Valid {
+		analytics.TotalHoursSavedPerMonth = hoursSaved.Float64
+	}
+	if effortHours.Valid {
+		analytics.TotalEffortHoursInvested = effortHours.Float64
+	}
+
+	// Calculate Average ROI
+	benefitRows, err := r.db.QueryContext(ctx, "SELECT effort_hours_invested, realized_financial_savings, hours_saved_per_month FROM csi_benefits WHERE workspace_id = ?", workspaceID)
+	if err == nil && benefitRows != nil {
+		defer benefitRows.Close()
+		var totalROI float64
+		var count int
+		for benefitRows.Next() {
+			var b model.CSIBenefit
+			if scanErr := benefitRows.Scan(&b.EffortHoursInvested, &b.RealizedFinancialSavings, &b.HoursSavedPerMonth); scanErr == nil {
+				roi := b.CalculateROI(75.0)
+				totalROI += roi
+				count++
+			}
+		}
+		if count > 0 {
+			analytics.AverageROI = totalROI / float64(count)
+		}
+	}
+
+	// 3. Alignment Breakdown
+	alignRows, err := r.db.QueryContext(ctx, `
+		SELECT strategic_alignment, COUNT(*)
+		FROM csi_initiatives
+		WHERE workspace_id = ?
+		GROUP BY strategic_alignment
+		ORDER BY COUNT(*) DESC`, workspaceID)
+	if err == nil && alignRows != nil {
+		defer alignRows.Close()
+		for alignRows.Next() {
+			var s model.AlignmentSummary
+			if scanErr := alignRows.Scan(&s.Alignment, &s.Count); scanErr == nil {
+				analytics.InitiativesByAlignment = append(analytics.InitiativesByAlignment, s)
+			}
+		}
+	}
+
+	analytics.CalculateMaturityScore()
+	return analytics, nil
 }
