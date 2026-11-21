@@ -482,3 +482,182 @@ func (h *CSIHandler) GetReviewByID(w http.ResponseWriter, r *http.Request, id st
 	}
 	writeCSIJSON(w, http.StatusOK, review)
 }
+
+// Analytics Endpoints
+
+// GetAnalytics handles GET /v2/csi/analytics
+func (h *CSIHandler) GetAnalytics(w http.ResponseWriter, r *http.Request) {
+	wsID := getCSIWorkspaceID(r)
+
+	analytics, err := h.svc.GetCSIAnalytics(r.Context(), wsID)
+	if err != nil {
+		handleCSIError(w, err)
+		return
+	}
+	writeCSIJSON(w, http.StatusOK, analytics)
+}
+
+// ServeHTTP multiplexes sub-routes under /v2/csi
+func (h *CSIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/csi")
+	path = strings.TrimPrefix(path, "/")
+
+	// Analytics
+	if path == "analytics" {
+		if r.Method == http.MethodGet {
+			h.GetAnalytics(w, r)
+		} else {
+			writeCSIError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	// Direct Benchmarks sub-path (/v2/csi/benchmarks/:id)
+	if strings.HasPrefix(path, "benchmarks") {
+		sub := strings.TrimPrefix(path, "benchmarks")
+		sub = strings.TrimPrefix(sub, "/")
+		parts := strings.Split(sub, "/")
+		benchmarkID := parts[0]
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetBenchmarkByID(w, r, benchmarkID)
+			case http.MethodPut:
+				h.UpdateBenchmark(w, r, benchmarkID)
+			case http.MethodDelete:
+				h.DeleteBenchmark(w, r, benchmarkID)
+			default:
+				writeCSIError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 && parts[1] == "verify" && r.Method == http.MethodPost {
+			h.VerifyBenchmark(w, r, benchmarkID)
+			return
+		}
+	}
+
+	// Direct Actions sub-path (/v2/csi/actions/:id)
+	if strings.HasPrefix(path, "actions") {
+		sub := strings.TrimPrefix(path, "actions")
+		sub = strings.TrimPrefix(sub, "/")
+		parts := strings.Split(sub, "/")
+		actionID := parts[0]
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetActionByID(w, r, actionID)
+			case http.MethodPut:
+				h.UpdateAction(w, r, actionID)
+			case http.MethodDelete:
+				h.DeleteAction(w, r, actionID)
+			default:
+				writeCSIError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 && parts[1] == "complete" && r.Method == http.MethodPost {
+			h.CompleteAction(w, r, actionID)
+			return
+		}
+	}
+
+	// Direct Reviews sub-path (/v2/csi/reviews/:id)
+	if strings.HasPrefix(path, "reviews") {
+		sub := strings.TrimPrefix(path, "reviews")
+		sub = strings.TrimPrefix(sub, "/")
+		if r.Method == http.MethodGet {
+			h.GetReviewByID(w, r, sub)
+		} else {
+			writeCSIError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	// Initiatives (/v2/csi/initiatives)
+	if strings.HasPrefix(path, "initiatives") {
+		sub := strings.TrimPrefix(path, "initiatives")
+		sub = strings.TrimPrefix(sub, "/")
+		if sub == "" {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListInitiatives(w, r)
+			case http.MethodPost:
+				h.CreateInitiative(w, r)
+			default:
+				writeCSIError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		parts := strings.Split(sub, "/")
+		initiativeID := parts[0]
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetInitiativeByID(w, r, initiativeID)
+			case http.MethodPut:
+				h.UpdateInitiative(w, r, initiativeID)
+			case http.MethodDelete:
+				h.DeleteInitiative(w, r, initiativeID)
+			default:
+				writeCSIError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+		// Nested initiative routes
+		switch parts[1] {
+		case "complete":
+			if r.Method == http.MethodPost {
+				h.CompleteInitiative(w, r, initiativeID)
+			} else {
+				writeCSIError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		case "benchmarks":
+			switch r.Method {
+			case http.MethodGet:
+				h.ListBenchmarks(w, r, initiativeID)
+			case http.MethodPost:
+				h.AddBenchmark(w, r, initiativeID)
+			default:
+				writeCSIError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		case "benefit":
+			switch r.Method {
+			case http.MethodGet:
+				h.GetBenefit(w, r, initiativeID)
+			case http.MethodPost:
+				h.RecordBenefit(w, r, initiativeID)
+			case http.MethodPut:
+				h.UpdateBenefit(w, r, initiativeID)
+			default:
+				writeCSIError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		case "actions":
+			switch r.Method {
+			case http.MethodGet:
+				h.ListActions(w, r, initiativeID)
+			case http.MethodPost:
+				h.CreateAction(w, r, initiativeID)
+			default:
+				writeCSIError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		case "reviews":
+			switch r.Method {
+			case http.MethodGet:
+				h.ListReviews(w, r, initiativeID)
+			case http.MethodPost:
+				h.RecordReview(w, r, initiativeID)
+			default:
+				writeCSIError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+	}
+
+	writeCSIError(w, http.StatusNotFound, "route not found")
+}
