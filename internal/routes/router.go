@@ -300,6 +300,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 ITIL Continual Service Improvement (CSI)
+	if strings.HasPrefix(r.URL.Path, "/v2/csi") {
+		if handler.GlobalCSIHandler == nil {
+			http.Error(w, "CSI handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalCSIHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return
