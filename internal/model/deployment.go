@@ -1,6 +1,8 @@
 package model
 
 import (
+	"errors"
+	"strings"
 	"time"
 )
 
@@ -273,4 +275,234 @@ type RollbackPolicy struct {
 	RollbackLogs          string     `json:"rollback_logs,omitempty"`
 	CreatedAt             time.Time  `json:"created_at"`
 	UpdatedAt             time.Time  `json:"updated_at"`
+}
+
+// DTOs and validation rules for Deployment API
+
+// CreateDeploymentPipelineRequest payload for creating a pipeline
+type CreateDeploymentPipelineRequest struct {
+	WorkspaceID         string `json:"workspace_id"`
+	PipelineCode        string `json:"pipeline_code"`
+	Name                string `json:"name"`
+	Description         string `json:"description,omitempty"`
+	TargetEnvironment   string `json:"target_environment"`
+	DeploymentStrategy  string `json:"deployment_strategy"`
+	AutoRollbackEnabled bool   `json:"auto_rollback_enabled"`
+	LinkedCIID          string `json:"linked_ci_id,omitempty"`
+	CreatedByUserID     string `json:"created_by_user_id,omitempty"`
+}
+
+func (r *CreateDeploymentPipelineRequest) Validate() error {
+	if strings.TrimSpace(r.WorkspaceID) == "" {
+		return errors.New("workspace_id is required")
+	}
+	if strings.TrimSpace(r.PipelineCode) == "" {
+		return errors.New("pipeline_code is required")
+	}
+	if strings.TrimSpace(r.Name) == "" {
+		return errors.New("name is required")
+	}
+	if !IsValidEnvironment(r.TargetEnvironment) {
+		return errors.New("invalid target_environment")
+	}
+	if !IsValidDeploymentStrategy(r.DeploymentStrategy) {
+		return errors.New("invalid deployment_strategy")
+	}
+	return nil
+}
+
+// UpdateDeploymentPipelineRequest payload for updating a pipeline
+type UpdateDeploymentPipelineRequest struct {
+	Name                *string `json:"name,omitempty"`
+	Description         *string `json:"description,omitempty"`
+	TargetEnvironment   *string `json:"target_environment,omitempty"`
+	DeploymentStrategy  *string `json:"deployment_strategy,omitempty"`
+	AutoRollbackEnabled *bool   `json:"auto_rollback_enabled,omitempty"`
+	LinkedCIID          *string `json:"linked_ci_id,omitempty"`
+	Status              *string `json:"status,omitempty"`
+}
+
+func (r *UpdateDeploymentPipelineRequest) Validate() error {
+	if r.TargetEnvironment != nil && !IsValidEnvironment(*r.TargetEnvironment) {
+		return errors.New("invalid target_environment")
+	}
+	if r.DeploymentStrategy != nil && !IsValidDeploymentStrategy(*r.DeploymentStrategy) {
+		return errors.New("invalid deployment_strategy")
+	}
+	if r.Status != nil && !IsValidPipelineStatus(*r.Status) {
+		return errors.New("invalid status")
+	}
+	return nil
+}
+
+// CreateDeploymentRunRequest payload for initiating a deployment run
+type CreateDeploymentRunRequest struct {
+	WorkspaceID      string `json:"workspace_id"`
+	PipelineID       string `json:"pipeline_id"`
+	ReleaseVersion   string `json:"release_version"`
+	Environment      string `json:"environment"`
+	TriggerType      string `json:"trigger_type"`
+	DeployedByUserID string `json:"deployed_by_user_id,omitempty"`
+	CommitHash       string `json:"commit_hash,omitempty"`
+	Changelog        string `json:"changelog,omitempty"`
+}
+
+func (r *CreateDeploymentRunRequest) Validate() error {
+	if strings.TrimSpace(r.WorkspaceID) == "" {
+		return errors.New("workspace_id is required")
+	}
+	if strings.TrimSpace(r.PipelineID) == "" {
+		return errors.New("pipeline_id is required")
+	}
+	if strings.TrimSpace(r.ReleaseVersion) == "" {
+		return errors.New("release_version is required")
+	}
+	if !IsValidEnvironment(r.Environment) {
+		return errors.New("invalid environment")
+	}
+	if !IsValidRunTrigger(r.TriggerType) {
+		return errors.New("invalid trigger_type")
+	}
+	return nil
+}
+
+// UpdateDeploymentRunStatusRequest payload for transitioning run status
+type UpdateDeploymentRunStatusRequest struct {
+	Status          string  `json:"status"`
+	DurationSeconds float64 `json:"duration_seconds,omitempty"`
+	RollbackReason  string  `json:"rollback_reason,omitempty"`
+}
+
+func (r *UpdateDeploymentRunStatusRequest) Validate() error {
+	if !IsValidRunStatus(r.Status) {
+		return errors.New("invalid run status")
+	}
+	return nil
+}
+
+// CreateDeploymentGateRequest payload for registering a deployment gate
+type CreateDeploymentGateRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+	RunID       string `json:"run_id"`
+	GateType    string `json:"gate_type"`
+	GateName    string `json:"gate_name"`
+}
+
+func (r *CreateDeploymentGateRequest) Validate() error {
+	if strings.TrimSpace(r.WorkspaceID) == "" {
+		return errors.New("workspace_id is required")
+	}
+	if strings.TrimSpace(r.RunID) == "" {
+		return errors.New("run_id is required")
+	}
+	if !IsValidGateType(r.GateType) {
+		return errors.New("invalid gate_type")
+	}
+	if strings.TrimSpace(r.GateName) == "" {
+		return errors.New("gate_name is required")
+	}
+	return nil
+}
+
+// EvaluateDeploymentGateRequest payload for evaluating or waiving a gate
+type EvaluateDeploymentGateRequest struct {
+	Status          string `json:"status"`
+	EvaluatorID     string `json:"evaluator_id"`
+	WaiverReason    string `json:"waiver_reason,omitempty"`
+	EvidenceDetails string `json:"evidence_details,omitempty"`
+}
+
+func (r *EvaluateDeploymentGateRequest) Validate() error {
+	if !IsValidGateStatus(r.Status) {
+		return errors.New("invalid gate status")
+	}
+	if strings.TrimSpace(r.EvaluatorID) == "" {
+		return errors.New("evaluator_id is required")
+	}
+	if r.Status == GateStatusWaived && strings.TrimSpace(r.WaiverReason) == "" {
+		return errors.New("waiver_reason is required when status is waived")
+	}
+	return nil
+}
+
+// CreateDeploymentStepRequest payload for adding a rollout stage step
+type CreateDeploymentStepRequest struct {
+	WorkspaceID        string  `json:"workspace_id"`
+	RunID              string  `json:"run_id"`
+	StepOrder          int     `json:"step_order"`
+	StepName           string  `json:"step_name"`
+	TrafficPercentage  float64 `json:"traffic_percentage"`
+	SoakTimeMinutes    int     `json:"soak_time_minutes"`
+	ErrorRateThreshold float64 `json:"error_rate_threshold"`
+}
+
+func (r *CreateDeploymentStepRequest) Validate() error {
+	if strings.TrimSpace(r.WorkspaceID) == "" {
+		return errors.New("workspace_id is required")
+	}
+	if strings.TrimSpace(r.RunID) == "" {
+		return errors.New("run_id is required")
+	}
+	if r.StepOrder <= 0 {
+		return errors.New("step_order must be greater than 0")
+	}
+	if strings.TrimSpace(r.StepName) == "" {
+		return errors.New("step_name is required")
+	}
+	if r.TrafficPercentage < 0 || r.TrafficPercentage > 100 {
+		return errors.New("traffic_percentage must be between 0 and 100")
+	}
+	return nil
+}
+
+// PromoteDeploymentStepRequest payload for advancing or aborting a step
+type PromoteDeploymentStepRequest struct {
+	Status          string  `json:"status"`
+	ActualErrorRate float64 `json:"actual_error_rate"`
+}
+
+func (r *PromoteDeploymentStepRequest) Validate() error {
+	if !IsValidStepStatus(r.Status) {
+		return errors.New("invalid step status")
+	}
+	return nil
+}
+
+// CreateRollbackPolicyRequest payload for registering a rollback policy
+type CreateRollbackPolicyRequest struct {
+	WorkspaceID           string  `json:"workspace_id"`
+	PipelineID            string  `json:"pipeline_id"`
+	RunID                 string  `json:"run_id,omitempty"`
+	TriggerCondition      string  `json:"trigger_condition"`
+	ThresholdValue        float64 `json:"threshold_value"`
+	TargetRollbackVersion string  `json:"target_rollback_version"`
+}
+
+func (r *CreateRollbackPolicyRequest) Validate() error {
+	if strings.TrimSpace(r.WorkspaceID) == "" {
+		return errors.New("workspace_id is required")
+	}
+	if strings.TrimSpace(r.PipelineID) == "" {
+		return errors.New("pipeline_id is required")
+	}
+	if !IsValidRollbackTrigger(r.TriggerCondition) {
+		return errors.New("invalid trigger_condition")
+	}
+	if strings.TrimSpace(r.TargetRollbackVersion) == "" {
+		return errors.New("target_rollback_version is required")
+	}
+	return nil
+}
+
+// ExecuteRollbackRequest payload for executing or updating a rollback
+type ExecuteRollbackRequest struct {
+	ExecutionStatus string `json:"execution_status"`
+	RollbackLogs    string `json:"rollback_logs,omitempty"`
+}
+
+func (r *ExecuteRollbackRequest) Validate() error {
+	if !IsValidRollbackStatus(r.ExecutionStatus) {
+		return errors.New("invalid execution_status")
+	}
+	return nil
 }
