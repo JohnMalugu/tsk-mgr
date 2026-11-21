@@ -3194,6 +3194,28 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	csiActionsQuery := `
+	CREATE TABLE IF NOT EXISTS csi_actions (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		initiative_id TEXT NOT NULL,
+		step_number INTEGER NOT NULL,
+		description TEXT NOT NULL,
+		assignee_id TEXT,
+		due_date DATETIME NOT NULL,
+		status TEXT NOT NULL,
+		verification_evidence TEXT,
+		completed_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (initiative_id) REFERENCES csi_initiatives(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(csiActionsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
