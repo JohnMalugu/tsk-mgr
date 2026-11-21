@@ -77,33 +77,111 @@ func NewCSIService(repo repository.CSIRepository) CSIService {
 	return &csiService{repo: repo}
 }
 
-// Stubs to be implemented in subsequent commits
+// CreateInitiative validates request and creates a new CIR initiative
 func (s *csiService) CreateInitiative(ctx context.Context, workspaceID string, req model.CreateCSIInitiativeRequest) (*model.CSIInitiative, error) {
-	return nil, errors.New("not implemented")
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	initiative := &model.CSIInitiative{
+		WorkspaceID:          workspaceID,
+		InitiativeCode:       strings.TrimSpace(req.InitiativeCode),
+		Title:                strings.TrimSpace(req.Title),
+		Description:          strings.TrimSpace(req.Description),
+		StrategicAlignment:   req.StrategicAlignment,
+		Priority:             req.Priority,
+		Status:               req.Status,
+		Source:               req.Source,
+		SourceReferenceID:    strings.TrimSpace(req.SourceReferenceID),
+		CIID:                 strings.TrimSpace(req.CIID),
+		OwnerID:              strings.TrimSpace(req.OwnerID),
+		TargetCompletionDate: req.TargetCompletionDate,
+	}
+
+	if err := s.repo.CreateInitiative(ctx, initiative); err != nil {
+		return nil, err
+	}
+	return initiative, nil
 }
 
+// GetInitiativeByID retrieves an initiative by ID
 func (s *csiService) GetInitiativeByID(ctx context.Context, id string) (*model.CSIInitiative, error) {
-	return nil, errors.New("not implemented")
+	return s.repo.GetInitiativeByID(ctx, id)
 }
 
+// GetInitiativeByCode retrieves an initiative by code
 func (s *csiService) GetInitiativeByCode(ctx context.Context, workspaceID string, code string) (*model.CSIInitiative, error) {
-	return nil, errors.New("not implemented")
+	return s.repo.GetInitiativeByCode(ctx, workspaceID, code)
 }
 
+// UpdateInitiative modifies fields of an ongoing initiative
 func (s *csiService) UpdateInitiative(ctx context.Context, id string, req model.UpdateCSIInitiativeRequest) (*model.CSIInitiative, error) {
-	return nil, errors.New("not implemented")
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	initiative, err := s.repo.GetInitiativeByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Title != nil {
+		initiative.Title = strings.TrimSpace(*req.Title)
+	}
+	if req.Description != nil {
+		initiative.Description = strings.TrimSpace(*req.Description)
+	}
+	if req.StrategicAlignment != nil {
+		initiative.StrategicAlignment = *req.StrategicAlignment
+	}
+	if req.Priority != nil {
+		initiative.Priority = *req.Priority
+	}
+	if req.Status != nil {
+		initiative.Status = *req.Status
+		if *req.Status == model.CSIStatusCompleted && initiative.CompletedAt == nil {
+			now := time.Now().UTC()
+			initiative.CompletedAt = &now
+		}
+	}
+	if req.Source != nil {
+		initiative.Source = *req.Source
+	}
+	if req.SourceReferenceID != nil {
+		initiative.SourceReferenceID = strings.TrimSpace(*req.SourceReferenceID)
+	}
+	if req.CIID != nil {
+		initiative.CIID = strings.TrimSpace(*req.CIID)
+	}
+	if req.OwnerID != nil {
+		initiative.OwnerID = strings.TrimSpace(*req.OwnerID)
+	}
+	if req.TargetCompletionDate != nil {
+		initiative.TargetCompletionDate = *req.TargetCompletionDate
+	}
+
+	if err := s.repo.UpdateInitiative(ctx, initiative); err != nil {
+		return nil, err
+	}
+	return initiative, nil
 }
 
+// CompleteInitiative marks an initiative as completed with completion timestamp
 func (s *csiService) CompleteInitiative(ctx context.Context, id string) (*model.CSIInitiative, error) {
-	return nil, errors.New("not implemented")
+	status := model.CSIStatusCompleted
+	return s.UpdateInitiative(ctx, id, model.UpdateCSIInitiativeRequest{
+		Status: &status,
+	})
 }
 
+// DeleteInitiative removes an initiative record
 func (s *csiService) DeleteInitiative(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	return s.repo.DeleteInitiative(ctx, id)
 }
 
+// ListInitiatives queries initiatives with filter criteria
 func (s *csiService) ListInitiatives(ctx context.Context, filter model.CSIFilterCriteria) ([]model.CSIInitiative, int, error) {
-	return nil, 0, errors.New("not implemented")
+	return s.repo.ListInitiatives(ctx, filter)
 }
 
 func (s *csiService) AddBenchmark(ctx context.Context, workspaceID string, initiativeID string, req model.CreateCSIBenchmarkRequest) (*model.CSIBenchmark, error) {
