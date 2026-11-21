@@ -352,40 +352,131 @@ func (s *csiService) UpdateBenefit(ctx context.Context, initiativeID string, req
 	return benefit, nil
 }
 
+// CreateAction adds a step to an initiative's action plan
 func (s *csiService) CreateAction(ctx context.Context, workspaceID string, initiativeID string, req model.CreateCSIActionRequest) (*model.CSIAction, error) {
-	return nil, errors.New("not implemented")
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Verify initiative exists
+	if _, err := s.repo.GetInitiativeByID(ctx, initiativeID); err != nil {
+		return nil, err
+	}
+
+	action := &model.CSIAction{
+		WorkspaceID:          workspaceID,
+		InitiativeID:         initiativeID,
+		StepNumber:           req.StepNumber,
+		Description:          strings.TrimSpace(req.Description),
+		AssigneeID:           strings.TrimSpace(req.AssigneeID),
+		DueDate:              req.DueDate,
+		Status:               req.Status,
+		VerificationEvidence: strings.TrimSpace(req.VerificationEvidence),
+	}
+
+	if err := s.repo.CreateAction(ctx, action); err != nil {
+		return nil, err
+	}
+	return action, nil
 }
 
+// GetActionByID retrieves an action item by ID
 func (s *csiService) GetActionByID(ctx context.Context, id string) (*model.CSIAction, error) {
-	return nil, errors.New("not implemented")
+	return s.repo.GetActionByID(ctx, id)
 }
 
+// UpdateAction updates fields of an action item
 func (s *csiService) UpdateAction(ctx context.Context, id string, req model.UpdateCSIActionRequest) (*model.CSIAction, error) {
-	return nil, errors.New("not implemented")
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	action, err := s.repo.GetActionByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Description != nil {
+		action.Description = strings.TrimSpace(*req.Description)
+	}
+	if req.AssigneeID != nil {
+		action.AssigneeID = strings.TrimSpace(*req.AssigneeID)
+	}
+	if req.DueDate != nil {
+		action.DueDate = *req.DueDate
+	}
+	if req.Status != nil {
+		action.Status = *req.Status
+		if *req.Status == model.CSIActionCompleted && action.CompletedAt == nil {
+			now := time.Now().UTC()
+			action.CompletedAt = &now
+		}
+	}
+	if req.VerificationEvidence != nil {
+		action.VerificationEvidence = strings.TrimSpace(*req.VerificationEvidence)
+	}
+
+	if err := s.repo.UpdateAction(ctx, action); err != nil {
+		return nil, err
+	}
+	return action, nil
 }
 
+// CompleteAction marks an action step as completed
 func (s *csiService) CompleteAction(ctx context.Context, id string, evidence string) (*model.CSIAction, error) {
-	return nil, errors.New("not implemented")
+	status := model.CSIActionCompleted
+	return s.UpdateAction(ctx, id, model.UpdateCSIActionRequest{
+		Status:               &status,
+		VerificationEvidence: &evidence,
+	})
 }
 
+// DeleteAction deletes an action step
 func (s *csiService) DeleteAction(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	return s.repo.DeleteAction(ctx, id)
 }
 
+// ListActions lists actions for an initiative
 func (s *csiService) ListActions(ctx context.Context, initiativeID string) ([]model.CSIAction, error) {
-	return nil, errors.New("not implemented")
+	return s.repo.ListActions(ctx, initiativeID)
 }
 
+// RecordReview logs a formal governance review for an initiative
 func (s *csiService) RecordReview(ctx context.Context, workspaceID string, initiativeID string, req model.RecordCSIReviewRequest) (*model.CSIReview, error) {
-	return nil, errors.New("not implemented")
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Verify initiative exists
+	if _, err := s.repo.GetInitiativeByID(ctx, initiativeID); err != nil {
+		return nil, err
+	}
+
+	review := &model.CSIReview{
+		WorkspaceID:    workspaceID,
+		InitiativeID:   initiativeID,
+		ReviewDate:     req.ReviewDate,
+		ReviewerID:     strings.TrimSpace(req.ReviewerID),
+		Outcome:        req.Outcome,
+		Findings:       strings.TrimSpace(req.Findings),
+		LessonsLearned: strings.TrimSpace(req.LessonsLearned),
+		NextReviewDate: req.NextReviewDate,
+	}
+
+	if err := s.repo.CreateReview(ctx, review); err != nil {
+		return nil, err
+	}
+	return review, nil
 }
 
+// GetReviewByID retrieves a review by ID
 func (s *csiService) GetReviewByID(ctx context.Context, id string) (*model.CSIReview, error) {
-	return nil, errors.New("not implemented")
+	return s.repo.GetReviewByID(ctx, id)
 }
 
+// ListReviews lists reviews for an initiative
 func (s *csiService) ListReviews(ctx context.Context, initiativeID string) ([]model.CSIReview, error) {
-	return nil, errors.New("not implemented")
+	return s.repo.ListReviews(ctx, initiativeID)
 }
 
 func (s *csiService) GetCSIAnalytics(ctx context.Context, workspaceID string) (*model.CSIAnalytics, error) {
