@@ -608,36 +608,278 @@ func (r *csiRepository) UpdateBenefit(ctx context.Context, benefit *model.CSIBen
 	return r.SaveBenefit(ctx, benefit)
 }
 
+// CreateAction creates an action item under an initiative
 func (r *csiRepository) CreateAction(ctx context.Context, action *model.CSIAction) error {
-	return errors.New("not implemented")
+	if err := action.Validate(); err != nil {
+		return err
+	}
+	if action.ID == "" {
+		action.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if action.CreatedAt.IsZero() {
+		action.CreatedAt = now
+	}
+	action.UpdatedAt = now
+
+	if action.StepNumber <= 0 {
+		var maxStep int
+		_ = r.db.QueryRowContext(ctx, "SELECT COALESCE(MAX(step_number), 0) FROM csi_actions WHERE initiative_id = ?", action.InitiativeID).Scan(&maxStep)
+		action.StepNumber = maxStep + 1
+	}
+
+	query := `
+	INSERT INTO csi_actions (
+		id, workspace_id, initiative_id, step_number,
+		description, assignee_id, due_date, status,
+		verification_evidence, completed_at, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		action.ID, action.WorkspaceID, action.InitiativeID, action.StepNumber,
+		action.Description, action.AssigneeID, action.DueDate, action.Status,
+		action.VerificationEvidence, action.CompletedAt, action.CreatedAt, action.UpdatedAt,
+	)
+	return err
 }
 
+// GetActionByID retrieves an action item by ID
 func (r *csiRepository) GetActionByID(ctx context.Context, id string) (*model.CSIAction, error) {
-	return nil, errors.New("not implemented")
+	query := `
+	SELECT id, workspace_id, initiative_id, step_number,
+	       description, assignee_id, due_date, status,
+	       verification_evidence, completed_at, created_at, updated_at
+	FROM csi_actions WHERE id = ?`
+
+	var a model.CSIAction
+	var assigneeID, evidence sql.NullString
+	var completedAt sql.NullTime
+
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&a.ID, &a.WorkspaceID, &a.InitiativeID, &a.StepNumber,
+		&a.Description, &assigneeID, &a.DueDate, &a.Status,
+		&evidence, &completedAt, &a.CreatedAt, &a.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrCSIActionNotFound
+		}
+		return nil, err
+	}
+	if assigneeID.Valid {
+		a.AssigneeID = assigneeID.String
+	}
+	if evidence.Valid {
+		a.VerificationEvidence = evidence.String
+	}
+	if completedAt.Valid {
+		t := completedAt.Time
+		a.CompletedAt = &t
+	}
+	return &a, nil
 }
 
+// UpdateAction updates fields of an action step
 func (r *csiRepository) UpdateAction(ctx context.Context, action *model.CSIAction) error {
-	return errors.New("not implemented")
+	if err := action.Validate(); err != nil {
+		return err
+	}
+	action.UpdatedAt = time.Now().UTC()
+
+	query := `
+	UPDATE csi_actions SET
+		step_number = ?, description = ?, assignee_id = ?,
+		due_date = ?, status = ?, verification_evidence = ?,
+		completed_at = ?, updated_at = ?
+	WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		action.StepNumber, action.Description, action.AssigneeID,
+		action.DueDate, action.Status, action.VerificationEvidence,
+		action.CompletedAt, action.UpdatedAt,
+		action.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrCSIActionNotFound
+	}
+	return nil
 }
 
+// DeleteAction removes an action item
 func (r *csiRepository) DeleteAction(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	query := `DELETE FROM csi_actions WHERE id = ?`
+	res, err := r.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrCSIActionNotFound
+	}
+	return nil
 }
 
+// ListActions returns action items for an initiative ordered by step number
 func (r *csiRepository) ListActions(ctx context.Context, initiativeID string) ([]model.CSIAction, error) {
-	return nil, errors.New("not implemented")
+	query := `
+	SELECT id, workspace_id, initiative_id, step_number,
+	       description, assignee_id, due_date, status,
+	       verification_evidence, completed_at, created_at, updated_at
+	FROM csi_actions WHERE initiative_id = ?
+	ORDER BY step_number ASC`
+
+	rows, err := r.db.QueryContext(ctx, query, initiativeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var actions []model.CSIAction
+	for rows.Next() {
+		var a model.CSIAction
+		var assigneeID, evidence sql.NullString
+		var completedAt sql.NullTime
+
+		err := rows.Scan(
+			&a.ID, &a.WorkspaceID, &a.InitiativeID, &a.StepNumber,
+			&a.Description, &assigneeID, &a.DueDate, &a.Status,
+			&evidence, &completedAt, &a.CreatedAt, &a.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if assigneeID.Valid {
+			a.AssigneeID = assigneeID.String
+		}
+		if evidence.Valid {
+			a.VerificationEvidence = evidence.String
+		}
+		if completedAt.Valid {
+			t := completedAt.Time
+			a.CompletedAt = &t
+		}
+		actions = append(actions, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return actions, nil
 }
 
+// CreateReview logs a governance or post-implementation review
 func (r *csiRepository) CreateReview(ctx context.Context, review *model.CSIReview) error {
-	return errors.New("not implemented")
+	if err := review.Validate(); err != nil {
+		return err
+	}
+	if review.ID == "" {
+		review.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if review.CreatedAt.IsZero() {
+		review.CreatedAt = now
+	}
+	review.UpdatedAt = now
+
+	query := `
+	INSERT INTO csi_reviews (
+		id, workspace_id, initiative_id, review_date,
+		reviewer_id, outcome, findings, lessons_learned,
+		next_review_date, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		review.ID, review.WorkspaceID, review.InitiativeID, review.ReviewDate,
+		review.ReviewerID, review.Outcome, review.Findings, review.LessonsLearned,
+		review.NextReviewDate, review.CreatedAt, review.UpdatedAt,
+	)
+	return err
 }
 
+// GetReviewByID retrieves a review entry by ID
 func (r *csiRepository) GetReviewByID(ctx context.Context, id string) (*model.CSIReview, error) {
-	return nil, errors.New("not implemented")
+	query := `
+	SELECT id, workspace_id, initiative_id, review_date,
+	       reviewer_id, outcome, findings, lessons_learned,
+	       next_review_date, created_at, updated_at
+	FROM csi_reviews WHERE id = ?`
+
+	var rv model.CSIReview
+	var lessons sql.NullString
+	var nextRev sql.NullTime
+
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&rv.ID, &rv.WorkspaceID, &rv.InitiativeID, &rv.ReviewDate,
+		&rv.ReviewerID, &rv.Outcome, &rv.Findings, &lessons,
+		&nextRev, &rv.CreatedAt, &rv.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrCSIReviewNotFound
+		}
+		return nil, err
+	}
+	if lessons.Valid {
+		rv.LessonsLearned = lessons.String
+	}
+	if nextRev.Valid {
+		t := nextRev.Time
+		rv.NextReviewDate = &t
+	}
+	return &rv, nil
 }
 
+// ListReviews returns all reviews associated with an initiative
 func (r *csiRepository) ListReviews(ctx context.Context, initiativeID string) ([]model.CSIReview, error) {
-	return nil, errors.New("not implemented")
+	query := `
+	SELECT id, workspace_id, initiative_id, review_date,
+	       reviewer_id, outcome, findings, lessons_learned,
+	       next_review_date, created_at, updated_at
+	FROM csi_reviews WHERE initiative_id = ?
+	ORDER BY review_date DESC`
+
+	rows, err := r.db.QueryContext(ctx, query, initiativeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var reviews []model.CSIReview
+	for rows.Next() {
+		var rv model.CSIReview
+		var lessons sql.NullString
+		var nextRev sql.NullTime
+
+		err := rows.Scan(
+			&rv.ID, &rv.WorkspaceID, &rv.InitiativeID, &rv.ReviewDate,
+			&rv.ReviewerID, &rv.Outcome, &rv.Findings, &lessons,
+			&nextRev, &rv.CreatedAt, &rv.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if lessons.Valid {
+			rv.LessonsLearned = lessons.String
+		}
+		if nextRev.Valid {
+			t := nextRev.Time
+			rv.NextReviewDate = &t
+		}
+		reviews = append(reviews, rv)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return reviews, nil
 }
 
 func (r *csiRepository) GetCSIAnalytics(ctx context.Context, workspaceID string) (*model.CSIAnalytics, error) {
