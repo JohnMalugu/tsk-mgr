@@ -3237,6 +3237,28 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	deploymentPipelinesQuery := `
+	CREATE TABLE IF NOT EXISTS deployment_pipelines (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		pipeline_code TEXT NOT NULL,
+		name TEXT NOT NULL,
+		description TEXT,
+		target_environment TEXT NOT NULL,
+		deployment_strategy TEXT NOT NULL,
+		auto_rollback_enabled BOOLEAN NOT NULL DEFAULT 1,
+		linked_ci_id TEXT,
+		status TEXT NOT NULL,
+		created_by_user_id TEXT,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);`
+
+	_, err = db.Exec(deploymentPipelinesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
