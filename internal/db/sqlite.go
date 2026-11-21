@@ -3259,6 +3259,33 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	deploymentRunsQuery := `
+	CREATE TABLE IF NOT EXISTS deployment_runs (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		pipeline_id TEXT NOT NULL,
+		run_number INTEGER NOT NULL,
+		release_version TEXT NOT NULL,
+		environment TEXT NOT NULL,
+		trigger_type TEXT NOT NULL,
+		status TEXT NOT NULL,
+		started_at DATETIME NOT NULL,
+		finished_at DATETIME,
+		duration_seconds REAL NOT NULL DEFAULT 0.0,
+		deployed_by_user_id TEXT,
+		rollback_reason TEXT,
+		commit_hash TEXT,
+		changelog TEXT,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (pipeline_id) REFERENCES deployment_pipelines(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(deploymentRunsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
