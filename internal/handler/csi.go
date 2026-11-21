@@ -220,3 +220,265 @@ func (h *CSIHandler) DeleteInitiative(w http.ResponseWriter, r *http.Request, id
 	}
 	writeCSIJSON(w, http.StatusOK, map[string]string{"message": "continual improvement initiative deleted successfully"})
 }
+
+// Benchmark Endpoints
+
+// ListBenchmarks handles GET /v2/csi/initiatives/:id/benchmarks
+func (h *CSIHandler) ListBenchmarks(w http.ResponseWriter, r *http.Request, initiativeID string) {
+	benchmarks, err := h.svc.ListBenchmarks(r.Context(), initiativeID)
+	if err != nil {
+		handleCSIError(w, err)
+		return
+	}
+	writeCSIJSON(w, http.StatusOK, map[string]interface{}{
+		"benchmarks": benchmarks,
+		"total":      len(benchmarks),
+	})
+}
+
+// AddBenchmark handles POST /v2/csi/initiatives/:id/benchmarks
+func (h *CSIHandler) AddBenchmark(w http.ResponseWriter, r *http.Request, initiativeID string) {
+	wsID := getCSIWorkspaceID(r)
+
+	var req model.CreateCSIBenchmarkRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeCSIError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	benchmark, err := h.svc.AddBenchmark(r.Context(), wsID, initiativeID, req)
+	if err != nil {
+		handleCSIError(w, err)
+		return
+	}
+	writeCSIJSON(w, http.StatusCreated, benchmark)
+}
+
+// GetBenchmarkByID handles GET /v2/csi/benchmarks/:id
+func (h *CSIHandler) GetBenchmarkByID(w http.ResponseWriter, r *http.Request, id string) {
+	benchmark, err := h.svc.GetBenchmarkByID(r.Context(), id)
+	if err != nil {
+		handleCSIError(w, err)
+		return
+	}
+	writeCSIJSON(w, http.StatusOK, benchmark)
+}
+
+// UpdateBenchmark handles PUT /v2/csi/benchmarks/:id
+func (h *CSIHandler) UpdateBenchmark(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateCSIBenchmarkRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeCSIError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	benchmark, err := h.svc.UpdateBenchmark(r.Context(), id, req)
+	if err != nil {
+		handleCSIError(w, err)
+		return
+	}
+	writeCSIJSON(w, http.StatusOK, benchmark)
+}
+
+// VerifyBenchmark handles POST /v2/csi/benchmarks/:id/verify
+func (h *CSIHandler) VerifyBenchmark(w http.ResponseWriter, r *http.Request, id string) {
+	var req struct {
+		CurrentValue float64 `json:"current_value"`
+		Notes        string  `json:"notes,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeCSIError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	benchmark, err := h.svc.VerifyBenchmark(r.Context(), id, req.CurrentValue, req.Notes)
+	if err != nil {
+		handleCSIError(w, err)
+		return
+	}
+	writeCSIJSON(w, http.StatusOK, benchmark)
+}
+
+// DeleteBenchmark handles DELETE /v2/csi/benchmarks/:id
+func (h *CSIHandler) DeleteBenchmark(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteBenchmark(r.Context(), id); err != nil {
+		handleCSIError(w, err)
+		return
+	}
+	writeCSIJSON(w, http.StatusOK, map[string]string{"message": "benchmark deleted successfully"})
+}
+
+// Benefit Endpoints
+
+// GetBenefit handles GET /v2/csi/initiatives/:id/benefit
+func (h *CSIHandler) GetBenefit(w http.ResponseWriter, r *http.Request, initiativeID string) {
+	benefit, err := h.svc.GetBenefit(r.Context(), initiativeID)
+	if err != nil {
+		handleCSIError(w, err)
+		return
+	}
+	writeCSIJSON(w, http.StatusOK, benefit)
+}
+
+// RecordBenefit handles POST /v2/csi/initiatives/:id/benefit
+func (h *CSIHandler) RecordBenefit(w http.ResponseWriter, r *http.Request, initiativeID string) {
+	wsID := getCSIWorkspaceID(r)
+
+	var req model.RecordCSIBenefitRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeCSIError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	benefit, err := h.svc.RecordBenefit(r.Context(), wsID, initiativeID, req)
+	if err != nil {
+		handleCSIError(w, err)
+		return
+	}
+	writeCSIJSON(w, http.StatusCreated, benefit)
+}
+
+// UpdateBenefit handles PUT /v2/csi/initiatives/:id/benefit
+func (h *CSIHandler) UpdateBenefit(w http.ResponseWriter, r *http.Request, initiativeID string) {
+	var req model.UpdateCSIBenefitRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeCSIError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	benefit, err := h.svc.UpdateBenefit(r.Context(), initiativeID, req)
+	if err != nil {
+		handleCSIError(w, err)
+		return
+	}
+	writeCSIJSON(w, http.StatusOK, benefit)
+}
+
+// Action Endpoints
+
+// ListActions handles GET /v2/csi/initiatives/:id/actions
+func (h *CSIHandler) ListActions(w http.ResponseWriter, r *http.Request, initiativeID string) {
+	actions, err := h.svc.ListActions(r.Context(), initiativeID)
+	if err != nil {
+		handleCSIError(w, err)
+		return
+	}
+	writeCSIJSON(w, http.StatusOK, map[string]interface{}{
+		"actions": actions,
+		"total":   len(actions),
+	})
+}
+
+// CreateAction handles POST /v2/csi/initiatives/:id/actions
+func (h *CSIHandler) CreateAction(w http.ResponseWriter, r *http.Request, initiativeID string) {
+	wsID := getCSIWorkspaceID(r)
+
+	var req model.CreateCSIActionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeCSIError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	action, err := h.svc.CreateAction(r.Context(), wsID, initiativeID, req)
+	if err != nil {
+		handleCSIError(w, err)
+		return
+	}
+	writeCSIJSON(w, http.StatusCreated, action)
+}
+
+// GetActionByID handles GET /v2/csi/actions/:id
+func (h *CSIHandler) GetActionByID(w http.ResponseWriter, r *http.Request, id string) {
+	action, err := h.svc.GetActionByID(r.Context(), id)
+	if err != nil {
+		handleCSIError(w, err)
+		return
+	}
+	writeCSIJSON(w, http.StatusOK, action)
+}
+
+// UpdateAction handles PUT /v2/csi/actions/:id
+func (h *CSIHandler) UpdateAction(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateCSIActionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeCSIError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	action, err := h.svc.UpdateAction(r.Context(), id, req)
+	if err != nil {
+		handleCSIError(w, err)
+		return
+	}
+	writeCSIJSON(w, http.StatusOK, action)
+}
+
+// CompleteAction handles POST /v2/csi/actions/:id/complete
+func (h *CSIHandler) CompleteAction(w http.ResponseWriter, r *http.Request, id string) {
+	var req struct {
+		VerificationEvidence string `json:"verification_evidence"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeCSIError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	action, err := h.svc.CompleteAction(r.Context(), id, req.VerificationEvidence)
+	if err != nil {
+		handleCSIError(w, err)
+		return
+	}
+	writeCSIJSON(w, http.StatusOK, action)
+}
+
+// DeleteAction handles DELETE /v2/csi/actions/:id
+func (h *CSIHandler) DeleteAction(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteAction(r.Context(), id); err != nil {
+		handleCSIError(w, err)
+		return
+	}
+	writeCSIJSON(w, http.StatusOK, map[string]string{"message": "action item deleted successfully"})
+}
+
+// Review Endpoints
+
+// ListReviews handles GET /v2/csi/initiatives/:id/reviews
+func (h *CSIHandler) ListReviews(w http.ResponseWriter, r *http.Request, initiativeID string) {
+	reviews, err := h.svc.ListReviews(r.Context(), initiativeID)
+	if err != nil {
+		handleCSIError(w, err)
+		return
+	}
+	writeCSIJSON(w, http.StatusOK, map[string]interface{}{
+		"reviews": reviews,
+		"total":   len(reviews),
+	})
+}
+
+// RecordReview handles POST /v2/csi/initiatives/:id/reviews
+func (h *CSIHandler) RecordReview(w http.ResponseWriter, r *http.Request, initiativeID string) {
+	wsID := getCSIWorkspaceID(r)
+
+	var req model.RecordCSIReviewRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeCSIError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	review, err := h.svc.RecordReview(r.Context(), wsID, initiativeID, req)
+	if err != nil {
+		handleCSIError(w, err)
+		return
+	}
+	writeCSIJSON(w, http.StatusCreated, review)
+}
+
+// GetReviewByID handles GET /v2/csi/reviews/:id
+func (h *CSIHandler) GetReviewByID(w http.ResponseWriter, r *http.Request, id string) {
+	review, err := h.svc.GetReviewByID(r.Context(), id)
+	if err != nil {
+		handleCSIError(w, err)
+		return
+	}
+	writeCSIJSON(w, http.StatusOK, review)
+}
