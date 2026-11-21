@@ -63,6 +63,14 @@ const (
 	CSIBenefitFullyRealized     = "fully_realized"
 )
 
+// Action status constants
+const (
+	CSIActionPending    = "pending"
+	CSIActionInProgress = "in_progress"
+	CSIActionCompleted  = "completed"
+	CSIActionBlocked    = "blocked"
+)
+
 // CSI domain errors
 var (
 	ErrCSIInitiativeNotFound          = errors.New("continual improvement initiative not found")
@@ -77,6 +85,9 @@ var (
 	ErrCSIBenefitNotFound             = errors.New("CSI benefit realization record not found")
 	ErrInvalidCSIBenefitStatus        = errors.New("invalid CSI benefit realization status")
 	ErrInvalidEffortHours             = errors.New("effort hours must be non-negative")
+	ErrCSIActionNotFound              = errors.New("CSI action item not found")
+	ErrCSIActionDescriptionRequired   = errors.New("action description is required")
+	ErrInvalidCSIActionStatus         = errors.New("invalid CSI action status")
 )
 
 // ValidateCSIAlignment verifies if an alignment category is recognized
@@ -141,6 +152,16 @@ func ValidateCSIBenefitStatus(s string) error {
 		return nil
 	default:
 		return ErrInvalidCSIBenefitStatus
+	}
+}
+
+// ValidateCSIActionStatus verifies if action status is valid
+func ValidateCSIActionStatus(s string) error {
+	switch s {
+	case CSIActionPending, CSIActionInProgress, CSIActionCompleted, CSIActionBlocked:
+		return nil
+	default:
+		return ErrInvalidCSIActionStatus
 	}
 }
 
@@ -261,4 +282,31 @@ func (b *CSIBenefit) CalculateROI(hourlyRate float64) float64 {
 	annualSavings := b.RealizedFinancialSavings + (b.HoursSavedPerMonth * 12.0 * hourlyRate)
 	roi := (annualSavings - cost) / cost
 	return roi
+}
+
+// CSIAction represents an implementation task or milestone under a CSI initiative
+type CSIAction struct {
+	ID                   string     `json:"id"`
+	WorkspaceID          string     `json:"workspace_id"`
+	InitiativeID         string     `json:"initiative_id"`
+	StepNumber           int        `json:"step_number"`
+	Description          string     `json:"description"`
+	AssigneeID           string     `json:"assignee_id,omitempty"`
+	DueDate              time.Time  `json:"due_date"`
+	Status               string     `json:"status"`
+	VerificationEvidence string     `json:"verification_evidence,omitempty"`
+	CompletedAt          *time.Time `json:"completed_at,omitempty"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
+}
+
+// Validate validates the CSIAction entity
+func (a *CSIAction) Validate() error {
+	if strings.TrimSpace(a.Description) == "" {
+		return ErrCSIActionDescriptionRequired
+	}
+	if err := ValidateCSIActionStatus(a.Status); err != nil {
+		return err
+	}
+	return nil
 }
