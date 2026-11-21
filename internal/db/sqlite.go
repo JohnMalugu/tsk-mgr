@@ -3332,6 +3332,29 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	deploymentRollbacksQuery := `
+	CREATE TABLE IF NOT EXISTS deployment_rollbacks (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		pipeline_id TEXT NOT NULL,
+		run_id TEXT,
+		trigger_condition TEXT NOT NULL,
+		threshold_value REAL NOT NULL DEFAULT 0.0,
+		target_rollback_version TEXT NOT NULL,
+		execution_status TEXT NOT NULL,
+		triggered_at DATETIME,
+		completed_at DATETIME,
+		rollback_logs TEXT,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (pipeline_id) REFERENCES deployment_pipelines(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(deploymentRollbacksQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
