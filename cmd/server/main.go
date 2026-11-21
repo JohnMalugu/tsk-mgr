@@ -199,6 +199,10 @@ func main() {
 	availabilitySvc := service.NewAvailabilityService(availabilityRepo)
 	handler.InitAvailabilityHandler(availabilitySvc)
 
+	csiRepo := repository.NewCSIRepository(sqliteDB)
+	csiSvc := service.NewCSIService(csiRepo)
+	handler.InitCSIHandler(csiSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
