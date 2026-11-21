@@ -221,3 +221,56 @@ type DeploymentStep struct {
 	CreatedAt          time.Time  `json:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at"`
 }
+
+// Rollback trigger condition constants
+const (
+	RollbackTriggerErrorRateSpike       = "error_rate_spike"
+	RollbackTriggerLatencyP99Threshold  = "latency_p99_threshold"
+	RollbackTriggerHealthCheckFailure   = "health_check_failure"
+	RollbackTriggerManualAbort          = "manual_abort"
+)
+
+// Rollback execution status constants
+const (
+	RollbackStatusTriggered  = "triggered"
+	RollbackStatusInProgress = "in_progress"
+	RollbackStatusCompleted  = "completed"
+	RollbackStatusFailed     = "failed"
+)
+
+// IsValidRollbackTrigger checks if the rollback trigger condition is valid
+func IsValidRollbackTrigger(trigger string) bool {
+	switch trigger {
+	case RollbackTriggerErrorRateSpike, RollbackTriggerLatencyP99Threshold, RollbackTriggerHealthCheckFailure, RollbackTriggerManualAbort:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsValidRollbackStatus checks if the rollback execution status is valid
+func IsValidRollbackStatus(status string) bool {
+	switch status {
+	case RollbackStatusTriggered, RollbackStatusInProgress, RollbackStatusCompleted, RollbackStatusFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+// RollbackPolicy represents an automated or manual safety policy to revert a failed release
+type RollbackPolicy struct {
+	ID                    string     `json:"id"`
+	WorkspaceID           string     `json:"workspace_id"`
+	PipelineID            string     `json:"pipeline_id"`
+	RunID                 string     `json:"run_id,omitempty"`
+	TriggerCondition      string     `json:"trigger_condition"`
+	ThresholdValue        float64    `json:"threshold_value"`
+	TargetRollbackVersion string     `json:"target_rollback_version"`
+	ExecutionStatus       string     `json:"execution_status"`
+	TriggeredAt           *time.Time `json:"triggered_at,omitempty"`
+	CompletedAt           *time.Time `json:"completed_at,omitempty"`
+	RollbackLogs          string     `json:"rollback_logs,omitempty"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
+}
