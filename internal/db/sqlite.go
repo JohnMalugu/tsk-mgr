@@ -3125,6 +3125,31 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	csiInitiativesQuery := `
+	CREATE TABLE IF NOT EXISTS csi_initiatives (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		initiative_code TEXT NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT,
+		strategic_alignment TEXT NOT NULL,
+		priority TEXT NOT NULL,
+		status TEXT NOT NULL,
+		source TEXT NOT NULL,
+		source_reference_id TEXT,
+		ci_id TEXT,
+		owner_id TEXT,
+		target_completion_date DATETIME NOT NULL,
+		completed_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);`
+
+	_, err = db.Exec(csiInitiativesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
