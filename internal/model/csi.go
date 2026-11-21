@@ -601,3 +601,74 @@ func (r *RecordCSIReviewRequest) Validate() error {
 	}
 	return nil
 }
+
+// CSIFilterCriteria defines search, filter, and pagination parameters for CSI resources
+type CSIFilterCriteria struct {
+	WorkspaceID        string `json:"workspace_id"`
+	InitiativeID       string `json:"initiative_id,omitempty"`
+	StrategicAlignment string `json:"strategic_alignment,omitempty"`
+	Priority           string `json:"priority,omitempty"`
+	Status             string `json:"status,omitempty"`
+	Source             string `json:"source,omitempty"`
+	CIID               string `json:"ci_id,omitempty"`
+	Limit              int    `json:"limit,omitempty"`
+	Offset             int    `json:"offset,omitempty"`
+}
+
+// AlignmentSummary groups initiative counts by strategic alignment
+type AlignmentSummary struct {
+	Alignment string `json:"alignment"`
+	Count     int    `json:"count"`
+}
+
+// CSIAnalytics represents executive continual improvement maturity, ROI realization, and program velocity
+type CSIAnalytics struct {
+	TotalInitiatives         int                `json:"total_initiatives"`
+	ActiveInitiatives        int                `json:"active_initiatives"`
+	CompletedInitiatives     int                `json:"completed_initiatives"`
+	CompletionRate           float64            `json:"completion_rate"`
+	TotalProjectedSavings    float64            `json:"total_projected_savings"`
+	TotalRealizedSavings     float64            `json:"total_realized_savings"`
+	TotalHoursSavedPerMonth  float64            `json:"total_hours_saved_per_month"`
+	TotalEffortHoursInvested float64            `json:"total_effort_hours_invested"`
+	AverageROI               float64            `json:"average_roi"`
+	MaturityScore            float64            `json:"maturity_score"`
+	InitiativesByAlignment   []AlignmentSummary `json:"initiatives_by_alignment"`
+}
+
+// CalculateMaturityScore derives a composite CSI maturity index (0-100) based on initiative throughput, ROI, and governance
+func (a *CSIAnalytics) CalculateMaturityScore() float64 {
+	score := 50.0 // Base baseline
+
+	// Completion throughput contribution (up to 25 pts)
+	if a.TotalInitiatives > 0 {
+		score += (a.CompletionRate * 0.25)
+	}
+
+	// Realized financial savings contribution (up to 15 pts)
+	if a.TotalRealizedSavings > 0 {
+		savingsPts := (a.TotalRealizedSavings / 10000.0) * 3.0
+		if savingsPts > 15.0 {
+			savingsPts = 15.0
+		}
+		score += savingsPts
+	}
+
+	// Positive ROI multiplier contribution (up to 10 pts)
+	if a.AverageROI > 0 {
+		roiPts := a.AverageROI * 5.0
+		if roiPts > 10.0 {
+			roiPts = 10.0
+		}
+		score += roiPts
+	}
+
+	if score > 100.0 {
+		score = 100.0
+	}
+	if score < 0.0 {
+		score = 0.0
+	}
+	a.MaturityScore = score
+	return score
+}
