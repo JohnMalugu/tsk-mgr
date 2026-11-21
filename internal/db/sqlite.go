@@ -3150,6 +3150,28 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	csiBenchmarksQuery := `
+	CREATE TABLE IF NOT EXISTS csi_benchmarks (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		initiative_id TEXT NOT NULL,
+		metric_name TEXT NOT NULL,
+		unit_of_measure TEXT NOT NULL,
+		baseline_value REAL NOT NULL,
+		current_value REAL NOT NULL,
+		target_value REAL NOT NULL,
+		verified_at DATETIME,
+		notes TEXT,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (initiative_id) REFERENCES csi_initiatives(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(csiBenchmarksQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
