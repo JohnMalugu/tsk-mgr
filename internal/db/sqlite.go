@@ -3694,6 +3694,11 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_deploy_runs_started ON deployment_runs(started_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_deploy_gates_run ON deployment_gates(run_id);
 	CREATE INDEX IF NOT EXISTS idx_deploy_gates_ws_status ON deployment_gates(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_deploy_steps_run_order ON deployment_steps(run_id, step_order);
+	CREATE INDEX IF NOT EXISTS idx_deploy_steps_ws_status ON deployment_steps(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_deploy_rollbacks_pipeline ON deployment_rollbacks(pipeline_id);
+	CREATE INDEX IF NOT EXISTS idx_deploy_rollbacks_run ON deployment_rollbacks(run_id);
+	CREATE INDEX IF NOT EXISTS idx_deploy_rollbacks_ws_status ON deployment_rollbacks(workspace_id, execution_status);
 	`
 
 	_, err = db.Exec(indexQuery)
