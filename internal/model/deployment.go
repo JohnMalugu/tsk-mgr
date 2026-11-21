@@ -132,3 +132,56 @@ type DeploymentRun struct {
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
+
+// Gate type constants
+const (
+	GateTypeAutomatedTest        = "automated_test"
+	GateTypeSecurityScan         = "security_scan"
+	GateTypePerformanceBenchmark = "performance_benchmark"
+	GateTypeManualApproval       = "manual_approval"
+	GateTypeChangeApproval       = "change_approval"
+)
+
+// Gate status constants
+const (
+	GateStatusPending = "pending"
+	GateStatusPassed  = "passed"
+	GateStatusFailed  = "failed"
+	GateStatusWaived  = "waived"
+)
+
+// IsValidGateType checks if the gate type is valid
+func IsValidGateType(gt string) bool {
+	switch gt {
+	case GateTypeAutomatedTest, GateTypeSecurityScan, GateTypePerformanceBenchmark, GateTypeManualApproval, GateTypeChangeApproval:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsValidGateStatus checks if the gate status is valid
+func IsValidGateStatus(status string) bool {
+	switch status {
+	case GateStatusPending, GateStatusPassed, GateStatusFailed, GateStatusWaived:
+		return true
+	default:
+		return false
+	}
+}
+
+// DeploymentGate represents a quality or approval check required for a deployment run
+type DeploymentGate struct {
+	ID              string     `json:"id"`
+	WorkspaceID     string     `json:"workspace_id"`
+	RunID           string     `json:"run_id"`
+	GateType        string     `json:"gate_type"`
+	GateName        string     `json:"gate_name"`
+	Status          string     `json:"status"`
+	EvaluatorID     string     `json:"evaluator_id,omitempty"`
+	EvaluatedAt     *time.Time `json:"evaluated_at,omitempty"`
+	WaiverReason    string     `json:"waiver_reason,omitempty"`
+	EvidenceDetails string     `json:"evidence_details,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}
