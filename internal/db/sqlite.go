@@ -3563,6 +3563,10 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_csi_initiatives_ci ON csi_initiatives(ci_id);
 	CREATE INDEX IF NOT EXISTS idx_csi_benchmarks_initiative ON csi_benchmarks(initiative_id);
 	CREATE INDEX IF NOT EXISTS idx_csi_benefits_initiative ON csi_benefits(initiative_id, status);
+	CREATE INDEX IF NOT EXISTS idx_csi_actions_initiative_step ON csi_actions(initiative_id, step_number);
+	CREATE INDEX IF NOT EXISTS idx_csi_actions_ws_status ON csi_actions(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_csi_reviews_initiative_date ON csi_reviews(initiative_id, review_date DESC);
+	CREATE INDEX IF NOT EXISTS idx_csi_reviews_ws ON csi_reviews(workspace_id);
 	`
 
 	_, err = db.Exec(indexQuery)
