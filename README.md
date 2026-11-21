@@ -437,6 +437,19 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET|PUT|DELETE /v2/availability/tests/{id}` to inspect, update, or remove availability tests
 - `POST /v2/availability/tests/{id}/result` to record failover drill outcomes (`passed`, `failed`, `partial`), findings, and automated next test schedules
 - `GET /v2/availability/analytics?workspace_id={id}` for executive Availability Management posture reporting, cross-service uptime %, SLA compliance rate %, MTBF/MTTR averages, top recurring outage services by CI, active critical SPOFs, and Availability Health Index (0–100)
+- `GET|POST /v2/csi/initiatives` to list Continual Improvement Register (CIR) initiatives (`workspace_id`, `strategic_alignment`, `priority`, `status`, `source`, `ci_id`, `limit`, `offset`) or create improvement initiatives aligned with business objectives (`reliability`, `cost_reduction`, `security`, `velocity`, `compliance`, `user_experience`)
+- `GET|PUT|DELETE /v2/csi/initiatives/{id}` to fetch, update, or remove CSI initiatives
+- `POST /v2/csi/initiatives/{id}/complete` to mark an initiative as completed with automated completion timestamps
+- `GET|POST /v2/csi/initiatives/{id}/benchmarks` to list or register baseline vs target measurement benchmarks (`percent`, `milliseconds`, `seconds`, `dollars`, `hours`, `count`)
+- `GET|PUT|DELETE /v2/csi/benchmarks/{id}` to inspect, update, or remove benchmark metrics
+- `POST /v2/csi/benchmarks/{id}/verify` to record measured metric values with verification timestamps
+- `GET|POST|PUT /v2/csi/initiatives/{id}/benefit` to fetch, record, or update value realization metrics, projected vs realized financial savings, effort hours invested, monthly hours saved, and ROI multiplier calculations
+- `GET|POST /v2/csi/initiatives/{id}/actions` to list or create implementation action steps and milestones (`step_number`, `description`, `assignee_id`, `due_date`, `status`)
+- `GET|PUT|DELETE /v2/csi/actions/{id}` to inspect, update, or delete action items
+- `POST /v2/csi/actions/{id}/complete` to complete an action item with verification evidence
+- `GET|POST /v2/csi/initiatives/{id}/reviews` to list or log periodic governance reviews, lessons learned, and retrospective evaluation outcomes (`on_track`, `needs_adjustment`, `goals_achieved`, `terminated`)
+- `GET /v2/csi/reviews/{id}` to inspect individual governance review records
+- `GET /v2/csi/analytics?workspace_id={id}` for executive Continual Service Improvement posture reporting, completion rate %, total projected and realized cost savings ($), monthly hours saved, average ROI multiplier, alignment category distribution, and composite CSI Maturity Score (0–100)
 
 ## Current limitations
 
