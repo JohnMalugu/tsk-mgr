@@ -3216,6 +3216,27 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	csiReviewsQuery := `
+	CREATE TABLE IF NOT EXISTS csi_reviews (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		initiative_id TEXT NOT NULL,
+		review_date DATETIME NOT NULL,
+		reviewer_id TEXT NOT NULL,
+		outcome TEXT NOT NULL,
+		findings TEXT NOT NULL,
+		lessons_learned TEXT,
+		next_review_date DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (initiative_id) REFERENCES csi_initiatives(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(csiReviewsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
