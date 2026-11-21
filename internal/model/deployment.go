@@ -185,3 +185,39 @@ type DeploymentGate struct {
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
+
+// Deployment step status constants
+const (
+	StepStatusPending  = "pending"
+	StepStatusSoaking  = "soaking"
+	StepStatusPromoted = "promoted"
+	StepStatusAborted  = "aborted"
+)
+
+// IsValidStepStatus checks if the step status is valid
+func IsValidStepStatus(status string) bool {
+	switch status {
+	case StepStatusPending, StepStatusSoaking, StepStatusPromoted, StepStatusAborted:
+		return true
+	default:
+		return false
+	}
+}
+
+// DeploymentStep represents an incremental rollout phase (e.g. Canary traffic slice)
+type DeploymentStep struct {
+	ID                 string     `json:"id"`
+	WorkspaceID        string     `json:"workspace_id"`
+	RunID              string     `json:"run_id"`
+	StepOrder          int        `json:"step_order"`
+	StepName           string     `json:"step_name"`
+	TrafficPercentage  float64    `json:"traffic_percentage"`
+	SoakTimeMinutes    int        `json:"soak_time_minutes"`
+	ErrorRateThreshold float64    `json:"error_rate_threshold"`
+	ActualErrorRate    float64    `json:"actual_error_rate"`
+	Status             string     `json:"status"`
+	StartedAt          *time.Time `json:"started_at,omitempty"`
+	CompletedAt        *time.Time `json:"completed_at,omitempty"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+}
