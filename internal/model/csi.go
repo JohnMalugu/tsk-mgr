@@ -56,6 +56,13 @@ const (
 	CSIMetricUnitCount        = "count"
 )
 
+// Benefit realization status constants
+const (
+	CSIBenefitProjected         = "projected"
+	CSIBenefitPartiallyRealized = "partially_realized"
+	CSIBenefitFullyRealized     = "fully_realized"
+)
+
 // CSI domain errors
 var (
 	ErrCSIInitiativeNotFound          = errors.New("continual improvement initiative not found")
@@ -67,6 +74,9 @@ var (
 	ErrCSIBenchmarkNotFound           = errors.New("CSI benchmark metric not found")
 	ErrCSIBenchmarkMetricNameRequired = errors.New("benchmark metric name is required")
 	ErrInvalidCSIMetricUnit           = errors.New("invalid CSI benchmark metric unit")
+	ErrCSIBenefitNotFound             = errors.New("CSI benefit realization record not found")
+	ErrInvalidCSIBenefitStatus        = errors.New("invalid CSI benefit realization status")
+	ErrInvalidEffortHours             = errors.New("effort hours must be non-negative")
 )
 
 // ValidateCSIAlignment verifies if an alignment category is recognized
@@ -121,6 +131,16 @@ func ValidateCSIMetricUnit(u string) error {
 		return nil
 	default:
 		return ErrInvalidCSIMetricUnit
+	}
+}
+
+// ValidateCSIBenefitStatus verifies if benefit status is recognized
+func ValidateCSIBenefitStatus(s string) error {
+	switch s {
+	case CSIBenefitProjected, CSIBenefitPartiallyRealized, CSIBenefitFullyRealized:
+		return nil
+	default:
+		return ErrInvalidCSIBenefitStatus
 	}
 }
 
@@ -199,4 +219,46 @@ func (b *CSIBenchmark) HasAchievedTarget() bool {
 	}
 	// If baseline was lower than target (e.g. availability, throughput, coverage), higher or equal is better
 	return b.CurrentValue >= b.TargetValue
+}
+
+// CSIBenefit captures projected and realized financial savings and operational efficiencies
+type CSIBenefit struct {
+	ID                        string     `json:"id"`
+	WorkspaceID               string     `json:"workspace_id"`
+	InitiativeID              string     `json:"initiative_id"`
+	ProjectedFinancialSavings float64    `json:"projected_financial_savings"`
+	RealizedFinancialSavings  float64    `json:"realized_financial_savings"`
+	EffortHoursInvested       float64    `json:"effort_hours_invested"`
+	HoursSavedPerMonth        float64    `json:"hours_saved_per_month"`
+	RiskReductionPercentage   float64    `json:"risk_reduction_percentage"`
+	Status                    string     `json:"status"`
+	RealizedAt                *time.Time `json:"realized_at,omitempty"`
+	CreatedAt                 time.Time  `json:"created_at"`
+	UpdatedAt                 time.Time  `json:"updated_at"`
+}
+
+// Validate validates the CSIBenefit entity
+func (b *CSIBenefit) Validate() error {
+	if b.EffortHoursInvested < 0 {
+		return ErrInvalidEffortHours
+	}
+	if err := ValidateCSIBenefitStatus(b.Status); err != nil {
+		return err
+	}
+	return nil
+}
+
+// CalculateROI calculates Return On Investment multiplier: (Total Benefit Value - Investment Cost) / Investment Cost
+func (b *CSIBenefit) CalculateROI(hourlyRate float64) float64 {
+	if hourlyRate <= 0 {
+		hourlyRate = 75.0 // standard default engineering/operations loaded rate
+	}
+	cost := b.EffortHoursInvested * hourlyRate
+	if cost <= 0 {
+		return 0.0
+	}
+	// Annual value = realized annual financial savings + (hours saved/month * 12 * rate)
+	annualSavings := b.RealizedFinancialSavings + (b.HoursSavedPerMonth * 12.0 * hourlyRate)
+	roi := (annualSavings - cost) / cost
+	return roi
 }
