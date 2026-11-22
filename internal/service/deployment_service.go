@@ -290,29 +290,135 @@ func (s *deploymentService) EvaluateGate(ctx context.Context, id string, req mod
 func (s *deploymentService) ListGates(ctx context.Context, filter model.DeploymentGateFilter) ([]model.DeploymentGate, int, error) {
 	return s.repo.ListGates(ctx, filter)
 }
+// Steps implementation
 func (s *deploymentService) CreateStep(ctx context.Context, workspaceID string, req model.CreateDeploymentStepRequest) (*model.DeploymentStep, error) {
-	return nil, nil
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = workspaceID
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	run, err := s.repo.GetRunByID(ctx, req.RunID)
+	if err != nil {
+		return nil, err
+	}
+
+	step := &model.DeploymentStep{
+		WorkspaceID:        req.WorkspaceID,
+		RunID:              run.ID,
+		StepOrder:          req.StepOrder,
+		StepName:           strings.TrimSpace(req.StepName),
+		TrafficPercentage:  req.TrafficPercentage,
+		SoakTimeMinutes:    req.SoakTimeMinutes,
+		ErrorRateThreshold: req.ErrorRateThreshold,
+		Status:             model.StepStatusPending,
+	}
+
+	if err := s.repo.CreateStep(ctx, step); err != nil {
+		return nil, err
+	}
+	return step, nil
 }
+
 func (s *deploymentService) GetStepByID(ctx context.Context, id string) (*model.DeploymentStep, error) {
-	return nil, nil
+	return s.repo.GetStepByID(ctx, id)
 }
+
 func (s *deploymentService) PromoteStep(ctx context.Context, id string, req model.PromoteDeploymentStepRequest) (*model.DeploymentStep, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	step, err := s.repo.GetStepByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	step.Status = req.Status
+	step.ActualErrorRate = req.ActualErrorRate
+
+	if req.Status == model.StepStatusSoaking && step.StartedAt == nil {
+		step.StartedAt = &now
+	}
+	if req.Status == model.StepStatusPromoted || req.Status == model.StepStatusAborted {
+		step.CompletedAt = &now
+	}
+
+	if err := s.repo.UpdateStep(ctx, step); err != nil {
+		return nil, err
+	}
+	return step, nil
 }
+
 func (s *deploymentService) ListSteps(ctx context.Context, filter model.DeploymentStepFilter) ([]model.DeploymentStep, int, error) {
-	return nil, 0, nil
+	return s.repo.ListSteps(ctx, filter)
 }
+
+// Rollback Policies implementation
 func (s *deploymentService) CreateRollbackPolicy(ctx context.Context, workspaceID string, req model.CreateRollbackPolicyRequest) (*model.RollbackPolicy, error) {
-	return nil, nil
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = workspaceID
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	pipeline, err := s.repo.GetPipelineByID(ctx, req.PipelineID)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	policy := &model.RollbackPolicy{
+		WorkspaceID:           req.WorkspaceID,
+		PipelineID:            pipeline.ID,
+		RunID:                 strings.TrimSpace(req.RunID),
+		TriggerCondition:      req.TriggerCondition,
+		ThresholdValue:        req.ThresholdValue,
+		TargetRollbackVersion: strings.TrimSpace(req.TargetRollbackVersion),
+		ExecutionStatus:       model.RollbackStatusTriggered,
+		TriggeredAt:           &now,
+	}
+
+	if err := s.repo.CreateRollbackPolicy(ctx, policy); err != nil {
+		return nil, err
+	}
+	return policy, nil
 }
+
 func (s *deploymentService) GetRollbackPolicyByID(ctx context.Context, id string) (*model.RollbackPolicy, error) {
-	return nil, nil
+	return s.repo.GetRollbackPolicyByID(ctx, id)
 }
+
 func (s *deploymentService) ExecuteRollback(ctx context.Context, id string, req model.ExecuteRollbackRequest) (*model.RollbackPolicy, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	policy, err := s.repo.GetRollbackPolicyByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	policy.ExecutionStatus = req.ExecutionStatus
+	if req.RollbackLogs != "" {
+		policy.RollbackLogs = strings.TrimSpace(req.RollbackLogs)
+	}
+	if req.ExecutionStatus == model.RollbackStatusCompleted || req.ExecutionStatus == model.RollbackStatusFailed {
+		policy.CompletedAt = &now
+	}
+
+	if err := s.repo.UpdateRollbackPolicy(ctx, policy); err != nil {
+		return nil, err
+	}
+	return policy, nil
 }
+
 func (s *deploymentService) ListRollbackPolicies(ctx context.Context, filter model.RollbackPolicyFilter) ([]model.RollbackPolicy, int, error) {
-	return nil, 0, nil
+	return s.repo.ListRollbackPolicies(ctx, filter)
 }
 func (s *deploymentService) GetDeploymentAnalytics(ctx context.Context, workspaceID string) (*model.DeploymentAnalytics, error) {
 	return nil, nil
