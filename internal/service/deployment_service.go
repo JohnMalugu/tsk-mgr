@@ -232,17 +232,63 @@ func (s *deploymentService) UpdateRunStatus(ctx context.Context, id string, req 
 func (s *deploymentService) ListRuns(ctx context.Context, filter model.DeploymentRunFilter) ([]model.DeploymentRun, int, error) {
 	return s.repo.ListRuns(ctx, filter)
 }
+// Gates implementation
 func (s *deploymentService) CreateGate(ctx context.Context, workspaceID string, req model.CreateDeploymentGateRequest) (*model.DeploymentGate, error) {
-	return nil, nil
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = workspaceID
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	run, err := s.repo.GetRunByID(ctx, req.RunID)
+	if err != nil {
+		return nil, err
+	}
+
+	gate := &model.DeploymentGate{
+		WorkspaceID: req.WorkspaceID,
+		RunID:       run.ID,
+		GateType:    req.GateType,
+		GateName:    strings.TrimSpace(req.GateName),
+		Status:      model.GateStatusPending,
+	}
+
+	if err := s.repo.CreateGate(ctx, gate); err != nil {
+		return nil, err
+	}
+	return gate, nil
 }
+
 func (s *deploymentService) GetGateByID(ctx context.Context, id string) (*model.DeploymentGate, error) {
-	return nil, nil
+	return s.repo.GetGateByID(ctx, id)
 }
+
 func (s *deploymentService) EvaluateGate(ctx context.Context, id string, req model.EvaluateDeploymentGateRequest) (*model.DeploymentGate, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	gate, err := s.repo.GetGateByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	gate.Status = req.Status
+	gate.EvaluatorID = strings.TrimSpace(req.EvaluatorID)
+	gate.EvaluatedAt = &now
+	gate.WaiverReason = strings.TrimSpace(req.WaiverReason)
+	gate.EvidenceDetails = strings.TrimSpace(req.EvidenceDetails)
+
+	if err := s.repo.UpdateGate(ctx, gate); err != nil {
+		return nil, err
+	}
+	return gate, nil
 }
+
 func (s *deploymentService) ListGates(ctx context.Context, filter model.DeploymentGateFilter) ([]model.DeploymentGate, int, error) {
-	return nil, 0, nil
+	return s.repo.ListGates(ctx, filter)
 }
 func (s *deploymentService) CreateStep(ctx context.Context, workspaceID string, req model.CreateDeploymentStepRequest) (*model.DeploymentStep, error) {
 	return nil, nil
