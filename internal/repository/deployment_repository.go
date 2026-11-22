@@ -470,29 +470,340 @@ func (r *sqlDeploymentRepository) ListRuns(ctx context.Context, filter model.Dep
 	}
 	return runs, total, rows.Err()
 }
+// Gates implementation
 func (r *sqlDeploymentRepository) CreateGate(ctx context.Context, g *model.DeploymentGate) error {
-	return nil
+	if g.ID == "" {
+		g.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if g.CreatedAt.IsZero() {
+		g.CreatedAt = now
+	}
+	g.UpdatedAt = now
+	if g.Status == "" {
+		g.Status = model.GateStatusPending
+	}
+
+	query := `
+		INSERT INTO deployment_gates (
+			id, workspace_id, run_id, gate_type, gate_name, status,
+			evaluator_id, evaluated_at, waiver_reason, evidence_details,
+			created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err := r.db.ExecContext(ctx, query,
+		g.ID, g.WorkspaceID, g.RunID, g.GateType, g.GateName, g.Status,
+		g.EvaluatorID, g.EvaluatedAt, g.WaiverReason, g.EvidenceDetails,
+		g.CreatedAt, g.UpdatedAt,
+	)
+	return err
 }
+
 func (r *sqlDeploymentRepository) GetGateByID(ctx context.Context, id string) (*model.DeploymentGate, error) {
-	return nil, nil
+	query := `
+		SELECT id, workspace_id, run_id, gate_type, gate_name, status,
+		       evaluator_id, evaluated_at, waiver_reason, evidence_details,
+		       created_at, updated_at
+		FROM deployment_gates
+		WHERE id = ?
+	`
+	var g model.DeploymentGate
+	var evaluator, waiver, evidence sql.NullString
+	var evaluatedAt sql.NullTime
+
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&g.ID, &g.WorkspaceID, &g.RunID, &g.GateType, &g.GateName, &g.Status,
+		&evaluator, &evaluatedAt, &waiver, &evidence,
+		&g.CreatedAt, &g.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrDeploymentGateNotFound
+		}
+		return nil, err
+	}
+	if evaluatedAt.Valid {
+		g.EvaluatedAt = &evaluatedAt.Time
+	}
+	g.EvaluatorID = evaluator.String
+	g.WaiverReason = waiver.String
+	g.EvidenceDetails = evidence.String
+	return &g, nil
 }
+
 func (r *sqlDeploymentRepository) UpdateGate(ctx context.Context, g *model.DeploymentGate) error {
+	g.UpdatedAt = time.Now().UTC()
+	query := `
+		UPDATE deployment_gates
+		SET status = ?, evaluator_id = ?, evaluated_at = ?, waiver_reason = ?,
+		    evidence_details = ?, updated_at = ?
+		WHERE id = ?
+	`
+	res, err := r.db.ExecContext(ctx, query,
+		g.Status, g.EvaluatorID, g.EvaluatedAt, g.WaiverReason,
+		g.EvidenceDetails, g.UpdatedAt, g.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrDeploymentGateNotFound
+	}
 	return nil
 }
+
 func (r *sqlDeploymentRepository) ListGates(ctx context.Context, filter model.DeploymentGateFilter) ([]model.DeploymentGate, int, error) {
-	return nil, 0, nil
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.RunID != "" {
+		conditions = append(conditions, "run_id = ?")
+		args = append(args, filter.RunID)
+	}
+	if filter.GateType != "" {
+		conditions = append(conditions, "gate_type = ?")
+		args = append(args, filter.GateType)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM deployment_gates %s", whereClause)
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, workspace_id, run_id, gate_type, gate_name, status,
+		       evaluator_id, evaluated_at, waiver_reason, evidence_details,
+		       created_at, updated_at
+		FROM deployment_gates
+		%s
+		ORDER BY created_at ASC
+		LIMIT ? OFFSET ?
+	`, whereClause)
+
+	argsWithPaging := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, argsWithPaging...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var gates []model.DeploymentGate
+	for rows.Next() {
+		var g model.DeploymentGate
+		var evaluator, waiver, evidence sql.NullString
+		var evaluatedAt sql.NullTime
+
+		err := rows.Scan(
+			&g.ID, &g.WorkspaceID, &g.RunID, &g.GateType, &g.GateName, &g.Status,
+			&evaluator, &evaluatedAt, &waiver, &evidence,
+			&g.CreatedAt, &g.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		if evaluatedAt.Valid {
+			g.EvaluatedAt = &evaluatedAt.Time
+		}
+		g.EvaluatorID = evaluator.String
+		g.WaiverReason = waiver.String
+		g.EvidenceDetails = evidence.String
+		gates = append(gates, g)
+	}
+	return gates, total, rows.Err()
 }
+
+// Steps implementation
 func (r *sqlDeploymentRepository) CreateStep(ctx context.Context, s *model.DeploymentStep) error {
-	return nil
+	if s.ID == "" {
+		s.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if s.CreatedAt.IsZero() {
+		s.CreatedAt = now
+	}
+	s.UpdatedAt = now
+	if s.Status == "" {
+		s.Status = model.StepStatusPending
+	}
+
+	query := `
+		INSERT INTO deployment_steps (
+			id, workspace_id, run_id, step_order, step_name, traffic_percentage,
+			soak_time_minutes, error_rate_threshold, actual_error_rate, status,
+			started_at, completed_at, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err := r.db.ExecContext(ctx, query,
+		s.ID, s.WorkspaceID, s.RunID, s.StepOrder, s.StepName, s.TrafficPercentage,
+		s.SoakTimeMinutes, s.ErrorRateThreshold, s.ActualErrorRate, s.Status,
+		s.StartedAt, s.CompletedAt, s.CreatedAt, s.UpdatedAt,
+	)
+	return err
 }
+
 func (r *sqlDeploymentRepository) GetStepByID(ctx context.Context, id string) (*model.DeploymentStep, error) {
-	return nil, nil
+	query := `
+		SELECT id, workspace_id, run_id, step_order, step_name, traffic_percentage,
+		       soak_time_minutes, error_rate_threshold, actual_error_rate, status,
+		       started_at, completed_at, created_at, updated_at
+		FROM deployment_steps
+		WHERE id = ?
+	`
+	var s model.DeploymentStep
+	var startedAt, completedAt sql.NullTime
+
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&s.ID, &s.WorkspaceID, &s.RunID, &s.StepOrder, &s.StepName, &s.TrafficPercentage,
+		&s.SoakTimeMinutes, &s.ErrorRateThreshold, &s.ActualErrorRate, &s.Status,
+		&startedAt, &completedAt, &s.CreatedAt, &s.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrDeploymentStepNotFound
+		}
+		return nil, err
+	}
+	if startedAt.Valid {
+		s.StartedAt = &startedAt.Time
+	}
+	if completedAt.Valid {
+		s.CompletedAt = &completedAt.Time
+	}
+	return &s, nil
 }
+
 func (r *sqlDeploymentRepository) UpdateStep(ctx context.Context, s *model.DeploymentStep) error {
+	s.UpdatedAt = time.Now().UTC()
+	query := `
+		UPDATE deployment_steps
+		SET step_order = ?, step_name = ?, traffic_percentage = ?, soak_time_minutes = ?,
+		    error_rate_threshold = ?, actual_error_rate = ?, status = ?,
+		    started_at = ?, completed_at = ?, updated_at = ?
+		WHERE id = ?
+	`
+	res, err := r.db.ExecContext(ctx, query,
+		s.StepOrder, s.StepName, s.TrafficPercentage, s.SoakTimeMinutes,
+		s.ErrorRateThreshold, s.ActualErrorRate, s.Status,
+		s.StartedAt, s.CompletedAt, s.UpdatedAt, s.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrDeploymentStepNotFound
+	}
 	return nil
 }
+
 func (r *sqlDeploymentRepository) ListSteps(ctx context.Context, filter model.DeploymentStepFilter) ([]model.DeploymentStep, int, error) {
-	return nil, 0, nil
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.RunID != "" {
+		conditions = append(conditions, "run_id = ?")
+		args = append(args, filter.RunID)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM deployment_steps %s", whereClause)
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, workspace_id, run_id, step_order, step_name, traffic_percentage,
+		       soak_time_minutes, error_rate_threshold, actual_error_rate, status,
+		       started_at, completed_at, created_at, updated_at
+		FROM deployment_steps
+		%s
+		ORDER BY step_order ASC
+		LIMIT ? OFFSET ?
+	`, whereClause)
+
+	argsWithPaging := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, argsWithPaging...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var steps []model.DeploymentStep
+	for rows.Next() {
+		var s model.DeploymentStep
+		var startedAt, completedAt sql.NullTime
+
+		err := rows.Scan(
+			&s.ID, &s.WorkspaceID, &s.RunID, &s.StepOrder, &s.StepName, &s.TrafficPercentage,
+			&s.SoakTimeMinutes, &s.ErrorRateThreshold, &s.ActualErrorRate, &s.Status,
+			&startedAt, &completedAt, &s.CreatedAt, &s.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		if startedAt.Valid {
+			s.StartedAt = &startedAt.Time
+		}
+		if completedAt.Valid {
+			s.CompletedAt = &completedAt.Time
+		}
+		steps = append(steps, s)
+	}
+	return steps, total, rows.Err()
 }
 func (r *sqlDeploymentRepository) CreateRollbackPolicy(ctx context.Context, p *model.RollbackPolicy) error {
 	return nil
