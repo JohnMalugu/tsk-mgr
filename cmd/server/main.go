@@ -203,6 +203,10 @@ func main() {
 	csiSvc := service.NewCSIService(csiRepo)
 	handler.InitCSIHandler(csiSvc)
 
+	deploymentRepo := repository.NewDeploymentRepository(sqliteDB)
+	deploymentSvc := service.NewDeploymentService(deploymentRepo)
+	handler.InitDeploymentHandler(deploymentSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
