@@ -450,6 +450,21 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET|POST /v2/csi/initiatives/{id}/reviews` to list or log periodic governance reviews, lessons learned, and retrospective evaluation outcomes (`on_track`, `needs_adjustment`, `goals_achieved`, `terminated`)
 - `GET /v2/csi/reviews/{id}` to inspect individual governance review records
 - `GET /v2/csi/analytics?workspace_id={id}` for executive Continual Service Improvement posture reporting, completion rate %, total projected and realized cost savings ($), monthly hours saved, average ROI multiplier, alignment category distribution, and composite CSI Maturity Score (0–100)
+- `GET|POST /v2/deployments/pipelines` to list deployment pipelines (`workspace_id`, `target_environment`, `deployment_strategy`, `status`, `limit`, `offset`) or create delivery pipelines (`rolling`, `blue_green`, `canary`, `recreate`) with automated rollback configuration and CI linkages
+- `GET|PUT|DELETE /v2/deployments/pipelines/{id}` to fetch, update, or remove deployment pipelines
+- `GET|POST /v2/deployments/runs` to list deployment execution runs (`workspace_id`, `pipeline_id`, `environment`, `status`, `trigger_type`, `limit`, `offset`) or initiate a deployment run (`manual`, `automated_ci`, `scheduled`) with release version, commit hash, and changelog
+- `GET /v2/deployments/runs/{id}` to inspect deployment run status, duration, and execution metadata
+- `PUT|PATCH /v2/deployments/runs/{id}/status` to transition deployment run execution state (`in_progress`, `successful`, `failed`, `rolled_back`, `cancelled`) with automated duration calculation and rollback justifications
+- `GET|POST /v2/deployments/gates` to list or register deployment quality gates (`automated_test`, `security_scan`, `performance_benchmark`, `manual_approval`, `change_approval`)
+- `GET /v2/deployments/gates/{id}` to fetch deployment gate evaluation details
+- `POST /v2/deployments/gates/{id}/evaluate` to evaluate or waive quality gates with reviewer identity, evidence details, and waiver reasons
+- `GET|POST /v2/deployments/steps` to list or register canary/staged rollout steps (`step_order`, `step_name`, `traffic_percentage`, `soak_time_minutes`, `error_rate_threshold`)
+- `GET /v2/deployments/steps/{id}` to inspect canary rollout step progression
+- `POST /v2/deployments/steps/{id}/promote` to advance canary steps (`soaking`, `promoted`, `aborted`) with observed error rate metrics
+- `GET|POST /v2/deployments/rollbacks` to list or configure automated rollback policies (`error_rate_spike`, `latency_p99_threshold`, `health_check_failure`, `manual_abort`) with threshold criteria and target rollback versions
+- `GET /v2/deployments/rollbacks/{id}` to inspect rollback execution status and diagnostic logs
+- `POST /v2/deployments/rollbacks/{id}/execute` to trigger or complete automated rollback execution
+- `GET /v2/deployments/analytics?workspace_id={id}` for executive Release & Deployment posture reporting, DORA metrics (deployment frequency per week, lead time for changes in hours, change failure rate %, mean time to recovery MTTR in minutes), environment distribution, and composite Deployment Health Index (0–100)
 
 ## Current limitations
 
