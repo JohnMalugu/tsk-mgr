@@ -420,6 +420,10 @@ func (s *deploymentService) ExecuteRollback(ctx context.Context, id string, req 
 func (s *deploymentService) ListRollbackPolicies(ctx context.Context, filter model.RollbackPolicyFilter) ([]model.RollbackPolicy, int, error) {
 	return s.repo.ListRollbackPolicies(ctx, filter)
 }
+// Posture Analytics implementation
 func (s *deploymentService) GetDeploymentAnalytics(ctx context.Context, workspaceID string) (*model.DeploymentAnalytics, error) {
-	return nil, nil
+	if strings.TrimSpace(workspaceID) == "" {
+		return nil, errors.New("workspace_id is required")
+	}
+	return s.repo.GetDeploymentAnalytics(ctx, workspaceID)
 }
