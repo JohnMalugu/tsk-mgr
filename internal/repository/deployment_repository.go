@@ -77,24 +77,210 @@ func NewDeploymentRepository(db *sql.DB) DeploymentRepository {
 	return &sqlDeploymentRepository{db: db}
 }
 
-// Stubs for interface compliance during incremental commits
+// Pipelines implementation
 func (r *sqlDeploymentRepository) CreatePipeline(ctx context.Context, p *model.DeploymentPipeline) error {
-	return nil
+	if p.ID == "" {
+		p.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if p.CreatedAt.IsZero() {
+		p.CreatedAt = now
+	}
+	p.UpdatedAt = now
+
+	// Check for unique code in workspace
+	var count int
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deployment_pipelines WHERE workspace_id = ? AND pipeline_code = ?`, p.WorkspaceID, p.PipelineCode).Scan(&count)
+	if err == nil && count > 0 {
+		return ErrDeploymentPipelineCodeConflict
+	}
+
+	query := `
+		INSERT INTO deployment_pipelines (
+			id, workspace_id, pipeline_code, name, description,
+			target_environment, deployment_strategy, auto_rollback_enabled,
+			linked_ci_id, status, created_by_user_id, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err = r.db.ExecContext(ctx, query,
+		p.ID, p.WorkspaceID, p.PipelineCode, p.Name, p.Description,
+		p.TargetEnvironment, p.DeploymentStrategy, p.AutoRollbackEnabled,
+		p.LinkedCIID, p.Status, p.CreatedByUserID, p.CreatedAt, p.UpdatedAt,
+	)
+	return err
 }
+
 func (r *sqlDeploymentRepository) GetPipelineByID(ctx context.Context, id string) (*model.DeploymentPipeline, error) {
-	return nil, nil
+	query := `
+		SELECT id, workspace_id, pipeline_code, name, description,
+		       target_environment, deployment_strategy, auto_rollback_enabled,
+		       linked_ci_id, status, created_by_user_id, created_at, updated_at
+		FROM deployment_pipelines
+		WHERE id = ?
+	`
+	var p model.DeploymentPipeline
+	var desc, ciID, user sql.NullString
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&p.ID, &p.WorkspaceID, &p.PipelineCode, &p.Name, &desc,
+		&p.TargetEnvironment, &p.DeploymentStrategy, &p.AutoRollbackEnabled,
+		&ciID, &p.Status, &user, &p.CreatedAt, &p.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrDeploymentPipelineNotFound
+		}
+		return nil, err
+	}
+	p.Description = desc.String
+	p.LinkedCIID = ciID.String
+	p.CreatedByUserID = user.String
+	return &p, nil
 }
+
 func (r *sqlDeploymentRepository) GetPipelineByCode(ctx context.Context, workspaceID, code string) (*model.DeploymentPipeline, error) {
-	return nil, nil
+	query := `
+		SELECT id, workspace_id, pipeline_code, name, description,
+		       target_environment, deployment_strategy, auto_rollback_enabled,
+		       linked_ci_id, status, created_by_user_id, created_at, updated_at
+		FROM deployment_pipelines
+		WHERE workspace_id = ? AND pipeline_code = ?
+	`
+	var p model.DeploymentPipeline
+	var desc, ciID, user sql.NullString
+	err := r.db.QueryRowContext(ctx, query, workspaceID, code).Scan(
+		&p.ID, &p.WorkspaceID, &p.PipelineCode, &p.Name, &desc,
+		&p.TargetEnvironment, &p.DeploymentStrategy, &p.AutoRollbackEnabled,
+		&ciID, &p.Status, &user, &p.CreatedAt, &p.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrDeploymentPipelineNotFound
+		}
+		return nil, err
+	}
+	p.Description = desc.String
+	p.LinkedCIID = ciID.String
+	p.CreatedByUserID = user.String
+	return &p, nil
 }
+
 func (r *sqlDeploymentRepository) UpdatePipeline(ctx context.Context, p *model.DeploymentPipeline) error {
+	p.UpdatedAt = time.Now().UTC()
+	query := `
+		UPDATE deployment_pipelines
+		SET name = ?, description = ?, target_environment = ?, deployment_strategy = ?,
+		    auto_rollback_enabled = ?, linked_ci_id = ?, status = ?, updated_at = ?
+		WHERE id = ?
+	`
+	res, err := r.db.ExecContext(ctx, query,
+		p.Name, p.Description, p.TargetEnvironment, p.DeploymentStrategy,
+		p.AutoRollbackEnabled, p.LinkedCIID, p.Status, p.UpdatedAt, p.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrDeploymentPipelineNotFound
+	}
 	return nil
 }
+
 func (r *sqlDeploymentRepository) DeletePipeline(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM deployment_pipelines WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrDeploymentPipelineNotFound
+	}
 	return nil
 }
+
 func (r *sqlDeploymentRepository) ListPipelines(ctx context.Context, filter model.DeploymentPipelineFilter) ([]model.DeploymentPipeline, int, error) {
-	return nil, 0, nil
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.TargetEnvironment != "" {
+		conditions = append(conditions, "target_environment = ?")
+		args = append(args, filter.TargetEnvironment)
+	}
+	if filter.DeploymentStrategy != "" {
+		conditions = append(conditions, "deployment_strategy = ?")
+		args = append(args, filter.DeploymentStrategy)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM deployment_pipelines %s", whereClause)
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, workspace_id, pipeline_code, name, description,
+		       target_environment, deployment_strategy, auto_rollback_enabled,
+		       linked_ci_id, status, created_by_user_id, created_at, updated_at
+		FROM deployment_pipelines
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?
+	`, whereClause)
+
+	argsWithPaging := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, argsWithPaging...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var pipelines []model.DeploymentPipeline
+	for rows.Next() {
+		var p model.DeploymentPipeline
+		var desc, ciID, user sql.NullString
+		err := rows.Scan(
+			&p.ID, &p.WorkspaceID, &p.PipelineCode, &p.Name, &desc,
+			&p.TargetEnvironment, &p.DeploymentStrategy, &p.AutoRollbackEnabled,
+			&ciID, &p.Status, &user, &p.CreatedAt, &p.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		p.Description = desc.String
+		p.LinkedCIID = ciID.String
+		p.CreatedByUserID = user.String
+		pipelines = append(pipelines, p)
+	}
+	return pipelines, total, rows.Err()
 }
 func (r *sqlDeploymentRepository) CreateRun(ctx context.Context, run *model.DeploymentRun) error {
 	return nil
