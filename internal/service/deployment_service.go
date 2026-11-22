@@ -155,17 +155,82 @@ func (s *deploymentService) DeletePipeline(ctx context.Context, id string) error
 func (s *deploymentService) ListPipelines(ctx context.Context, filter model.DeploymentPipelineFilter) ([]model.DeploymentPipeline, int, error) {
 	return s.repo.ListPipelines(ctx, filter)
 }
+// Runs implementation
 func (s *deploymentService) CreateRun(ctx context.Context, workspaceID string, req model.CreateDeploymentRunRequest) (*model.DeploymentRun, error) {
-	return nil, nil
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = workspaceID
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	pipeline, err := s.repo.GetPipelineByID(ctx, req.PipelineID)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	run := &model.DeploymentRun{
+		WorkspaceID:      req.WorkspaceID,
+		PipelineID:       pipeline.ID,
+		ReleaseVersion:   strings.TrimSpace(req.ReleaseVersion),
+		Environment:      req.Environment,
+		TriggerType:      req.TriggerType,
+		Status:           model.RunStatusPending,
+		StartedAt:        now,
+		DeployedByUserID: strings.TrimSpace(req.DeployedByUserID),
+		CommitHash:       strings.TrimSpace(req.CommitHash),
+		Changelog:        strings.TrimSpace(req.Changelog),
+	}
+
+	if err := s.repo.CreateRun(ctx, run); err != nil {
+		return nil, err
+	}
+	return run, nil
 }
+
 func (s *deploymentService) GetRunByID(ctx context.Context, id string) (*model.DeploymentRun, error) {
-	return nil, nil
+	return s.repo.GetRunByID(ctx, id)
 }
+
 func (s *deploymentService) UpdateRunStatus(ctx context.Context, id string, req model.UpdateDeploymentRunStatusRequest) (*model.DeploymentRun, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	run, err := s.repo.GetRunByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	run.Status = req.Status
+	now := time.Now().UTC()
+	switch req.Status {
+	case model.RunStatusSuccessful, model.RunStatusFailed, model.RunStatusRolledBack, model.RunStatusCancelled:
+		run.FinishedAt = &now
+		if req.DurationSeconds > 0 {
+			run.DurationSeconds = req.DurationSeconds
+		} else if !run.StartedAt.IsZero() {
+			run.DurationSeconds = now.Sub(run.StartedAt).Seconds()
+		}
+	case model.RunStatusInProgress:
+		if run.StartedAt.IsZero() {
+			run.StartedAt = now
+		}
+	}
+
+	if req.RollbackReason != "" {
+		run.RollbackReason = strings.TrimSpace(req.RollbackReason)
+	}
+
+	if err := s.repo.UpdateRun(ctx, run); err != nil {
+		return nil, err
+	}
+	return run, nil
 }
+
 func (s *deploymentService) ListRuns(ctx context.Context, filter model.DeploymentRunFilter) ([]model.DeploymentRun, int, error) {
-	return nil, 0, nil
+	return s.repo.ListRuns(ctx, filter)
 }
 func (s *deploymentService) CreateGate(ctx context.Context, workspaceID string, req model.CreateDeploymentGateRequest) (*model.DeploymentGate, error) {
 	return nil, nil
