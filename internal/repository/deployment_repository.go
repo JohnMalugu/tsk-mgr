@@ -974,6 +974,94 @@ func (r *sqlDeploymentRepository) ListRollbackPolicies(ctx context.Context, filt
 	}
 	return policies, total, rows.Err()
 }
+// Posture Analytics implementation
 func (r *sqlDeploymentRepository) GetDeploymentAnalytics(ctx context.Context, workspaceID string) (*model.DeploymentAnalytics, error) {
-	return nil, nil
+	analytics := &model.DeploymentAnalytics{
+		EnvironmentDistribution: make(map[string]int),
+	}
+
+	// 1. Pipelines counts
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deployment_pipelines WHERE workspace_id = ?`, workspaceID).Scan(&analytics.TotalPipelines)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deployment_pipelines WHERE workspace_id = ? AND status = ?`, workspaceID, model.PipelineStatusActive).Scan(&analytics.ActivePipelines)
+
+	// 2. Runs counts by status
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deployment_runs WHERE workspace_id = ?`, workspaceID).Scan(&analytics.TotalRuns)
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deployment_runs WHERE workspace_id = ? AND status = ?`, workspaceID, model.RunStatusSuccessful).Scan(&analytics.SuccessfulRuns)
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deployment_runs WHERE workspace_id = ? AND status = ?`, workspaceID, model.RunStatusFailed).Scan(&analytics.FailedRuns)
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deployment_runs WHERE workspace_id = ? AND status = ?`, workspaceID, model.RunStatusRolledBack).Scan(&analytics.RolledBackRuns)
+
+	// 3. Rollbacks count
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deployment_rollbacks WHERE workspace_id = ?`, workspaceID).Scan(&analytics.RollbacksCount)
+
+	// 4. Environment distribution
+	envRows, err := r.db.QueryContext(ctx, `SELECT environment, COUNT(*) FROM deployment_runs WHERE workspace_id = ? GROUP BY environment`, workspaceID)
+	if err == nil {
+		defer envRows.Close()
+		for envRows.Next() {
+			var env string
+			var count int
+			if err := envRows.Scan(&env, &count); err == nil {
+				analytics.EnvironmentDistribution[env] = count
+			}
+		}
+	}
+
+	// 5. DORA Metrics computation
+	// Deployment frequency per week (runs in the last 30 days / 4.28 weeks)
+	thirtyDaysAgo := time.Now().UTC().AddDate(0, 0, -30)
+	var recentRuns int
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deployment_runs WHERE workspace_id = ? AND started_at >= ?`, workspaceID, thirtyDaysAgo).Scan(&recentRuns)
+	analytics.DeploymentFrequencyPerWeek = float64(recentRuns) / (30.0 / 7.0)
+
+	// Lead time for changes (average duration_seconds / 3600 for successful runs)
+	var avgDuration sql.NullFloat64
+	_ = r.db.QueryRowContext(ctx, `SELECT AVG(duration_seconds) FROM deployment_runs WHERE workspace_id = ? AND status = ?`, workspaceID, model.RunStatusSuccessful).Scan(&avgDuration)
+	if avgDuration.Valid {
+		analytics.LeadTimeForChangesHours = avgDuration.Float64 / 3600.0
+	}
+
+	// Change failure rate: (failed + rolled_back) / total * 100
+	if analytics.TotalRuns > 0 {
+		unsuccessful := analytics.FailedRuns + analytics.RolledBackRuns
+		analytics.ChangeFailureRate = (float64(unsuccessful) / float64(analytics.TotalRuns)) * 100.0
+	}
+
+	// MTTR (Mean time to recover): average duration of rolled back runs in minutes
+	var avgRecoveryDuration sql.NullFloat64
+	_ = r.db.QueryRowContext(ctx, `SELECT AVG(duration_seconds) FROM deployment_runs WHERE workspace_id = ? AND status = ?`, workspaceID, model.RunStatusRolledBack).Scan(&avgRecoveryDuration)
+	if avgRecoveryDuration.Valid {
+		analytics.MTTRMinutes = avgRecoveryDuration.Float64 / 60.0
+	}
+
+	// 6. Composite Deployment Health Index (0 - 100)
+	health := 100.0
+	if analytics.TotalRuns > 0 {
+		// Penalty for change failure rate (up to 50 pts)
+		health -= (analytics.ChangeFailureRate * 0.5)
+	}
+	if analytics.TotalPipelines > 0 {
+		// Pipeline active ratio bonus (up to 20 pts)
+		activeRatio := float64(analytics.ActivePipelines) / float64(analytics.TotalPipelines)
+		health -= (1.0 - activeRatio) * 20.0
+	}
+	if analytics.RollbacksCount > 0 {
+		// Penalty for excessive rollbacks
+		penalty := float64(analytics.RollbacksCount) * 2.0
+		if penalty > 20.0 {
+			penalty = 20.0
+		}
+		health -= penalty
+	}
+	if health < 0.0 {
+		health = 0.0
+	}
+	if health > 100.0 {
+		health = 100.0
+	}
+	analytics.DeploymentHealthIndex = health
+
+	return analytics, nil
 }
