@@ -342,3 +342,159 @@ func (h *DeploymentHandler) EvaluateGate(w http.ResponseWriter, r *http.Request,
 	}
 	writeDeploymentJSON(w, http.StatusOK, gate)
 }
+
+// Steps HTTP Endpoints
+
+// ListSteps handles GET /v2/deployments/steps
+func (h *DeploymentHandler) ListSteps(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.DeploymentStepFilter{
+		WorkspaceID: getDeploymentWorkspaceID(r),
+		RunID:       q.Get("run_id"),
+		Status:      q.Get("status"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	steps, total, err := h.svc.ListSteps(r.Context(), filter)
+	if err != nil {
+		handleDeploymentError(w, err)
+		return
+	}
+
+	writeDeploymentJSON(w, http.StatusOK, map[string]interface{}{
+		"steps":  steps,
+		"total":  total,
+		"limit":  filter.Limit,
+		"offset": filter.Offset,
+	})
+}
+
+// CreateStep handles POST /v2/deployments/steps
+func (h *DeploymentHandler) CreateStep(w http.ResponseWriter, r *http.Request) {
+	var req model.CreateDeploymentStepRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeDeploymentError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	ws := getDeploymentWorkspaceID(r)
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = ws
+	}
+
+	step, err := h.svc.CreateStep(r.Context(), ws, req)
+	if err != nil {
+		handleDeploymentError(w, err)
+		return
+	}
+
+	writeDeploymentJSON(w, http.StatusCreated, step)
+}
+
+// GetStepByID handles GET /v2/deployments/steps/{id}
+func (h *DeploymentHandler) GetStepByID(w http.ResponseWriter, r *http.Request, id string) {
+	step, err := h.svc.GetStepByID(r.Context(), id)
+	if err != nil {
+		handleDeploymentError(w, err)
+		return
+	}
+	writeDeploymentJSON(w, http.StatusOK, step)
+}
+
+// PromoteStep handles POST /v2/deployments/steps/{id}/promote
+func (h *DeploymentHandler) PromoteStep(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.PromoteDeploymentStepRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeDeploymentError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	step, err := h.svc.PromoteStep(r.Context(), id, req)
+	if err != nil {
+		handleDeploymentError(w, err)
+		return
+	}
+	writeDeploymentJSON(w, http.StatusOK, step)
+}
+
+// Rollback Policies HTTP Endpoints
+
+// ListRollbackPolicies handles GET /v2/deployments/rollbacks
+func (h *DeploymentHandler) ListRollbackPolicies(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.RollbackPolicyFilter{
+		WorkspaceID:     getDeploymentWorkspaceID(r),
+		PipelineID:      q.Get("pipeline_id"),
+		ExecutionStatus: q.Get("execution_status"),
+		Limit:           limit,
+		Offset:          offset,
+	}
+
+	policies, total, err := h.svc.ListRollbackPolicies(r.Context(), filter)
+	if err != nil {
+		handleDeploymentError(w, err)
+		return
+	}
+
+	writeDeploymentJSON(w, http.StatusOK, map[string]interface{}{
+		"rollbacks": policies,
+		"total":     total,
+		"limit":     filter.Limit,
+		"offset":    filter.Offset,
+	})
+}
+
+// CreateRollbackPolicy handles POST /v2/deployments/rollbacks
+func (h *DeploymentHandler) CreateRollbackPolicy(w http.ResponseWriter, r *http.Request) {
+	var req model.CreateRollbackPolicyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeDeploymentError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	ws := getDeploymentWorkspaceID(r)
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = ws
+	}
+
+	policy, err := h.svc.CreateRollbackPolicy(r.Context(), ws, req)
+	if err != nil {
+		handleDeploymentError(w, err)
+		return
+	}
+
+	writeDeploymentJSON(w, http.StatusCreated, policy)
+}
+
+// GetRollbackPolicyByID handles GET /v2/deployments/rollbacks/{id}
+func (h *DeploymentHandler) GetRollbackPolicyByID(w http.ResponseWriter, r *http.Request, id string) {
+	policy, err := h.svc.GetRollbackPolicyByID(r.Context(), id)
+	if err != nil {
+		handleDeploymentError(w, err)
+		return
+	}
+	writeDeploymentJSON(w, http.StatusOK, policy)
+}
+
+// ExecuteRollback handles POST /v2/deployments/rollbacks/{id}/execute
+func (h *DeploymentHandler) ExecuteRollback(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.ExecuteRollbackRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeDeploymentError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	policy, err := h.svc.ExecuteRollback(r.Context(), id, req)
+	if err != nil {
+		handleDeploymentError(w, err)
+		return
+	}
+	writeDeploymentJSON(w, http.StatusOK, policy)
+}
