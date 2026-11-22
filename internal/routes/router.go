@@ -310,6 +310,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 ITIL Release & Deployment Management
+	if strings.HasPrefix(r.URL.Path, "/v2/deployments") {
+		if handler.GlobalDeploymentHandler == nil {
+			http.Error(w, "Deployment handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalDeploymentHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return
