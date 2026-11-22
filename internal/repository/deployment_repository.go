@@ -805,17 +805,174 @@ func (r *sqlDeploymentRepository) ListSteps(ctx context.Context, filter model.De
 	}
 	return steps, total, rows.Err()
 }
+// Rollback Policies implementation
 func (r *sqlDeploymentRepository) CreateRollbackPolicy(ctx context.Context, p *model.RollbackPolicy) error {
-	return nil
+	if p.ID == "" {
+		p.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if p.CreatedAt.IsZero() {
+		p.CreatedAt = now
+	}
+	p.UpdatedAt = now
+	if p.ExecutionStatus == "" {
+		p.ExecutionStatus = model.RollbackStatusTriggered
+	}
+
+	query := `
+		INSERT INTO deployment_rollbacks (
+			id, workspace_id, pipeline_id, run_id, trigger_condition,
+			threshold_value, target_rollback_version, execution_status,
+			triggered_at, completed_at, rollback_logs, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err := r.db.ExecContext(ctx, query,
+		p.ID, p.WorkspaceID, p.PipelineID, p.RunID, p.TriggerCondition,
+		p.ThresholdValue, p.TargetRollbackVersion, p.ExecutionStatus,
+		p.TriggeredAt, p.CompletedAt, p.RollbackLogs, p.CreatedAt, p.UpdatedAt,
+	)
+	return err
 }
+
 func (r *sqlDeploymentRepository) GetRollbackPolicyByID(ctx context.Context, id string) (*model.RollbackPolicy, error) {
-	return nil, nil
+	query := `
+		SELECT id, workspace_id, pipeline_id, run_id, trigger_condition,
+		       threshold_value, target_rollback_version, execution_status,
+		       triggered_at, completed_at, rollback_logs, created_at, updated_at
+		FROM deployment_rollbacks
+		WHERE id = ?
+	`
+	var p model.RollbackPolicy
+	var runID, logs sql.NullString
+	var triggeredAt, completedAt sql.NullTime
+
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&p.ID, &p.WorkspaceID, &p.PipelineID, &runID, &p.TriggerCondition,
+		&p.ThresholdValue, &p.TargetRollbackVersion, &p.ExecutionStatus,
+		&triggeredAt, &completedAt, &logs, &p.CreatedAt, &p.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRollbackPolicyNotFound
+		}
+		return nil, err
+	}
+	p.RunID = runID.String
+	p.RollbackLogs = logs.String
+	if triggeredAt.Valid {
+		p.TriggeredAt = &triggeredAt.Time
+	}
+	if completedAt.Valid {
+		p.CompletedAt = &completedAt.Time
+	}
+	return &p, nil
 }
+
 func (r *sqlDeploymentRepository) UpdateRollbackPolicy(ctx context.Context, p *model.RollbackPolicy) error {
+	p.UpdatedAt = time.Now().UTC()
+	query := `
+		UPDATE deployment_rollbacks
+		SET execution_status = ?, triggered_at = ?, completed_at = ?,
+		    rollback_logs = ?, updated_at = ?
+		WHERE id = ?
+	`
+	res, err := r.db.ExecContext(ctx, query,
+		p.ExecutionStatus, p.TriggeredAt, p.CompletedAt,
+		p.RollbackLogs, p.UpdatedAt, p.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrRollbackPolicyNotFound
+	}
 	return nil
 }
+
 func (r *sqlDeploymentRepository) ListRollbackPolicies(ctx context.Context, filter model.RollbackPolicyFilter) ([]model.RollbackPolicy, int, error) {
-	return nil, 0, nil
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.PipelineID != "" {
+		conditions = append(conditions, "pipeline_id = ?")
+		args = append(args, filter.PipelineID)
+	}
+	if filter.ExecutionStatus != "" {
+		conditions = append(conditions, "execution_status = ?")
+		args = append(args, filter.ExecutionStatus)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM deployment_rollbacks %s", whereClause)
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, workspace_id, pipeline_id, run_id, trigger_condition,
+		       threshold_value, target_rollback_version, execution_status,
+		       triggered_at, completed_at, rollback_logs, created_at, updated_at
+		FROM deployment_rollbacks
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?
+	`, whereClause)
+
+	argsWithPaging := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, argsWithPaging...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var policies []model.RollbackPolicy
+	for rows.Next() {
+		var p model.RollbackPolicy
+		var runID, logs sql.NullString
+		var triggeredAt, completedAt sql.NullTime
+
+		err := rows.Scan(
+			&p.ID, &p.WorkspaceID, &p.PipelineID, &runID, &p.TriggerCondition,
+			&p.ThresholdValue, &p.TargetRollbackVersion, &p.ExecutionStatus,
+			&triggeredAt, &completedAt, &logs, &p.CreatedAt, &p.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		p.RunID = runID.String
+		p.RollbackLogs = logs.String
+		if triggeredAt.Valid {
+			p.TriggeredAt = &triggeredAt.Time
+		}
+		if completedAt.Valid {
+			p.CompletedAt = &completedAt.Time
+		}
+		policies = append(policies, p)
+	}
+	return policies, total, rows.Err()
 }
 func (r *sqlDeploymentRepository) GetDeploymentAnalytics(ctx context.Context, workspaceID string) (*model.DeploymentAnalytics, error) {
 	return nil, nil
