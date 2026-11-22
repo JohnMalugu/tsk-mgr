@@ -259,3 +259,86 @@ func (h *DeploymentHandler) UpdateRunStatus(w http.ResponseWriter, r *http.Reque
 	}
 	writeDeploymentJSON(w, http.StatusOK, run)
 }
+
+// Gates HTTP Endpoints
+
+// ListGates handles GET /v2/deployments/gates
+func (h *DeploymentHandler) ListGates(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.DeploymentGateFilter{
+		WorkspaceID: getDeploymentWorkspaceID(r),
+		RunID:       q.Get("run_id"),
+		GateType:    q.Get("gate_type"),
+		Status:      q.Get("status"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	gates, total, err := h.svc.ListGates(r.Context(), filter)
+	if err != nil {
+		handleDeploymentError(w, err)
+		return
+	}
+
+	writeDeploymentJSON(w, http.StatusOK, map[string]interface{}{
+		"gates":  gates,
+		"total":  total,
+		"limit":  filter.Limit,
+		"offset": filter.Offset,
+	})
+}
+
+// CreateGate handles POST /v2/deployments/gates
+func (h *DeploymentHandler) CreateGate(w http.ResponseWriter, r *http.Request) {
+	var req model.CreateDeploymentGateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeDeploymentError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	ws := getDeploymentWorkspaceID(r)
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = ws
+	}
+
+	gate, err := h.svc.CreateGate(r.Context(), ws, req)
+	if err != nil {
+		handleDeploymentError(w, err)
+		return
+	}
+
+	writeDeploymentJSON(w, http.StatusCreated, gate)
+}
+
+// GetGateByID handles GET /v2/deployments/gates/{id}
+func (h *DeploymentHandler) GetGateByID(w http.ResponseWriter, r *http.Request, id string) {
+	gate, err := h.svc.GetGateByID(r.Context(), id)
+	if err != nil {
+		handleDeploymentError(w, err)
+		return
+	}
+	writeDeploymentJSON(w, http.StatusOK, gate)
+}
+
+// EvaluateGate handles POST /v2/deployments/gates/{id}/evaluate
+func (h *DeploymentHandler) EvaluateGate(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.EvaluateDeploymentGateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeDeploymentError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.EvaluatorID == "" {
+		req.EvaluatorID = getDeploymentUser(r)
+	}
+
+	gate, err := h.svc.EvaluateGate(r.Context(), id, req)
+	if err != nil {
+		handleDeploymentError(w, err)
+		return
+	}
+	writeDeploymentJSON(w, http.StatusOK, gate)
+}
