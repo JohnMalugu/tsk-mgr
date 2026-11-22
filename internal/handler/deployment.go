@@ -498,3 +498,193 @@ func (h *DeploymentHandler) ExecuteRollback(w http.ResponseWriter, r *http.Reque
 	}
 	writeDeploymentJSON(w, http.StatusOK, policy)
 }
+
+// Analytics and Router HTTP Endpoints
+
+// GetDeploymentAnalytics handles GET /v2/deployments/analytics
+func (h *DeploymentHandler) GetDeploymentAnalytics(w http.ResponseWriter, r *http.Request) {
+	ws := getDeploymentWorkspaceID(r)
+	analytics, err := h.svc.GetDeploymentAnalytics(r.Context(), ws)
+	if err != nil {
+		handleDeploymentError(w, err)
+		return
+	}
+	writeDeploymentJSON(w, http.StatusOK, analytics)
+}
+
+// ServeHTTP routes HTTP requests under /v2/deployments
+func (h *DeploymentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/deployments")
+	path = strings.TrimPrefix(path, "/")
+
+	if path == "" {
+		writeDeploymentJSON(w, http.StatusOK, map[string]string{
+			"service": "ITIL Release & Deployment Management API",
+			"version": "v2",
+		})
+		return
+	}
+
+	if path == "analytics" {
+		if r.Method == http.MethodGet {
+			h.GetDeploymentAnalytics(w, r)
+		} else {
+			writeDeploymentError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	parts := strings.Split(path, "/")
+	resource := parts[0]
+
+	switch resource {
+	case "pipelines":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListPipelines(w, r)
+			case http.MethodPost:
+				h.CreatePipeline(w, r)
+			default:
+				writeDeploymentError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		pipelineID := parts[1]
+		if len(parts) == 2 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetPipelineByID(w, r, pipelineID)
+			case http.MethodPut:
+				h.UpdatePipeline(w, r, pipelineID)
+			case http.MethodDelete:
+				h.DeletePipeline(w, r, pipelineID)
+			default:
+				writeDeploymentError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+	case "runs":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListRuns(w, r)
+			case http.MethodPost:
+				h.CreateRun(w, r)
+			default:
+				writeDeploymentError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		runID := parts[1]
+		if len(parts) == 2 {
+			if r.Method == http.MethodGet {
+				h.GetRunByID(w, r, runID)
+			} else {
+				writeDeploymentError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 3 && parts[2] == "status" {
+			if r.Method == http.MethodPut || r.Method == http.MethodPatch {
+				h.UpdateRunStatus(w, r, runID)
+			} else {
+				writeDeploymentError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+	case "gates":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListGates(w, r)
+			case http.MethodPost:
+				h.CreateGate(w, r)
+			default:
+				writeDeploymentError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		gateID := parts[1]
+		if len(parts) == 2 {
+			if r.Method == http.MethodGet {
+				h.GetGateByID(w, r, gateID)
+			} else {
+				writeDeploymentError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 3 && parts[2] == "evaluate" {
+			if r.Method == http.MethodPost {
+				h.EvaluateGate(w, r, gateID)
+			} else {
+				writeDeploymentError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+	case "steps":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListSteps(w, r)
+			case http.MethodPost:
+				h.CreateStep(w, r)
+			default:
+				writeDeploymentError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		stepID := parts[1]
+		if len(parts) == 2 {
+			if r.Method == http.MethodGet {
+				h.GetStepByID(w, r, stepID)
+			} else {
+				writeDeploymentError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 3 && parts[2] == "promote" {
+			if r.Method == http.MethodPost {
+				h.PromoteStep(w, r, stepID)
+			} else {
+				writeDeploymentError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+	case "rollbacks":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListRollbackPolicies(w, r)
+			case http.MethodPost:
+				h.CreateRollbackPolicy(w, r)
+			default:
+				writeDeploymentError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		rollbackID := parts[1]
+		if len(parts) == 2 {
+			if r.Method == http.MethodGet {
+				h.GetRollbackPolicyByID(w, r, rollbackID)
+			} else {
+				writeDeploymentError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 3 && parts[2] == "execute" {
+			if r.Method == http.MethodPost {
+				h.ExecuteRollback(w, r, rollbackID)
+			} else {
+				writeDeploymentError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+	}
+
+	writeDeploymentError(w, http.StatusNotFound, "route not found")
+}
