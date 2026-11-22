@@ -176,3 +176,86 @@ func (h *DeploymentHandler) DeletePipeline(w http.ResponseWriter, r *http.Reques
 	}
 	writeDeploymentJSON(w, http.StatusOK, map[string]string{"message": "deployment pipeline deleted successfully"})
 }
+
+// Runs HTTP Endpoints
+
+// ListRuns handles GET /v2/deployments/runs
+func (h *DeploymentHandler) ListRuns(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.DeploymentRunFilter{
+		WorkspaceID: getDeploymentWorkspaceID(r),
+		PipelineID:  q.Get("pipeline_id"),
+		Environment: q.Get("environment"),
+		Status:      q.Get("status"),
+		TriggerType: q.Get("trigger_type"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	runs, total, err := h.svc.ListRuns(r.Context(), filter)
+	if err != nil {
+		handleDeploymentError(w, err)
+		return
+	}
+
+	writeDeploymentJSON(w, http.StatusOK, map[string]interface{}{
+		"runs":   runs,
+		"total":  total,
+		"limit":  filter.Limit,
+		"offset": filter.Offset,
+	})
+}
+
+// CreateRun handles POST /v2/deployments/runs
+func (h *DeploymentHandler) CreateRun(w http.ResponseWriter, r *http.Request) {
+	var req model.CreateDeploymentRunRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeDeploymentError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	ws := getDeploymentWorkspaceID(r)
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = ws
+	}
+	if req.DeployedByUserID == "" {
+		req.DeployedByUserID = getDeploymentUser(r)
+	}
+
+	run, err := h.svc.CreateRun(r.Context(), ws, req)
+	if err != nil {
+		handleDeploymentError(w, err)
+		return
+	}
+
+	writeDeploymentJSON(w, http.StatusCreated, run)
+}
+
+// GetRunByID handles GET /v2/deployments/runs/{id}
+func (h *DeploymentHandler) GetRunByID(w http.ResponseWriter, r *http.Request, id string) {
+	run, err := h.svc.GetRunByID(r.Context(), id)
+	if err != nil {
+		handleDeploymentError(w, err)
+		return
+	}
+	writeDeploymentJSON(w, http.StatusOK, run)
+}
+
+// UpdateRunStatus handles PUT/PATCH /v2/deployments/runs/{id}/status
+func (h *DeploymentHandler) UpdateRunStatus(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateDeploymentRunStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeDeploymentError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	run, err := h.svc.UpdateRunStatus(r.Context(), id, req)
+	if err != nil {
+		handleDeploymentError(w, err)
+		return
+	}
+	writeDeploymentJSON(w, http.StatusOK, run)
+}
