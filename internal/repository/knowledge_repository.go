@@ -555,23 +555,264 @@ func (r *sqlKnowledgeRepository) ListFeedback(ctx context.Context, filter model.
 	}
 	return list, total, rows.Err()
 }
+// Reviews implementation
 func (r *sqlKnowledgeRepository) CreateReview(ctx context.Context, rev *model.KnowledgeReview) error {
+	if rev.ID == "" {
+		rev.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if rev.CreatedAt.IsZero() {
+		rev.CreatedAt = now
+	}
+	rev.UpdatedAt = now
+	if rev.Status == "" {
+		rev.Status = model.KnowledgeReviewStatusScheduled
+	}
+
+	query := `
+		INSERT INTO knowledge_reviews (
+			id, workspace_id, article_id, reviewer_id, status,
+			findings, next_review_due, reviewed_at, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err := r.db.ExecContext(ctx, query,
+		rev.ID, rev.WorkspaceID, rev.ArticleID, rev.ReviewerID, rev.Status,
+		rev.Findings, rev.NextReviewDue, rev.ReviewedAt, rev.CreatedAt, rev.UpdatedAt,
+	)
+	if err != nil {
+		return err
+	}
+
+	if rev.NextReviewDue != nil {
+		_, _ = r.db.ExecContext(ctx, `UPDATE knowledge_articles SET review_due_date = ?, updated_at = ? WHERE id = ?`, rev.NextReviewDue, now, rev.ArticleID)
+	}
 	return nil
 }
+
 func (r *sqlKnowledgeRepository) GetReviewByID(ctx context.Context, id string) (*model.KnowledgeReview, error) {
-	return nil, nil
+	query := `
+		SELECT id, workspace_id, article_id, reviewer_id, status,
+		       findings, next_review_due, reviewed_at, created_at, updated_at
+		FROM knowledge_reviews
+		WHERE id = ?
+	`
+	var rev model.KnowledgeReview
+	var findings sql.NullString
+	var nextDue, reviewedAt sql.NullTime
+
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&rev.ID, &rev.WorkspaceID, &rev.ArticleID, &rev.ReviewerID, &rev.Status,
+		&findings, &nextDue, &reviewedAt, &rev.CreatedAt, &rev.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrKnowledgeReviewNotFound
+		}
+		return nil, err
+	}
+	rev.Findings = findings.String
+	if nextDue.Valid {
+		rev.NextReviewDue = &nextDue.Time
+	}
+	if reviewedAt.Valid {
+		rev.ReviewedAt = &reviewedAt.Time
+	}
+	return &rev, nil
 }
+
 func (r *sqlKnowledgeRepository) UpdateReview(ctx context.Context, rev *model.KnowledgeReview) error {
+	rev.UpdatedAt = time.Now().UTC()
+	query := `
+		UPDATE knowledge_reviews
+		SET status = ?, findings = ?, next_review_due = ?, reviewed_at = ?, updated_at = ?
+		WHERE id = ?
+	`
+	res, err := r.db.ExecContext(ctx, query,
+		rev.Status, rev.Findings, rev.NextReviewDue, rev.ReviewedAt, rev.UpdatedAt, rev.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrKnowledgeReviewNotFound
+	}
+
+	if rev.NextReviewDue != nil {
+		_, _ = r.db.ExecContext(ctx, `UPDATE knowledge_articles SET review_due_date = ?, updated_at = ? WHERE id = ?`, rev.NextReviewDue, rev.UpdatedAt, rev.ArticleID)
+	}
 	return nil
 }
+
 func (r *sqlKnowledgeRepository) ListReviews(ctx context.Context, filter model.KnowledgeReviewFilter) ([]model.KnowledgeReview, int, error) {
-	return nil, 0, nil
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.ArticleID != "" {
+		conditions = append(conditions, "article_id = ?")
+		args = append(args, filter.ArticleID)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM knowledge_reviews %s", whereClause)
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, workspace_id, article_id, reviewer_id, status,
+		       findings, next_review_due, reviewed_at, created_at, updated_at
+		FROM knowledge_reviews
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?
+	`, whereClause)
+
+	argsWithPaging := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, argsWithPaging...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var reviews []model.KnowledgeReview
+	for rows.Next() {
+		var rev model.KnowledgeReview
+		var findings sql.NullString
+		var nextDue, reviewedAt sql.NullTime
+
+		err := rows.Scan(
+			&rev.ID, &rev.WorkspaceID, &rev.ArticleID, &rev.ReviewerID, &rev.Status,
+			&findings, &nextDue, &reviewedAt, &rev.CreatedAt, &rev.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		rev.Findings = findings.String
+		if nextDue.Valid {
+			rev.NextReviewDue = &nextDue.Time
+		}
+		if reviewedAt.Valid {
+			rev.ReviewedAt = &reviewedAt.Time
+		}
+		reviews = append(reviews, rev)
+	}
+	return reviews, total, rows.Err()
 }
+
+// Deflections implementation
 func (r *sqlKnowledgeRepository) LogDeflection(ctx context.Context, d *model.KnowledgeDeflection) error {
-	return nil
+	if d.ID == "" {
+		d.ID = uuid.New().String()
+	}
+	if d.CreatedAt.IsZero() {
+		d.CreatedAt = time.Now().UTC()
+	}
+
+	query := `
+		INSERT INTO knowledge_deflections (
+			id, workspace_id, query, article_id, user_id, deflected, context, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err := r.db.ExecContext(ctx, query,
+		d.ID, d.WorkspaceID, d.Query, d.ArticleID, d.UserID, d.Deflected, d.Context, d.CreatedAt,
+	)
+	return err
 }
+
 func (r *sqlKnowledgeRepository) ListDeflections(ctx context.Context, filter model.KnowledgeDeflectionFilter) ([]model.KnowledgeDeflection, int, error) {
-	return nil, 0, nil
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.ArticleID != "" {
+		conditions = append(conditions, "article_id = ?")
+		args = append(args, filter.ArticleID)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM knowledge_deflections %s", whereClause)
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, workspace_id, query, article_id, user_id, deflected, context, created_at
+		FROM knowledge_deflections
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?
+	`, whereClause)
+
+	argsWithPaging := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, argsWithPaging...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var deflections []model.KnowledgeDeflection
+	for rows.Next() {
+		var d model.KnowledgeDeflection
+		var articleID, userID, contextStr sql.NullString
+
+		err := rows.Scan(
+			&d.ID, &d.WorkspaceID, &d.Query, &articleID, &userID,
+			&d.Deflected, &contextStr, &d.CreatedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		d.ArticleID = articleID.String
+		d.UserID = userID.String
+		d.Context = contextStr.String
+		deflections = append(deflections, d)
+	}
+	return deflections, total, rows.Err()
 }
 func (r *sqlKnowledgeRepository) GetKnowledgeAnalytics(ctx context.Context, workspaceID string) (*model.KnowledgeAnalytics, error) {
 	return nil, nil
