@@ -3813,6 +3813,13 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_kb_articles_incident ON knowledge_articles(incident_id);
 	CREATE INDEX IF NOT EXISTS idx_kb_articles_review ON knowledge_articles(review_due_date);
 	CREATE INDEX IF NOT EXISTS idx_kb_revisions_article ON knowledge_revisions(article_id, version DESC);
+	CREATE INDEX IF NOT EXISTS idx_kb_feedback_article ON knowledge_feedback(article_id);
+	CREATE INDEX IF NOT EXISTS idx_kb_feedback_user ON knowledge_feedback(user_id);
+	CREATE INDEX IF NOT EXISTS idx_kb_reviews_article ON knowledge_reviews(article_id);
+	CREATE INDEX IF NOT EXISTS idx_kb_reviews_due ON knowledge_reviews(next_review_due);
+	CREATE INDEX IF NOT EXISTS idx_kb_reviews_ws_status ON knowledge_reviews(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_kb_deflections_ws ON knowledge_deflections(workspace_id);
+	CREATE INDEX IF NOT EXISTS idx_kb_deflections_article ON knowledge_deflections(article_id);
 	`
 
 	_, err = db.Exec(indexQuery)
