@@ -3386,6 +3386,26 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	knowledgeRevisionsQuery := `
+	CREATE TABLE IF NOT EXISTS knowledge_revisions (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		article_id TEXT NOT NULL,
+		version INTEGER NOT NULL,
+		title TEXT NOT NULL,
+		content TEXT NOT NULL,
+		summary TEXT,
+		change_summary TEXT,
+		author_id TEXT,
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (article_id) REFERENCES knowledge_articles(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(knowledgeRevisionsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
