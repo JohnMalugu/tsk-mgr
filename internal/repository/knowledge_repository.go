@@ -72,27 +72,276 @@ func NewKnowledgeRepository(db *sql.DB) KnowledgeRepository {
 	return &sqlKnowledgeRepository{db: db}
 }
 
-// Stubs for interface compliance during incremental commits
+// Articles implementation
 func (r *sqlKnowledgeRepository) CreateArticle(ctx context.Context, a *model.KnowledgeArticle) error {
-	return nil
+	if a.ID == "" {
+		a.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if a.CreatedAt.IsZero() {
+		a.CreatedAt = now
+	}
+	a.UpdatedAt = now
+	if a.Version <= 0 {
+		a.Version = 1
+	}
+
+	// Check for unique code in workspace
+	var count int
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM knowledge_articles WHERE workspace_id = ? AND article_code = ?`, a.WorkspaceID, a.ArticleCode).Scan(&count)
+	if err == nil && count > 0 {
+		return ErrKnowledgeArticleCodeConflict
+	}
+
+	query := `
+		INSERT INTO knowledge_articles (
+			id, workspace_id, article_code, title, summary, content,
+			category, status, visibility, version, author_id, ci_id,
+			problem_id, incident_id, tags, view_count, helpful_count,
+			not_helpful_count, review_due_date, published_at, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err = r.db.ExecContext(ctx, query,
+		a.ID, a.WorkspaceID, a.ArticleCode, a.Title, a.Summary, a.Content,
+		a.Category, a.Status, a.Visibility, a.Version, a.AuthorID, a.CIID,
+		a.ProblemID, a.IncidentID, a.Tags, a.ViewCount, a.HelpfulCount,
+		a.NotHelpfulCount, a.ReviewDueDate, a.PublishedAt, a.CreatedAt, a.UpdatedAt,
+	)
+	return err
 }
+
 func (r *sqlKnowledgeRepository) GetArticleByID(ctx context.Context, id string) (*model.KnowledgeArticle, error) {
-	return nil, nil
+	query := `
+		SELECT id, workspace_id, article_code, title, summary, content,
+		       category, status, visibility, version, author_id, ci_id,
+		       problem_id, incident_id, tags, view_count, helpful_count,
+		       not_helpful_count, review_due_date, published_at, created_at, updated_at
+		FROM knowledge_articles
+		WHERE id = ?
+	`
+	var a model.KnowledgeArticle
+	var summary, author, ci, prob, inc, tags sql.NullString
+	var reviewDue, pubAt sql.NullTime
+
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&a.ID, &a.WorkspaceID, &a.ArticleCode, &a.Title, &summary, &a.Content,
+		&a.Category, &a.Status, &a.Visibility, &a.Version, &author, &ci,
+		&prob, &inc, &tags, &a.ViewCount, &a.HelpfulCount,
+		&a.NotHelpfulCount, &reviewDue, &pubAt, &a.CreatedAt, &a.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrKnowledgeArticleNotFound
+		}
+		return nil, err
+	}
+	a.Summary = summary.String
+	a.AuthorID = author.String
+	a.CIID = ci.String
+	a.ProblemID = prob.String
+	a.IncidentID = inc.String
+	a.Tags = tags.String
+	if reviewDue.Valid {
+		a.ReviewDueDate = &reviewDue.Time
+	}
+	if pubAt.Valid {
+		a.PublishedAt = &pubAt.Time
+	}
+	return &a, nil
 }
+
 func (r *sqlKnowledgeRepository) GetArticleByCode(ctx context.Context, workspaceID, code string) (*model.KnowledgeArticle, error) {
-	return nil, nil
+	query := `
+		SELECT id, workspace_id, article_code, title, summary, content,
+		       category, status, visibility, version, author_id, ci_id,
+		       problem_id, incident_id, tags, view_count, helpful_count,
+		       not_helpful_count, review_due_date, published_at, created_at, updated_at
+		FROM knowledge_articles
+		WHERE workspace_id = ? AND article_code = ?
+	`
+	var a model.KnowledgeArticle
+	var summary, author, ci, prob, inc, tags sql.NullString
+	var reviewDue, pubAt sql.NullTime
+
+	err := r.db.QueryRowContext(ctx, query, workspaceID, code).Scan(
+		&a.ID, &a.WorkspaceID, &a.ArticleCode, &a.Title, &summary, &a.Content,
+		&a.Category, &a.Status, &a.Visibility, &a.Version, &author, &ci,
+		&prob, &inc, &tags, &a.ViewCount, &a.HelpfulCount,
+		&a.NotHelpfulCount, &reviewDue, &pubAt, &a.CreatedAt, &a.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrKnowledgeArticleNotFound
+		}
+		return nil, err
+	}
+	a.Summary = summary.String
+	a.AuthorID = author.String
+	a.CIID = ci.String
+	a.ProblemID = prob.String
+	a.IncidentID = inc.String
+	a.Tags = tags.String
+	if reviewDue.Valid {
+		a.ReviewDueDate = &reviewDue.Time
+	}
+	if pubAt.Valid {
+		a.PublishedAt = &pubAt.Time
+	}
+	return &a, nil
 }
+
 func (r *sqlKnowledgeRepository) UpdateArticle(ctx context.Context, a *model.KnowledgeArticle) error {
+	a.UpdatedAt = time.Now().UTC()
+	query := `
+		UPDATE knowledge_articles
+		SET title = ?, summary = ?, content = ?, category = ?, status = ?,
+		    visibility = ?, version = ?, ci_id = ?, problem_id = ?, incident_id = ?,
+		    tags = ?, helpful_count = ?, not_helpful_count = ?, review_due_date = ?,
+		    published_at = ?, updated_at = ?
+		WHERE id = ?
+	`
+	res, err := r.db.ExecContext(ctx, query,
+		a.Title, a.Summary, a.Content, a.Category, a.Status,
+		a.Visibility, a.Version, a.CIID, a.ProblemID, a.IncidentID,
+		a.Tags, a.HelpfulCount, a.NotHelpfulCount, a.ReviewDueDate,
+		a.PublishedAt, a.UpdatedAt, a.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrKnowledgeArticleNotFound
+	}
 	return nil
 }
+
 func (r *sqlKnowledgeRepository) DeleteArticle(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM knowledge_articles WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrKnowledgeArticleNotFound
+	}
 	return nil
 }
+
 func (r *sqlKnowledgeRepository) IncrementViewCount(ctx context.Context, id string) error {
-	return nil
+	_, err := r.db.ExecContext(ctx, `UPDATE knowledge_articles SET view_count = view_count + 1 WHERE id = ?`, id)
+	return err
 }
+
 func (r *sqlKnowledgeRepository) ListArticles(ctx context.Context, filter model.KnowledgeArticleFilter) ([]model.KnowledgeArticle, int, error) {
-	return nil, 0, nil
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.Category != "" {
+		conditions = append(conditions, "category = ?")
+		args = append(args, filter.Category)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+	if filter.Visibility != "" {
+		conditions = append(conditions, "visibility = ?")
+		args = append(args, filter.Visibility)
+	}
+	if filter.AuthorID != "" {
+		conditions = append(conditions, "author_id = ?")
+		args = append(args, filter.AuthorID)
+	}
+	if filter.CIID != "" {
+		conditions = append(conditions, "ci_id = ?")
+		args = append(args, filter.CIID)
+	}
+	if filter.Search != "" {
+		searchTerm := "%" + filter.Search + "%"
+		conditions = append(conditions, "(title LIKE ? OR summary LIKE ? OR tags LIKE ?)")
+		args = append(args, searchTerm, searchTerm, searchTerm)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM knowledge_articles %s", whereClause)
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, workspace_id, article_code, title, summary, content,
+		       category, status, visibility, version, author_id, ci_id,
+		       problem_id, incident_id, tags, view_count, helpful_count,
+		       not_helpful_count, review_due_date, published_at, created_at, updated_at
+		FROM knowledge_articles
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?
+	`, whereClause)
+
+	argsWithPaging := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, argsWithPaging...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var articles []model.KnowledgeArticle
+	for rows.Next() {
+		var a model.KnowledgeArticle
+		var summary, author, ci, prob, inc, tags sql.NullString
+		var reviewDue, pubAt sql.NullTime
+
+		err := rows.Scan(
+			&a.ID, &a.WorkspaceID, &a.ArticleCode, &a.Title, &summary, &a.Content,
+			&a.Category, &a.Status, &a.Visibility, &a.Version, &author, &ci,
+			&prob, &inc, &tags, &a.ViewCount, &a.HelpfulCount,
+			&a.NotHelpfulCount, &reviewDue, &pubAt, &a.CreatedAt, &a.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		a.Summary = summary.String
+		a.AuthorID = author.String
+		a.CIID = ci.String
+		a.ProblemID = prob.String
+		a.IncidentID = inc.String
+		a.Tags = tags.String
+		if reviewDue.Valid {
+			a.ReviewDueDate = &reviewDue.Time
+		}
+		if pubAt.Valid {
+			a.PublishedAt = &pubAt.Time
+		}
+		articles = append(articles, a)
+	}
+	return articles, total, rows.Err()
 }
 func (r *sqlKnowledgeRepository) CreateRevision(ctx context.Context, rev *model.KnowledgeRevision) error {
 	return nil
