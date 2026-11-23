@@ -371,3 +371,68 @@ func (h *KnowledgeHandler) CompleteReview(w http.ResponseWriter, r *http.Request
 	}
 	writeKnowledgeJSON(w, http.StatusOK, review)
 }
+
+// Deflections and Lookup HTTP Endpoints
+
+// ListDeflections handles GET /v2/knowledge/deflections
+func (h *KnowledgeHandler) ListDeflections(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.KnowledgeDeflectionFilter{
+		WorkspaceID: getKnowledgeWorkspaceID(r),
+		ArticleID:   q.Get("article_id"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	deflections, total, err := h.svc.ListDeflections(r.Context(), filter)
+	if err != nil {
+		handleKnowledgeError(w, err)
+		return
+	}
+
+	writeKnowledgeJSON(w, http.StatusOK, map[string]interface{}{
+		"deflections": deflections,
+		"total":       total,
+		"limit":       filter.Limit,
+		"offset":      filter.Offset,
+	})
+}
+
+// LogDeflection handles POST /v2/knowledge/deflections
+func (h *KnowledgeHandler) LogDeflection(w http.ResponseWriter, r *http.Request) {
+	var req model.LogKnowledgeDeflectionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeKnowledgeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	ws := getKnowledgeWorkspaceID(r)
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = ws
+	}
+	if req.UserID == "" {
+		req.UserID = getKnowledgeUser(r)
+	}
+
+	deflection, err := h.svc.LogDeflection(r.Context(), ws, req)
+	if err != nil {
+		handleKnowledgeError(w, err)
+		return
+	}
+
+	writeKnowledgeJSON(w, http.StatusCreated, deflection)
+}
+
+// GetArticleByCode handles GET /v2/knowledge/code/{code}
+func (h *KnowledgeHandler) GetArticleByCode(w http.ResponseWriter, r *http.Request, code string) {
+	ws := getKnowledgeWorkspaceID(r)
+	article, err := h.svc.GetArticleByCode(r.Context(), ws, code)
+	if err != nil {
+		handleKnowledgeError(w, err)
+		return
+	}
+	writeKnowledgeJSON(w, http.StatusOK, article)
+}
