@@ -113,3 +113,34 @@ type KnowledgeFeedback struct {
 	Comment     string    `json:"comment,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 }
+
+// Knowledge review status constants
+const (
+	KnowledgeReviewStatusScheduled = "scheduled"
+	KnowledgeReviewStatusCompleted = "completed"
+	KnowledgeReviewStatusExpired   = "expired"
+)
+
+// IsValidKnowledgeReviewStatus validates review status
+func IsValidKnowledgeReviewStatus(status string) bool {
+	switch status {
+	case KnowledgeReviewStatusScheduled, KnowledgeReviewStatusCompleted, KnowledgeReviewStatusExpired:
+		return true
+	default:
+		return false
+	}
+}
+
+// KnowledgeReview tracks periodic technical verification and accuracy certification of articles
+type KnowledgeReview struct {
+	ID            string     `json:"id"`
+	WorkspaceID   string     `json:"workspace_id"`
+	ArticleID     string     `json:"article_id"`
+	ReviewerID    string     `json:"reviewer_id"`
+	Status        string     `json:"status"`
+	Findings      string     `json:"findings,omitempty"`
+	NextReviewDue *time.Time `json:"next_review_due,omitempty"`
+	ReviewedAt    *time.Time `json:"reviewed_at,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+}
