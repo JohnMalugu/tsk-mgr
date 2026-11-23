@@ -87,3 +87,17 @@ type KnowledgeArticle struct {
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
+
+// KnowledgeRevision represents an immutable version snapshot of a knowledge article
+type KnowledgeRevision struct {
+	ID            string    `json:"id"`
+	WorkspaceID   string    `json:"workspace_id"`
+	ArticleID     string    `json:"article_id"`
+	Version       int       `json:"version"`
+	Title         string    `json:"title"`
+	Content       string    `json:"content"`
+	Summary       string    `json:"summary,omitempty"`
+	ChangeSummary string    `json:"change_summary,omitempty"`
+	AuthorID      string    `json:"author_id,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+}
