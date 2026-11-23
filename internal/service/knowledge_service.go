@@ -256,23 +256,98 @@ func (s *knowledgeService) GetRevisionByID(ctx context.Context, id string) (*mod
 func (s *knowledgeService) ListRevisions(ctx context.Context, filter model.KnowledgeRevisionFilter) ([]model.KnowledgeRevision, int, error) {
 	return s.repo.ListRevisions(ctx, filter)
 }
+// Feedback implementation
 func (s *knowledgeService) SubmitFeedback(ctx context.Context, workspaceID string, req model.SubmitKnowledgeFeedbackRequest) (*model.KnowledgeFeedback, error) {
-	return nil, nil
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = workspaceID
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	article, err := s.repo.GetArticleByID(ctx, req.ArticleID)
+	if err != nil {
+		return nil, err
+	}
+
+	feedback := &model.KnowledgeFeedback{
+		WorkspaceID: req.WorkspaceID,
+		ArticleID:   article.ID,
+		UserID:      strings.TrimSpace(req.UserID),
+		IsHelpful:   req.IsHelpful,
+		Rating:      req.Rating,
+		Comment:     strings.TrimSpace(req.Comment),
+		CreatedAt:   time.Now().UTC(),
+	}
+
+	if err := s.repo.CreateFeedback(ctx, feedback); err != nil {
+		return nil, err
+	}
+	return feedback, nil
 }
+
 func (s *knowledgeService) ListFeedback(ctx context.Context, filter model.KnowledgeFeedbackFilter) ([]model.KnowledgeFeedback, int, error) {
-	return nil, 0, nil
+	return s.repo.ListFeedback(ctx, filter)
 }
+
+// Reviews implementation
 func (s *knowledgeService) ScheduleReview(ctx context.Context, workspaceID string, req model.ScheduleKnowledgeReviewRequest) (*model.KnowledgeReview, error) {
-	return nil, nil
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = workspaceID
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	article, err := s.repo.GetArticleByID(ctx, req.ArticleID)
+	if err != nil {
+		return nil, err
+	}
+
+	review := &model.KnowledgeReview{
+		WorkspaceID:   req.WorkspaceID,
+		ArticleID:     article.ID,
+		ReviewerID:    strings.TrimSpace(req.ReviewerID),
+		Status:        model.KnowledgeReviewStatusScheduled,
+		NextReviewDue: req.NextReviewDue,
+	}
+
+	if err := s.repo.CreateReview(ctx, review); err != nil {
+		return nil, err
+	}
+	return review, nil
 }
+
 func (s *knowledgeService) GetReviewByID(ctx context.Context, id string) (*model.KnowledgeReview, error) {
-	return nil, nil
+	return s.repo.GetReviewByID(ctx, id)
 }
+
 func (s *knowledgeService) CompleteReview(ctx context.Context, id string, req model.CompleteKnowledgeReviewRequest) (*model.KnowledgeReview, error) {
-	return nil, nil
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	review, err := s.repo.GetReviewByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	review.Status = model.KnowledgeReviewStatusCompleted
+	review.Findings = strings.TrimSpace(req.Findings)
+	review.ReviewedAt = &now
+	if req.NextReviewDue != nil {
+		review.NextReviewDue = req.NextReviewDue
+	}
+
+	if err := s.repo.UpdateReview(ctx, review); err != nil {
+		return nil, err
+	}
+	return review, nil
 }
+
 func (s *knowledgeService) ListReviews(ctx context.Context, filter model.KnowledgeReviewFilter) ([]model.KnowledgeReview, int, error) {
-	return nil, 0, nil
+	return s.repo.ListReviews(ctx, filter)
 }
 func (s *knowledgeService) LogDeflection(ctx context.Context, workspaceID string, req model.LogKnowledgeDeflectionRequest) (*model.KnowledgeDeflection, error) {
 	return nil, nil
