@@ -1,6 +1,8 @@
 package model
 
 import (
+	"errors"
+	"strings"
 	"time"
 )
 
@@ -155,4 +157,149 @@ type KnowledgeDeflection struct {
 	Deflected   bool      `json:"deflected"`
 	Context     string    `json:"context,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+// Request DTOs and validation rules for Knowledge API
+
+// CreateKnowledgeArticleRequest represents the payload for creating an article
+type CreateKnowledgeArticleRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+	ArticleCode string `json:"article_code"`
+	Title       string `json:"title"`
+	Summary     string `json:"summary,omitempty"`
+	Content     string `json:"content"`
+	Category    string `json:"category"`
+	Visibility  string `json:"visibility"`
+	CIID        string `json:"ci_id,omitempty"`
+	ProblemID   string `json:"problem_id,omitempty"`
+	IncidentID  string `json:"incident_id,omitempty"`
+	Tags        string `json:"tags,omitempty"`
+	AuthorID    string `json:"author_id,omitempty"`
+}
+
+func (r *CreateKnowledgeArticleRequest) Validate() error {
+	if strings.TrimSpace(r.WorkspaceID) == "" {
+		return errors.New("workspace_id is required")
+	}
+	if strings.TrimSpace(r.ArticleCode) == "" {
+		return errors.New("article_code is required")
+	}
+	if strings.TrimSpace(r.Title) == "" {
+		return errors.New("title is required")
+	}
+	if strings.TrimSpace(r.Content) == "" {
+		return errors.New("content is required")
+	}
+	if !IsValidKnowledgeCategory(r.Category) {
+		return errors.New("invalid category")
+	}
+	if r.Visibility != "" && !IsValidKnowledgeVisibility(r.Visibility) {
+		return errors.New("invalid visibility")
+	}
+	return nil
+}
+
+// UpdateKnowledgeArticleRequest represents the payload for modifying an article
+type UpdateKnowledgeArticleRequest struct {
+	Title         *string `json:"title,omitempty"`
+	Summary       *string `json:"summary,omitempty"`
+	Content       *string `json:"content,omitempty"`
+	Category      *string `json:"category,omitempty"`
+	Status        *string `json:"status,omitempty"`
+	Visibility    *string `json:"visibility,omitempty"`
+	CIID          *string `json:"ci_id,omitempty"`
+	ProblemID     *string `json:"problem_id,omitempty"`
+	IncidentID    *string `json:"incident_id,omitempty"`
+	Tags          *string `json:"tags,omitempty"`
+	ChangeSummary string  `json:"change_summary,omitempty"`
+}
+
+func (r *UpdateKnowledgeArticleRequest) Validate() error {
+	if r.Category != nil && !IsValidKnowledgeCategory(*r.Category) {
+		return errors.New("invalid category")
+	}
+	if r.Status != nil && !IsValidKnowledgeStatus(*r.Status) {
+		return errors.New("invalid status")
+	}
+	if r.Visibility != nil && !IsValidKnowledgeVisibility(*r.Visibility) {
+		return errors.New("invalid visibility")
+	}
+	return nil
+}
+
+// SubmitKnowledgeFeedbackRequest payload for voting and reviewing an article
+type SubmitKnowledgeFeedbackRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+	ArticleID   string `json:"article_id"`
+	UserID      string `json:"user_id"`
+	IsHelpful   bool   `json:"is_helpful"`
+	Rating      int    `json:"rating"`
+	Comment     string `json:"comment,omitempty"`
+}
+
+func (r *SubmitKnowledgeFeedbackRequest) Validate() error {
+	if strings.TrimSpace(r.WorkspaceID) == "" {
+		return errors.New("workspace_id is required")
+	}
+	if strings.TrimSpace(r.ArticleID) == "" {
+		return errors.New("article_id is required")
+	}
+	if r.Rating < 1 || r.Rating > 5 {
+		return errors.New("rating must be between 1 and 5")
+	}
+	return nil
+}
+
+// ScheduleKnowledgeReviewRequest payload for scheduling article verification
+type ScheduleKnowledgeReviewRequest struct {
+	WorkspaceID   string     `json:"workspace_id"`
+	ArticleID     string     `json:"article_id"`
+	ReviewerID    string     `json:"reviewer_id"`
+	NextReviewDue *time.Time `json:"next_review_due,omitempty"`
+}
+
+func (r *ScheduleKnowledgeReviewRequest) Validate() error {
+	if strings.TrimSpace(r.WorkspaceID) == "" {
+		return errors.New("workspace_id is required")
+	}
+	if strings.TrimSpace(r.ArticleID) == "" {
+		return errors.New("article_id is required")
+	}
+	if strings.TrimSpace(r.ReviewerID) == "" {
+		return errors.New("reviewer_id is required")
+	}
+	return nil
+}
+
+// CompleteKnowledgeReviewRequest payload for certifying an article review
+type CompleteKnowledgeReviewRequest struct {
+	Findings      string     `json:"findings"`
+	NextReviewDue *time.Time `json:"next_review_due,omitempty"`
+}
+
+func (r *CompleteKnowledgeReviewRequest) Validate() error {
+	if strings.TrimSpace(r.Findings) == "" {
+		return errors.New("findings is required")
+	}
+	return nil
+}
+
+// LogKnowledgeDeflectionRequest payload for self-service deflection metrics
+type LogKnowledgeDeflectionRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+	Query       string `json:"query"`
+	ArticleID   string `json:"article_id,omitempty"`
+	UserID      string `json:"user_id,omitempty"`
+	Deflected   bool   `json:"deflected"`
+	Context     string `json:"context,omitempty"`
+}
+
+func (r *LogKnowledgeDeflectionRequest) Validate() error {
+	if strings.TrimSpace(r.WorkspaceID) == "" {
+		return errors.New("workspace_id is required")
+	}
+	if strings.TrimSpace(r.Query) == "" {
+		return errors.New("query is required")
+	}
+	return nil
 }
