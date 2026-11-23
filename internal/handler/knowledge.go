@@ -197,3 +197,42 @@ func (h *KnowledgeHandler) DeleteArticle(w http.ResponseWriter, r *http.Request,
 	}
 	writeKnowledgeJSON(w, http.StatusOK, map[string]string{"message": "knowledge article deleted successfully"})
 }
+
+// Revisions HTTP Endpoints
+
+// ListRevisions handles GET /v2/knowledge/revisions
+func (h *KnowledgeHandler) ListRevisions(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.KnowledgeRevisionFilter{
+		WorkspaceID: getKnowledgeWorkspaceID(r),
+		ArticleID:   q.Get("article_id"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	revisions, total, err := h.svc.ListRevisions(r.Context(), filter)
+	if err != nil {
+		handleKnowledgeError(w, err)
+		return
+	}
+
+	writeKnowledgeJSON(w, http.StatusOK, map[string]interface{}{
+		"revisions": revisions,
+		"total":     total,
+		"limit":     filter.Limit,
+		"offset":    filter.Offset,
+	})
+}
+
+// GetRevisionByID handles GET /v2/knowledge/revisions/{id}
+func (h *KnowledgeHandler) GetRevisionByID(w http.ResponseWriter, r *http.Request, id string) {
+	revision, err := h.svc.GetRevisionByID(r.Context(), id)
+	if err != nil {
+		handleKnowledgeError(w, err)
+		return
+	}
+	writeKnowledgeJSON(w, http.StatusOK, revision)
+}
