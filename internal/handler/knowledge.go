@@ -236,3 +236,138 @@ func (h *KnowledgeHandler) GetRevisionByID(w http.ResponseWriter, r *http.Reques
 	}
 	writeKnowledgeJSON(w, http.StatusOK, revision)
 }
+
+// Feedback HTTP Endpoints
+
+// ListFeedback handles GET /v2/knowledge/feedback
+func (h *KnowledgeHandler) ListFeedback(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.KnowledgeFeedbackFilter{
+		WorkspaceID: getKnowledgeWorkspaceID(r),
+		ArticleID:   q.Get("article_id"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	feedback, total, err := h.svc.ListFeedback(r.Context(), filter)
+	if err != nil {
+		handleKnowledgeError(w, err)
+		return
+	}
+
+	writeKnowledgeJSON(w, http.StatusOK, map[string]interface{}{
+		"feedback": feedback,
+		"total":    total,
+		"limit":    filter.Limit,
+		"offset":   filter.Offset,
+	})
+}
+
+// SubmitFeedback handles POST /v2/knowledge/feedback
+func (h *KnowledgeHandler) SubmitFeedback(w http.ResponseWriter, r *http.Request) {
+	var req model.SubmitKnowledgeFeedbackRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeKnowledgeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	ws := getKnowledgeWorkspaceID(r)
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = ws
+	}
+	if req.UserID == "" {
+		req.UserID = getKnowledgeUser(r)
+	}
+
+	feedback, err := h.svc.SubmitFeedback(r.Context(), ws, req)
+	if err != nil {
+		handleKnowledgeError(w, err)
+		return
+	}
+
+	writeKnowledgeJSON(w, http.StatusCreated, feedback)
+}
+
+// Reviews HTTP Endpoints
+
+// ListReviews handles GET /v2/knowledge/reviews
+func (h *KnowledgeHandler) ListReviews(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.KnowledgeReviewFilter{
+		WorkspaceID: getKnowledgeWorkspaceID(r),
+		ArticleID:   q.Get("article_id"),
+		Status:      q.Get("status"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	reviews, total, err := h.svc.ListReviews(r.Context(), filter)
+	if err != nil {
+		handleKnowledgeError(w, err)
+		return
+	}
+
+	writeKnowledgeJSON(w, http.StatusOK, map[string]interface{}{
+		"reviews": reviews,
+		"total":   total,
+		"limit":   filter.Limit,
+		"offset":  filter.Offset,
+	})
+}
+
+// ScheduleReview handles POST /v2/knowledge/reviews
+func (h *KnowledgeHandler) ScheduleReview(w http.ResponseWriter, r *http.Request) {
+	var req model.ScheduleKnowledgeReviewRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeKnowledgeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	ws := getKnowledgeWorkspaceID(r)
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = ws
+	}
+	if req.ReviewerID == "" {
+		req.ReviewerID = getKnowledgeUser(r)
+	}
+
+	review, err := h.svc.ScheduleReview(r.Context(), ws, req)
+	if err != nil {
+		handleKnowledgeError(w, err)
+		return
+	}
+
+	writeKnowledgeJSON(w, http.StatusCreated, review)
+}
+
+// GetReviewByID handles GET /v2/knowledge/reviews/{id}
+func (h *KnowledgeHandler) GetReviewByID(w http.ResponseWriter, r *http.Request, id string) {
+	review, err := h.svc.GetReviewByID(r.Context(), id)
+	if err != nil {
+		handleKnowledgeError(w, err)
+		return
+	}
+	writeKnowledgeJSON(w, http.StatusOK, review)
+}
+
+// CompleteReview handles POST /v2/knowledge/reviews/{id}/complete
+func (h *KnowledgeHandler) CompleteReview(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.CompleteKnowledgeReviewRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeKnowledgeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	review, err := h.svc.CompleteReview(r.Context(), id, req)
+	if err != nil {
+		handleKnowledgeError(w, err)
+		return
+	}
+	writeKnowledgeJSON(w, http.StatusOK, review)
+}
