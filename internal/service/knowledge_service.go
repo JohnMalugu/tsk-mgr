@@ -377,6 +377,10 @@ func (s *knowledgeService) LogDeflection(ctx context.Context, workspaceID string
 func (s *knowledgeService) ListDeflections(ctx context.Context, filter model.KnowledgeDeflectionFilter) ([]model.KnowledgeDeflection, int, error) {
 	return s.repo.ListDeflections(ctx, filter)
 }
+// Posture Analytics implementation
 func (s *knowledgeService) GetKnowledgeAnalytics(ctx context.Context, workspaceID string) (*model.KnowledgeAnalytics, error) {
-	return nil, nil
+	if strings.TrimSpace(workspaceID) == "" {
+		return nil, errors.New("workspace_id is required")
+	}
+	return s.repo.GetKnowledgeAnalytics(ctx, workspaceID)
 }
