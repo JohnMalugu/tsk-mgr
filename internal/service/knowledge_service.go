@@ -349,11 +349,33 @@ func (s *knowledgeService) CompleteReview(ctx context.Context, id string, req mo
 func (s *knowledgeService) ListReviews(ctx context.Context, filter model.KnowledgeReviewFilter) ([]model.KnowledgeReview, int, error) {
 	return s.repo.ListReviews(ctx, filter)
 }
+// Deflections implementation
 func (s *knowledgeService) LogDeflection(ctx context.Context, workspaceID string, req model.LogKnowledgeDeflectionRequest) (*model.KnowledgeDeflection, error) {
-	return nil, nil
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = workspaceID
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	deflection := &model.KnowledgeDeflection{
+		WorkspaceID: req.WorkspaceID,
+		Query:       strings.TrimSpace(req.Query),
+		ArticleID:   strings.TrimSpace(req.ArticleID),
+		UserID:      strings.TrimSpace(req.UserID),
+		Deflected:   req.Deflected,
+		Context:     strings.TrimSpace(req.Context),
+		CreatedAt:   time.Now().UTC(),
+	}
+
+	if err := s.repo.LogDeflection(ctx, deflection); err != nil {
+		return nil, err
+	}
+	return deflection, nil
 }
+
 func (s *knowledgeService) ListDeflections(ctx context.Context, filter model.KnowledgeDeflectionFilter) ([]model.KnowledgeDeflection, int, error) {
-	return nil, 0, nil
+	return s.repo.ListDeflections(ctx, filter)
 }
 func (s *knowledgeService) GetKnowledgeAnalytics(ctx context.Context, workspaceID string) (*model.KnowledgeAnalytics, error) {
 	return nil, nil
