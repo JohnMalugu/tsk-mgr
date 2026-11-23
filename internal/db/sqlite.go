@@ -3355,6 +3355,37 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	knowledgeArticlesQuery := `
+	CREATE TABLE IF NOT EXISTS knowledge_articles (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		article_code TEXT NOT NULL,
+		title TEXT NOT NULL,
+		summary TEXT,
+		content TEXT NOT NULL,
+		category TEXT NOT NULL,
+		status TEXT NOT NULL,
+		visibility TEXT NOT NULL DEFAULT 'internal',
+		version INTEGER NOT NULL DEFAULT 1,
+		author_id TEXT,
+		ci_id TEXT,
+		problem_id TEXT,
+		incident_id TEXT,
+		tags TEXT,
+		view_count INTEGER NOT NULL DEFAULT 0,
+		helpful_count INTEGER NOT NULL DEFAULT 0,
+		not_helpful_count INTEGER NOT NULL DEFAULT 0,
+		review_due_date DATETIME,
+		published_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);`
+
+	_, err = db.Exec(knowledgeArticlesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
