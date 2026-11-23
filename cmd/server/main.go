@@ -207,6 +207,10 @@ func main() {
 	deploymentSvc := service.NewDeploymentService(deploymentRepo)
 	handler.InitDeploymentHandler(deploymentSvc)
 
+	knowledgeRepo := repository.NewKnowledgeRepository(sqliteDB)
+	knowledgeSvc := service.NewKnowledgeService(knowledgeRepo)
+	handler.InitKnowledgeHandler(knowledgeSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
