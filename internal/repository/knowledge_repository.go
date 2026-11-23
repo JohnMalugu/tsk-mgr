@@ -814,6 +814,91 @@ func (r *sqlKnowledgeRepository) ListDeflections(ctx context.Context, filter mod
 	}
 	return deflections, total, rows.Err()
 }
+// Posture Analytics implementation
 func (r *sqlKnowledgeRepository) GetKnowledgeAnalytics(ctx context.Context, workspaceID string) (*model.KnowledgeAnalytics, error) {
-	return nil, nil
+	analytics := &model.KnowledgeAnalytics{
+		CategoryDistribution: make(map[string]int),
+	}
+
+	// 1. Article counts by status
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM knowledge_articles WHERE workspace_id = ?`, workspaceID).Scan(&analytics.TotalArticles)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM knowledge_articles WHERE workspace_id = ? AND status = ?`, workspaceID, model.KnowledgeStatusPublished).Scan(&analytics.PublishedArticles)
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM knowledge_articles WHERE workspace_id = ? AND status = ?`, workspaceID, model.KnowledgeStatusDraft).Scan(&analytics.DraftArticles)
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM knowledge_articles WHERE workspace_id = ? AND status = ?`, workspaceID, model.KnowledgeStatusInReview).Scan(&analytics.InReviewArticles)
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM knowledge_articles WHERE workspace_id = ? AND status = ?`, workspaceID, model.KnowledgeStatusArchived).Scan(&analytics.ArchivedArticles)
+
+	// 2. Engagement & helpfulness metrics
+	_ = r.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(view_count), 0), COALESCE(SUM(helpful_count), 0), COALESCE(SUM(not_helpful_count), 0)
+		FROM knowledge_articles
+		WHERE workspace_id = ?
+	`, workspaceID).Scan(&analytics.TotalViews, &analytics.TotalHelpfulVotes, &analytics.TotalNotHelpfulVotes)
+
+	totalVotes := analytics.TotalHelpfulVotes + analytics.TotalNotHelpfulVotes
+	if totalVotes > 0 {
+		analytics.AverageHelpfulnessRatio = (float64(analytics.TotalHelpfulVotes) / float64(totalVotes)) * 100.0
+	}
+
+	// 3. Deflection metrics
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM knowledge_deflections WHERE workspace_id = ?`, workspaceID).Scan(&analytics.TotalDeflectionAttempts)
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM knowledge_deflections WHERE workspace_id = ? AND deflected = 1`, workspaceID).Scan(&analytics.SuccessfulDeflections)
+
+	if analytics.TotalDeflectionAttempts > 0 {
+		analytics.DeflectionRate = (float64(analytics.SuccessfulDeflections) / float64(analytics.TotalDeflectionAttempts)) * 100.0
+	}
+
+	// 4. Verification review backlog
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM knowledge_reviews WHERE workspace_id = ? AND status = ?`, workspaceID, model.KnowledgeReviewStatusScheduled).Scan(&analytics.PendingReviewsCount)
+
+	// 5. Category distribution
+	catRows, err := r.db.QueryContext(ctx, `SELECT category, COUNT(*) FROM knowledge_articles WHERE workspace_id = ? GROUP BY category`, workspaceID)
+	if err == nil {
+		defer catRows.Close()
+		for catRows.Next() {
+			var cat string
+			var count int
+			if err := catRows.Scan(&cat, &count); err == nil {
+				analytics.CategoryDistribution[cat] = count
+			}
+		}
+	}
+
+	// 6. Knowledge Base Health Index (0 - 100)
+	score := 50.0 // baseline starting score
+	if analytics.TotalArticles > 0 {
+		pubRatio := float64(analytics.PublishedArticles) / float64(analytics.TotalArticles)
+		score += (pubRatio * 25.0)
+	}
+	if totalVotes > 0 {
+		score += ((analytics.AverageHelpfulnessRatio / 100.0) * 20.0)
+	} else {
+		score += 10.0 // neutral if no votes yet
+	}
+	if analytics.TotalDeflectionAttempts > 0 {
+		score += ((analytics.DeflectionRate / 100.0) * 15.0)
+	} else {
+		score += 5.0
+	}
+
+	// Penalty for review backlog
+	if analytics.PendingReviewsCount > 0 {
+		penalty := float64(analytics.PendingReviewsCount) * 1.5
+		if penalty > 15.0 {
+			penalty = 15.0
+		}
+		score -= penalty
+	}
+
+	if score < 0.0 {
+		score = 0.0
+	}
+	if score > 100.0 {
+		score = 100.0
+	}
+	analytics.KnowledgeHealthIndex = score
+
+	return analytics, nil
 }
