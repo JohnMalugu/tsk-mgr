@@ -436,3 +436,167 @@ func (h *KnowledgeHandler) GetArticleByCode(w http.ResponseWriter, r *http.Reque
 	}
 	writeKnowledgeJSON(w, http.StatusOK, article)
 }
+
+// Analytics and Router HTTP Endpoints
+
+// GetKnowledgeAnalytics handles GET /v2/knowledge/analytics
+func (h *KnowledgeHandler) GetKnowledgeAnalytics(w http.ResponseWriter, r *http.Request) {
+	ws := getKnowledgeWorkspaceID(r)
+	analytics, err := h.svc.GetKnowledgeAnalytics(r.Context(), ws)
+	if err != nil {
+		handleKnowledgeError(w, err)
+		return
+	}
+	writeKnowledgeJSON(w, http.StatusOK, analytics)
+}
+
+// ServeHTTP routes HTTP requests under /v2/knowledge
+func (h *KnowledgeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/knowledge")
+	path = strings.TrimPrefix(path, "/")
+
+	if path == "" {
+		writeKnowledgeJSON(w, http.StatusOK, map[string]string{
+			"service": "ITIL Knowledge Management API",
+			"version": "v2",
+		})
+		return
+	}
+
+	if path == "analytics" {
+		if r.Method == http.MethodGet {
+			h.GetKnowledgeAnalytics(w, r)
+		} else {
+			writeKnowledgeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	parts := strings.Split(path, "/")
+	resource := parts[0]
+
+	switch resource {
+	case "code":
+		if len(parts) == 2 && r.Method == http.MethodGet {
+			h.GetArticleByCode(w, r, parts[1])
+			return
+		}
+
+	case "articles":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListArticles(w, r)
+			case http.MethodPost:
+				h.CreateArticle(w, r)
+			default:
+				writeKnowledgeError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		articleID := parts[1]
+		if len(parts) == 2 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetArticleByID(w, r, articleID)
+			case http.MethodPut:
+				h.UpdateArticle(w, r, articleID)
+			case http.MethodDelete:
+				h.DeleteArticle(w, r, articleID)
+			default:
+				writeKnowledgeError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 3 {
+			switch parts[2] {
+			case "publish":
+				if r.Method == http.MethodPost {
+					h.PublishArticle(w, r, articleID)
+				} else {
+					writeKnowledgeError(w, http.StatusMethodNotAllowed, "method not allowed")
+				}
+				return
+			case "archive":
+				if r.Method == http.MethodPost {
+					h.ArchiveArticle(w, r, articleID)
+				} else {
+					writeKnowledgeError(w, http.StatusMethodNotAllowed, "method not allowed")
+				}
+				return
+			}
+		}
+
+	case "revisions":
+		if len(parts) == 1 {
+			if r.Method == http.MethodGet {
+				h.ListRevisions(w, r)
+			} else {
+				writeKnowledgeError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 && r.Method == http.MethodGet {
+			h.GetRevisionByID(w, r, parts[1])
+			return
+		}
+
+	case "feedback":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListFeedback(w, r)
+			case http.MethodPost:
+				h.SubmitFeedback(w, r)
+			default:
+				writeKnowledgeError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+	case "reviews":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListReviews(w, r)
+			case http.MethodPost:
+				h.ScheduleReview(w, r)
+			default:
+				writeKnowledgeError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		reviewID := parts[1]
+		if len(parts) == 2 {
+			if r.Method == http.MethodGet {
+				h.GetReviewByID(w, r, reviewID)
+			} else {
+				writeKnowledgeError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 3 && parts[2] == "complete" {
+			if r.Method == http.MethodPost {
+				h.CompleteReview(w, r, reviewID)
+			} else {
+				writeKnowledgeError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+	case "deflections":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListDeflections(w, r)
+			case http.MethodPost:
+				h.LogDeflection(w, r)
+			default:
+				writeKnowledgeError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+	}
+
+	writeKnowledgeError(w, http.StatusNotFound, "route not found")
+}
