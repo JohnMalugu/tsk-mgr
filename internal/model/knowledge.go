@@ -101,3 +101,15 @@ type KnowledgeRevision struct {
 	AuthorID      string    `json:"author_id,omitempty"`
 	CreatedAt     time.Time `json:"created_at"`
 }
+
+// KnowledgeFeedback captures user evaluation, helpfulness votes, and qualitative feedback
+type KnowledgeFeedback struct {
+	ID          string    `json:"id"`
+	WorkspaceID string    `json:"workspace_id"`
+	ArticleID   string    `json:"article_id"`
+	UserID      string    `json:"user_id"`
+	IsHelpful   bool      `json:"is_helpful"`
+	Rating      int       `json:"rating"` // 1 - 5 stars
+	Comment     string    `json:"comment,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+}
