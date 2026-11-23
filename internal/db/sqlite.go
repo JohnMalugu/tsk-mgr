@@ -3444,6 +3444,23 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	knowledgeDeflectionsQuery := `
+	CREATE TABLE IF NOT EXISTS knowledge_deflections (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		query TEXT NOT NULL,
+		article_id TEXT,
+		user_id TEXT,
+		deflected BOOLEAN NOT NULL DEFAULT 0,
+		context TEXT,
+		created_at DATETIME NOT NULL
+	);`
+
+	_, err = db.Exec(knowledgeDeflectionsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
