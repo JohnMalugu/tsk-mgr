@@ -144,3 +144,15 @@ type KnowledgeReview struct {
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
 }
+
+// KnowledgeDeflection tracks search self-service interactions that prevent incident ticket escalation
+type KnowledgeDeflection struct {
+	ID          string    `json:"id"`
+	WorkspaceID string    `json:"workspace_id"`
+	Query       string    `json:"query"`
+	ArticleID   string    `json:"article_id,omitempty"`
+	UserID      string    `json:"user_id,omitempty"`
+	Deflected   bool      `json:"deflected"`
+	Context     string    `json:"context,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+}
