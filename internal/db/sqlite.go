@@ -3805,6 +3805,14 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_deploy_rollbacks_pipeline ON deployment_rollbacks(pipeline_id);
 	CREATE INDEX IF NOT EXISTS idx_deploy_rollbacks_run ON deployment_rollbacks(run_id);
 	CREATE INDEX IF NOT EXISTS idx_deploy_rollbacks_ws_status ON deployment_rollbacks(workspace_id, execution_status);
+	CREATE INDEX IF NOT EXISTS idx_kb_articles_ws_status ON knowledge_articles(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_kb_articles_ws_code ON knowledge_articles(workspace_id, article_code);
+	CREATE INDEX IF NOT EXISTS idx_kb_articles_category ON knowledge_articles(category);
+	CREATE INDEX IF NOT EXISTS idx_kb_articles_ci ON knowledge_articles(ci_id);
+	CREATE INDEX IF NOT EXISTS idx_kb_articles_problem ON knowledge_articles(problem_id);
+	CREATE INDEX IF NOT EXISTS idx_kb_articles_incident ON knowledge_articles(incident_id);
+	CREATE INDEX IF NOT EXISTS idx_kb_articles_review ON knowledge_articles(review_due_date);
+	CREATE INDEX IF NOT EXISTS idx_kb_revisions_article ON knowledge_revisions(article_id, version DESC);
 	`
 
 	_, err = db.Exec(indexQuery)
