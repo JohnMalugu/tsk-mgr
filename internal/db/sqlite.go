@@ -3406,6 +3406,24 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	knowledgeFeedbackQuery := `
+	CREATE TABLE IF NOT EXISTS knowledge_feedback (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		article_id TEXT NOT NULL,
+		user_id TEXT NOT NULL,
+		is_helpful BOOLEAN NOT NULL,
+		rating INTEGER NOT NULL DEFAULT 5,
+		comment TEXT,
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (article_id) REFERENCES knowledge_articles(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(knowledgeFeedbackQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
