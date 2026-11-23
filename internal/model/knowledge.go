@@ -303,3 +303,70 @@ func (r *LogKnowledgeDeflectionRequest) Validate() error {
 	}
 	return nil
 }
+
+// Filters and executive analytics models
+
+// KnowledgeArticleFilter defines query criteria for listing articles
+type KnowledgeArticleFilter struct {
+	WorkspaceID string
+	Category    string
+	Status      string
+	Visibility  string
+	AuthorID    string
+	CIID        string
+	Search      string
+	Limit       int
+	Offset      int
+}
+
+// KnowledgeRevisionFilter defines query criteria for listing article revisions
+type KnowledgeRevisionFilter struct {
+	WorkspaceID string
+	ArticleID   string
+	Limit       int
+	Offset      int
+}
+
+// KnowledgeFeedbackFilter defines query criteria for listing article feedback
+type KnowledgeFeedbackFilter struct {
+	WorkspaceID string
+	ArticleID   string
+	Limit       int
+	Offset      int
+}
+
+// KnowledgeReviewFilter defines query criteria for listing reviews
+type KnowledgeReviewFilter struct {
+	WorkspaceID string
+	ArticleID   string
+	Status      string
+	Limit       int
+	Offset      int
+}
+
+// KnowledgeDeflectionFilter defines query criteria for deflection logs
+type KnowledgeDeflectionFilter struct {
+	WorkspaceID string
+	ArticleID   string
+	Limit       int
+	Offset      int
+}
+
+// KnowledgeAnalytics aggregates executive Knowledge Base health and self-service metrics
+type KnowledgeAnalytics struct {
+	TotalArticles            int            `json:"total_articles"`
+	PublishedArticles        int            `json:"published_articles"`
+	DraftArticles            int            `json:"draft_articles"`
+	InReviewArticles         int            `json:"in_review_articles"`
+	ArchivedArticles         int            `json:"archived_articles"`
+	TotalViews               int            `json:"total_views"`
+	TotalHelpfulVotes        int            `json:"total_helpful_votes"`
+	TotalNotHelpfulVotes     int            `json:"total_not_helpful_votes"`
+	AverageHelpfulnessRatio  float64        `json:"average_helpfulness_ratio"`
+	TotalDeflectionAttempts  int            `json:"total_deflection_attempts"`
+	SuccessfulDeflections    int            `json:"successful_deflections"`
+	DeflectionRate           float64        `json:"deflection_rate"`
+	PendingReviewsCount      int            `json:"pending_reviews_count"`
+	CategoryDistribution     map[string]int `json:"category_distribution"`
+	KnowledgeHealthIndex     float64        `json:"knowledge_health_index"`
+}
