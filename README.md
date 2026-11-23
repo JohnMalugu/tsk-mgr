@@ -465,6 +465,21 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET /v2/deployments/rollbacks/{id}` to inspect rollback execution status and diagnostic logs
 - `POST /v2/deployments/rollbacks/{id}/execute` to trigger or complete automated rollback execution
 - `GET /v2/deployments/analytics?workspace_id={id}` for executive Release & Deployment posture reporting, DORA metrics (deployment frequency per week, lead time for changes in hours, change failure rate %, mean time to recovery MTTR in minutes), environment distribution, and composite Deployment Health Index (0–100)
+- `GET|POST /v2/knowledge/articles` to list Knowledge Base / KEDB articles (`workspace_id`, `category`, `status`, `visibility`, `author_id`, `ci_id`, `search`, `limit`, `offset`) or author new knowledge articles across categories (`how_to`, `troubleshooting`, `workaround`, `sop`, `reference`, `faq`) with automated version 1 snapshot creation
+- `GET /v2/knowledge/articles/{id}` to fetch an article by ID with automated view impression incrementing
+- `GET /v2/knowledge/code/{code}` to look up an article by human-readable article code (e.g. `KB-1001`) with view impression tracking
+- `PUT /v2/knowledge/articles/{id}` to update an article, automatically incrementing the version and creating an immutable revision entry when content or title changes
+- `POST /v2/knowledge/articles/{id}/publish` to transition an article to `published` status with timestamp certification
+- `POST /v2/knowledge/articles/{id}/archive` to retire an article into `archived` status
+- `DELETE /v2/knowledge/articles/{id}` to delete a knowledge article and cascade related revisions/feedback
+- `GET /v2/knowledge/revisions` to list version history and audit trail for an article (`workspace_id`, `article_id`, `limit`, `offset`)
+- `GET /v2/knowledge/revisions/{id}` to inspect a specific historical snapshot of an article
+- `GET|POST /v2/knowledge/feedback` to list user ratings and qualitative feedback or record helpfulness votes (1-5 stars) with automated article helpfulness counter updates
+- `GET|POST /v2/knowledge/reviews` to list or schedule periodic technical review certifications (`workspace_id`, `article_id`, `reviewer_id`, `next_review_due`)
+- `GET /v2/knowledge/reviews/{id}` to fetch review certification details
+- `POST /v2/knowledge/reviews/{id}/complete` to record review findings and certify article technical accuracy
+- `GET|POST /v2/knowledge/deflections` to list self-service deflection logs or record successful query deflections that prevent incident creation
+- `GET /v2/knowledge/analytics?workspace_id={id}` for executive Knowledge Management posture reporting, total views, average helpfulness ratio (%), self-service incident deflection rate (%), pending review certifications, category distribution, and composite Knowledge Health Index (0–100)
 
 ## Current limitations
 

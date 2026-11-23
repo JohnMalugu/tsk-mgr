@@ -124,12 +124,8 @@ func (s *knowledgeService) CreateArticle(ctx context.Context, workspaceID string
 }
 
 func (s *knowledgeService) GetArticleByID(ctx context.Context, id string) (*model.KnowledgeArticle, error) {
-	article, err := s.repo.GetArticleByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
 	_ = s.repo.IncrementViewCount(ctx, id)
-	return article, nil
+	return s.repo.GetArticleByID(ctx, id)
 }
 
 func (s *knowledgeService) GetArticleByCode(ctx context.Context, workspaceID, code string) (*model.KnowledgeArticle, error) {
@@ -138,6 +134,7 @@ func (s *knowledgeService) GetArticleByCode(ctx context.Context, workspaceID, co
 		return nil, err
 	}
 	_ = s.repo.IncrementViewCount(ctx, article.ID)
+	article.ViewCount++
 	return article, nil
 }
 
