@@ -343,14 +343,122 @@ func (r *sqlKnowledgeRepository) ListArticles(ctx context.Context, filter model.
 	}
 	return articles, total, rows.Err()
 }
+// Revisions implementation
 func (r *sqlKnowledgeRepository) CreateRevision(ctx context.Context, rev *model.KnowledgeRevision) error {
-	return nil
+	if rev.ID == "" {
+		rev.ID = uuid.New().String()
+	}
+	if rev.CreatedAt.IsZero() {
+		rev.CreatedAt = time.Now().UTC()
+	}
+
+	query := `
+		INSERT INTO knowledge_revisions (
+			id, workspace_id, article_id, version, title, content,
+			summary, change_summary, author_id, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err := r.db.ExecContext(ctx, query,
+		rev.ID, rev.WorkspaceID, rev.ArticleID, rev.Version, rev.Title, rev.Content,
+		rev.Summary, rev.ChangeSummary, rev.AuthorID, rev.CreatedAt,
+	)
+	return err
 }
+
 func (r *sqlKnowledgeRepository) GetRevisionByID(ctx context.Context, id string) (*model.KnowledgeRevision, error) {
-	return nil, nil
+	query := `
+		SELECT id, workspace_id, article_id, version, title, content,
+		       summary, change_summary, author_id, created_at
+		FROM knowledge_revisions
+		WHERE id = ?
+	`
+	var rev model.KnowledgeRevision
+	var summary, changeSum, author sql.NullString
+
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&rev.ID, &rev.WorkspaceID, &rev.ArticleID, &rev.Version, &rev.Title, &rev.Content,
+		&summary, &changeSum, &author, &rev.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrKnowledgeRevisionNotFound
+		}
+		return nil, err
+	}
+	rev.Summary = summary.String
+	rev.ChangeSummary = changeSum.String
+	rev.AuthorID = author.String
+	return &rev, nil
 }
+
 func (r *sqlKnowledgeRepository) ListRevisions(ctx context.Context, filter model.KnowledgeRevisionFilter) ([]model.KnowledgeRevision, int, error) {
-	return nil, 0, nil
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.ArticleID != "" {
+		conditions = append(conditions, "article_id = ?")
+		args = append(args, filter.ArticleID)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM knowledge_revisions %s", whereClause)
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, workspace_id, article_id, version, title, content,
+		       summary, change_summary, author_id, created_at
+		FROM knowledge_revisions
+		%s
+		ORDER BY version DESC
+		LIMIT ? OFFSET ?
+	`, whereClause)
+
+	argsWithPaging := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, argsWithPaging...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var revisions []model.KnowledgeRevision
+	for rows.Next() {
+		var rev model.KnowledgeRevision
+		var summary, changeSum, author sql.NullString
+
+		err := rows.Scan(
+			&rev.ID, &rev.WorkspaceID, &rev.ArticleID, &rev.Version, &rev.Title, &rev.Content,
+			&summary, &changeSum, &author, &rev.CreatedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		rev.Summary = summary.String
+		rev.ChangeSummary = changeSum.String
+		rev.AuthorID = author.String
+		revisions = append(revisions, rev)
+	}
+	return revisions, total, rows.Err()
 }
 func (r *sqlKnowledgeRepository) CreateFeedback(ctx context.Context, f *model.KnowledgeFeedback) error {
 	return nil
