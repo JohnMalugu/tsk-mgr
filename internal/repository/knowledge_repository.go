@@ -460,11 +460,100 @@ func (r *sqlKnowledgeRepository) ListRevisions(ctx context.Context, filter model
 	}
 	return revisions, total, rows.Err()
 }
+// Feedback implementation
 func (r *sqlKnowledgeRepository) CreateFeedback(ctx context.Context, f *model.KnowledgeFeedback) error {
+	if f.ID == "" {
+		f.ID = uuid.New().String()
+	}
+	if f.CreatedAt.IsZero() {
+		f.CreatedAt = time.Now().UTC()
+	}
+
+	query := `
+		INSERT INTO knowledge_feedback (
+			id, workspace_id, article_id, user_id, is_helpful, rating, comment, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err := r.db.ExecContext(ctx, query,
+		f.ID, f.WorkspaceID, f.ArticleID, f.UserID, f.IsHelpful, f.Rating, f.Comment, f.CreatedAt,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Increment helpful or not helpful counter on article
+	if f.IsHelpful {
+		_, _ = r.db.ExecContext(ctx, `UPDATE knowledge_articles SET helpful_count = helpful_count + 1 WHERE id = ?`, f.ArticleID)
+	} else {
+		_, _ = r.db.ExecContext(ctx, `UPDATE knowledge_articles SET not_helpful_count = not_helpful_count + 1 WHERE id = ?`, f.ArticleID)
+	}
 	return nil
 }
+
 func (r *sqlKnowledgeRepository) ListFeedback(ctx context.Context, filter model.KnowledgeFeedbackFilter) ([]model.KnowledgeFeedback, int, error) {
-	return nil, 0, nil
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.ArticleID != "" {
+		conditions = append(conditions, "article_id = ?")
+		args = append(args, filter.ArticleID)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM knowledge_feedback %s", whereClause)
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, workspace_id, article_id, user_id, is_helpful, rating, comment, created_at
+		FROM knowledge_feedback
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?
+	`, whereClause)
+
+	argsWithPaging := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, argsWithPaging...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var list []model.KnowledgeFeedback
+	for rows.Next() {
+		var f model.KnowledgeFeedback
+		var comment sql.NullString
+		err := rows.Scan(
+			&f.ID, &f.WorkspaceID, &f.ArticleID, &f.UserID, &f.IsHelpful,
+			&f.Rating, &comment, &f.CreatedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		f.Comment = comment.String
+		list = append(list, f)
+	}
+	return list, total, rows.Err()
 }
 func (r *sqlKnowledgeRepository) CreateReview(ctx context.Context, rev *model.KnowledgeReview) error {
 	return nil
