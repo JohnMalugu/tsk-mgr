@@ -3461,6 +3461,28 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	eventRecordsQuery := `
+	CREATE TABLE IF NOT EXISTS event_records (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		source TEXT NOT NULL,
+		event_type TEXT NOT NULL,
+		severity TEXT NOT NULL,
+		ci_id TEXT,
+		resource TEXT NOT NULL,
+		message TEXT NOT NULL,
+		fingerprint TEXT NOT NULL,
+		deduplication_key TEXT NOT NULL,
+		raw_payload TEXT,
+		timestamp DATETIME NOT NULL,
+		created_at DATETIME NOT NULL
+	);`
+
+	_, err = db.Exec(eventRecordsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
