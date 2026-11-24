@@ -847,39 +847,339 @@ func (r *sqlEventRepository) ListRules(ctx context.Context, filter model.Correla
 	return rules, total, nil
 }
 
-// CreateSuppression stub
+// CreateSuppression inserts a new event suppression window
 func (r *sqlEventRepository) CreateSuppression(ctx context.Context, s *model.EventSuppression) error {
-	return errors.New("not implemented")
+	if s.ID == "" {
+		s.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if s.CreatedAt.IsZero() {
+		s.CreatedAt = now
+	}
+	s.UpdatedAt = now
+
+	query := `
+		INSERT INTO event_suppressions (
+			id, workspace_id, name, reason, ci_id,
+			resource_pattern, start_time, end_time, is_active,
+			created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		s.ID,
+		s.WorkspaceID,
+		s.Name,
+		s.Reason,
+		s.CIID,
+		s.ResourcePattern,
+		s.StartTime,
+		s.EndTime,
+		s.IsActive,
+		s.CreatedAt,
+		s.UpdatedAt,
+	)
+	return err
 }
 
-// GetSuppressionByID stub
+// GetSuppressionByID retrieves an event suppression by ID
 func (r *sqlEventRepository) GetSuppressionByID(ctx context.Context, id string) (*model.EventSuppression, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, name, reason, ci_id,
+		       resource_pattern, start_time, end_time, is_active,
+		       created_at, updated_at
+		FROM event_suppressions
+		WHERE id = ?`
+
+	var s model.EventSuppression
+	var ciID, resPattern sql.NullString
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&s.ID,
+		&s.WorkspaceID,
+		&s.Name,
+		&s.Reason,
+		&ciID,
+		&resPattern,
+		&s.StartTime,
+		&s.EndTime,
+		&s.IsActive,
+		&s.CreatedAt,
+		&s.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrEventSuppressionNotFound
+		}
+		return nil, err
+	}
+	if ciID.Valid {
+		s.CIID = ciID.String
+	}
+	if resPattern.Valid {
+		s.ResourcePattern = resPattern.String
+	}
+	return &s, nil
 }
 
-// UpdateSuppression stub
+// UpdateSuppression updates an existing event suppression rule
 func (r *sqlEventRepository) UpdateSuppression(ctx context.Context, s *model.EventSuppression) error {
-	return errors.New("not implemented")
+	s.UpdatedAt = time.Now().UTC()
+
+	query := `
+		UPDATE event_suppressions
+		SET name = ?, reason = ?, ci_id = ?, resource_pattern = ?,
+		    start_time = ?, end_time = ?, is_active = ?, updated_at = ?
+		WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		s.Name,
+		s.Reason,
+		s.CIID,
+		s.ResourcePattern,
+		s.StartTime,
+		s.EndTime,
+		s.IsActive,
+		s.UpdatedAt,
+		s.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrEventSuppressionNotFound
+	}
+	return nil
 }
 
-// DeleteSuppression stub
+// DeleteSuppression removes an event suppression window by ID
 func (r *sqlEventRepository) DeleteSuppression(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	res, err := r.db.ExecContext(ctx, "DELETE FROM event_suppressions WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrEventSuppressionNotFound
+	}
+	return nil
 }
 
-// ListSuppressions stub
+// ListSuppressions queries event suppressions based on filter criteria
 func (r *sqlEventRepository) ListSuppressions(ctx context.Context, filter model.EventSuppressionFilter) ([]model.EventSuppression, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.CIID != "" {
+		conditions = append(conditions, "ci_id = ?")
+		args = append(args, filter.CIID)
+	}
+	if filter.IsActive != nil {
+		conditions = append(conditions, "is_active = ?")
+		args = append(args, *filter.IsActive)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM event_suppressions %s", whereClause)
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, name, reason, ci_id,
+		       resource_pattern, start_time, end_time, is_active,
+		       created_at, updated_at
+		FROM event_suppressions
+		%s
+		ORDER BY start_time DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, selectQuery, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var suppressions []model.EventSuppression
+	for rows.Next() {
+		var s model.EventSuppression
+		var ciID, resPattern sql.NullString
+		if err := rows.Scan(
+			&s.ID,
+			&s.WorkspaceID,
+			&s.Name,
+			&s.Reason,
+			&ciID,
+			&resPattern,
+			&s.StartTime,
+			&s.EndTime,
+			&s.IsActive,
+			&s.CreatedAt,
+			&s.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		if ciID.Valid {
+			s.CIID = ciID.String
+		}
+		if resPattern.Valid {
+			s.ResourcePattern = resPattern.String
+		}
+		suppressions = append(suppressions, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return suppressions, total, nil
 }
 
-// CreateAction stub
+// CreateAction inserts a new event action record
 func (r *sqlEventRepository) CreateAction(ctx context.Context, a *model.EventAction) error {
-	return errors.New("not implemented")
+	if a.ID == "" {
+		a.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if a.CreatedAt.IsZero() {
+		a.CreatedAt = now
+	}
+	if a.Status == "" {
+		a.Status = model.ActionStatusPending
+	}
+
+	query := `
+		INSERT INTO event_actions (
+			id, workspace_id, alert_id, action_type, status,
+			output_logs, executed_at, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		a.ID,
+		a.WorkspaceID,
+		a.AlertID,
+		a.ActionType,
+		a.Status,
+		a.OutputLogs,
+		a.ExecutedAt,
+		a.CreatedAt,
+	)
+	return err
 }
 
-// ListActions stub
+// ListActions queries event actions based on filter criteria
 func (r *sqlEventRepository) ListActions(ctx context.Context, filter model.EventActionFilter) ([]model.EventAction, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.AlertID != "" {
+		conditions = append(conditions, "alert_id = ?")
+		args = append(args, filter.AlertID)
+	}
+	if filter.ActionType != "" {
+		conditions = append(conditions, "action_type = ?")
+		args = append(args, filter.ActionType)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM event_actions %s", whereClause)
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, alert_id, action_type, status,
+		       output_logs, executed_at, created_at
+		FROM event_actions
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, selectQuery, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var actions []model.EventAction
+	for rows.Next() {
+		var a model.EventAction
+		var logs sql.NullString
+		var execAt sql.NullTime
+
+		if err := rows.Scan(
+			&a.ID,
+			&a.WorkspaceID,
+			&a.AlertID,
+			&a.ActionType,
+			&a.Status,
+			&logs,
+			&execAt,
+			&a.CreatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		if logs.Valid {
+			a.OutputLogs = logs.String
+		}
+		if execAt.Valid {
+			a.ExecutedAt = &execAt.Time
+		}
+		actions = append(actions, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return actions, total, nil
 }
 
 // GetEventAnalytics stub
