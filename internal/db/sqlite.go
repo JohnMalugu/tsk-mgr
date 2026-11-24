@@ -3942,6 +3942,12 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_corr_alerts_ci ON correlated_alerts(ci_id);
 	CREATE INDEX IF NOT EXISTS idx_corr_alerts_fingerprint ON correlated_alerts(fingerprint);
 	CREATE INDEX IF NOT EXISTS idx_corr_alerts_incident ON correlated_alerts(incident_id);
+	CREATE INDEX IF NOT EXISTS idx_corr_rules_ws_active ON correlation_rules(workspace_id, is_active);
+	CREATE INDEX IF NOT EXISTS idx_event_suppress_ws_active ON event_suppressions(workspace_id, is_active);
+	CREATE INDEX IF NOT EXISTS idx_event_suppress_ci ON event_suppressions(ci_id);
+	CREATE INDEX IF NOT EXISTS idx_event_suppress_window ON event_suppressions(start_time, end_time);
+	CREATE INDEX IF NOT EXISTS idx_event_actions_alert ON event_actions(alert_id);
+	CREATE INDEX IF NOT EXISTS idx_event_actions_ws_status ON event_actions(workspace_id, status);
 	`
 
 	_, err = db.Exec(indexQuery)
