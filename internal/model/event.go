@@ -173,3 +173,18 @@ type CorrelationRule struct {
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
 }
+
+// EventSuppression defines noise-silencing criteria and scheduled maintenance blackout windows
+type EventSuppression struct {
+	ID              string    `json:"id"`
+	WorkspaceID     string    `json:"workspace_id"`
+	Name            string    `json:"name"`
+	Reason          string    `json:"reason"`
+	CIID            string    `json:"ci_id,omitempty"`
+	ResourcePattern string    `json:"resource_pattern,omitempty"`
+	StartTime       time.Time `json:"start_time"`
+	EndTime         time.Time `json:"end_time"`
+	IsActive        bool      `json:"is_active"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
