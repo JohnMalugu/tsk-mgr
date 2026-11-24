@@ -527,7 +527,10 @@ func (s *eventService) ListActions(ctx context.Context, filter model.EventAction
 	return s.repo.ListActions(ctx, filter)
 }
 
-// GetEventAnalytics stub
+// GetEventAnalytics returns high-level executive telemetry posture and noise compression analytics
 func (s *eventService) GetEventAnalytics(ctx context.Context, workspaceID string) (*model.EventAnalytics, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(workspaceID) == "" {
+		return nil, errors.New("workspace_id is required")
+	}
+	return s.repo.GetEventAnalytics(ctx, workspaceID)
 }
