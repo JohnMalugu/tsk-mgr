@@ -1,6 +1,8 @@
 package model
 
 import (
+	"errors"
+	"strings"
 	"time"
 )
 
@@ -234,4 +236,164 @@ type EventAction struct {
 	OutputLogs  string     `json:"output_logs,omitempty"`
 	ExecutedAt  *time.Time `json:"executed_at,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
+}
+
+// Request DTOs and validation rules for Event Management API
+
+// IngestEventRequest represents payload for receiving a raw telemetry event
+type IngestEventRequest struct {
+	WorkspaceID      string     `json:"workspace_id"`
+	Source           string     `json:"source"`
+	EventType        string     `json:"event_type"`
+	Severity         string     `json:"severity"`
+	CIID             string     `json:"ci_id,omitempty"`
+	Resource         string     `json:"resource"`
+	Message          string     `json:"message"`
+	Fingerprint      string     `json:"fingerprint,omitempty"`
+	DeduplicationKey string     `json:"deduplication_key,omitempty"`
+	RawPayload       string     `json:"raw_payload,omitempty"`
+	Timestamp        *time.Time `json:"timestamp,omitempty"`
+}
+
+func (r *IngestEventRequest) Validate() error {
+	if strings.TrimSpace(r.WorkspaceID) == "" {
+		return errors.New("workspace_id is required")
+	}
+	if strings.TrimSpace(r.Source) == "" {
+		return errors.New("source is required")
+	}
+	if strings.TrimSpace(r.Resource) == "" {
+		return errors.New("resource is required")
+	}
+	if strings.TrimSpace(r.Message) == "" {
+		return errors.New("message is required")
+	}
+	if r.Severity != "" && !IsValidEventSeverity(r.Severity) {
+		return errors.New("invalid severity")
+	}
+	if r.EventType != "" && !IsValidEventType(r.EventType) {
+		return errors.New("invalid event_type")
+	}
+	return nil
+}
+
+// UpdateAlertStatusRequest payload for updating an alert lifecycle state
+type UpdateAlertStatusRequest struct {
+	Status         string `json:"status"`
+	AcknowledgedBy string `json:"acknowledged_by,omitempty"`
+	IncidentID     string `json:"incident_id,omitempty"`
+}
+
+func (r *UpdateAlertStatusRequest) Validate() error {
+	if !IsValidAlertStatus(r.Status) {
+		return errors.New("invalid alert status")
+	}
+	return nil
+}
+
+// CreateCorrelationRuleRequest payload for configuring event correlation rules
+type CreateCorrelationRuleRequest struct {
+	WorkspaceID       string `json:"workspace_id"`
+	Name              string `json:"name"`
+	Description       string `json:"description,omitempty"`
+	SourcePattern     string `json:"source_pattern"`
+	SeverityPattern   string `json:"severity_pattern"`
+	TimeWindowSeconds int    `json:"time_window_seconds"`
+	ThresholdCount    int    `json:"threshold_count"`
+	GroupingFields    string `json:"grouping_fields"`
+	ActionType        string `json:"action_type"`
+	IsActive          bool   `json:"is_active"`
+}
+
+func (r *CreateCorrelationRuleRequest) Validate() error {
+	if strings.TrimSpace(r.WorkspaceID) == "" {
+		return errors.New("workspace_id is required")
+	}
+	if strings.TrimSpace(r.Name) == "" {
+		return errors.New("name is required")
+	}
+	if r.TimeWindowSeconds <= 0 {
+		return errors.New("time_window_seconds must be positive")
+	}
+	if r.ThresholdCount <= 0 {
+		return errors.New("threshold_count must be positive")
+	}
+	if r.ActionType != "" && !IsValidRuleAction(r.ActionType) {
+		return errors.New("invalid action_type")
+	}
+	return nil
+}
+
+// UpdateCorrelationRuleRequest payload for modifying a correlation rule
+type UpdateCorrelationRuleRequest struct {
+	Name              *string `json:"name,omitempty"`
+	Description       *string `json:"description,omitempty"`
+	SourcePattern     *string `json:"source_pattern,omitempty"`
+	SeverityPattern   *string `json:"severity_pattern,omitempty"`
+	TimeWindowSeconds *int    `json:"time_window_seconds,omitempty"`
+	ThresholdCount    *int    `json:"threshold_count,omitempty"`
+	GroupingFields    *string `json:"grouping_fields,omitempty"`
+	ActionType        *string `json:"action_type,omitempty"`
+	IsActive          *bool   `json:"is_active,omitempty"`
+}
+
+func (r *UpdateCorrelationRuleRequest) Validate() error {
+	if r.TimeWindowSeconds != nil && *r.TimeWindowSeconds <= 0 {
+		return errors.New("time_window_seconds must be positive")
+	}
+	if r.ThresholdCount != nil && *r.ThresholdCount <= 0 {
+		return errors.New("threshold_count must be positive")
+	}
+	if r.ActionType != nil && !IsValidRuleAction(*r.ActionType) {
+		return errors.New("invalid action_type")
+	}
+	return nil
+}
+
+// CreateEventSuppressionRequest payload for scheduling blackout / suppression windows
+type CreateEventSuppressionRequest struct {
+	WorkspaceID     string    `json:"workspace_id"`
+	Name            string    `json:"name"`
+	Reason          string    `json:"reason"`
+	CIID            string    `json:"ci_id,omitempty"`
+	ResourcePattern string    `json:"resource_pattern,omitempty"`
+	StartTime       time.Time `json:"start_time"`
+	EndTime         time.Time `json:"end_time"`
+}
+
+func (r *CreateEventSuppressionRequest) Validate() error {
+	if strings.TrimSpace(r.WorkspaceID) == "" {
+		return errors.New("workspace_id is required")
+	}
+	if strings.TrimSpace(r.Name) == "" {
+		return errors.New("name is required")
+	}
+	if strings.TrimSpace(r.Reason) == "" {
+		return errors.New("reason is required")
+	}
+	if r.EndTime.Before(r.StartTime) {
+		return errors.New("end_time cannot be before start_time")
+	}
+	return nil
+}
+
+// TriggerEventActionRequest payload for manually or automatically dispatching alert actions
+type TriggerEventActionRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+	AlertID     string `json:"alert_id"`
+	ActionType  string `json:"action_type"`
+	OutputLogs  string `json:"output_logs,omitempty"`
+}
+
+func (r *TriggerEventActionRequest) Validate() error {
+	if strings.TrimSpace(r.WorkspaceID) == "" {
+		return errors.New("workspace_id is required")
+	}
+	if strings.TrimSpace(r.AlertID) == "" {
+		return errors.New("alert_id is required")
+	}
+	if !IsValidActionType(r.ActionType) {
+		return errors.New("invalid action_type")
+	}
+	return nil
 }
