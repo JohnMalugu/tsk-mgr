@@ -266,19 +266,70 @@ func (s *eventService) ListEvents(ctx context.Context, filter model.EventRecordF
 	return s.repo.ListEvents(ctx, filter)
 }
 
-// GetAlertByID stub
+// GetAlertByID retrieves a correlated alert by ID
 func (s *eventService) GetAlertByID(ctx context.Context, id string) (*model.CorrelatedAlert, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrCorrelatedAlertNotFound
+	}
+	return s.repo.GetAlertByID(ctx, id)
 }
 
-// UpdateAlertStatus stub
+// UpdateAlertStatus orchestrates alert lifecycle state transitions (acknowledge, resolve, escalate)
 func (s *eventService) UpdateAlertStatus(ctx context.Context, id string, req model.UpdateAlertStatusRequest) (*model.CorrelatedAlert, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrCorrelatedAlertNotFound
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	alert, err := s.repo.GetAlertByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	switch req.Status {
+	case model.AlertStatusAcknowledged:
+		alert.Status = model.AlertStatusAcknowledged
+		if req.AcknowledgedBy != "" {
+			alert.AcknowledgedBy = req.AcknowledgedBy
+		}
+		alert.AcknowledgedAt = &now
+
+	case model.AlertStatusResolved:
+		alert.Status = model.AlertStatusResolved
+		alert.ResolvedAt = &now
+
+	case model.AlertStatusEscalated:
+		alert.Status = model.AlertStatusEscalated
+		if req.IncidentID != "" {
+			alert.IncidentID = req.IncidentID
+		} else if alert.IncidentID == "" {
+			alert.IncidentID = fmt.Sprintf("INC-%05d", time.Now().UnixNano()%100000)
+		}
+		_ = s.repo.CreateAction(ctx, &model.EventAction{
+			WorkspaceID: alert.WorkspaceID,
+			AlertID:     alert.ID,
+			ActionType:  model.ActionTriggerIncident,
+			Status:      model.ActionStatusExecuted,
+			OutputLogs:  fmt.Sprintf("Alert escalated to incident %s", alert.IncidentID),
+		})
+
+	case model.AlertStatusOpen, model.AlertStatusSuppressed:
+		alert.Status = req.Status
+	}
+
+	if err := s.repo.UpdateAlert(ctx, alert); err != nil {
+		return nil, err
+	}
+
+	return alert, nil
 }
 
-// ListAlerts stub
+// ListAlerts lists correlated alerts matching filter criteria
 func (s *eventService) ListAlerts(ctx context.Context, filter model.CorrelatedAlertFilter) ([]model.CorrelatedAlert, int, error) {
-	return nil, 0, errors.New("not implemented")
+	return s.repo.ListAlerts(ctx, filter)
 }
 
 // CreateRule stub
