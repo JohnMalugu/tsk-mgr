@@ -332,59 +332,199 @@ func (s *eventService) ListAlerts(ctx context.Context, filter model.CorrelatedAl
 	return s.repo.ListAlerts(ctx, filter)
 }
 
-// CreateRule stub
+// CreateRule creates a new correlation clustering rule
 func (s *eventService) CreateRule(ctx context.Context, workspaceID string, req model.CreateCorrelationRuleRequest) (*model.CorrelationRule, error) {
-	return nil, errors.New("not implemented")
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = workspaceID
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	rule := &model.CorrelationRule{
+		WorkspaceID:       req.WorkspaceID,
+		Name:              req.Name,
+		Description:       req.Description,
+		SourcePattern:     req.SourcePattern,
+		SeverityPattern:   req.SeverityPattern,
+		TimeWindowSeconds: req.TimeWindowSeconds,
+		ThresholdCount:    req.ThresholdCount,
+		GroupingFields:    req.GroupingFields,
+		ActionType:        req.ActionType,
+		IsActive:          req.IsActive,
+	}
+	if rule.TimeWindowSeconds <= 0 {
+		rule.TimeWindowSeconds = 300
+	}
+	if rule.ThresholdCount <= 0 {
+		rule.ThresholdCount = 1
+	}
+	if rule.ActionType == "" {
+		rule.ActionType = model.RuleActionCreateAlert
+	}
+
+	if err := s.repo.CreateRule(ctx, rule); err != nil {
+		return nil, err
+	}
+	return rule, nil
 }
 
-// GetRuleByID stub
+// GetRuleByID retrieves a correlation rule by ID
 func (s *eventService) GetRuleByID(ctx context.Context, id string) (*model.CorrelationRule, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrCorrelationRuleNotFound
+	}
+	return s.repo.GetRuleByID(ctx, id)
 }
 
-// UpdateRule stub
+// UpdateRule updates an existing correlation rule
 func (s *eventService) UpdateRule(ctx context.Context, id string, req model.UpdateCorrelationRuleRequest) (*model.CorrelationRule, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrCorrelationRuleNotFound
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	rule, err := s.repo.GetRuleByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Name != nil {
+		rule.Name = *req.Name
+	}
+	if req.Description != nil {
+		rule.Description = *req.Description
+	}
+	if req.SourcePattern != nil {
+		rule.SourcePattern = *req.SourcePattern
+	}
+	if req.SeverityPattern != nil {
+		rule.SeverityPattern = *req.SeverityPattern
+	}
+	if req.TimeWindowSeconds != nil {
+		rule.TimeWindowSeconds = *req.TimeWindowSeconds
+	}
+	if req.ThresholdCount != nil {
+		rule.ThresholdCount = *req.ThresholdCount
+	}
+	if req.GroupingFields != nil {
+		rule.GroupingFields = *req.GroupingFields
+	}
+	if req.ActionType != nil {
+		rule.ActionType = *req.ActionType
+	}
+	if req.IsActive != nil {
+		rule.IsActive = *req.IsActive
+	}
+
+	if err := s.repo.UpdateRule(ctx, rule); err != nil {
+		return nil, err
+	}
+	return rule, nil
 }
 
-// DeleteRule stub
+// DeleteRule deletes a correlation rule by ID
 func (s *eventService) DeleteRule(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return ErrCorrelationRuleNotFound
+	}
+	return s.repo.DeleteRule(ctx, id)
 }
 
-// ListRules stub
+// ListRules lists correlation rules matching query filters
 func (s *eventService) ListRules(ctx context.Context, filter model.CorrelationRuleFilter) ([]model.CorrelationRule, int, error) {
-	return nil, 0, errors.New("not implemented")
+	return s.repo.ListRules(ctx, filter)
 }
 
-// CreateSuppression stub
+// CreateSuppression creates a new scheduled noise suppression or blackout window
 func (s *eventService) CreateSuppression(ctx context.Context, workspaceID string, req model.CreateEventSuppressionRequest) (*model.EventSuppression, error) {
-	return nil, errors.New("not implemented")
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = workspaceID
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	suppression := &model.EventSuppression{
+		WorkspaceID:     req.WorkspaceID,
+		Name:            req.Name,
+		Reason:          req.Reason,
+		CIID:            req.CIID,
+		ResourcePattern: req.ResourcePattern,
+		StartTime:       req.StartTime,
+		EndTime:         req.EndTime,
+		IsActive:        true,
+	}
+
+	if err := s.repo.CreateSuppression(ctx, suppression); err != nil {
+		return nil, err
+	}
+	return suppression, nil
 }
 
-// GetSuppressionByID stub
+// GetSuppressionByID retrieves a suppression window by ID
 func (s *eventService) GetSuppressionByID(ctx context.Context, id string) (*model.EventSuppression, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrEventSuppressionNotFound
+	}
+	return s.repo.GetSuppressionByID(ctx, id)
 }
 
-// DeleteSuppression stub
+// DeleteSuppression deletes a suppression window by ID
 func (s *eventService) DeleteSuppression(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return ErrEventSuppressionNotFound
+	}
+	return s.repo.DeleteSuppression(ctx, id)
 }
 
-// ListSuppressions stub
+// ListSuppressions lists suppression windows matching query criteria
 func (s *eventService) ListSuppressions(ctx context.Context, filter model.EventSuppressionFilter) ([]model.EventSuppression, int, error) {
-	return nil, 0, errors.New("not implemented")
+	return s.repo.ListSuppressions(ctx, filter)
 }
 
-// TriggerAction stub
+// TriggerAction dispatches an automated action or remediation for an alert
 func (s *eventService) TriggerAction(ctx context.Context, workspaceID string, req model.TriggerEventActionRequest) (*model.EventAction, error) {
-	return nil, errors.New("not implemented")
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = workspaceID
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Verify alert exists
+	alert, err := s.repo.GetAlertByID(ctx, req.AlertID)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	logs := req.OutputLogs
+	if logs == "" {
+		logs = fmt.Sprintf("Executed action %s on alert %s (%s)", req.ActionType, alert.AlertCode, alert.Title)
+	}
+
+	action := &model.EventAction{
+		WorkspaceID: req.WorkspaceID,
+		AlertID:     req.AlertID,
+		ActionType:  req.ActionType,
+		Status:      model.ActionStatusExecuted,
+		OutputLogs:  logs,
+		ExecutedAt:  &now,
+		CreatedAt:   now,
+	}
+
+	if err := s.repo.CreateAction(ctx, action); err != nil {
+		return nil, err
+	}
+	return action, nil
 }
 
-// ListActions stub
+// ListActions lists event actions matching query criteria
 func (s *eventService) ListActions(ctx context.Context, filter model.EventActionFilter) ([]model.EventAction, int, error) {
-	return nil, 0, errors.New("not implemented")
+	return s.repo.ListActions(ctx, filter)
 }
 
 // GetEventAnalytics stub
