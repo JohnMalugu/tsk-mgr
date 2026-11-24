@@ -3535,6 +3535,26 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	eventSuppressionsQuery := `
+	CREATE TABLE IF NOT EXISTS event_suppressions (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		reason TEXT NOT NULL,
+		ci_id TEXT,
+		resource_pattern TEXT,
+		start_time DATETIME NOT NULL,
+		end_time DATETIME NOT NULL,
+		is_active BOOLEAN NOT NULL DEFAULT 1,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);`
+
+	_, err = db.Exec(eventSuppressionsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
