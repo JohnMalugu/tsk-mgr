@@ -211,6 +211,10 @@ func main() {
 	knowledgeSvc := service.NewKnowledgeService(knowledgeRepo)
 	handler.InitKnowledgeHandler(knowledgeSvc)
 
+	eventRepo := repository.NewEventRepository(sqliteDB)
+	eventSvc := service.NewEventService(eventRepo)
+	handler.InitEventHandler(eventSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
