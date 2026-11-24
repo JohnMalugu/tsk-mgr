@@ -391,10 +391,146 @@ func (h *EventHandler) TriggerAction(w http.ResponseWriter, r *http.Request) {
 	writeEventJSON(w, http.StatusCreated, action)
 }
 
-// Analytics stub
-func (h *EventHandler) GetEventAnalytics(w http.ResponseWriter, r *http.Request) {}
+// GetEventAnalytics handles GET /v2/events/analytics
+func (h *EventHandler) GetEventAnalytics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeEventError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	workspaceID := getEventWorkspaceID(r)
+	analytics, err := h.svc.GetEventAnalytics(r.Context(), workspaceID)
+	if err != nil {
+		handleEventError(w, err)
+		return
+	}
+	writeEventJSON(w, http.StatusOK, analytics)
+}
 
-// ServeHTTP stub
+// ServeHTTP routes HTTP requests for ITIL Monitoring & Event Management (/v2/events)
 func (h *EventHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/events")
+	path = strings.TrimPrefix(path, "/events")
+	path = strings.TrimPrefix(path, "/")
+	if path == "" {
+		writeEventError(w, http.StatusNotFound, "route not found")
+		return
+	}
+
+	parts := strings.Split(path, "/")
+	switch parts[0] {
+	case "analytics":
+		h.GetEventAnalytics(w, r)
+		return
+
+	case "raw":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodPost:
+				h.IngestEvent(w, r)
+			case http.MethodGet:
+				h.ListEvents(w, r)
+			default:
+				writeEventError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 && r.Method == http.MethodGet {
+			h.GetEventByID(w, r, parts[1])
+			return
+		}
+
+	case "alerts":
+		if len(parts) == 1 {
+			if r.Method == http.MethodGet {
+				h.ListAlerts(w, r)
+			} else {
+				writeEventError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		alertID := parts[1]
+		if len(parts) == 2 {
+			if r.Method == http.MethodGet {
+				h.GetAlertByID(w, r, alertID)
+			} else {
+				writeEventError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 3 && parts[2] == "status" {
+			if r.Method == http.MethodPut {
+				h.UpdateAlertStatus(w, r, alertID)
+			} else {
+				writeEventError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+	case "rules":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListRules(w, r)
+			case http.MethodPost:
+				h.CreateRule(w, r)
+			default:
+				writeEventError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		ruleID := parts[1]
+		if len(parts) == 2 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetRuleByID(w, r, ruleID)
+			case http.MethodPut:
+				h.UpdateRule(w, r, ruleID)
+			case http.MethodDelete:
+				h.DeleteRule(w, r, ruleID)
+			default:
+				writeEventError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+	case "suppressions":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListSuppressions(w, r)
+			case http.MethodPost:
+				h.CreateSuppression(w, r)
+			default:
+				writeEventError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		suppressionID := parts[1]
+		if len(parts) == 2 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetSuppressionByID(w, r, suppressionID)
+			case http.MethodDelete:
+				h.DeleteSuppression(w, r, suppressionID)
+			default:
+				writeEventError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+	case "actions":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListActions(w, r)
+			case http.MethodPost:
+				h.TriggerAction(w, r)
+			default:
+				writeEventError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+	}
+
 	writeEventError(w, http.StatusNotFound, "route not found")
 }
