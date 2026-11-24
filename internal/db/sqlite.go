@@ -3513,6 +3513,28 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	correlationRulesQuery := `
+	CREATE TABLE IF NOT EXISTS correlation_rules (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		description TEXT,
+		source_pattern TEXT NOT NULL,
+		severity_pattern TEXT NOT NULL,
+		time_window_seconds INTEGER NOT NULL DEFAULT 300,
+		threshold_count INTEGER NOT NULL DEFAULT 1,
+		grouping_fields TEXT NOT NULL,
+		action_type TEXT NOT NULL DEFAULT 'create_alert',
+		is_active BOOLEAN NOT NULL DEFAULT 1,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);`
+
+	_, err = db.Exec(correlationRulesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
