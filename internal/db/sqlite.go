@@ -3932,6 +3932,16 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_kb_reviews_ws_status ON knowledge_reviews(workspace_id, status);
 	CREATE INDEX IF NOT EXISTS idx_kb_deflections_ws ON knowledge_deflections(workspace_id);
 	CREATE INDEX IF NOT EXISTS idx_kb_deflections_article ON knowledge_deflections(article_id);
+	CREATE INDEX IF NOT EXISTS idx_event_records_ws_time ON event_records(workspace_id, timestamp DESC);
+	CREATE INDEX IF NOT EXISTS idx_event_records_source ON event_records(source);
+	CREATE INDEX IF NOT EXISTS idx_event_records_severity ON event_records(severity);
+	CREATE INDEX IF NOT EXISTS idx_event_records_ci ON event_records(ci_id);
+	CREATE INDEX IF NOT EXISTS idx_event_records_dedup ON event_records(deduplication_key);
+	CREATE INDEX IF NOT EXISTS idx_corr_alerts_ws_status ON correlated_alerts(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_corr_alerts_ws_code ON correlated_alerts(workspace_id, alert_code);
+	CREATE INDEX IF NOT EXISTS idx_corr_alerts_ci ON correlated_alerts(ci_id);
+	CREATE INDEX IF NOT EXISTS idx_corr_alerts_fingerprint ON correlated_alerts(fingerprint);
+	CREATE INDEX IF NOT EXISTS idx_corr_alerts_incident ON correlated_alerts(incident_id);
 	`
 
 	_, err = db.Exec(indexQuery)
