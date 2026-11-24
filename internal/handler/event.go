@@ -192,12 +192,89 @@ func (h *EventHandler) UpdateAlertStatus(w http.ResponseWriter, r *http.Request,
 	writeEventJSON(w, http.StatusOK, alert)
 }
 
-// Correlation Rules stubs
-func (h *EventHandler) ListRules(w http.ResponseWriter, r *http.Request) {}
-func (h *EventHandler) CreateRule(w http.ResponseWriter, r *http.Request) {}
-func (h *EventHandler) GetRuleByID(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *EventHandler) UpdateRule(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *EventHandler) DeleteRule(w http.ResponseWriter, r *http.Request, id string) {}
+// ListRules handles GET /v2/events/rules
+func (h *EventHandler) ListRules(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.CorrelationRuleFilter{
+		WorkspaceID: getEventWorkspaceID(r),
+		Limit:       limit,
+		Offset:      offset,
+	}
+	if isActiveStr := q.Get("is_active"); isActiveStr != "" {
+		active := isActiveStr == "true" || isActiveStr == "1"
+		filter.IsActive = &active
+	}
+
+	rules, total, err := h.svc.ListRules(r.Context(), filter)
+	if err != nil {
+		handleEventError(w, err)
+		return
+	}
+
+	writeEventJSON(w, http.StatusOK, map[string]interface{}{
+		"rules":  rules,
+		"total":  total,
+		"limit":  filter.Limit,
+		"offset": filter.Offset,
+	})
+}
+
+// CreateRule handles POST /v2/events/rules
+func (h *EventHandler) CreateRule(w http.ResponseWriter, r *http.Request) {
+	var req model.CreateCorrelationRuleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeEventError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	workspaceID := getEventWorkspaceID(r)
+	rule, err := h.svc.CreateRule(r.Context(), workspaceID, req)
+	if err != nil {
+		handleEventError(w, err)
+		return
+	}
+
+	writeEventJSON(w, http.StatusCreated, rule)
+}
+
+// GetRuleByID handles GET /v2/events/rules/{id}
+func (h *EventHandler) GetRuleByID(w http.ResponseWriter, r *http.Request, id string) {
+	rule, err := h.svc.GetRuleByID(r.Context(), id)
+	if err != nil {
+		handleEventError(w, err)
+		return
+	}
+	writeEventJSON(w, http.StatusOK, rule)
+}
+
+// UpdateRule handles PUT /v2/events/rules/{id}
+func (h *EventHandler) UpdateRule(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateCorrelationRuleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeEventError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	rule, err := h.svc.UpdateRule(r.Context(), id, req)
+	if err != nil {
+		handleEventError(w, err)
+		return
+	}
+
+	writeEventJSON(w, http.StatusOK, rule)
+}
+
+// DeleteRule handles DELETE /v2/events/rules/{id}
+func (h *EventHandler) DeleteRule(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteRule(r.Context(), id); err != nil {
+		handleEventError(w, err)
+		return
+	}
+	writeEventJSON(w, http.StatusOK, map[string]string{"message": "correlation rule deleted"})
+}
 
 // Suppression stubs
 func (h *EventHandler) ListSuppressions(w http.ResponseWriter, r *http.Request) {}
