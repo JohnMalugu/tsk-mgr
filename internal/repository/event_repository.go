@@ -253,29 +253,378 @@ func (r *sqlEventRepository) ListEvents(ctx context.Context, filter model.EventR
 	return events, total, nil
 }
 
-// CreateAlert stub
+// CreateAlert inserts a new correlated alert record
 func (r *sqlEventRepository) CreateAlert(ctx context.Context, a *model.CorrelatedAlert) error {
-	return errors.New("not implemented")
+	if a.ID == "" {
+		a.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if a.FirstSeenAt.IsZero() {
+		a.FirstSeenAt = now
+	}
+	if a.LastSeenAt.IsZero() {
+		a.LastSeenAt = now
+	}
+	if a.CreatedAt.IsZero() {
+		a.CreatedAt = now
+	}
+	a.UpdatedAt = now
+	if a.EventCount <= 0 {
+		a.EventCount = 1
+	}
+
+	// Check alert code uniqueness within workspace
+	var count int
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM correlated_alerts WHERE workspace_id = ? AND alert_code = ?`, a.WorkspaceID, a.AlertCode).Scan(&count)
+	if err == nil && count > 0 {
+		return ErrCorrelatedAlertCodeConflict
+	}
+
+	query := `
+		INSERT INTO correlated_alerts (
+			id, workspace_id, alert_code, title, description,
+			status, severity, priority, ci_id, resource,
+			fingerprint, event_count, first_seen_at, last_seen_at,
+			acknowledged_by, acknowledged_at, resolved_at,
+			incident_id, rule_id, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err = r.db.ExecContext(ctx, query,
+		a.ID,
+		a.WorkspaceID,
+		a.AlertCode,
+		a.Title,
+		a.Description,
+		a.Status,
+		a.Severity,
+		a.Priority,
+		a.CIID,
+		a.Resource,
+		a.Fingerprint,
+		a.EventCount,
+		a.FirstSeenAt,
+		a.LastSeenAt,
+		a.AcknowledgedBy,
+		a.AcknowledgedAt,
+		a.ResolvedAt,
+		a.IncidentID,
+		a.RuleID,
+		a.CreatedAt,
+		a.UpdatedAt,
+	)
+	return err
 }
 
-// GetAlertByID stub
+// GetAlertByID retrieves a correlated alert by ID
 func (r *sqlEventRepository) GetAlertByID(ctx context.Context, id string) (*model.CorrelatedAlert, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, alert_code, title, description,
+		       status, severity, priority, ci_id, resource,
+		       fingerprint, event_count, first_seen_at, last_seen_at,
+		       acknowledged_by, acknowledged_at, resolved_at,
+		       incident_id, rule_id, created_at, updated_at
+		FROM correlated_alerts
+		WHERE id = ?`
+
+	var a model.CorrelatedAlert
+	var desc, ciID, ackBy, incID, ruleID sql.NullString
+	var ackAt, resAt sql.NullTime
+
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&a.ID,
+		&a.WorkspaceID,
+		&a.AlertCode,
+		&a.Title,
+		&desc,
+		&a.Status,
+		&a.Severity,
+		&a.Priority,
+		&ciID,
+		&a.Resource,
+		&a.Fingerprint,
+		&a.EventCount,
+		&a.FirstSeenAt,
+		&a.LastSeenAt,
+		&ackBy,
+		&ackAt,
+		&resAt,
+		&incID,
+		&ruleID,
+		&a.CreatedAt,
+		&a.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrCorrelatedAlertNotFound
+		}
+		return nil, err
+	}
+	if desc.Valid {
+		a.Description = desc.String
+	}
+	if ciID.Valid {
+		a.CIID = ciID.String
+	}
+	if ackBy.Valid {
+		a.AcknowledgedBy = ackBy.String
+	}
+	if ackAt.Valid {
+		a.AcknowledgedAt = &ackAt.Time
+	}
+	if resAt.Valid {
+		a.ResolvedAt = &resAt.Time
+	}
+	if incID.Valid {
+		a.IncidentID = incID.String
+	}
+	if ruleID.Valid {
+		a.RuleID = ruleID.String
+	}
+	return &a, nil
 }
 
-// GetAlertByFingerprint stub
+// GetAlertByFingerprint retrieves the active (non-resolved) alert for a given fingerprint in workspace
 func (r *sqlEventRepository) GetAlertByFingerprint(ctx context.Context, workspaceID, fingerprint string) (*model.CorrelatedAlert, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, alert_code, title, description,
+		       status, severity, priority, ci_id, resource,
+		       fingerprint, event_count, first_seen_at, last_seen_at,
+		       acknowledged_by, acknowledged_at, resolved_at,
+		       incident_id, rule_id, created_at, updated_at
+		FROM correlated_alerts
+		WHERE workspace_id = ? AND fingerprint = ? AND status != 'resolved'
+		ORDER BY last_seen_at DESC
+		LIMIT 1`
+
+	var a model.CorrelatedAlert
+	var desc, ciID, ackBy, incID, ruleID sql.NullString
+	var ackAt, resAt sql.NullTime
+
+	err := r.db.QueryRowContext(ctx, query, workspaceID, fingerprint).Scan(
+		&a.ID,
+		&a.WorkspaceID,
+		&a.AlertCode,
+		&a.Title,
+		&desc,
+		&a.Status,
+		&a.Severity,
+		&a.Priority,
+		&ciID,
+		&a.Resource,
+		&a.Fingerprint,
+		&a.EventCount,
+		&a.FirstSeenAt,
+		&a.LastSeenAt,
+		&ackBy,
+		&ackAt,
+		&resAt,
+		&incID,
+		&ruleID,
+		&a.CreatedAt,
+		&a.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrCorrelatedAlertNotFound
+		}
+		return nil, err
+	}
+	if desc.Valid {
+		a.Description = desc.String
+	}
+	if ciID.Valid {
+		a.CIID = ciID.String
+	}
+	if ackBy.Valid {
+		a.AcknowledgedBy = ackBy.String
+	}
+	if ackAt.Valid {
+		a.AcknowledgedAt = &ackAt.Time
+	}
+	if resAt.Valid {
+		a.ResolvedAt = &resAt.Time
+	}
+	if incID.Valid {
+		a.IncidentID = incID.String
+	}
+	if ruleID.Valid {
+		a.RuleID = ruleID.String
+	}
+	return &a, nil
 }
 
-// UpdateAlert stub
+// UpdateAlert updates an existing correlated alert
 func (r *sqlEventRepository) UpdateAlert(ctx context.Context, a *model.CorrelatedAlert) error {
-	return errors.New("not implemented")
+	a.UpdatedAt = time.Now().UTC()
+
+	query := `
+		UPDATE correlated_alerts
+		SET title = ?, description = ?, status = ?, severity = ?,
+		    priority = ?, ci_id = ?, resource = ?, event_count = ?,
+		    last_seen_at = ?, acknowledged_by = ?, acknowledged_at = ?,
+		    resolved_at = ?, incident_id = ?, rule_id = ?, updated_at = ?
+		WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		a.Title,
+		a.Description,
+		a.Status,
+		a.Severity,
+		a.Priority,
+		a.CIID,
+		a.Resource,
+		a.EventCount,
+		a.LastSeenAt,
+		a.AcknowledgedBy,
+		a.AcknowledgedAt,
+		a.ResolvedAt,
+		a.IncidentID,
+		a.RuleID,
+		a.UpdatedAt,
+		a.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrCorrelatedAlertNotFound
+	}
+	return nil
 }
 
-// ListAlerts stub
+// ListAlerts queries correlated alerts based on filter criteria
 func (r *sqlEventRepository) ListAlerts(ctx context.Context, filter model.CorrelatedAlertFilter) ([]model.CorrelatedAlert, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+	if filter.Severity != "" {
+		conditions = append(conditions, "severity = ?")
+		args = append(args, filter.Severity)
+	}
+	if filter.Priority != "" {
+		conditions = append(conditions, "priority = ?")
+		args = append(args, filter.Priority)
+	}
+	if filter.CIID != "" {
+		conditions = append(conditions, "ci_id = ?")
+		args = append(args, filter.CIID)
+	}
+	if filter.Search != "" {
+		conditions = append(conditions, "(title LIKE ? OR resource LIKE ? OR alert_code LIKE ?)")
+		searchTerm := "%" + filter.Search + "%"
+		args = append(args, searchTerm, searchTerm, searchTerm)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM correlated_alerts %s", whereClause)
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, alert_code, title, description,
+		       status, severity, priority, ci_id, resource,
+		       fingerprint, event_count, first_seen_at, last_seen_at,
+		       acknowledged_by, acknowledged_at, resolved_at,
+		       incident_id, rule_id, created_at, updated_at
+		FROM correlated_alerts
+		%s
+		ORDER BY last_seen_at DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, selectQuery, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var alerts []model.CorrelatedAlert
+	for rows.Next() {
+		var a model.CorrelatedAlert
+		var desc, ciID, ackBy, incID, ruleID sql.NullString
+		var ackAt, resAt sql.NullTime
+
+		if err := rows.Scan(
+			&a.ID,
+			&a.WorkspaceID,
+			&a.AlertCode,
+			&a.Title,
+			&desc,
+			&a.Status,
+			&a.Severity,
+			&a.Priority,
+			&ciID,
+			&a.Resource,
+			&a.Fingerprint,
+			&a.EventCount,
+			&a.FirstSeenAt,
+			&a.LastSeenAt,
+			&ackBy,
+			&ackAt,
+			&resAt,
+			&incID,
+			&ruleID,
+			&a.CreatedAt,
+			&a.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		if desc.Valid {
+			a.Description = desc.String
+		}
+		if ciID.Valid {
+			a.CIID = ciID.String
+		}
+		if ackBy.Valid {
+			a.AcknowledgedBy = ackBy.String
+		}
+		if ackAt.Valid {
+			a.AcknowledgedAt = &ackAt.Time
+		}
+		if resAt.Valid {
+			a.ResolvedAt = &resAt.Time
+		}
+		if incID.Valid {
+			a.IncidentID = incID.String
+		}
+		if ruleID.Valid {
+			a.RuleID = ruleID.String
+		}
+		alerts = append(alerts, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return alerts, total, nil
 }
 
 // CreateRule stub
