@@ -397,3 +397,72 @@ func (r *TriggerEventActionRequest) Validate() error {
 	}
 	return nil
 }
+
+// Query filters and posture analytics models
+
+// EventRecordFilter defines query criteria for browsing raw events
+type EventRecordFilter struct {
+	WorkspaceID string
+	Source      string
+	Severity    string
+	CIID        string
+	Resource    string
+	Limit       int
+	Offset      int
+}
+
+// CorrelatedAlertFilter defines query criteria for browsing clustered alerts
+type CorrelatedAlertFilter struct {
+	WorkspaceID string
+	Status      string
+	Severity    string
+	Priority    string
+	CIID        string
+	Search      string
+	Limit       int
+	Offset      int
+}
+
+// CorrelationRuleFilter defines query criteria for correlation rules
+type CorrelationRuleFilter struct {
+	WorkspaceID string
+	IsActive    *bool
+	Limit       int
+	Offset      int
+}
+
+// EventSuppressionFilter defines query criteria for noise suppression windows
+type EventSuppressionFilter struct {
+	WorkspaceID string
+	CIID        string
+	IsActive    *bool
+	Limit       int
+	Offset      int
+}
+
+// EventActionFilter defines query criteria for alert action records
+type EventActionFilter struct {
+	WorkspaceID string
+	AlertID     string
+	ActionType  string
+	Status      string
+	Limit       int
+	Offset      int
+}
+
+// EventAnalytics represents executive event management posture and noise compression metrics
+type EventAnalytics struct {
+	TotalEventsIngested    int            `json:"total_events_ingested"`
+	TotalAlertsCreated     int            `json:"total_alerts_created"`
+	OpenAlerts             int            `json:"open_alerts"`
+	AcknowledgedAlerts     int            `json:"acknowledged_alerts"`
+	ResolvedAlerts         int            `json:"resolved_alerts"`
+	EscalatedAlerts        int            `json:"escalated_alerts"`
+	NoiseReductionRatio    float64        `json:"noise_reduction_ratio"`
+	SuppressedEventsCount  int            `json:"suppressed_events_count"`
+	ActiveSuppressionRules int            `json:"active_suppression_rules"`
+	TotalActionsTriggered  int            `json:"total_actions_triggered"`
+	SeverityDistribution   map[string]int `json:"severity_distribution"`
+	SourceDistribution     map[string]int `json:"source_distribution"`
+	EventHealthIndex       float64        `json:"event_health_index"`
+}
