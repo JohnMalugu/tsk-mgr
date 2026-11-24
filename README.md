@@ -480,6 +480,17 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `POST /v2/knowledge/reviews/{id}/complete` to record review findings and certify article technical accuracy
 - `GET|POST /v2/knowledge/deflections` to list self-service deflection logs or record successful query deflections that prevent incident creation
 - `GET /v2/knowledge/analytics?workspace_id={id}` for executive Knowledge Management posture reporting, total views, average helpfulness ratio (%), self-service incident deflection rate (%), pending review certifications, category distribution, and composite Knowledge Health Index (0–100)
+- `GET|POST /v2/events/raw` to browse ingested telemetry events (`workspace_id`, `source`, `severity`, `ci_id`, `resource`, `limit`, `offset`) or ingest raw monitoring telemetry from external tools (`datadog`, `prometheus`, `cloudwatch`, `grafana`, `pagerduty`, `custom`) with automatic fingerprint clustering and noise suppression evaluation
+- `GET /v2/events/raw/{id}` to fetch an individual telemetry event record
+- `GET /v2/events/alerts` to query deduplicated clustered alerts (`workspace_id`, `status`, `severity`, `priority`, `ci_id`, `search`, `limit`, `offset`)
+- `GET /v2/events/alerts/{id}` to inspect correlated alert details, aggregated event counts, first/last seen timestamps, and linked incidents
+- `PUT /v2/events/alerts/{id}/status` to transition alert lifecycle states (`acknowledged`, `resolved`, `escalated_to_incident`, `open`, `suppressed`) with user assignment and automated action dispatching
+- `GET|POST /v2/events/rules` to list or configure event correlation clustering rules (`source_pattern`, `severity_pattern`, `time_window_seconds`, `threshold_count`, `grouping_fields`, `action_type`, `is_active`)
+- `GET|PUT|DELETE /v2/events/rules/{id}` to inspect, update, or remove event correlation clustering rules
+- `GET|POST /v2/events/suppressions` to list or schedule maintenance blackout and noise suppression windows (`start_time`, `end_time`, `ci_id`, `resource_pattern`)
+- `GET|DELETE /v2/events/suppressions/{id}` to fetch or remove event suppression windows
+- `GET|POST /v2/events/actions` to list action execution logs or manually dispatch remediation and escalation actions (`trigger_incident`, `trigger_oncall_page`, `run_remediation`, `send_webhook`)
+- `GET /v2/events/analytics?workspace_id={id}` for executive Monitoring & Event Management posture reporting, total events ingested, total alerts created, status counts, noise reduction compression ratio (%), suppressed event counts, severity/source distributions, and composite Event Health Index (0–100)
 
 ## Current limitations
 
