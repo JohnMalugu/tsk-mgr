@@ -627,29 +627,224 @@ func (r *sqlEventRepository) ListAlerts(ctx context.Context, filter model.Correl
 	return alerts, total, nil
 }
 
-// CreateRule stub
+// CreateRule inserts a new event correlation rule
 func (r *sqlEventRepository) CreateRule(ctx context.Context, rule *model.CorrelationRule) error {
-	return errors.New("not implemented")
+	if rule.ID == "" {
+		rule.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if rule.CreatedAt.IsZero() {
+		rule.CreatedAt = now
+	}
+	rule.UpdatedAt = now
+	if rule.TimeWindowSeconds <= 0 {
+		rule.TimeWindowSeconds = 300
+	}
+	if rule.ThresholdCount <= 0 {
+		rule.ThresholdCount = 1
+	}
+	if rule.ActionType == "" {
+		rule.ActionType = model.RuleActionCreateAlert
+	}
+
+	query := `
+		INSERT INTO correlation_rules (
+			id, workspace_id, name, description, source_pattern,
+			severity_pattern, time_window_seconds, threshold_count,
+			grouping_fields, action_type, is_active, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		rule.ID,
+		rule.WorkspaceID,
+		rule.Name,
+		rule.Description,
+		rule.SourcePattern,
+		rule.SeverityPattern,
+		rule.TimeWindowSeconds,
+		rule.ThresholdCount,
+		rule.GroupingFields,
+		rule.ActionType,
+		rule.IsActive,
+		rule.CreatedAt,
+		rule.UpdatedAt,
+	)
+	return err
 }
 
-// GetRuleByID stub
+// GetRuleByID retrieves a correlation rule by ID
 func (r *sqlEventRepository) GetRuleByID(ctx context.Context, id string) (*model.CorrelationRule, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, name, description, source_pattern,
+		       severity_pattern, time_window_seconds, threshold_count,
+		       grouping_fields, action_type, is_active, created_at, updated_at
+		FROM correlation_rules
+		WHERE id = ?`
+
+	var rule model.CorrelationRule
+	var desc sql.NullString
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&rule.ID,
+		&rule.WorkspaceID,
+		&rule.Name,
+		&desc,
+		&rule.SourcePattern,
+		&rule.SeverityPattern,
+		&rule.TimeWindowSeconds,
+		&rule.ThresholdCount,
+		&rule.GroupingFields,
+		&rule.ActionType,
+		&rule.IsActive,
+		&rule.CreatedAt,
+		&rule.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrCorrelationRuleNotFound
+		}
+		return nil, err
+	}
+	if desc.Valid {
+		rule.Description = desc.String
+	}
+	return &rule, nil
 }
 
-// UpdateRule stub
+// UpdateRule updates an existing correlation rule
 func (r *sqlEventRepository) UpdateRule(ctx context.Context, rule *model.CorrelationRule) error {
-	return errors.New("not implemented")
+	rule.UpdatedAt = time.Now().UTC()
+
+	query := `
+		UPDATE correlation_rules
+		SET name = ?, description = ?, source_pattern = ?, severity_pattern = ?,
+		    time_window_seconds = ?, threshold_count = ?, grouping_fields = ?,
+		    action_type = ?, is_active = ?, updated_at = ?
+		WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		rule.Name,
+		rule.Description,
+		rule.SourcePattern,
+		rule.SeverityPattern,
+		rule.TimeWindowSeconds,
+		rule.ThresholdCount,
+		rule.GroupingFields,
+		rule.ActionType,
+		rule.IsActive,
+		rule.UpdatedAt,
+		rule.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrCorrelationRuleNotFound
+	}
+	return nil
 }
 
-// DeleteRule stub
+// DeleteRule removes a correlation rule by ID
 func (r *sqlEventRepository) DeleteRule(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	res, err := r.db.ExecContext(ctx, "DELETE FROM correlation_rules WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrCorrelationRuleNotFound
+	}
+	return nil
 }
 
-// ListRules stub
+// ListRules queries correlation rules based on filter criteria
 func (r *sqlEventRepository) ListRules(ctx context.Context, filter model.CorrelationRuleFilter) ([]model.CorrelationRule, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.IsActive != nil {
+		conditions = append(conditions, "is_active = ?")
+		args = append(args, *filter.IsActive)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM correlation_rules %s", whereClause)
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, name, description, source_pattern,
+		       severity_pattern, time_window_seconds, threshold_count,
+		       grouping_fields, action_type, is_active, created_at, updated_at
+		FROM correlation_rules
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, selectQuery, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var rules []model.CorrelationRule
+	for rows.Next() {
+		var rule model.CorrelationRule
+		var desc sql.NullString
+		if err := rows.Scan(
+			&rule.ID,
+			&rule.WorkspaceID,
+			&rule.Name,
+			&desc,
+			&rule.SourcePattern,
+			&rule.SeverityPattern,
+			&rule.TimeWindowSeconds,
+			&rule.ThresholdCount,
+			&rule.GroupingFields,
+			&rule.ActionType,
+			&rule.IsActive,
+			&rule.CreatedAt,
+			&rule.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		if desc.Valid {
+			rule.Description = desc.String
+		}
+		rules = append(rules, rule)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return rules, total, nil
 }
 
 // CreateSuppression stub
