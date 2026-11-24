@@ -3483,6 +3483,36 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	correlatedAlertsQuery := `
+	CREATE TABLE IF NOT EXISTS correlated_alerts (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		alert_code TEXT NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT,
+		status TEXT NOT NULL,
+		severity TEXT NOT NULL,
+		priority TEXT NOT NULL,
+		ci_id TEXT,
+		resource TEXT NOT NULL,
+		fingerprint TEXT NOT NULL,
+		event_count INTEGER NOT NULL DEFAULT 1,
+		first_seen_at DATETIME NOT NULL,
+		last_seen_at DATETIME NOT NULL,
+		acknowledged_by TEXT,
+		acknowledged_at DATETIME,
+		resolved_at DATETIME,
+		incident_id TEXT,
+		rule_id TEXT,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);`
+
+	_, err = db.Exec(correlatedAlertsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
