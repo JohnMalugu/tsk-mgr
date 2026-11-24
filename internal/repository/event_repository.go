@@ -1182,7 +1182,104 @@ func (r *sqlEventRepository) ListActions(ctx context.Context, filter model.Event
 	return actions, total, nil
 }
 
-// GetEventAnalytics stub
+// GetEventAnalytics computes executive event posture and noise reduction metrics
 func (r *sqlEventRepository) GetEventAnalytics(ctx context.Context, workspaceID string) (*model.EventAnalytics, error) {
-	return nil, errors.New("not implemented")
+	analytics := &model.EventAnalytics{
+		SeverityDistribution: make(map[string]int),
+		SourceDistribution:   make(map[string]int),
+	}
+
+	// 1. Total events ingested
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM event_records WHERE workspace_id = ?", workspaceID).Scan(&analytics.TotalEventsIngested)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Total alerts created
+	err = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM correlated_alerts WHERE workspace_id = ?", workspaceID).Scan(&analytics.TotalAlertsCreated)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. Alert counts by status
+	statusRows, err := r.db.QueryContext(ctx, "SELECT status, COUNT(*) FROM correlated_alerts WHERE workspace_id = ?", workspaceID)
+	if err == nil {
+		defer statusRows.Close()
+		for statusRows.Next() {
+			var st string
+			var count int
+			if err := statusRows.Scan(&st, &count); err == nil {
+				switch st {
+				case model.AlertStatusOpen:
+					analytics.OpenAlerts = count
+				case model.AlertStatusAcknowledged:
+					analytics.AcknowledgedAlerts = count
+				case model.AlertStatusResolved:
+					analytics.ResolvedAlerts = count
+				case model.AlertStatusEscalated:
+					analytics.EscalatedAlerts = count
+				}
+			}
+		}
+	}
+
+	// 4. Suppressed events count
+	_ = r.db.QueryRowContext(ctx, "SELECT COALESCE(SUM(event_count), 0) FROM correlated_alerts WHERE workspace_id = ? AND status = 'suppressed'", workspaceID).Scan(&analytics.SuppressedEventsCount)
+
+	// 5. Active suppression rules count
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM event_suppressions WHERE workspace_id = ? AND is_active = 1", workspaceID).Scan(&analytics.ActiveSuppressionRules)
+
+	// 6. Total actions triggered
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM event_actions WHERE workspace_id = ?", workspaceID).Scan(&analytics.TotalActionsTriggered)
+
+	// 7. Severity distribution
+	sevRows, err := r.db.QueryContext(ctx, "SELECT severity, COUNT(*) FROM event_records WHERE workspace_id = ? GROUP BY severity", workspaceID)
+	if err == nil {
+		defer sevRows.Close()
+		for sevRows.Next() {
+			var sev string
+			var count int
+			if err := sevRows.Scan(&sev, &count); err == nil {
+				analytics.SeverityDistribution[sev] = count
+			}
+		}
+	}
+
+	// 8. Source distribution
+	srcRows, err := r.db.QueryContext(ctx, "SELECT source, COUNT(*) FROM event_records WHERE workspace_id = ? GROUP BY source", workspaceID)
+	if err == nil {
+		defer srcRows.Close()
+		for srcRows.Next() {
+			var src string
+			var count int
+			if err := srcRows.Scan(&src, &count); err == nil {
+				analytics.SourceDistribution[src] = count
+			}
+		}
+	}
+
+	// 9. Noise reduction ratio calculation: ((events - alerts) / events) * 100
+	if analytics.TotalEventsIngested > 0 {
+		diff := float64(analytics.TotalEventsIngested - analytics.TotalAlertsCreated)
+		if diff < 0 {
+			diff = 0
+		}
+		analytics.NoiseReductionRatio = (diff / float64(analytics.TotalEventsIngested)) * 100.0
+	} else {
+		analytics.NoiseReductionRatio = 0.0
+	}
+
+	// 10. Composite Event Health Index (0 - 100)
+	health := 100.0
+	health -= float64(analytics.OpenAlerts) * 4.0
+	health -= float64(analytics.EscalatedAlerts) * 6.0
+	if health < 0.0 {
+		health = 0.0
+	}
+	if health > 100.0 {
+		health = 100.0
+	}
+	analytics.EventHealthIndex = health
+
+	return analytics, nil
 }
