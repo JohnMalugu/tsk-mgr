@@ -188,3 +188,50 @@ type EventSuppression struct {
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
+
+// Event action type constants
+const (
+	ActionTriggerIncident   = "trigger_incident"
+	ActionTriggerOnCallPage = "trigger_oncall_page"
+	ActionRunRemediation    = "run_remediation"
+	ActionSendWebhook       = "send_webhook"
+)
+
+// Event action execution status constants
+const (
+	ActionStatusPending  = "pending"
+	ActionStatusExecuted = "executed"
+	ActionStatusFailed   = "failed"
+)
+
+// IsValidActionType validates event action type
+func IsValidActionType(at string) bool {
+	switch at {
+	case ActionTriggerIncident, ActionTriggerOnCallPage, ActionRunRemediation, ActionSendWebhook:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsValidActionStatus validates event action execution status
+func IsValidActionStatus(status string) bool {
+	switch status {
+	case ActionStatusPending, ActionStatusExecuted, ActionStatusFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+// EventAction records automated downstream dispatching or remediation triggered by an alert
+type EventAction struct {
+	ID          string     `json:"id"`
+	WorkspaceID string     `json:"workspace_id"`
+	AlertID     string     `json:"alert_id"`
+	ActionType  string     `json:"action_type"`
+	Status      string     `json:"status"`
+	OutputLogs  string     `json:"output_logs,omitempty"`
+	ExecutedAt  *time.Time `json:"executed_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+}
