@@ -134,10 +134,63 @@ func (h *EventHandler) GetEventByID(w http.ResponseWriter, r *http.Request, id s
 	writeEventJSON(w, http.StatusOK, event)
 }
 
-// Correlated Alerts stubs
-func (h *EventHandler) ListAlerts(w http.ResponseWriter, r *http.Request) {}
-func (h *EventHandler) GetAlertByID(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *EventHandler) UpdateAlertStatus(w http.ResponseWriter, r *http.Request, id string) {}
+// ListAlerts handles GET /v2/events/alerts
+func (h *EventHandler) ListAlerts(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.CorrelatedAlertFilter{
+		WorkspaceID: getEventWorkspaceID(r),
+		Status:      q.Get("status"),
+		Severity:    q.Get("severity"),
+		Priority:    q.Get("priority"),
+		CIID:        q.Get("ci_id"),
+		Search:      q.Get("search"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	alerts, total, err := h.svc.ListAlerts(r.Context(), filter)
+	if err != nil {
+		handleEventError(w, err)
+		return
+	}
+
+	writeEventJSON(w, http.StatusOK, map[string]interface{}{
+		"alerts": alerts,
+		"total":  total,
+		"limit":  filter.Limit,
+		"offset": filter.Offset,
+	})
+}
+
+// GetAlertByID handles GET /v2/events/alerts/{id}
+func (h *EventHandler) GetAlertByID(w http.ResponseWriter, r *http.Request, id string) {
+	alert, err := h.svc.GetAlertByID(r.Context(), id)
+	if err != nil {
+		handleEventError(w, err)
+		return
+	}
+	writeEventJSON(w, http.StatusOK, alert)
+}
+
+// UpdateAlertStatus handles PUT /v2/events/alerts/{id}/status
+func (h *EventHandler) UpdateAlertStatus(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateAlertStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeEventError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	alert, err := h.svc.UpdateAlertStatus(r.Context(), id, req)
+	if err != nil {
+		handleEventError(w, err)
+		return
+	}
+
+	writeEventJSON(w, http.StatusOK, alert)
+}
 
 // Correlation Rules stubs
 func (h *EventHandler) ListRules(w http.ResponseWriter, r *http.Request) {}
