@@ -139,3 +139,37 @@ type CorrelatedAlert struct {
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
+
+// Correlation rule action constants
+const (
+	RuleActionCreateAlert       = "create_alert"
+	RuleActionEscalateIncident = "escalate_to_incident"
+	RuleActionPageOnCall        = "page_oncall"
+)
+
+// IsValidRuleAction validates rule action type
+func IsValidRuleAction(action string) bool {
+	switch action {
+	case RuleActionCreateAlert, RuleActionEscalateIncident, RuleActionPageOnCall:
+		return true
+	default:
+		return false
+	}
+}
+
+// CorrelationRule defines event pattern matching, time window clustering, and auto-action policies
+type CorrelationRule struct {
+	ID                string    `json:"id"`
+	WorkspaceID       string    `json:"workspace_id"`
+	Name              string    `json:"name"`
+	Description       string    `json:"description,omitempty"`
+	SourcePattern     string    `json:"source_pattern"`
+	SeverityPattern   string    `json:"severity_pattern"`
+	TimeWindowSeconds int       `json:"time_window_seconds"`
+	ThresholdCount    int       `json:"threshold_count"`
+	GroupingFields    string    `json:"grouping_fields"`
+	ActionType        string    `json:"action_type"`
+	IsActive          bool      `json:"is_active"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
