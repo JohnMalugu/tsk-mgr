@@ -70,19 +70,200 @@ func NewEventService(repo repository.EventRepository) EventService {
 	return &eventService{repo: repo}
 }
 
-// IngestEvent stub
+func severityRank(sev string) int {
+	switch sev {
+	case model.EventSeverityCritical:
+		return 5
+	case model.EventSeverityHigh:
+		return 4
+	case model.EventSeverityMedium:
+		return 3
+	case model.EventSeverityLow:
+		return 2
+	case model.EventSeverityInfo:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func severityToPriority(sev string) string {
+	switch sev {
+	case model.EventSeverityCritical:
+		return model.AlertPriorityP1
+	case model.EventSeverityHigh:
+		return model.AlertPriorityP2
+	case model.EventSeverityMedium:
+		return model.AlertPriorityP3
+	default:
+		return model.AlertPriorityP4
+	}
+}
+
+// IngestEvent processes an incoming event, applies suppression windows, deduplicates, and clusters into correlated alerts
 func (s *eventService) IngestEvent(ctx context.Context, workspaceID string, req model.IngestEventRequest) (*model.EventRecord, *model.CorrelatedAlert, error) {
-	return nil, nil, errors.New("not implemented")
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = workspaceID
+	}
+	if err := req.Validate(); err != nil {
+		return nil, nil, err
+	}
+
+	if req.Severity == "" {
+		req.Severity = model.EventSeverityInfo
+	}
+	if req.EventType == "" {
+		req.EventType = model.EventTypeInformational
+	}
+
+	eventTime := time.Now().UTC()
+	if req.Timestamp != nil && !req.Timestamp.IsZero() {
+		eventTime = req.Timestamp.UTC()
+	}
+
+	fingerprint := strings.TrimSpace(req.Fingerprint)
+	if fingerprint == "" {
+		fingerprint = fmt.Sprintf("%s:%s:%s", req.Source, req.Resource, req.Severity)
+	}
+
+	dedupKey := strings.TrimSpace(req.DeduplicationKey)
+	if dedupKey == "" {
+		dedupKey = fingerprint
+	}
+
+	record := &model.EventRecord{
+		WorkspaceID:      req.WorkspaceID,
+		Source:           req.Source,
+		EventType:        req.EventType,
+		Severity:         req.Severity,
+		CIID:             req.CIID,
+		Resource:         req.Resource,
+		Message:          req.Message,
+		Fingerprint:      fingerprint,
+		DeduplicationKey: dedupKey,
+		RawPayload:       req.RawPayload,
+		Timestamp:        eventTime,
+		CreatedAt:        time.Now().UTC(),
+	}
+
+	if err := s.repo.IngestEvent(ctx, record); err != nil {
+		return nil, nil, err
+	}
+
+	// Check active suppression / blackout windows
+	activeTrue := true
+	suppressions, _, _ := s.repo.ListSuppressions(ctx, model.EventSuppressionFilter{
+		WorkspaceID: req.WorkspaceID,
+		IsActive:    &activeTrue,
+	})
+
+	isSuppressed := false
+	for _, sup := range suppressions {
+		if (record.Timestamp.Equal(sup.StartTime) || record.Timestamp.After(sup.StartTime)) &&
+			(record.Timestamp.Equal(sup.EndTime) || record.Timestamp.Before(sup.EndTime)) {
+			if sup.CIID != "" && sup.CIID == record.CIID {
+				isSuppressed = true
+				break
+			}
+			if sup.ResourcePattern != "" && strings.Contains(strings.ToLower(record.Resource), strings.ToLower(sup.ResourcePattern)) {
+				isSuppressed = true
+				break
+			}
+		}
+	}
+
+	// Alert correlation and deduplication clustering
+	existingAlert, err := s.repo.GetAlertByFingerprint(ctx, req.WorkspaceID, record.Fingerprint)
+	if err == nil && existingAlert != nil {
+		// Existing active alert: aggregate and update
+		existingAlert.EventCount++
+		existingAlert.LastSeenAt = record.Timestamp
+		if severityRank(record.Severity) > severityRank(existingAlert.Severity) {
+			existingAlert.Severity = record.Severity
+			existingAlert.Priority = severityToPriority(record.Severity)
+		}
+		if isSuppressed && existingAlert.Status == model.AlertStatusOpen {
+			existingAlert.Status = model.AlertStatusSuppressed
+		}
+
+		if err := s.repo.UpdateAlert(ctx, existingAlert); err != nil {
+			return nil, nil, err
+		}
+		return record, existingAlert, nil
+	}
+
+	// New alert clustering
+	initialStatus := model.AlertStatusOpen
+	if isSuppressed {
+		initialStatus = model.AlertStatusSuppressed
+	}
+
+	alertCode := fmt.Sprintf("ALT-%05d", time.Now().UnixNano()%100000)
+	title := fmt.Sprintf("[%s] %s alert on %s", strings.ToUpper(record.Severity), record.Source, record.Resource)
+
+	newAlert := &model.CorrelatedAlert{
+		WorkspaceID: req.WorkspaceID,
+		AlertCode:   alertCode,
+		Title:       title,
+		Description: record.Message,
+		Status:      initialStatus,
+		Severity:    record.Severity,
+		Priority:    severityToPriority(record.Severity),
+		CIID:        record.CIID,
+		Resource:    record.Resource,
+		Fingerprint: record.Fingerprint,
+		EventCount:  1,
+		FirstSeenAt: record.Timestamp,
+		LastSeenAt:  record.Timestamp,
+	}
+
+	// Evaluate correlation rules
+	rules, _, _ := s.repo.ListRules(ctx, model.CorrelationRuleFilter{
+		WorkspaceID: req.WorkspaceID,
+		IsActive:    &activeTrue,
+	})
+	for _, rule := range rules {
+		matchedSource := rule.SourcePattern == "" || rule.SourcePattern == "*" || strings.EqualFold(rule.SourcePattern, record.Source)
+		matchedSev := rule.SeverityPattern == "" || rule.SeverityPattern == "*" || strings.EqualFold(rule.SeverityPattern, record.Severity)
+		if matchedSource && matchedSev {
+			newAlert.RuleID = rule.ID
+			if rule.ActionType == model.RuleActionEscalateIncident {
+				newAlert.Status = model.AlertStatusEscalated
+				newAlert.IncidentID = fmt.Sprintf("INC-%05d", time.Now().UnixNano()%100000)
+			}
+			break
+		}
+	}
+
+	if err := s.repo.CreateAlert(ctx, newAlert); err != nil {
+		return nil, nil, err
+	}
+
+	// If alert was escalated by rule, record auto-action
+	if newAlert.RuleID != "" {
+		_ = s.repo.CreateAction(ctx, &model.EventAction{
+			WorkspaceID: req.WorkspaceID,
+			AlertID:     newAlert.ID,
+			ActionType:  model.ActionTriggerIncident,
+			Status:      model.ActionStatusExecuted,
+			OutputLogs:  fmt.Sprintf("Auto-triggered incident %s from correlation rule %s", newAlert.IncidentID, newAlert.RuleID),
+		})
+	}
+
+	return record, newAlert, nil
 }
 
-// GetEventByID stub
+// GetEventByID retrieves an event record by ID
 func (s *eventService) GetEventByID(ctx context.Context, id string) (*model.EventRecord, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrEventRecordNotFound
+	}
+	return s.repo.GetEventByID(ctx, id)
 }
 
-// ListEvents stub
+// ListEvents lists event records according to query filters
 func (s *eventService) ListEvents(ctx context.Context, filter model.EventRecordFilter) ([]model.EventRecord, int, error) {
-	return nil, 0, errors.New("not implemented")
+	return s.repo.ListEvents(ctx, filter)
 }
 
 // GetAlertByID stub
