@@ -330,6 +330,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 ITIL Monitoring & Event Management
+	if strings.HasPrefix(r.URL.Path, "/v2/events") {
+		if handler.GlobalEventHandler == nil {
+			http.Error(w, "Event handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalEventHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return
