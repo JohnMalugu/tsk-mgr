@@ -276,15 +276,120 @@ func (h *EventHandler) DeleteRule(w http.ResponseWriter, r *http.Request, id str
 	writeEventJSON(w, http.StatusOK, map[string]string{"message": "correlation rule deleted"})
 }
 
-// Suppression stubs
-func (h *EventHandler) ListSuppressions(w http.ResponseWriter, r *http.Request) {}
-func (h *EventHandler) CreateSuppression(w http.ResponseWriter, r *http.Request) {}
-func (h *EventHandler) GetSuppressionByID(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *EventHandler) DeleteSuppression(w http.ResponseWriter, r *http.Request, id string) {}
+// ListSuppressions handles GET /v2/events/suppressions
+func (h *EventHandler) ListSuppressions(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
 
-// Actions stubs
-func (h *EventHandler) ListActions(w http.ResponseWriter, r *http.Request) {}
-func (h *EventHandler) TriggerAction(w http.ResponseWriter, r *http.Request) {}
+	filter := model.EventSuppressionFilter{
+		WorkspaceID: getEventWorkspaceID(r),
+		CIID:        q.Get("ci_id"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+	if isActiveStr := q.Get("is_active"); isActiveStr != "" {
+		active := isActiveStr == "true" || isActiveStr == "1"
+		filter.IsActive = &active
+	}
+
+	suppressions, total, err := h.svc.ListSuppressions(r.Context(), filter)
+	if err != nil {
+		handleEventError(w, err)
+		return
+	}
+
+	writeEventJSON(w, http.StatusOK, map[string]interface{}{
+		"suppressions": suppressions,
+		"total":        total,
+		"limit":        filter.Limit,
+		"offset":       filter.Offset,
+	})
+}
+
+// CreateSuppression handles POST /v2/events/suppressions
+func (h *EventHandler) CreateSuppression(w http.ResponseWriter, r *http.Request) {
+	var req model.CreateEventSuppressionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeEventError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	workspaceID := getEventWorkspaceID(r)
+	suppression, err := h.svc.CreateSuppression(r.Context(), workspaceID, req)
+	if err != nil {
+		handleEventError(w, err)
+		return
+	}
+
+	writeEventJSON(w, http.StatusCreated, suppression)
+}
+
+// GetSuppressionByID handles GET /v2/events/suppressions/{id}
+func (h *EventHandler) GetSuppressionByID(w http.ResponseWriter, r *http.Request, id string) {
+	suppression, err := h.svc.GetSuppressionByID(r.Context(), id)
+	if err != nil {
+		handleEventError(w, err)
+		return
+	}
+	writeEventJSON(w, http.StatusOK, suppression)
+}
+
+// DeleteSuppression handles DELETE /v2/events/suppressions/{id}
+func (h *EventHandler) DeleteSuppression(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteSuppression(r.Context(), id); err != nil {
+		handleEventError(w, err)
+		return
+	}
+	writeEventJSON(w, http.StatusOK, map[string]string{"message": "event suppression deleted"})
+}
+
+// ListActions handles GET /v2/events/actions
+func (h *EventHandler) ListActions(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.EventActionFilter{
+		WorkspaceID: getEventWorkspaceID(r),
+		AlertID:     q.Get("alert_id"),
+		ActionType:  q.Get("action_type"),
+		Status:      q.Get("status"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	actions, total, err := h.svc.ListActions(r.Context(), filter)
+	if err != nil {
+		handleEventError(w, err)
+		return
+	}
+
+	writeEventJSON(w, http.StatusOK, map[string]interface{}{
+		"actions": actions,
+		"total":   total,
+		"limit":   filter.Limit,
+		"offset":  filter.Offset,
+	})
+}
+
+// TriggerAction handles POST /v2/events/actions
+func (h *EventHandler) TriggerAction(w http.ResponseWriter, r *http.Request) {
+	var req model.TriggerEventActionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeEventError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	workspaceID := getEventWorkspaceID(r)
+	action, err := h.svc.TriggerAction(r.Context(), workspaceID, req)
+	if err != nil {
+		handleEventError(w, err)
+		return
+	}
+
+	writeEventJSON(w, http.StatusCreated, action)
+}
 
 // Analytics stub
 func (h *EventHandler) GetEventAnalytics(w http.ResponseWriter, r *http.Request) {}
