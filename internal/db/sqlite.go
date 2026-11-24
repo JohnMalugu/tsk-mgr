@@ -3555,6 +3555,24 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	eventActionsQuery := `
+	CREATE TABLE IF NOT EXISTS event_actions (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		alert_id TEXT NOT NULL,
+		action_type TEXT NOT NULL,
+		status TEXT NOT NULL,
+		output_logs TEXT,
+		executed_at DATETIME,
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (alert_id) REFERENCES correlated_alerts(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(eventActionsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
