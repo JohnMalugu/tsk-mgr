@@ -87,3 +87,77 @@ type ValidationTestPlan struct {
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 }
+
+// Validation test case categories
+const (
+	TestCaseCategorySmoke       = "smoke"
+	TestCaseCategoryIntegration = "integration"
+	TestCaseCategorySecurity    = "security"
+	TestCaseCategoryLoad        = "load"
+	TestCaseCategoryFailover    = "failover"
+	TestCaseCategoryE2E         = "e2e"
+)
+
+// Validation test case severities
+const (
+	TestCaseSeverityCritical = "critical"
+	TestCaseSeverityHigh     = "high"
+	TestCaseSeverityMedium   = "medium"
+	TestCaseSeverityLow      = "low"
+)
+
+// Validation test case statuses
+const (
+	TestCaseStatusReady      = "ready"
+	TestCaseStatusDraft      = "draft"
+	TestCaseStatusDeprecated = "deprecated"
+)
+
+// IsValidTestCaseCategory validates test case category
+func IsValidTestCaseCategory(cat string) bool {
+	switch cat {
+	case TestCaseCategorySmoke, TestCaseCategoryIntegration, TestCaseCategorySecurity,
+		TestCaseCategoryLoad, TestCaseCategoryFailover, TestCaseCategoryE2E:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsValidTestCaseSeverity validates test case severity rating
+func IsValidTestCaseSeverity(sev string) bool {
+	switch sev {
+	case TestCaseSeverityCritical, TestCaseSeverityHigh, TestCaseSeverityMedium, TestCaseSeverityLow:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsValidTestCaseStatus validates test case lifecycle status
+func IsValidTestCaseStatus(status string) bool {
+	switch status {
+	case TestCaseStatusReady, TestCaseStatusDraft, TestCaseStatusDeprecated:
+		return true
+	default:
+		return false
+	}
+}
+
+// ValidationTestCase represents an individual verification scenario with steps and expectations
+type ValidationTestCase struct {
+	ID             string    `json:"id"`
+	WorkspaceID    string    `json:"workspace_id"`
+	PlanID         string    `json:"plan_id"`
+	CaseCode       string    `json:"case_code"`
+	Title          string    `json:"title"`
+	Description    string    `json:"description,omitempty"`
+	Preconditions  string    `json:"preconditions,omitempty"`
+	TestSteps      string    `json:"test_steps"`
+	ExpectedResult string    `json:"expected_result"`
+	Severity       string    `json:"severity"`
+	Category       string    `json:"category"`
+	Status         string    `json:"status"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
