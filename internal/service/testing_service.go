@@ -579,7 +579,10 @@ func (s *testingService) ListDefects(ctx context.Context, filter model.DefectLin
 	return s.repo.ListDefectLinks(ctx, filter)
 }
 
-// Posture Analytics stub
+// GetTestingAnalytics computes executive service validation posture and quality metrics
 func (s *testingService) GetTestingAnalytics(ctx context.Context, workspaceID string) (*model.TestingAnalytics, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(workspaceID) == "" {
+		return nil, errors.New("workspace_id is required")
+	}
+	return s.repo.GetTestingAnalytics(ctx, workspaceID)
 }
