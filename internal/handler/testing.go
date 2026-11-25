@@ -180,17 +180,152 @@ func (h *TestingHandler) DeletePlan(w http.ResponseWriter, r *http.Request, id s
 	writeTestingJSON(w, http.StatusOK, map[string]string{"message": "test plan deleted"})
 }
 
-// Cases stubs
-func (h *TestingHandler) ListCases(w http.ResponseWriter, r *http.Request) {}
-func (h *TestingHandler) CreateCase(w http.ResponseWriter, r *http.Request) {}
-func (h *TestingHandler) GetCaseByID(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *TestingHandler) UpdateCase(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *TestingHandler) DeleteCase(w http.ResponseWriter, r *http.Request, id string) {}
+// ListCases handles GET /v2/testing/cases
+func (h *TestingHandler) ListCases(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
 
-// Runs stubs
-func (h *TestingHandler) ListRuns(w http.ResponseWriter, r *http.Request) {}
-func (h *TestingHandler) ExecuteRun(w http.ResponseWriter, r *http.Request) {}
-func (h *TestingHandler) GetRunByID(w http.ResponseWriter, r *http.Request, id string) {}
+	filter := model.TestCaseFilter{
+		WorkspaceID: getTestingWorkspaceID(r),
+		PlanID:      q.Get("plan_id"),
+		Category:    q.Get("category"),
+		Severity:    q.Get("severity"),
+		Status:      q.Get("status"),
+		Search:      q.Get("search"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	cases, total, err := h.svc.ListCases(r.Context(), filter)
+	if err != nil {
+		handleTestingError(w, err)
+		return
+	}
+
+	writeTestingJSON(w, http.StatusOK, map[string]interface{}{
+		"cases":  cases,
+		"total":  total,
+		"limit":  filter.Limit,
+		"offset": filter.Offset,
+	})
+}
+
+// CreateCase handles POST /v2/testing/cases
+func (h *TestingHandler) CreateCase(w http.ResponseWriter, r *http.Request) {
+	var req model.CreateTestCaseRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeTestingError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	workspaceID := getTestingWorkspaceID(r)
+	testCase, err := h.svc.CreateCase(r.Context(), workspaceID, req)
+	if err != nil {
+		handleTestingError(w, err)
+		return
+	}
+
+	writeTestingJSON(w, http.StatusCreated, testCase)
+}
+
+// GetCaseByID handles GET /v2/testing/cases/{id}
+func (h *TestingHandler) GetCaseByID(w http.ResponseWriter, r *http.Request, id string) {
+	testCase, err := h.svc.GetCaseByID(r.Context(), id)
+	if err != nil {
+		handleTestingError(w, err)
+		return
+	}
+	writeTestingJSON(w, http.StatusOK, testCase)
+}
+
+// UpdateCase handles PUT /v2/testing/cases/{id}
+func (h *TestingHandler) UpdateCase(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateTestCaseRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeTestingError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	testCase, err := h.svc.UpdateCase(r.Context(), id, req)
+	if err != nil {
+		handleTestingError(w, err)
+		return
+	}
+
+	writeTestingJSON(w, http.StatusOK, testCase)
+}
+
+// DeleteCase handles DELETE /v2/testing/cases/{id}
+func (h *TestingHandler) DeleteCase(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteCase(r.Context(), id); err != nil {
+		handleTestingError(w, err)
+		return
+	}
+	writeTestingJSON(w, http.StatusOK, map[string]string{"message": "test case deleted"})
+}
+
+// ListRuns handles GET /v2/testing/runs
+func (h *TestingHandler) ListRuns(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.TestRunFilter{
+		WorkspaceID: getTestingWorkspaceID(r),
+		PlanID:      q.Get("plan_id"),
+		CaseID:      q.Get("case_id"),
+		Status:      q.Get("status"),
+		ExecutedBy:  q.Get("executed_by"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	runs, total, err := h.svc.ListRuns(r.Context(), filter)
+	if err != nil {
+		handleTestingError(w, err)
+		return
+	}
+
+	writeTestingJSON(w, http.StatusOK, map[string]interface{}{
+		"runs":   runs,
+		"total":  total,
+		"limit":  filter.Limit,
+		"offset": filter.Offset,
+	})
+}
+
+// ExecuteRun handles POST /v2/testing/runs
+func (h *TestingHandler) ExecuteRun(w http.ResponseWriter, r *http.Request) {
+	var req model.ExecuteTestRunRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeTestingError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	workspaceID := getTestingWorkspaceID(r)
+	if req.ExecutedBy == "" {
+		req.ExecutedBy = getTestingUser(r)
+	}
+
+	run, err := h.svc.ExecuteRun(r.Context(), workspaceID, req)
+	if err != nil {
+		handleTestingError(w, err)
+		return
+	}
+
+	writeTestingJSON(w, http.StatusCreated, run)
+}
+
+// GetRunByID handles GET /v2/testing/runs/{id}
+func (h *TestingHandler) GetRunByID(w http.ResponseWriter, r *http.Request, id string) {
+	run, err := h.svc.GetRunByID(r.Context(), id)
+	if err != nil {
+		handleTestingError(w, err)
+		return
+	}
+	writeTestingJSON(w, http.StatusOK, run)
+}
 
 // Quality Gates stubs
 func (h *TestingHandler) ListQualityGates(w http.ResponseWriter, r *http.Request) {}
