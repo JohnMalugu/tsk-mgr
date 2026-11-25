@@ -700,18 +700,243 @@ func (r *sqlTestingRepository) ListCases(ctx context.Context, filter model.TestC
 	return cases, total, nil
 }
 
-// Runs stubs
+// CreateRun records a new test execution run
 func (r *sqlTestingRepository) CreateRun(ctx context.Context, run *model.ValidationTestRun) error {
-	return errors.New("not implemented")
+	if run.ID == "" {
+		run.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if run.ExecutedAt.IsZero() {
+		run.ExecutedAt = now
+	}
+	if run.CreatedAt.IsZero() {
+		run.CreatedAt = now
+	}
+	if run.Status == "" {
+		run.Status = model.TestRunStatusPassed
+	}
+
+	query := `
+		INSERT INTO validation_test_runs (
+			id, workspace_id, plan_id, case_id, run_code,
+			executed_by, status, actual_result, execution_time_ms,
+			error_message, stack_trace, evidence_url, defect_id,
+			executed_at, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		run.ID,
+		run.WorkspaceID,
+		run.PlanID,
+		run.CaseID,
+		run.RunCode,
+		run.ExecutedBy,
+		run.Status,
+		run.ActualResult,
+		run.ExecutionTimeMs,
+		run.ErrorMessage,
+		run.StackTrace,
+		run.EvidenceURL,
+		run.DefectID,
+		run.ExecutedAt,
+		run.CreatedAt,
+	)
+	return err
 }
+
+// GetRunByID retrieves a test run execution record by ID
 func (r *sqlTestingRepository) GetRunByID(ctx context.Context, id string) (*model.ValidationTestRun, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, plan_id, case_id, run_code,
+		       executed_by, status, actual_result, execution_time_ms,
+		       error_message, stack_trace, evidence_url, defect_id,
+		       executed_at, created_at
+		FROM validation_test_runs
+		WHERE id = ?`
+
+	var run model.ValidationTestRun
+	var actRes, errMsg, stTrace, evURL, defID sql.NullString
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&run.ID,
+		&run.WorkspaceID,
+		&run.PlanID,
+		&run.CaseID,
+		&run.RunCode,
+		&run.ExecutedBy,
+		&run.Status,
+		&actRes,
+		&run.ExecutionTimeMs,
+		&errMsg,
+		&stTrace,
+		&evURL,
+		&defID,
+		&run.ExecutedAt,
+		&run.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTestRunNotFound
+		}
+		return nil, err
+	}
+	if actRes.Valid {
+		run.ActualResult = actRes.String
+	}
+	if errMsg.Valid {
+		run.ErrorMessage = errMsg.String
+	}
+	if stTrace.Valid {
+		run.StackTrace = stTrace.String
+	}
+	if evURL.Valid {
+		run.EvidenceURL = evURL.String
+	}
+	if defID.Valid {
+		run.DefectID = defID.String
+	}
+	return &run, nil
 }
+
+// UpdateRun updates an existing test run execution record
 func (r *sqlTestingRepository) UpdateRun(ctx context.Context, run *model.ValidationTestRun) error {
-	return errors.New("not implemented")
+	query := `
+		UPDATE validation_test_runs
+		SET status = ?, actual_result = ?, execution_time_ms = ?,
+		    error_message = ?, stack_trace = ?, evidence_url = ?, defect_id = ?
+		WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		run.Status,
+		run.ActualResult,
+		run.ExecutionTimeMs,
+		run.ErrorMessage,
+		run.StackTrace,
+		run.EvidenceURL,
+		run.DefectID,
+		run.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrTestRunNotFound
+	}
+	return nil
 }
+
+// ListRuns queries test run execution logs based on filter criteria
 func (r *sqlTestingRepository) ListRuns(ctx context.Context, filter model.TestRunFilter) ([]model.ValidationTestRun, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.PlanID != "" {
+		conditions = append(conditions, "plan_id = ?")
+		args = append(args, filter.PlanID)
+	}
+	if filter.CaseID != "" {
+		conditions = append(conditions, "case_id = ?")
+		args = append(args, filter.CaseID)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+	if filter.ExecutedBy != "" {
+		conditions = append(conditions, "executed_by = ?")
+		args = append(args, filter.ExecutedBy)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM validation_test_runs %s", whereClause)
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, plan_id, case_id, run_code,
+		       executed_by, status, actual_result, execution_time_ms,
+		       error_message, stack_trace, evidence_url, defect_id,
+		       executed_at, created_at
+		FROM validation_test_runs
+		%s
+		ORDER BY executed_at DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, selectQuery, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var runs []model.ValidationTestRun
+	for rows.Next() {
+		var run model.ValidationTestRun
+		var actRes, errMsg, stTrace, evURL, defID sql.NullString
+		if err := rows.Scan(
+			&run.ID,
+			&run.WorkspaceID,
+			&run.PlanID,
+			&run.CaseID,
+			&run.RunCode,
+			&run.ExecutedBy,
+			&run.Status,
+			&actRes,
+			&run.ExecutionTimeMs,
+			&errMsg,
+			&stTrace,
+			&evURL,
+			&defID,
+			&run.ExecutedAt,
+			&run.CreatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		if actRes.Valid {
+			run.ActualResult = actRes.String
+		}
+		if errMsg.Valid {
+			run.ErrorMessage = errMsg.String
+		}
+		if stTrace.Valid {
+			run.StackTrace = stTrace.String
+		}
+		if evURL.Valid {
+			run.EvidenceURL = evURL.String
+		}
+		if defID.Valid {
+			run.DefectID = defID.String
+		}
+		runs = append(runs, run)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return runs, total, nil
 }
 
 // Quality Gates stubs
