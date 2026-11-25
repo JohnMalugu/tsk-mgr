@@ -3647,6 +3647,29 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	qualityGatesQuery := `
+	CREATE TABLE IF NOT EXISTS quality_gates (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		release_id TEXT,
+		change_id TEXT,
+		min_pass_rate REAL NOT NULL DEFAULT 95.0,
+		require_security_signoff BOOLEAN NOT NULL DEFAULT 0,
+		require_performance_signoff BOOLEAN NOT NULL DEFAULT 0,
+		status TEXT NOT NULL DEFAULT 'pending',
+		waived_by TEXT,
+		waived_reason TEXT,
+		decided_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);`
+
+	_, err = db.Exec(qualityGatesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
