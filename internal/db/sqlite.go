@@ -3621,6 +3621,32 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	validationTestRunsQuery := `
+	CREATE TABLE IF NOT EXISTS validation_test_runs (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		plan_id TEXT NOT NULL,
+		case_id TEXT NOT NULL,
+		run_code TEXT NOT NULL,
+		executed_by TEXT NOT NULL,
+		status TEXT NOT NULL,
+		actual_result TEXT,
+		execution_time_ms INTEGER NOT NULL DEFAULT 0,
+		error_message TEXT,
+		stack_trace TEXT,
+		evidence_url TEXT,
+		defect_id TEXT,
+		executed_at DATETIME NOT NULL,
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (plan_id) REFERENCES validation_test_plans(id) ON DELETE CASCADE,
+		FOREIGN KEY (case_id) REFERENCES validation_test_cases(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(validationTestRunsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
