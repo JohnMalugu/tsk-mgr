@@ -480,3 +480,79 @@ func (r *LinkDefectRequest) Validate() error {
 	}
 	return nil
 }
+
+// Query filters and posture analytics models for Service Validation & Testing
+
+// TestPlanFilter defines query criteria for browsing test plans
+type TestPlanFilter struct {
+	WorkspaceID string
+	ReleaseID   string
+	ChangeID    string
+	TestType    string
+	Environment string
+	Status      string
+	Search      string
+	Limit       int
+	Offset      int
+}
+
+// TestCaseFilter defines query criteria for browsing test cases
+type TestCaseFilter struct {
+	WorkspaceID string
+	PlanID      string
+	Category    string
+	Severity    string
+	Status      string
+	Search      string
+	Limit       int
+	Offset      int
+}
+
+// TestRunFilter defines query criteria for test execution logs
+type TestRunFilter struct {
+	WorkspaceID string
+	PlanID      string
+	CaseID      string
+	Status      string
+	ExecutedBy  string
+	Limit       int
+	Offset      int
+}
+
+// QualityGateFilter defines query criteria for quality gates
+type QualityGateFilter struct {
+	WorkspaceID string
+	ReleaseID   string
+	ChangeID    string
+	Status      string
+	Limit       int
+	Offset      int
+}
+
+// DefectLinkFilter defines query criteria for validation defects
+type DefectLinkFilter struct {
+	WorkspaceID string
+	RunID       string
+	IncidentID  string
+	ProblemID   string
+	Status      string
+	Limit       int
+	Offset      int
+}
+
+// TestingAnalytics represents executive Service Validation & Testing posture reporting
+type TestingAnalytics struct {
+	TotalPlans              int            `json:"total_plans"`
+	TotalCases              int            `json:"total_cases"`
+	TotalRuns               int            `json:"total_runs"`
+	PassedRuns              int            `json:"passed_runs"`
+	FailedRuns              int            `json:"failed_runs"`
+	BlockedRuns             int            `json:"blocked_runs"`
+	SkippedRuns             int            `json:"skipped_runs"`
+	OverallPassRate         float64        `json:"overall_pass_rate"`
+	DefectDensity           float64        `json:"defect_density"`
+	QualityGateCompliance   float64        `json:"quality_gate_compliance"`
+	TestTypeDistribution    map[string]int `json:"test_type_distribution"`
+	EnvironmentDistribution map[string]int `json:"environment_distribution"`
+	QualityHealthIndex      float64        `json:"quality_health_index"`
+}
