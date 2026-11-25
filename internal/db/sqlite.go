@@ -4064,6 +4064,15 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_event_suppress_window ON event_suppressions(start_time, end_time);
 	CREATE INDEX IF NOT EXISTS idx_event_actions_alert ON event_actions(alert_id);
 	CREATE INDEX IF NOT EXISTS idx_event_actions_ws_status ON event_actions(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_val_plans_ws_status ON validation_test_plans(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_val_plans_code ON validation_test_plans(workspace_id, plan_code);
+	CREATE INDEX IF NOT EXISTS idx_val_plans_rel_change ON validation_test_plans(release_id, change_id);
+	CREATE INDEX IF NOT EXISTS idx_val_cases_plan ON validation_test_cases(plan_id);
+	CREATE INDEX IF NOT EXISTS idx_val_cases_code ON validation_test_cases(workspace_id, case_code);
+	CREATE INDEX IF NOT EXISTS idx_val_runs_plan_case ON validation_test_runs(plan_id, case_id);
+	CREATE INDEX IF NOT EXISTS idx_val_runs_ws_status ON validation_test_runs(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_val_gates_ws_rel ON quality_gates(workspace_id, release_id);
+	CREATE INDEX IF NOT EXISTS idx_val_defects_run ON validation_defects(run_id);
 	`
 
 	_, err = db.Exec(indexQuery)
