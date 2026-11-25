@@ -939,29 +939,396 @@ func (r *sqlTestingRepository) ListRuns(ctx context.Context, filter model.TestRu
 	return runs, total, nil
 }
 
-// Quality Gates stubs
+// CreateQualityGate inserts a new quality gate policy
 func (r *sqlTestingRepository) CreateQualityGate(ctx context.Context, g *model.QualityGate) error {
-	return errors.New("not implemented")
-}
-func (r *sqlTestingRepository) GetQualityGateByID(ctx context.Context, id string) (*model.QualityGate, error) {
-	return nil, errors.New("not implemented")
-}
-func (r *sqlTestingRepository) UpdateQualityGate(ctx context.Context, g *model.QualityGate) error {
-	return errors.New("not implemented")
-}
-func (r *sqlTestingRepository) DeleteQualityGate(ctx context.Context, id string) error {
-	return errors.New("not implemented")
-}
-func (r *sqlTestingRepository) ListQualityGates(ctx context.Context, filter model.QualityGateFilter) ([]model.QualityGate, int, error) {
-	return nil, 0, errors.New("not implemented")
+	if g.ID == "" {
+		g.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if g.CreatedAt.IsZero() {
+		g.CreatedAt = now
+	}
+	g.UpdatedAt = now
+	if g.Status == "" {
+		g.Status = model.QualityGateStatusPending
+	}
+	if g.MinPassRate <= 0 {
+		g.MinPassRate = 95.0
+	}
+
+	// Check name uniqueness within workspace
+	var count int
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM quality_gates WHERE workspace_id = ? AND name = ?", g.WorkspaceID, g.Name).Scan(&count)
+	if err == nil && count > 0 {
+		return ErrQualityGateNameConflict
+	}
+
+	query := `
+		INSERT INTO quality_gates (
+			id, workspace_id, name, release_id, change_id,
+			min_pass_rate, require_security_signoff, require_performance_signoff,
+			status, waived_by, waived_reason, decided_at, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err = r.db.ExecContext(ctx, query,
+		g.ID,
+		g.WorkspaceID,
+		g.Name,
+		g.ReleaseID,
+		g.ChangeID,
+		g.MinPassRate,
+		g.RequireSecuritySignoff,
+		g.RequirePerformanceSignoff,
+		g.Status,
+		g.WaivedBy,
+		g.WaivedReason,
+		g.DecidedAt,
+		g.CreatedAt,
+		g.UpdatedAt,
+	)
+	return err
 }
 
-// Defects stubs
-func (r *sqlTestingRepository) CreateDefectLink(ctx context.Context, d *model.ValidationDefect) error {
-	return errors.New("not implemented")
+// GetQualityGateByID retrieves a quality gate by ID
+func (r *sqlTestingRepository) GetQualityGateByID(ctx context.Context, id string) (*model.QualityGate, error) {
+	query := `
+		SELECT id, workspace_id, name, release_id, change_id,
+		       min_pass_rate, require_security_signoff, require_performance_signoff,
+		       status, waived_by, waived_reason, decided_at, created_at, updated_at
+		FROM quality_gates
+		WHERE id = ?`
+
+	var g model.QualityGate
+	var relID, chgID, waivedBy, waivedReason sql.NullString
+	var decidedAt sql.NullTime
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&g.ID,
+		&g.WorkspaceID,
+		&g.Name,
+		&relID,
+		&chgID,
+		&g.MinPassRate,
+		&g.RequireSecuritySignoff,
+		&g.RequirePerformanceSignoff,
+		&g.Status,
+		&waivedBy,
+		&waivedReason,
+		&decidedAt,
+		&g.CreatedAt,
+		&g.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrQualityGateNotFound
+		}
+		return nil, err
+	}
+	if relID.Valid {
+		g.ReleaseID = relID.String
+	}
+	if chgID.Valid {
+		g.ChangeID = chgID.String
+	}
+	if waivedBy.Valid {
+		g.WaivedBy = waivedBy.String
+	}
+	if waivedReason.Valid {
+		g.WaivedReason = waivedReason.String
+	}
+	if decidedAt.Valid {
+		g.DecidedAt = &decidedAt.Time
+	}
+	return &g, nil
 }
+
+// UpdateQualityGate updates an existing quality gate
+func (r *sqlTestingRepository) UpdateQualityGate(ctx context.Context, g *model.QualityGate) error {
+	g.UpdatedAt = time.Now().UTC()
+
+	query := `
+		UPDATE quality_gates
+		SET name = ?, release_id = ?, change_id = ?, min_pass_rate = ?,
+		    require_security_signoff = ?, require_performance_signoff = ?,
+		    status = ?, waived_by = ?, waived_reason = ?, decided_at = ?, updated_at = ?
+		WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		g.Name,
+		g.ReleaseID,
+		g.ChangeID,
+		g.MinPassRate,
+		g.RequireSecuritySignoff,
+		g.RequirePerformanceSignoff,
+		g.Status,
+		g.WaivedBy,
+		g.WaivedReason,
+		g.DecidedAt,
+		g.UpdatedAt,
+		g.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrQualityGateNotFound
+	}
+	return nil
+}
+
+// DeleteQualityGate removes a quality gate
+func (r *sqlTestingRepository) DeleteQualityGate(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, "DELETE FROM quality_gates WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrQualityGateNotFound
+	}
+	return nil
+}
+
+// ListQualityGates queries quality gates based on filter criteria
+func (r *sqlTestingRepository) ListQualityGates(ctx context.Context, filter model.QualityGateFilter) ([]model.QualityGate, int, error) {
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.ReleaseID != "" {
+		conditions = append(conditions, "release_id = ?")
+		args = append(args, filter.ReleaseID)
+	}
+	if filter.ChangeID != "" {
+		conditions = append(conditions, "change_id = ?")
+		args = append(args, filter.ChangeID)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM quality_gates %s", whereClause)
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, name, release_id, change_id,
+		       min_pass_rate, require_security_signoff, require_performance_signoff,
+		       status, waived_by, waived_reason, decided_at, created_at, updated_at
+		FROM quality_gates
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, selectQuery, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var gates []model.QualityGate
+	for rows.Next() {
+		var g model.QualityGate
+		var relID, chgID, waivedBy, waivedReason sql.NullString
+		var decidedAt sql.NullTime
+		if err := rows.Scan(
+			&g.ID,
+			&g.WorkspaceID,
+			&g.Name,
+			&relID,
+			&chgID,
+			&g.MinPassRate,
+			&g.RequireSecuritySignoff,
+			&g.RequirePerformanceSignoff,
+			&g.Status,
+			&waivedBy,
+			&waivedReason,
+			&decidedAt,
+			&g.CreatedAt,
+			&g.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		if relID.Valid {
+			g.ReleaseID = relID.String
+		}
+		if chgID.Valid {
+			g.ChangeID = chgID.String
+		}
+		if waivedBy.Valid {
+			g.WaivedBy = waivedBy.String
+		}
+		if waivedReason.Valid {
+			g.WaivedReason = waivedReason.String
+		}
+		if decidedAt.Valid {
+			g.DecidedAt = &decidedAt.Time
+		}
+		gates = append(gates, g)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return gates, total, nil
+}
+
+// CreateDefectLink records a defect linkage for a test run
+func (r *sqlTestingRepository) CreateDefectLink(ctx context.Context, d *model.ValidationDefect) error {
+	if d.ID == "" {
+		d.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if d.LoggedAt.IsZero() {
+		d.LoggedAt = now
+	}
+	if d.Status == "" {
+		d.Status = model.DefectStatusOpen
+	}
+	if d.Severity == "" {
+		d.Severity = model.TestCaseSeverityMedium
+	}
+
+	query := `
+		INSERT INTO validation_defects (
+			id, workspace_id, run_id, incident_id, problem_id,
+			severity, title, status, logged_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		d.ID,
+		d.WorkspaceID,
+		d.RunID,
+		d.IncidentID,
+		d.ProblemID,
+		d.Severity,
+		d.Title,
+		d.Status,
+		d.LoggedAt,
+	)
+	return err
+}
+
+// ListDefectLinks queries validation defects based on filter criteria
 func (r *sqlTestingRepository) ListDefectLinks(ctx context.Context, filter model.DefectLinkFilter) ([]model.ValidationDefect, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.RunID != "" {
+		conditions = append(conditions, "run_id = ?")
+		args = append(args, filter.RunID)
+	}
+	if filter.IncidentID != "" {
+		conditions = append(conditions, "incident_id = ?")
+		args = append(args, filter.IncidentID)
+	}
+	if filter.ProblemID != "" {
+		conditions = append(conditions, "problem_id = ?")
+		args = append(args, filter.ProblemID)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM validation_defects %s", whereClause)
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, run_id, incident_id, problem_id,
+		       severity, title, status, logged_at
+		FROM validation_defects
+		%s
+		ORDER BY logged_at DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, selectQuery, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var defects []model.ValidationDefect
+	for rows.Next() {
+		var d model.ValidationDefect
+		var incID, probID sql.NullString
+		if err := rows.Scan(
+			&d.ID,
+			&d.WorkspaceID,
+			&d.RunID,
+			&incID,
+			&probID,
+			&d.Severity,
+			&d.Title,
+			&d.Status,
+			&d.LoggedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		if incID.Valid {
+			d.IncidentID = incID.String
+		}
+		if probID.Valid {
+			d.ProblemID = probID.String
+		}
+		defects = append(defects, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return defects, total, nil
 }
 
 // Posture Analytics stub
