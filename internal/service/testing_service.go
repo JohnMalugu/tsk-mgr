@@ -326,15 +326,90 @@ func (s *testingService) ListCases(ctx context.Context, filter model.TestCaseFil
 	return s.repo.ListCases(ctx, filter)
 }
 
-// Runs stubs
+// ExecuteRun orchestrates test execution, logs outcomes, updates plan progress, and logs defects on failure
 func (s *testingService) ExecuteRun(ctx context.Context, workspaceID string, req model.ExecuteTestRunRequest) (*model.ValidationTestRun, error) {
-	return nil, errors.New("not implemented")
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = workspaceID
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	plan, err := s.repo.GetPlanByID(ctx, req.PlanID)
+	if err != nil {
+		return nil, err
+	}
+
+	testCase, err := s.repo.GetCaseByID(ctx, req.CaseID)
+	if err != nil {
+		return nil, err
+	}
+
+	runCode := fmt.Sprintf("TR-%05d", time.Now().UnixNano()%100000)
+	executedBy := strings.TrimSpace(req.ExecutedBy)
+	if executedBy == "" {
+		executedBy = "system"
+	}
+
+	now := time.Now().UTC()
+	run := &model.ValidationTestRun{
+		WorkspaceID:     req.WorkspaceID,
+		PlanID:          req.PlanID,
+		CaseID:          req.CaseID,
+		RunCode:         runCode,
+		ExecutedBy:      executedBy,
+		Status:          req.Status,
+		ActualResult:    req.ActualResult,
+		ExecutionTimeMs: req.ExecutionTimeMs,
+		ErrorMessage:    req.ErrorMessage,
+		StackTrace:      req.StackTrace,
+		EvidenceURL:     req.EvidenceURL,
+		DefectID:        req.DefectID,
+		ExecutedAt:      now,
+		CreatedAt:       now,
+	}
+
+	if err := s.repo.CreateRun(ctx, run); err != nil {
+		return nil, err
+	}
+
+	// Auto-create defect link if test failed without explicit defect
+	if req.Status == model.TestRunStatusFailed && run.DefectID == "" {
+		defectTitle := fmt.Sprintf("Failure in test case %s (%s)", testCase.CaseCode, testCase.Title)
+		defect := &model.ValidationDefect{
+			WorkspaceID: req.WorkspaceID,
+			RunID:       run.ID,
+			Severity:    testCase.Severity,
+			Title:       defectTitle,
+			Status:      model.DefectStatusOpen,
+			LoggedAt:    now,
+		}
+		if err := s.repo.CreateDefectLink(ctx, defect); err == nil {
+			run.DefectID = defect.ID
+			_ = s.repo.UpdateRun(ctx, run)
+		}
+	}
+
+	// Advance test plan from draft to in_progress upon first execution
+	if plan.Status == model.TestPlanStatusDraft {
+		plan.Status = model.TestPlanStatusInProgress
+		_ = s.repo.UpdatePlan(ctx, plan)
+	}
+
+	return run, nil
 }
+
+// GetRunByID retrieves a test run execution record by ID
 func (s *testingService) GetRunByID(ctx context.Context, id string) (*model.ValidationTestRun, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrTestRunNotFound
+	}
+	return s.repo.GetRunByID(ctx, id)
 }
+
+// ListRuns queries test run execution logs based on filter criteria
 func (s *testingService) ListRuns(ctx context.Context, filter model.TestRunFilter) ([]model.ValidationTestRun, int, error) {
-	return nil, 0, errors.New("not implemented")
+	return s.repo.ListRuns(ctx, filter)
 }
 
 // Quality Gates stubs
