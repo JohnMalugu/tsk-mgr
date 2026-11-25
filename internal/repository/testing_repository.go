@@ -1331,7 +1331,113 @@ func (r *sqlTestingRepository) ListDefectLinks(ctx context.Context, filter model
 	return defects, total, nil
 }
 
-// Posture Analytics stub
+// GetTestingAnalytics computes quality posture, pass rates, and validation KPIs
 func (r *sqlTestingRepository) GetTestingAnalytics(ctx context.Context, workspaceID string) (*model.TestingAnalytics, error) {
-	return nil, errors.New("not implemented")
+	analytics := &model.TestingAnalytics{
+		TestTypeDistribution:    make(map[string]int),
+		EnvironmentDistribution: make(map[string]int),
+	}
+
+	// 1. Total plans
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM validation_test_plans WHERE workspace_id = ?", workspaceID).Scan(&analytics.TotalPlans)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Total cases
+	err = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM validation_test_cases WHERE workspace_id = ?", workspaceID).Scan(&analytics.TotalCases)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. Total runs
+	err = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM validation_test_runs WHERE workspace_id = ?", workspaceID).Scan(&analytics.TotalRuns)
+	if err != nil {
+		return nil, err
+	}
+
+	// 4. Test run breakdown by status
+	runRows, err := r.db.QueryContext(ctx, "SELECT status, COUNT(*) FROM validation_test_runs WHERE workspace_id = ?", workspaceID)
+	if err == nil {
+		defer runRows.Close()
+		for runRows.Next() {
+			var st string
+			var count int
+			if err := runRows.Scan(&st, &count); err == nil {
+				switch st {
+				case model.TestRunStatusPassed:
+					analytics.PassedRuns = count
+				case model.TestRunStatusFailed:
+					analytics.FailedRuns = count
+				case model.TestRunStatusBlocked:
+					analytics.BlockedRuns = count
+				case model.TestRunStatusSkipped:
+					analytics.SkippedRuns = count
+				}
+			}
+		}
+	}
+
+	// 5. Overall pass rate
+	if analytics.TotalRuns > 0 {
+		analytics.OverallPassRate = (float64(analytics.PassedRuns) / float64(analytics.TotalRuns)) * 100.0
+	} else {
+		analytics.OverallPassRate = 100.0
+	}
+
+	// 6. Defect density
+	var totalDefects int
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM validation_defects WHERE workspace_id = ?", workspaceID).Scan(&totalDefects)
+	if analytics.TotalRuns > 0 {
+		analytics.DefectDensity = float64(totalDefects) / float64(analytics.TotalRuns)
+	}
+
+	// 7. Quality gate compliance
+	var totalGates, compliantGates int
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM quality_gates WHERE workspace_id = ?", workspaceID).Scan(&totalGates)
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM quality_gates WHERE workspace_id = ? AND status IN ('passed', 'waived')", workspaceID).Scan(&compliantGates)
+	if totalGates > 0 {
+		analytics.QualityGateCompliance = (float64(compliantGates) / float64(totalGates)) * 100.0
+	} else {
+		analytics.QualityGateCompliance = 100.0
+	}
+
+	// 8. Test type distribution
+	typeRows, err := r.db.QueryContext(ctx, "SELECT test_type, COUNT(*) FROM validation_test_plans WHERE workspace_id = ? GROUP BY test_type", workspaceID)
+	if err == nil {
+		defer typeRows.Close()
+		for typeRows.Next() {
+			var tt string
+			var count int
+			if err := typeRows.Scan(&tt, &count); err == nil {
+				analytics.TestTypeDistribution[tt] = count
+			}
+		}
+	}
+
+	// 9. Environment distribution
+	envRows, err := r.db.QueryContext(ctx, "SELECT environment, COUNT(*) FROM validation_test_plans WHERE workspace_id = ? GROUP BY environment", workspaceID)
+	if err == nil {
+		defer envRows.Close()
+		for envRows.Next() {
+			var env string
+			var count int
+			if err := envRows.Scan(&env, &count); err == nil {
+				analytics.EnvironmentDistribution[env] = count
+			}
+		}
+	}
+
+	// 10. Composite Quality Health Index (0 - 100)
+	health := (analytics.OverallPassRate * 0.7) + (analytics.QualityGateCompliance * 0.3)
+	health -= float64(analytics.FailedRuns) * 3.0
+	if health < 0.0 {
+		health = 0.0
+	}
+	if health > 100.0 {
+		health = 100.0
+	}
+	analytics.QualityHealthIndex = health
+
+	return analytics, nil
 }
