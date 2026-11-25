@@ -215,6 +215,10 @@ func main() {
 	eventSvc := service.NewEventService(eventRepo)
 	handler.InitEventHandler(eventSvc)
 
+	testingRepo := repository.NewTestingRepository(sqliteDB)
+	testingSvc := service.NewTestingService(testingRepo)
+	handler.InitTestingHandler(testingSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
