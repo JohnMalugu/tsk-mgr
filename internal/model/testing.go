@@ -200,3 +200,69 @@ type ValidationTestRun struct {
 	ExecutedAt      time.Time `json:"executed_at"`
 	CreatedAt       time.Time `json:"created_at"`
 }
+
+// Quality gate approval statuses
+const (
+	QualityGateStatusPending = "pending"
+	QualityGateStatusPassed  = "passed"
+	QualityGateStatusFailed  = "failed"
+	QualityGateStatusWaived  = "waived"
+)
+
+// IsValidQualityGateStatus validates gate evaluation status
+func IsValidQualityGateStatus(status string) bool {
+	switch status {
+	case QualityGateStatusPending, QualityGateStatusPassed, QualityGateStatusFailed, QualityGateStatusWaived:
+		return true
+	default:
+		return false
+	}
+}
+
+// QualityGate defines policy criteria and sign-off thresholds required before promoting releases
+type QualityGate struct {
+	ID                        string     `json:"id"`
+	WorkspaceID               string     `json:"workspace_id"`
+	Name                      string     `json:"name"`
+	ReleaseID                 string     `json:"release_id,omitempty"`
+	ChangeID                  string     `json:"change_id,omitempty"`
+	MinPassRate               float64    `json:"min_pass_rate"`
+	RequireSecuritySignoff    bool       `json:"require_security_signoff"`
+	RequirePerformanceSignoff bool       `json:"require_performance_signoff"`
+	Status                    string     `json:"status"`
+	WaivedBy                  string     `json:"waived_by,omitempty"`
+	WaivedReason              string     `json:"waived_reason,omitempty"`
+	DecidedAt                 *time.Time `json:"decided_at,omitempty"`
+	CreatedAt                 time.Time  `json:"created_at"`
+	UpdatedAt                 time.Time  `json:"updated_at"`
+}
+
+// Validation defect lifecycle statuses
+const (
+	DefectStatusOpen          = "open"
+	DefectStatusInvestigating = "investigating"
+	DefectStatusResolved      = "resolved"
+)
+
+// IsValidDefectStatus validates defect status
+func IsValidDefectStatus(status string) bool {
+	switch status {
+	case DefectStatusOpen, DefectStatusInvestigating, DefectStatusResolved:
+		return true
+	default:
+		return false
+	}
+}
+
+// ValidationDefect records defects identified during test executions and links to Incidents or Problems
+type ValidationDefect struct {
+	ID          string    `json:"id"`
+	WorkspaceID string    `json:"workspace_id"`
+	RunID       string    `json:"run_id"`
+	IncidentID  string    `json:"incident_id,omitempty"`
+	ProblemID   string    `json:"problem_id,omitempty"`
+	Severity    string    `json:"severity"`
+	Title       string    `json:"title"`
+	Status      string    `json:"status"`
+	LoggedAt    time.Time `json:"logged_at"`
+}
