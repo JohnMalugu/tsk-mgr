@@ -161,3 +161,42 @@ type ValidationTestCase struct {
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 }
+
+// Validation test run execution statuses
+const (
+	TestRunStatusPassed     = "passed"
+	TestRunStatusFailed     = "failed"
+	TestRunStatusBlocked    = "blocked"
+	TestRunStatusSkipped    = "skipped"
+	TestRunStatusInProgress = "in_progress"
+)
+
+// IsValidTestRunStatus validates execution outcome status
+func IsValidTestRunStatus(status string) bool {
+	switch status {
+	case TestRunStatusPassed, TestRunStatusFailed, TestRunStatusBlocked,
+		TestRunStatusSkipped, TestRunStatusInProgress:
+		return true
+	default:
+		return false
+	}
+}
+
+// ValidationTestRun records the execution instance of a test case against an environment
+type ValidationTestRun struct {
+	ID              string    `json:"id"`
+	WorkspaceID     string    `json:"workspace_id"`
+	PlanID          string    `json:"plan_id"`
+	CaseID          string    `json:"case_id"`
+	RunCode         string    `json:"run_code"`
+	ExecutedBy      string    `json:"executed_by"`
+	Status          string    `json:"status"`
+	ActualResult    string    `json:"actual_result,omitempty"`
+	ExecutionTimeMs int64     `json:"execution_time_ms"`
+	ErrorMessage    string    `json:"error_message,omitempty"`
+	StackTrace      string    `json:"stack_trace,omitempty"`
+	EvidenceURL     string    `json:"evidence_url,omitempty"`
+	DefectID        string    `json:"defect_id,omitempty"`
+	ExecutedAt      time.Time `json:"executed_at"`
+	CreatedAt       time.Time `json:"created_at"`
+}
