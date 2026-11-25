@@ -80,24 +80,331 @@ func NewTestingRepository(db *sql.DB) TestingRepository {
 	return &sqlTestingRepository{db: db}
 }
 
-// Plans stubs
+// CreatePlan inserts a new validation test plan
 func (r *sqlTestingRepository) CreatePlan(ctx context.Context, p *model.ValidationTestPlan) error {
-	return errors.New("not implemented")
+	if p.ID == "" {
+		p.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if p.CreatedAt.IsZero() {
+		p.CreatedAt = now
+	}
+	p.UpdatedAt = now
+	if p.Status == "" {
+		p.Status = model.TestPlanStatusDraft
+	}
+	if p.TargetPassRate <= 0 {
+		p.TargetPassRate = 95.0
+	}
+
+	// Check plan code uniqueness within workspace
+	var count int
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM validation_test_plans WHERE workspace_id = ? AND plan_code = ?", p.WorkspaceID, p.PlanCode).Scan(&count)
+	if err == nil && count > 0 {
+		return ErrTestPlanCodeConflict
+	}
+
+	query := `
+		INSERT INTO validation_test_plans (
+			id, workspace_id, plan_code, title, description,
+			release_id, change_id, ci_id, test_type, environment,
+			status, target_pass_rate, created_by, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err = r.db.ExecContext(ctx, query,
+		p.ID,
+		p.WorkspaceID,
+		p.PlanCode,
+		p.Title,
+		p.Description,
+		p.ReleaseID,
+		p.ChangeID,
+		p.CIID,
+		p.TestType,
+		p.Environment,
+		p.Status,
+		p.TargetPassRate,
+		p.CreatedBy,
+		p.CreatedAt,
+		p.UpdatedAt,
+	)
+	return err
 }
+
+// GetPlanByID retrieves a validation test plan by ID
 func (r *sqlTestingRepository) GetPlanByID(ctx context.Context, id string) (*model.ValidationTestPlan, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, plan_code, title, description,
+		       release_id, change_id, ci_id, test_type, environment,
+		       status, target_pass_rate, created_by, created_at, updated_at
+		FROM validation_test_plans
+		WHERE id = ?`
+
+	var p model.ValidationTestPlan
+	var desc, relID, chgID, ciID, createdBy sql.NullString
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&p.ID,
+		&p.WorkspaceID,
+		&p.PlanCode,
+		&p.Title,
+		&desc,
+		&relID,
+		&chgID,
+		&ciID,
+		&p.TestType,
+		&p.Environment,
+		&p.Status,
+		&p.TargetPassRate,
+		&createdBy,
+		&p.CreatedAt,
+		&p.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTestPlanNotFound
+		}
+		return nil, err
+	}
+	if desc.Valid {
+		p.Description = desc.String
+	}
+	if relID.Valid {
+		p.ReleaseID = relID.String
+	}
+	if chgID.Valid {
+		p.ChangeID = chgID.String
+	}
+	if ciID.Valid {
+		p.CIID = ciID.String
+	}
+	if createdBy.Valid {
+		p.CreatedBy = createdBy.String
+	}
+	return &p, nil
 }
+
+// GetPlanByCode retrieves a validation test plan by plan_code within a workspace
 func (r *sqlTestingRepository) GetPlanByCode(ctx context.Context, workspaceID, code string) (*model.ValidationTestPlan, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, plan_code, title, description,
+		       release_id, change_id, ci_id, test_type, environment,
+		       status, target_pass_rate, created_by, created_at, updated_at
+		FROM validation_test_plans
+		WHERE workspace_id = ? AND plan_code = ?`
+
+	var p model.ValidationTestPlan
+	var desc, relID, chgID, ciID, createdBy sql.NullString
+	err := r.db.QueryRowContext(ctx, query, workspaceID, code).Scan(
+		&p.ID,
+		&p.WorkspaceID,
+		&p.PlanCode,
+		&p.Title,
+		&desc,
+		&relID,
+		&chgID,
+		&ciID,
+		&p.TestType,
+		&p.Environment,
+		&p.Status,
+		&p.TargetPassRate,
+		&createdBy,
+		&p.CreatedAt,
+		&p.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTestPlanNotFound
+		}
+		return nil, err
+	}
+	if desc.Valid {
+		p.Description = desc.String
+	}
+	if relID.Valid {
+		p.ReleaseID = relID.String
+	}
+	if chgID.Valid {
+		p.ChangeID = chgID.String
+	}
+	if ciID.Valid {
+		p.CIID = ciID.String
+	}
+	if createdBy.Valid {
+		p.CreatedBy = createdBy.String
+	}
+	return &p, nil
 }
+
+// UpdatePlan updates an existing test plan
 func (r *sqlTestingRepository) UpdatePlan(ctx context.Context, p *model.ValidationTestPlan) error {
-	return errors.New("not implemented")
+	p.UpdatedAt = time.Now().UTC()
+
+	query := `
+		UPDATE validation_test_plans
+		SET title = ?, description = ?, release_id = ?, change_id = ?,
+		    ci_id = ?, test_type = ?, environment = ?, status = ?,
+		    target_pass_rate = ?, updated_at = ?
+		WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		p.Title,
+		p.Description,
+		p.ReleaseID,
+		p.ChangeID,
+		p.CIID,
+		p.TestType,
+		p.Environment,
+		p.Status,
+		p.TargetPassRate,
+		p.UpdatedAt,
+		p.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrTestPlanNotFound
+	}
+	return nil
 }
+
+// DeletePlan removes a validation test plan
 func (r *sqlTestingRepository) DeletePlan(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	res, err := r.db.ExecContext(ctx, "DELETE FROM validation_test_plans WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrTestPlanNotFound
+	}
+	return nil
 }
+
+// ListPlans queries validation test plans based on filter criteria
 func (r *sqlTestingRepository) ListPlans(ctx context.Context, filter model.TestPlanFilter) ([]model.ValidationTestPlan, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.ReleaseID != "" {
+		conditions = append(conditions, "release_id = ?")
+		args = append(args, filter.ReleaseID)
+	}
+	if filter.ChangeID != "" {
+		conditions = append(conditions, "change_id = ?")
+		args = append(args, filter.ChangeID)
+	}
+	if filter.TestType != "" {
+		conditions = append(conditions, "test_type = ?")
+		args = append(args, filter.TestType)
+	}
+	if filter.Environment != "" {
+		conditions = append(conditions, "environment = ?")
+		args = append(args, filter.Environment)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+	if filter.Search != "" {
+		conditions = append(conditions, "(title LIKE ? OR plan_code LIKE ? OR description LIKE ?)")
+		s := "%" + filter.Search + "%"
+		args = append(args, s, s, s)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM validation_test_plans %s", whereClause)
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, plan_code, title, description,
+		       release_id, change_id, ci_id, test_type, environment,
+		       status, target_pass_rate, created_by, created_at, updated_at
+		FROM validation_test_plans
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, selectQuery, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var plans []model.ValidationTestPlan
+	for rows.Next() {
+		var p model.ValidationTestPlan
+		var desc, relID, chgID, ciID, createdBy sql.NullString
+		if err := rows.Scan(
+			&p.ID,
+			&p.WorkspaceID,
+			&p.PlanCode,
+			&p.Title,
+			&desc,
+			&relID,
+			&chgID,
+			&ciID,
+			&p.TestType,
+			&p.Environment,
+			&p.Status,
+			&p.TargetPassRate,
+			&createdBy,
+			&p.CreatedAt,
+			&p.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		if desc.Valid {
+			p.Description = desc.String
+		}
+		if relID.Valid {
+			p.ReleaseID = relID.String
+		}
+		if chgID.Valid {
+			p.ChangeID = chgID.String
+		}
+		if ciID.Valid {
+			p.CIID = ciID.String
+		}
+		if createdBy.Valid {
+			p.CreatedBy = createdBy.String
+		}
+		plans = append(plans, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return plans, total, nil
 }
 
 // Cases stubs
