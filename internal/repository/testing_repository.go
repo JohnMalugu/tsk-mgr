@@ -407,24 +407,297 @@ func (r *sqlTestingRepository) ListPlans(ctx context.Context, filter model.TestP
 	return plans, total, nil
 }
 
-// Cases stubs
+// CreateCase inserts a new validation test case linked to a test plan
 func (r *sqlTestingRepository) CreateCase(ctx context.Context, c *model.ValidationTestCase) error {
-	return errors.New("not implemented")
+	if c.ID == "" {
+		c.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if c.CreatedAt.IsZero() {
+		c.CreatedAt = now
+	}
+	c.UpdatedAt = now
+	if c.Severity == "" {
+		c.Severity = model.TestCaseSeverityMedium
+	}
+	if c.Category == "" {
+		c.Category = model.TestCaseCategoryIntegration
+	}
+	if c.Status == "" {
+		c.Status = model.TestCaseStatusReady
+	}
+
+	// Check case code uniqueness within workspace
+	var count int
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM validation_test_cases WHERE workspace_id = ? AND case_code = ?", c.WorkspaceID, c.CaseCode).Scan(&count)
+	if err == nil && count > 0 {
+		return ErrTestCaseCodeConflict
+	}
+
+	query := `
+		INSERT INTO validation_test_cases (
+			id, workspace_id, plan_id, case_code, title,
+			description, preconditions, test_steps, expected_result,
+			severity, category, status, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err = r.db.ExecContext(ctx, query,
+		c.ID,
+		c.WorkspaceID,
+		c.PlanID,
+		c.CaseCode,
+		c.Title,
+		c.Description,
+		c.Preconditions,
+		c.TestSteps,
+		c.ExpectedResult,
+		c.Severity,
+		c.Category,
+		c.Status,
+		c.CreatedAt,
+		c.UpdatedAt,
+	)
+	return err
 }
+
+// GetCaseByID retrieves a test case by ID
 func (r *sqlTestingRepository) GetCaseByID(ctx context.Context, id string) (*model.ValidationTestCase, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, plan_id, case_code, title,
+		       description, preconditions, test_steps, expected_result,
+		       severity, category, status, created_at, updated_at
+		FROM validation_test_cases
+		WHERE id = ?`
+
+	var c model.ValidationTestCase
+	var desc, pre sql.NullString
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&c.ID,
+		&c.WorkspaceID,
+		&c.PlanID,
+		&c.CaseCode,
+		&c.Title,
+		&desc,
+		&pre,
+		&c.TestSteps,
+		&c.ExpectedResult,
+		&c.Severity,
+		&c.Category,
+		&c.Status,
+		&c.CreatedAt,
+		&c.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTestCaseNotFound
+		}
+		return nil, err
+	}
+	if desc.Valid {
+		c.Description = desc.String
+	}
+	if pre.Valid {
+		c.Preconditions = pre.String
+	}
+	return &c, nil
 }
+
+// GetCaseByCode retrieves a test case by case_code within a workspace
 func (r *sqlTestingRepository) GetCaseByCode(ctx context.Context, workspaceID, code string) (*model.ValidationTestCase, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, plan_id, case_code, title,
+		       description, preconditions, test_steps, expected_result,
+		       severity, category, status, created_at, updated_at
+		FROM validation_test_cases
+		WHERE workspace_id = ? AND case_code = ?`
+
+	var c model.ValidationTestCase
+	var desc, pre sql.NullString
+	err := r.db.QueryRowContext(ctx, query, workspaceID, code).Scan(
+		&c.ID,
+		&c.WorkspaceID,
+		&c.PlanID,
+		&c.CaseCode,
+		&c.Title,
+		&desc,
+		&pre,
+		&c.TestSteps,
+		&c.ExpectedResult,
+		&c.Severity,
+		&c.Category,
+		&c.Status,
+		&c.CreatedAt,
+		&c.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTestCaseNotFound
+		}
+		return nil, err
+	}
+	if desc.Valid {
+		c.Description = desc.String
+	}
+	if pre.Valid {
+		c.Preconditions = pre.String
+	}
+	return &c, nil
 }
+
+// UpdateCase updates an existing test case
 func (r *sqlTestingRepository) UpdateCase(ctx context.Context, c *model.ValidationTestCase) error {
-	return errors.New("not implemented")
+	c.UpdatedAt = time.Now().UTC()
+
+	query := `
+		UPDATE validation_test_cases
+		SET title = ?, description = ?, preconditions = ?, test_steps = ?,
+		    expected_result = ?, severity = ?, category = ?, status = ?, updated_at = ?
+		WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		c.Title,
+		c.Description,
+		c.Preconditions,
+		c.TestSteps,
+		c.ExpectedResult,
+		c.Severity,
+		c.Category,
+		c.Status,
+		c.UpdatedAt,
+		c.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrTestCaseNotFound
+	}
+	return nil
 }
+
+// DeleteCase removes a test case
 func (r *sqlTestingRepository) DeleteCase(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	res, err := r.db.ExecContext(ctx, "DELETE FROM validation_test_cases WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrTestCaseNotFound
+	}
+	return nil
 }
+
+// ListCases queries test cases based on filter criteria
 func (r *sqlTestingRepository) ListCases(ctx context.Context, filter model.TestCaseFilter) ([]model.ValidationTestCase, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.PlanID != "" {
+		conditions = append(conditions, "plan_id = ?")
+		args = append(args, filter.PlanID)
+	}
+	if filter.Category != "" {
+		conditions = append(conditions, "category = ?")
+		args = append(args, filter.Category)
+	}
+	if filter.Severity != "" {
+		conditions = append(conditions, "severity = ?")
+		args = append(args, filter.Severity)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+	if filter.Search != "" {
+		conditions = append(conditions, "(title LIKE ? OR case_code LIKE ? OR description LIKE ?)")
+		s := "%" + filter.Search + "%"
+		args = append(args, s, s, s)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM validation_test_cases %s", whereClause)
+	var total int
+	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, plan_id, case_code, title,
+		       description, preconditions, test_steps, expected_result,
+		       severity, category, status, created_at, updated_at
+		FROM validation_test_cases
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, selectQuery, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var cases []model.ValidationTestCase
+	for rows.Next() {
+		var c model.ValidationTestCase
+		var desc, pre sql.NullString
+		if err := rows.Scan(
+			&c.ID,
+			&c.WorkspaceID,
+			&c.PlanID,
+			&c.CaseCode,
+			&c.Title,
+			&desc,
+			&pre,
+			&c.TestSteps,
+			&c.ExpectedResult,
+			&c.Severity,
+			&c.Category,
+			&c.Status,
+			&c.CreatedAt,
+			&c.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		if desc.Valid {
+			c.Description = desc.String
+		}
+		if pre.Valid {
+			c.Preconditions = pre.String
+		}
+		cases = append(cases, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return cases, total, nil
 }
 
 // Runs stubs
