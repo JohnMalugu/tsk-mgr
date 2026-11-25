@@ -489,7 +489,149 @@ func (h *TestingHandler) GetTestingAnalytics(w http.ResponseWriter, r *http.Requ
 	writeTestingJSON(w, http.StatusOK, analytics)
 }
 
-// ServeHTTP stub
+// ServeHTTP routes HTTP requests for ITIL Service Validation & Testing (/v2/testing)
 func (h *TestingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/testing")
+	path = strings.TrimPrefix(path, "/testing")
+	path = strings.TrimPrefix(path, "/")
+	if path == "" {
+		writeTestingError(w, http.StatusNotFound, "route not found")
+		return
+	}
+
+	parts := strings.Split(path, "/")
+	switch parts[0] {
+	case "analytics":
+		h.GetTestingAnalytics(w, r)
+		return
+
+	case "plans":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListPlans(w, r)
+			case http.MethodPost:
+				h.CreatePlan(w, r)
+			default:
+				writeTestingError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		planID := parts[1]
+		if len(parts) == 2 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetPlanByID(w, r, planID)
+			case http.MethodPut:
+				h.UpdatePlan(w, r, planID)
+			case http.MethodDelete:
+				h.DeletePlan(w, r, planID)
+			default:
+				writeTestingError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+	case "cases":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListCases(w, r)
+			case http.MethodPost:
+				h.CreateCase(w, r)
+			default:
+				writeTestingError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		caseID := parts[1]
+		if len(parts) == 2 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetCaseByID(w, r, caseID)
+			case http.MethodPut:
+				h.UpdateCase(w, r, caseID)
+			case http.MethodDelete:
+				h.DeleteCase(w, r, caseID)
+			default:
+				writeTestingError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+	case "runs":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListRuns(w, r)
+			case http.MethodPost:
+				h.ExecuteRun(w, r)
+			default:
+				writeTestingError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 && r.Method == http.MethodGet {
+			h.GetRunByID(w, r, parts[1])
+			return
+		}
+
+	case "gates":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListQualityGates(w, r)
+			case http.MethodPost:
+				h.CreateQualityGate(w, r)
+			default:
+				writeTestingError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		gateID := parts[1]
+		if len(parts) == 2 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetQualityGateByID(w, r, gateID)
+			case http.MethodDelete:
+				h.DeleteQualityGate(w, r, gateID)
+			default:
+				writeTestingError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 3 {
+			switch parts[2] {
+			case "evaluate":
+				if r.Method == http.MethodPost {
+					h.EvaluateQualityGate(w, r, gateID)
+				} else {
+					writeTestingError(w, http.StatusMethodNotAllowed, "method not allowed")
+				}
+				return
+			case "waive":
+				if r.Method == http.MethodPost {
+					h.WaiveQualityGate(w, r, gateID)
+				} else {
+					writeTestingError(w, http.StatusMethodNotAllowed, "method not allowed")
+				}
+				return
+			}
+		}
+
+	case "defects":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListDefects(w, r)
+			case http.MethodPost:
+				h.LinkDefect(w, r)
+			default:
+				writeTestingError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+	}
+
 	writeTestingError(w, http.StatusNotFound, "route not found")
 }
