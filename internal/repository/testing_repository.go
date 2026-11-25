@@ -1357,7 +1357,7 @@ func (r *sqlTestingRepository) GetTestingAnalytics(ctx context.Context, workspac
 	}
 
 	// 4. Test run breakdown by status
-	runRows, err := r.db.QueryContext(ctx, "SELECT status, COUNT(*) FROM validation_test_runs WHERE workspace_id = ?", workspaceID)
+	runRows, err := r.db.QueryContext(ctx, "SELECT status, COUNT(*) FROM validation_test_runs WHERE workspace_id = ? GROUP BY status", workspaceID)
 	if err == nil {
 		defer runRows.Close()
 		for runRows.Next() {

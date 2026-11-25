@@ -491,6 +491,18 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET|DELETE /v2/events/suppressions/{id}` to fetch or remove event suppression windows
 - `GET|POST /v2/events/actions` to list action execution logs or manually dispatch remediation and escalation actions (`trigger_incident`, `trigger_oncall_page`, `run_remediation`, `send_webhook`)
 - `GET /v2/events/analytics?workspace_id={id}` for executive Monitoring & Event Management posture reporting, total events ingested, total alerts created, status counts, noise reduction compression ratio (%), suppressed event counts, severity/source distributions, and composite Event Health Index (0–100)
+- `GET|POST /v2/testing/plans` to list validation test plans (`workspace_id`, `release_id`, `change_id`, `test_type`, `environment`, `status`, `search`, `limit`, `offset`) or author test plans with target pass rates across environments (`staging`, `preprod`, `production`, `sandbox`)
+- `GET|PUT|DELETE /v2/testing/plans/{id}` to fetch, update, or delete a validation test plan
+- `GET|POST /v2/testing/cases` to list validation test cases (`workspace_id`, `plan_id`, `category`, `severity`, `status`, `search`, `limit`, `offset`) or author test cases across categories (`smoke`, `integration`, `security`, `load`, `failover`, `e2e`)
+- `GET|PUT|DELETE /v2/testing/cases/{id}` to fetch, modify, or remove an individual test case
+- `GET|POST /v2/testing/runs` to list test execution logs or record a test run execution with runtime latency, outcome status (`passed`, `failed`, `blocked`, `skipped`), and automated defect linkage
+- `GET /v2/testing/runs/{id}` to inspect test execution details, error messages, and stack traces
+- `GET|POST /v2/testing/gates` to browse or configure release criteria quality gates with pass rate thresholds and security/performance sign-off requirements
+- `GET|DELETE /v2/testing/gates/{id}` to fetch or delete quality gates
+- `POST /v2/testing/gates/{id}/evaluate` to evaluate release candidate test runs against quality gate thresholds
+- `POST /v2/testing/gates/{id}/waive` to override and waive a quality gate with audit justification
+- `GET|POST /v2/testing/defects` to list defect linkages or manually link failed test runs to Incidents or Problems
+- `GET /v2/testing/analytics?workspace_id={id}` for executive Service Validation & Testing posture reporting, total plans, test cases, execution runs, overall pass rate (%), defect density, quality gate compliance rate (%), type and environment distributions, and composite Quality Health Index (0–100)
 
 ## Current limitations
 
