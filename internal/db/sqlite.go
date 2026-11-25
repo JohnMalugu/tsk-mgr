@@ -3573,6 +3573,30 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	validationTestPlansQuery := `
+	CREATE TABLE IF NOT EXISTS validation_test_plans (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		plan_code TEXT NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT,
+		release_id TEXT,
+		change_id TEXT,
+		ci_id TEXT,
+		test_type TEXT NOT NULL,
+		environment TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'draft',
+		target_pass_rate REAL NOT NULL DEFAULT 95.0,
+		created_by TEXT,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);`
+
+	_, err = db.Exec(validationTestPlansQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
