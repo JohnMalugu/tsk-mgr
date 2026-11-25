@@ -327,20 +327,167 @@ func (h *TestingHandler) GetRunByID(w http.ResponseWriter, r *http.Request, id s
 	writeTestingJSON(w, http.StatusOK, run)
 }
 
-// Quality Gates stubs
-func (h *TestingHandler) ListQualityGates(w http.ResponseWriter, r *http.Request) {}
-func (h *TestingHandler) CreateQualityGate(w http.ResponseWriter, r *http.Request) {}
-func (h *TestingHandler) GetQualityGateByID(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *TestingHandler) EvaluateQualityGate(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *TestingHandler) WaiveQualityGate(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *TestingHandler) DeleteQualityGate(w http.ResponseWriter, r *http.Request, id string) {}
+// ListQualityGates handles GET /v2/testing/gates
+func (h *TestingHandler) ListQualityGates(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
 
-// Defects stubs
-func (h *TestingHandler) ListDefects(w http.ResponseWriter, r *http.Request) {}
-func (h *TestingHandler) LinkDefect(w http.ResponseWriter, r *http.Request) {}
+	filter := model.QualityGateFilter{
+		WorkspaceID: getTestingWorkspaceID(r),
+		ReleaseID:   q.Get("release_id"),
+		ChangeID:    q.Get("change_id"),
+		Status:      q.Get("status"),
+		Limit:       limit,
+		Offset:      offset,
+	}
 
-// Analytics stub
-func (h *TestingHandler) GetTestingAnalytics(w http.ResponseWriter, r *http.Request) {}
+	gates, total, err := h.svc.ListQualityGates(r.Context(), filter)
+	if err != nil {
+		handleTestingError(w, err)
+		return
+	}
+
+	writeTestingJSON(w, http.StatusOK, map[string]interface{}{
+		"quality_gates": gates,
+		"total":         total,
+		"limit":         filter.Limit,
+		"offset":        filter.Offset,
+	})
+}
+
+// CreateQualityGate handles POST /v2/testing/gates
+func (h *TestingHandler) CreateQualityGate(w http.ResponseWriter, r *http.Request) {
+	var req model.CreateQualityGateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeTestingError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	workspaceID := getTestingWorkspaceID(r)
+	gate, err := h.svc.CreateQualityGate(r.Context(), workspaceID, req)
+	if err != nil {
+		handleTestingError(w, err)
+		return
+	}
+
+	writeTestingJSON(w, http.StatusCreated, gate)
+}
+
+// GetQualityGateByID handles GET /v2/testing/gates/{id}
+func (h *TestingHandler) GetQualityGateByID(w http.ResponseWriter, r *http.Request, id string) {
+	gate, err := h.svc.GetQualityGateByID(r.Context(), id)
+	if err != nil {
+		handleTestingError(w, err)
+		return
+	}
+	writeTestingJSON(w, http.StatusOK, gate)
+}
+
+// EvaluateQualityGate handles POST /v2/testing/gates/{id}/evaluate
+func (h *TestingHandler) EvaluateQualityGate(w http.ResponseWriter, r *http.Request, id string) {
+	gate, err := h.svc.EvaluateQualityGate(r.Context(), id)
+	if err != nil {
+		handleTestingError(w, err)
+		return
+	}
+	writeTestingJSON(w, http.StatusOK, gate)
+}
+
+// WaiveQualityGate handles POST /v2/testing/gates/{id}/waive
+func (h *TestingHandler) WaiveQualityGate(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.WaiveQualityGateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeTestingError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.WaivedBy == "" {
+		req.WaivedBy = getTestingUser(r)
+	}
+
+	gate, err := h.svc.WaiveQualityGate(r.Context(), id, req)
+	if err != nil {
+		handleTestingError(w, err)
+		return
+	}
+
+	writeTestingJSON(w, http.StatusOK, gate)
+}
+
+// DeleteQualityGate handles DELETE /v2/testing/gates/{id}
+func (h *TestingHandler) DeleteQualityGate(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteQualityGate(r.Context(), id); err != nil {
+		handleTestingError(w, err)
+		return
+	}
+	writeTestingJSON(w, http.StatusOK, map[string]string{"message": "quality gate deleted"})
+}
+
+// ListDefects handles GET /v2/testing/defects
+func (h *TestingHandler) ListDefects(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.DefectLinkFilter{
+		WorkspaceID: getTestingWorkspaceID(r),
+		RunID:       q.Get("run_id"),
+		IncidentID:  q.Get("incident_id"),
+		ProblemID:   q.Get("problem_id"),
+		Status:      q.Get("status"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	defects, total, err := h.svc.ListDefects(r.Context(), filter)
+	if err != nil {
+		handleTestingError(w, err)
+		return
+	}
+
+	writeTestingJSON(w, http.StatusOK, map[string]interface{}{
+		"defects": defects,
+		"total":   total,
+		"limit":   filter.Limit,
+		"offset":  filter.Offset,
+	})
+}
+
+// LinkDefect handles POST /v2/testing/defects
+func (h *TestingHandler) LinkDefect(w http.ResponseWriter, r *http.Request) {
+	var req model.LinkDefectRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeTestingError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	workspaceID := getTestingWorkspaceID(r)
+	defect, err := h.svc.LinkDefect(r.Context(), workspaceID, req)
+	if err != nil {
+		handleTestingError(w, err)
+		return
+	}
+
+	writeTestingJSON(w, http.StatusCreated, defect)
+}
+
+// GetTestingAnalytics handles GET /v2/testing/analytics
+func (h *TestingHandler) GetTestingAnalytics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeTestingError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	workspaceID := getTestingWorkspaceID(r)
+	analytics, err := h.svc.GetTestingAnalytics(r.Context(), workspaceID)
+	if err != nil {
+		handleTestingError(w, err)
+		return
+	}
+
+	writeTestingJSON(w, http.StatusOK, analytics)
+}
 
 // ServeHTTP stub
 func (h *TestingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
