@@ -219,6 +219,10 @@ func main() {
 	testingSvc := service.NewTestingService(testingRepo)
 	handler.InitTestingHandler(testingSvc)
 
+	serviceDeskRepo := repository.NewServiceDeskRepository(sqliteDB)
+	serviceDeskSvc := service.NewServiceDeskService(serviceDeskRepo)
+	handler.InitServiceDeskHandler(serviceDeskSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
