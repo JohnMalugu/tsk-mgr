@@ -403,7 +403,120 @@ func (h *ServiceDeskHandler) GetServiceDeskAnalytics(w http.ResponseWriter, r *h
 	writeSDJSON(w, http.StatusOK, analytics)
 }
 
-// ServeHTTP stub
+// ServeHTTP routes HTTP requests for ITIL Service Desk Management (/v2/servicedesk)
 func (h *ServiceDeskHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/servicedesk")
+	path = strings.TrimPrefix(path, "/servicedesk")
+	path = strings.TrimPrefix(path, "/")
+	if path == "" {
+		writeSDError(w, http.StatusNotFound, "route not found")
+		return
+	}
+
+	parts := strings.Split(path, "/")
+	switch parts[0] {
+	case "analytics":
+		h.GetServiceDeskAnalytics(w, r)
+		return
+
+	case "queues":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListQueues(w, r)
+			case http.MethodPost:
+				h.CreateQueue(w, r)
+			default:
+				writeSDError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		queueID := parts[1]
+		if len(parts) == 2 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetQueueByID(w, r, queueID)
+			case http.MethodPut:
+				h.UpdateQueue(w, r, queueID)
+			case http.MethodDelete:
+				h.DeleteQueue(w, r, queueID)
+			default:
+				writeSDError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+	case "tickets":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListTickets(w, r)
+			case http.MethodPost:
+				h.CreateTicket(w, r)
+			default:
+				writeSDError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		ticketID := parts[1]
+		if len(parts) == 2 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetTicketByID(w, r, ticketID)
+			case http.MethodPut:
+				h.UpdateTicket(w, r, ticketID)
+			case http.MethodDelete:
+				h.DeleteTicket(w, r, ticketID)
+			default:
+				writeSDError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 3 {
+			switch parts[2] {
+			case "resolve":
+				if r.Method == http.MethodPost {
+					h.ResolveTicket(w, r, ticketID)
+				} else {
+					writeSDError(w, http.StatusMethodNotAllowed, "method not allowed")
+				}
+				return
+			case "close":
+				if r.Method == http.MethodPost {
+					h.CloseTicket(w, r, ticketID)
+				} else {
+					writeSDError(w, http.StatusMethodNotAllowed, "method not allowed")
+				}
+				return
+			}
+		}
+
+	case "interactions":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListInteractions(w, r)
+			case http.MethodPost:
+				h.AddInteraction(w, r)
+			default:
+				writeSDError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+	case "surveys":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListSurveys(w, r)
+			case http.MethodPost:
+				h.SubmitSurvey(w, r)
+			default:
+				writeSDError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+	}
+
 	writeSDError(w, http.StatusNotFound, "route not found")
 }
