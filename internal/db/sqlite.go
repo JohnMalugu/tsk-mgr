@@ -3708,6 +3708,34 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	serviceDeskTicketsQuery := `
+	CREATE TABLE IF NOT EXISTS service_desk_tickets (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		ticket_number TEXT NOT NULL,
+		queue_id TEXT,
+		requester_id TEXT NOT NULL,
+		assignee_id TEXT,
+		channel TEXT NOT NULL DEFAULT 'portal',
+		ticket_type TEXT NOT NULL DEFAULT 'incident_report',
+		priority TEXT NOT NULL DEFAULT 'p3',
+		status TEXT NOT NULL DEFAULT 'new',
+		subject TEXT NOT NULL,
+		description TEXT,
+		first_contact_resolved BOOLEAN NOT NULL DEFAULT 0,
+		first_response_at DATETIME,
+		resolved_at DATETIME,
+		linked_incident_id TEXT,
+		linked_kb_article_id TEXT,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);`
+
+	_, err = db.Exec(serviceDeskTicketsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
