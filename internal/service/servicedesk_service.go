@@ -249,19 +249,125 @@ func (s *serviceDeskService) GetTicketByNumber(ctx context.Context, workspaceID,
 	return s.repo.GetTicketByNumber(ctx, workspaceID, number)
 }
 
-// UpdateTicket stub
+// UpdateTicket updates ticket assignment, queue routing, priority, or status
 func (s *serviceDeskService) UpdateTicket(ctx context.Context, id string, req model.UpdateSDTicketRequest) (*model.ServiceDeskTicket, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrSDTicketNotFound
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	ticket, err := s.repo.GetTicketByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.QueueID != nil {
+		if *req.QueueID != "" {
+			if _, err := s.repo.GetQueueByID(ctx, *req.QueueID); err != nil {
+				return nil, err
+			}
+		}
+		ticket.QueueID = *req.QueueID
+	}
+	if req.AssigneeID != nil {
+		ticket.AssigneeID = *req.AssigneeID
+		if ticket.Status == model.SDTicketStatusNew && *req.AssigneeID != "" {
+			ticket.Status = model.SDTicketStatusTriaged
+		}
+	}
+	if req.Priority != nil {
+		ticket.Priority = *req.Priority
+	}
+	if req.Status != nil {
+		ticket.Status = *req.Status
+	}
+	if req.Subject != nil {
+		ticket.Subject = *req.Subject
+	}
+	if req.Description != nil {
+		ticket.Description = *req.Description
+	}
+	if req.LinkedIncidentID != nil {
+		ticket.LinkedIncidentID = *req.LinkedIncidentID
+	}
+	if req.LinkedKBArticleID != nil {
+		ticket.LinkedKBArticleID = *req.LinkedKBArticleID
+	}
+
+	if err := s.repo.UpdateTicket(ctx, ticket); err != nil {
+		return nil, err
+	}
+	return ticket, nil
 }
 
-// ResolveTicket stub
+// ResolveTicket marks a support ticket as resolved and captures First Contact Resolution (FCR)
 func (s *serviceDeskService) ResolveTicket(ctx context.Context, id string, req model.ResolveSDTicketRequest) (*model.ServiceDeskTicket, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrSDTicketNotFound
+	}
+
+	ticket, err := s.repo.GetTicketByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	ticket.Status = model.SDTicketStatusResolved
+	ticket.FirstContactResolved = req.FirstContactResolved
+	ticket.ResolvedAt = &now
+	if ticket.FirstResponseAt == nil {
+		ticket.FirstResponseAt = &now
+	}
+	if req.LinkedKBArticleID != "" {
+		ticket.LinkedKBArticleID = req.LinkedKBArticleID
+	}
+
+	if err := s.repo.UpdateTicket(ctx, ticket); err != nil {
+		return nil, err
+	}
+
+	if strings.TrimSpace(req.ResolutionNote) != "" {
+		author := ticket.AssigneeID
+		if author == "" {
+			author = "system"
+		}
+		_ = s.repo.CreateInteraction(ctx, &model.TicketInteraction{
+			WorkspaceID: ticket.WorkspaceID,
+			TicketID:    ticket.ID,
+			AuthorID:    author,
+			Channel:     ticket.Channel,
+			Direction:   model.SDDirectionOutbound,
+			Body:        req.ResolutionNote,
+			CreatedAt:   now,
+		})
+	}
+
+	return ticket, nil
 }
 
-// CloseTicket stub
+// CloseTicket transitions a ticket to final closed state
 func (s *serviceDeskService) CloseTicket(ctx context.Context, id string) (*model.ServiceDeskTicket, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrSDTicketNotFound
+	}
+
+	ticket, err := s.repo.GetTicketByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	ticket.Status = model.SDTicketStatusClosed
+	if ticket.ResolvedAt == nil {
+		ticket.ResolvedAt = &now
+	}
+
+	if err := s.repo.UpdateTicket(ctx, ticket); err != nil {
+		return nil, err
+	}
+	return ticket, nil
 }
 
 // DeleteTicket removes a support ticket by ID
@@ -277,12 +383,70 @@ func (s *serviceDeskService) ListTickets(ctx context.Context, filter model.SDTic
 	return s.repo.ListTickets(ctx, filter)
 }
 
-// Interactions stubs
+// AddInteraction appends an omnichannel message or agent note to a ticket and tracks first response SLA
 func (s *serviceDeskService) AddInteraction(ctx context.Context, workspaceID string, req model.AddSDInteractionRequest) (*model.TicketInteraction, error) {
-	return nil, errors.New("not implemented")
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = workspaceID
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	ticket, err := s.repo.GetTicketByID(ctx, req.TicketID)
+	if err != nil {
+		return nil, err
+	}
+
+	author := strings.TrimSpace(req.AuthorID)
+	if author == "" {
+		author = "user_1"
+	}
+	channel := req.Channel
+	if channel == "" {
+		channel = ticket.Channel
+	}
+	direction := req.Direction
+	if direction == "" {
+		direction = model.SDDirectionInbound
+	}
+
+	now := time.Now().UTC()
+	interaction := &model.TicketInteraction{
+		WorkspaceID: req.WorkspaceID,
+		TicketID:    req.TicketID,
+		AuthorID:    author,
+		Channel:     channel,
+		Direction:   direction,
+		Body:        req.Body,
+		CreatedAt:   now,
+	}
+
+	if err := s.repo.CreateInteraction(ctx, interaction); err != nil {
+		return nil, err
+	}
+
+	// Stamp first response timestamp and advance status on first outbound agent reply
+	if direction == model.SDDirectionOutbound {
+		updated := false
+		if ticket.FirstResponseAt == nil {
+			ticket.FirstResponseAt = &now
+			updated = true
+		}
+		if ticket.Status == model.SDTicketStatusNew || ticket.Status == model.SDTicketStatusTriaged {
+			ticket.Status = model.SDTicketStatusInProgress
+			updated = true
+		}
+		if updated {
+			_ = s.repo.UpdateTicket(ctx, ticket)
+		}
+	}
+
+	return interaction, nil
 }
+
+// ListInteractions queries interaction threads based on filter criteria
 func (s *serviceDeskService) ListInteractions(ctx context.Context, filter model.SDInteractionFilter) ([]model.TicketInteraction, int, error) {
-	return nil, 0, errors.New("not implemented")
+	return s.repo.ListInteractions(ctx, filter)
 }
 
 // Surveys stubs
