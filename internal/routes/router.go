@@ -350,6 +350,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 ITIL Service Desk Management
+	if strings.HasPrefix(r.URL.Path, "/v2/servicedesk") {
+		if handler.GlobalServiceDeskHandler == nil {
+			http.Error(w, "ServiceDesk handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalServiceDeskHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return
