@@ -449,15 +449,50 @@ func (s *serviceDeskService) ListInteractions(ctx context.Context, filter model.
 	return s.repo.ListInteractions(ctx, filter)
 }
 
-// Surveys stubs
+// SubmitSurvey records a post-resolution customer satisfaction (CSAT/NPS) survey for a ticket
 func (s *serviceDeskService) SubmitSurvey(ctx context.Context, workspaceID string, req model.SubmitCSATSurveyRequest) (*model.CSATSurvey, error) {
-	return nil, errors.New("not implemented")
-}
-func (s *serviceDeskService) ListSurveys(ctx context.Context, filter model.CSATSurveyFilter) ([]model.CSATSurvey, int, error) {
-	return nil, 0, errors.New("not implemented")
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = workspaceID
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	ticket, err := s.repo.GetTicketByID(ctx, req.TicketID)
+	if err != nil {
+		return nil, err
+	}
+
+	respondent := strings.TrimSpace(req.RespondentID)
+	if respondent == "" {
+		respondent = ticket.RequesterID
+	}
+
+	survey := &model.CSATSurvey{
+		WorkspaceID:  req.WorkspaceID,
+		TicketID:     req.TicketID,
+		RespondentID: respondent,
+		CSATScore:    req.CSATScore,
+		NPSScore:     req.NPSScore,
+		Comment:      req.Comment,
+		SubmittedAt:  time.Now().UTC(),
+	}
+
+	if err := s.repo.CreateSurvey(ctx, survey); err != nil {
+		return nil, err
+	}
+	return survey, nil
 }
 
-// Analytics stub
+// ListSurveys queries customer satisfaction surveys matching filter criteria
+func (s *serviceDeskService) ListSurveys(ctx context.Context, filter model.CSATSurveyFilter) ([]model.CSATSurvey, int, error) {
+	return s.repo.ListSurveys(ctx, filter)
+}
+
+// GetServiceDeskAnalytics computes executive Service Desk FCR, CSAT, NPS, and posture metrics
 func (s *serviceDeskService) GetServiceDeskAnalytics(ctx context.Context, workspaceID string) (*model.ServiceDeskAnalytics, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(workspaceID) == "" {
+		return nil, errors.New("workspace_id is required")
+	}
+	return s.repo.GetServiceDeskAnalytics(ctx, workspaceID)
 }
