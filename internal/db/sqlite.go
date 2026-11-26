@@ -3736,6 +3736,24 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	serviceDeskInteractionsQuery := `
+	CREATE TABLE IF NOT EXISTS service_desk_interactions (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		ticket_id TEXT NOT NULL,
+		author_id TEXT NOT NULL,
+		channel TEXT NOT NULL DEFAULT 'portal',
+		direction TEXT NOT NULL DEFAULT 'inbound',
+		body TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (ticket_id) REFERENCES service_desk_tickets(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(serviceDeskInteractionsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
