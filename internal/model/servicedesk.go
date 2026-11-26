@@ -344,3 +344,63 @@ func (r *SubmitCSATSurveyRequest) Validate() error {
 	}
 	return nil
 }
+
+// Query filters and posture analytics models for Service Desk Management
+
+// SDQueueFilter defines query criteria for browsing support queues
+type SDQueueFilter struct {
+	WorkspaceID string
+	Tier        string
+	IsActive    *bool
+	Limit       int
+	Offset      int
+}
+
+// SDTicketFilter defines query criteria for browsing omnichannel tickets
+type SDTicketFilter struct {
+	WorkspaceID string
+	QueueID     string
+	RequesterID string
+	AssigneeID  string
+	Channel     string
+	TicketType  string
+	Priority    string
+	Status      string
+	Search      string
+	Limit       int
+	Offset      int
+}
+
+// SDInteractionFilter defines query criteria for ticket interaction threads
+type SDInteractionFilter struct {
+	WorkspaceID string
+	TicketID    string
+	Direction   string
+	Limit       int
+	Offset      int
+}
+
+// CSATSurveyFilter defines query criteria for customer satisfaction surveys
+type CSATSurveyFilter struct {
+	WorkspaceID string
+	TicketID    string
+	MinScore    int
+	Limit       int
+	Offset      int
+}
+
+// ServiceDeskAnalytics represents executive Service Desk FCR, CSAT, and omnichannel posture
+type ServiceDeskAnalytics struct {
+	TotalTickets           int            `json:"total_tickets"`
+	OpenTickets            int            `json:"open_tickets"`
+	ResolvedTickets        int            `json:"resolved_tickets"`
+	ClosedTickets          int            `json:"closed_tickets"`
+	FCRRate                float64        `json:"fcr_rate"`
+	AvgCSATScore           float64        `json:"avg_csat_score"`
+	AvgNPSScore            float64        `json:"avg_nps_score"`
+	TotalSurveys           int            `json:"total_surveys"`
+	ActiveQueues           int            `json:"active_queues"`
+	ChannelDistribution    map[string]int `json:"channel_distribution"`
+	PriorityDistribution   map[string]int `json:"priority_distribution"`
+	ServiceDeskHealthIndex float64        `json:"service_desk_health_index"`
+}
