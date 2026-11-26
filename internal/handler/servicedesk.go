@@ -170,14 +170,123 @@ func (h *ServiceDeskHandler) DeleteQueue(w http.ResponseWriter, r *http.Request,
 	writeSDJSON(w, http.StatusOK, map[string]string{"message": "service desk queue deleted"})
 }
 
-// Tickets stubs
-func (h *ServiceDeskHandler) ListTickets(w http.ResponseWriter, r *http.Request) {}
-func (h *ServiceDeskHandler) CreateTicket(w http.ResponseWriter, r *http.Request) {}
-func (h *ServiceDeskHandler) GetTicketByID(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *ServiceDeskHandler) UpdateTicket(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *ServiceDeskHandler) ResolveTicket(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *ServiceDeskHandler) CloseTicket(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *ServiceDeskHandler) DeleteTicket(w http.ResponseWriter, r *http.Request, id string) {}
+// ListTickets handles GET /v2/servicedesk/tickets
+func (h *ServiceDeskHandler) ListTickets(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.SDTicketFilter{
+		WorkspaceID: getSDWorkspaceID(r),
+		QueueID:     q.Get("queue_id"),
+		RequesterID: q.Get("requester_id"),
+		AssigneeID:  q.Get("assignee_id"),
+		Channel:     q.Get("channel"),
+		TicketType:  q.Get("ticket_type"),
+		Priority:    q.Get("priority"),
+		Status:      q.Get("status"),
+		Search:      q.Get("search"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	tickets, total, err := h.svc.ListTickets(r.Context(), filter)
+	if err != nil {
+		handleSDError(w, err)
+		return
+	}
+
+	writeSDJSON(w, http.StatusOK, map[string]interface{}{
+		"tickets": tickets,
+		"total":   total,
+		"limit":   filter.Limit,
+		"offset":  filter.Offset,
+	})
+}
+
+// CreateTicket handles POST /v2/servicedesk/tickets
+func (h *ServiceDeskHandler) CreateTicket(w http.ResponseWriter, r *http.Request) {
+	var req model.CreateSDTicketRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeSDError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.RequesterID == "" {
+		req.RequesterID = getSDUser(r)
+	}
+
+	ticket, err := h.svc.CreateTicket(r.Context(), getSDWorkspaceID(r), req)
+	if err != nil {
+		handleSDError(w, err)
+		return
+	}
+
+	writeSDJSON(w, http.StatusCreated, ticket)
+}
+
+// GetTicketByID handles GET /v2/servicedesk/tickets/{id}
+func (h *ServiceDeskHandler) GetTicketByID(w http.ResponseWriter, r *http.Request, id string) {
+	ticket, err := h.svc.GetTicketByID(r.Context(), id)
+	if err != nil {
+		handleSDError(w, err)
+		return
+	}
+	writeSDJSON(w, http.StatusOK, ticket)
+}
+
+// UpdateTicket handles PUT /v2/servicedesk/tickets/{id}
+func (h *ServiceDeskHandler) UpdateTicket(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateSDTicketRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeSDError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	ticket, err := h.svc.UpdateTicket(r.Context(), id, req)
+	if err != nil {
+		handleSDError(w, err)
+		return
+	}
+
+	writeSDJSON(w, http.StatusOK, ticket)
+}
+
+// ResolveTicket handles POST /v2/servicedesk/tickets/{id}/resolve
+func (h *ServiceDeskHandler) ResolveTicket(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.ResolveSDTicketRequest
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	ticket, err := h.svc.ResolveTicket(r.Context(), id, req)
+	if err != nil {
+		handleSDError(w, err)
+		return
+	}
+
+	writeSDJSON(w, http.StatusOK, ticket)
+}
+
+// CloseTicket handles POST /v2/servicedesk/tickets/{id}/close
+func (h *ServiceDeskHandler) CloseTicket(w http.ResponseWriter, r *http.Request, id string) {
+	ticket, err := h.svc.CloseTicket(r.Context(), id)
+	if err != nil {
+		handleSDError(w, err)
+		return
+	}
+
+	writeSDJSON(w, http.StatusOK, ticket)
+}
+
+// DeleteTicket handles DELETE /v2/servicedesk/tickets/{id}
+func (h *ServiceDeskHandler) DeleteTicket(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteTicket(r.Context(), id); err != nil {
+		handleSDError(w, err)
+		return
+	}
+	writeSDJSON(w, http.StatusOK, map[string]string{"message": "service desk ticket deleted"})
+}
 
 // Interactions & Surveys stubs
 func (h *ServiceDeskHandler) ListInteractions(w http.ResponseWriter, r *http.Request) {}
