@@ -729,7 +729,106 @@ func (r *sqlServiceDeskRepository) ListSurveys(ctx context.Context, filter model
 	return surveys, total, nil
 }
 
-// Analytics stub
+// GetServiceDeskAnalytics computes executive FCR, CSAT, NPS, and omnichannel posture metrics
 func (r *sqlServiceDeskRepository) GetServiceDeskAnalytics(ctx context.Context, workspaceID string) (*model.ServiceDeskAnalytics, error) {
-	return nil, errors.New("not implemented")
+	analytics := &model.ServiceDeskAnalytics{
+		ChannelDistribution:  make(map[string]int),
+		PriorityDistribution: make(map[string]int),
+	}
+
+	// 1. Total tickets
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM service_desk_tickets WHERE workspace_id = ?", workspaceID).Scan(&analytics.TotalTickets)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Ticket breakdown by status
+	statusRows, err := r.db.QueryContext(ctx, "SELECT status, COUNT(*) FROM service_desk_tickets WHERE workspace_id = ? GROUP BY status", workspaceID)
+	if err == nil {
+		defer statusRows.Close()
+		for statusRows.Next() {
+			var st string
+			var count int
+			if err := statusRows.Scan(&st, &count); err == nil {
+				switch st {
+				case model.SDTicketStatusResolved:
+					analytics.ResolvedTickets = count
+				case model.SDTicketStatusClosed:
+					analytics.ClosedTickets = count
+				default:
+					analytics.OpenTickets += count
+				}
+			}
+		}
+	}
+
+	// 3. First Contact Resolution (FCR) rate across resolved/closed tickets
+	var fcrCount int
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM service_desk_tickets WHERE workspace_id = ? AND first_contact_resolved = 1", workspaceID).Scan(&fcrCount)
+	completedTickets := analytics.ResolvedTickets + analytics.ClosedTickets
+	if completedTickets > 0 {
+		analytics.FCRRate = (float64(fcrCount) / float64(completedTickets)) * 100.0
+	}
+
+	// 4. CSAT & NPS survey aggregates
+	var avgCSAT, avgNPS sql.NullFloat64
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*), AVG(csat_score), AVG(nps_score) FROM service_desk_surveys WHERE workspace_id = ?", workspaceID).Scan(&analytics.TotalSurveys, &avgCSAT, &avgNPS)
+	if avgCSAT.Valid {
+		analytics.AvgCSATScore = avgCSAT.Float64
+	}
+	if avgNPS.Valid {
+		analytics.AvgNPSScore = avgNPS.Float64
+	}
+
+	// 5. Active queues count
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM service_desk_queues WHERE workspace_id = ? AND is_active = 1", workspaceID).Scan(&analytics.ActiveQueues)
+
+	// 6. Channel distribution
+	chRows, err := r.db.QueryContext(ctx, "SELECT channel, COUNT(*) FROM service_desk_tickets WHERE workspace_id = ? GROUP BY channel", workspaceID)
+	if err == nil {
+		defer chRows.Close()
+		for chRows.Next() {
+			var ch string
+			var count int
+			if err := chRows.Scan(&ch, &count); err == nil {
+				analytics.ChannelDistribution[ch] = count
+			}
+		}
+	}
+
+	// 7. Priority distribution
+	prioRows, err := r.db.QueryContext(ctx, "SELECT priority, COUNT(*) FROM service_desk_tickets WHERE workspace_id = ? GROUP BY priority", workspaceID)
+	if err == nil {
+		defer prioRows.Close()
+		for prioRows.Next() {
+			var prio string
+			var count int
+			if err := prioRows.Scan(&prio, &count); err == nil {
+				analytics.PriorityDistribution[prio] = count
+			}
+		}
+	}
+
+	// 8. Composite Service Desk Health Index (0 - 100)
+	csatComponent := 80.0
+	if analytics.TotalSurveys > 0 {
+		csatComponent = (analytics.AvgCSATScore / 5.0) * 100.0
+	}
+	fcrComponent := 80.0
+	if completedTickets > 0 {
+		fcrComponent = analytics.FCRRate
+	}
+	health := (csatComponent * 0.5) + (fcrComponent * 0.5)
+	if analytics.OpenTickets > 20 {
+		health -= float64(analytics.OpenTickets-20) * 1.5
+	}
+	if health < 0.0 {
+		health = 0.0
+	}
+	if health > 100.0 {
+		health = 100.0
+	}
+	analytics.ServiceDeskHealthIndex = health
+
+	return analytics, nil
 }
