@@ -143,3 +143,44 @@ type ServiceDeskTicket struct {
 	CreatedAt            time.Time  `json:"created_at"`
 	UpdatedAt            time.Time  `json:"updated_at"`
 }
+
+// Service Desk interaction direction constants
+const (
+	SDDirectionInbound      = "inbound"
+	SDDirectionOutbound     = "outbound"
+	SDDirectionInternalNote = "internal_note"
+)
+
+// IsValidSDDirection validates interaction direction
+func IsValidSDDirection(dir string) bool {
+	switch dir {
+	case SDDirectionInbound, SDDirectionOutbound, SDDirectionInternalNote:
+		return true
+	default:
+		return false
+	}
+}
+
+// TicketInteraction represents an omnichannel message or agent note on a support ticket
+type TicketInteraction struct {
+	ID          string    `json:"id"`
+	WorkspaceID string    `json:"workspace_id"`
+	TicketID    string    `json:"ticket_id"`
+	AuthorID    string    `json:"author_id"`
+	Channel     string    `json:"channel"`
+	Direction   string    `json:"direction"`
+	Body        string    `json:"body"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// CSATSurvey records post-resolution Customer Satisfaction (1-5) and Net Promoter Score (0-10)
+type CSATSurvey struct {
+	ID           string    `json:"id"`
+	WorkspaceID  string    `json:"workspace_id"`
+	TicketID     string    `json:"ticket_id"`
+	RespondentID string    `json:"respondent_id"`
+	CSATScore    int       `json:"csat_score"`
+	NPSScore     int       `json:"nps_score"`
+	Comment      string    `json:"comment,omitempty"`
+	SubmittedAt  time.Time `json:"submitted_at"`
+}
