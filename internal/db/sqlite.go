@@ -3689,6 +3689,25 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	serviceDeskQueuesQuery := `
+	CREATE TABLE IF NOT EXISTS service_desk_queues (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		queue_code TEXT NOT NULL,
+		name TEXT NOT NULL,
+		description TEXT,
+		tier TEXT NOT NULL DEFAULT 'tier_1',
+		default_sla_minutes INTEGER NOT NULL DEFAULT 60,
+		is_active BOOLEAN NOT NULL DEFAULT 1,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);`
+
+	_, err = db.Exec(serviceDeskQueuesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
