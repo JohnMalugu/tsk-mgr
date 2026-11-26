@@ -288,12 +288,120 @@ func (h *ServiceDeskHandler) DeleteTicket(w http.ResponseWriter, r *http.Request
 	writeSDJSON(w, http.StatusOK, map[string]string{"message": "service desk ticket deleted"})
 }
 
-// Interactions & Surveys stubs
-func (h *ServiceDeskHandler) ListInteractions(w http.ResponseWriter, r *http.Request) {}
-func (h *ServiceDeskHandler) AddInteraction(w http.ResponseWriter, r *http.Request) {}
-func (h *ServiceDeskHandler) ListSurveys(w http.ResponseWriter, r *http.Request) {}
-func (h *ServiceDeskHandler) SubmitSurvey(w http.ResponseWriter, r *http.Request) {}
-func (h *ServiceDeskHandler) GetServiceDeskAnalytics(w http.ResponseWriter, r *http.Request) {}
+// ListInteractions handles GET /v2/servicedesk/interactions
+func (h *ServiceDeskHandler) ListInteractions(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.SDInteractionFilter{
+		WorkspaceID: getSDWorkspaceID(r),
+		TicketID:    q.Get("ticket_id"),
+		Direction:   q.Get("direction"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	interactions, total, err := h.svc.ListInteractions(r.Context(), filter)
+	if err != nil {
+		handleSDError(w, err)
+		return
+	}
+
+	writeSDJSON(w, http.StatusOK, map[string]interface{}{
+		"interactions": interactions,
+		"total":        total,
+		"limit":        filter.Limit,
+		"offset":       filter.Offset,
+	})
+}
+
+// AddInteraction handles POST /v2/servicedesk/interactions
+func (h *ServiceDeskHandler) AddInteraction(w http.ResponseWriter, r *http.Request) {
+	var req model.AddSDInteractionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeSDError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.AuthorID == "" {
+		req.AuthorID = getSDUser(r)
+	}
+
+	interaction, err := h.svc.AddInteraction(r.Context(), getSDWorkspaceID(r), req)
+	if err != nil {
+		handleSDError(w, err)
+		return
+	}
+
+	writeSDJSON(w, http.StatusCreated, interaction)
+}
+
+// ListSurveys handles GET /v2/servicedesk/surveys
+func (h *ServiceDeskHandler) ListSurveys(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+	minScore, _ := strconv.Atoi(q.Get("min_score"))
+
+	filter := model.CSATSurveyFilter{
+		WorkspaceID: getSDWorkspaceID(r),
+		TicketID:    q.Get("ticket_id"),
+		MinScore:    minScore,
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	surveys, total, err := h.svc.ListSurveys(r.Context(), filter)
+	if err != nil {
+		handleSDError(w, err)
+		return
+	}
+
+	writeSDJSON(w, http.StatusOK, map[string]interface{}{
+		"surveys": surveys,
+		"total":   total,
+		"limit":   filter.Limit,
+		"offset":  filter.Offset,
+	})
+}
+
+// SubmitSurvey handles POST /v2/servicedesk/surveys
+func (h *ServiceDeskHandler) SubmitSurvey(w http.ResponseWriter, r *http.Request) {
+	var req model.SubmitCSATSurveyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeSDError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.RespondentID == "" {
+		req.RespondentID = getSDUser(r)
+	}
+
+	survey, err := h.svc.SubmitSurvey(r.Context(), getSDWorkspaceID(r), req)
+	if err != nil {
+		handleSDError(w, err)
+		return
+	}
+
+	writeSDJSON(w, http.StatusCreated, survey)
+}
+
+// GetServiceDeskAnalytics handles GET /v2/servicedesk/analytics
+func (h *ServiceDeskHandler) GetServiceDeskAnalytics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeSDError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	analytics, err := h.svc.GetServiceDeskAnalytics(r.Context(), getSDWorkspaceID(r))
+	if err != nil {
+		handleSDError(w, err)
+		return
+	}
+
+	writeSDJSON(w, http.StatusOK, analytics)
+}
 
 // ServeHTTP stub
 func (h *ServiceDeskHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
