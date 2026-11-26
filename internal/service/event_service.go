@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/JohnMalugu/tsk-mgr-api/internal/model"
 	"github.com/JohnMalugu/tsk-mgr-api/internal/repository"
 )
@@ -198,7 +200,7 @@ func (s *eventService) IngestEvent(ctx context.Context, workspaceID string, req 
 		initialStatus = model.AlertStatusSuppressed
 	}
 
-	alertCode := fmt.Sprintf("ALT-%05d", time.Now().UnixNano()%100000)
+	alertCode := fmt.Sprintf("ALT-%s", strings.ToUpper(uuid.New().String()[:8]))
 	title := fmt.Sprintf("[%s] %s alert on %s", strings.ToUpper(record.Severity), record.Source, record.Resource)
 
 	newAlert := &model.CorrelatedAlert{

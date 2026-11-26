@@ -503,6 +503,15 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `POST /v2/testing/gates/{id}/waive` to override and waive a quality gate with audit justification
 - `GET|POST /v2/testing/defects` to list defect linkages or manually link failed test runs to Incidents or Problems
 - `GET /v2/testing/analytics?workspace_id={id}` for executive Service Validation & Testing posture reporting, total plans, test cases, execution runs, overall pass rate (%), defect density, quality gate compliance rate (%), type and environment distributions, and composite Quality Health Index (0–100)
+- `GET|POST /v2/servicedesk/queues` to list support routing queues (`workspace_id`, `tier`, `is_active`, `limit`, `offset`) or configure multi-tier service desk queues (`tier_1`, `tier_2`, `tier_3`, `specialist`) with default SLA targets
+- `GET|PUT|DELETE /v2/servicedesk/queues/{id}` to inspect, update, or remove a support routing queue
+- `GET|POST /v2/servicedesk/tickets` to browse omnichannel support tickets (`workspace_id`, `queue_id`, `requester_id`, `assignee_id`, `channel`, `ticket_type`, `priority`, `status`, `search`, `limit`, `offset`) or capture new tickets across channels (`portal`, `email`, `chat`, `phone`, `slack`, `walk_up`)
+- `GET|PUT|DELETE /v2/servicedesk/tickets/{id}` to inspect, triage/assign, or delete a support ticket
+- `POST /v2/servicedesk/tickets/{id}/resolve` to resolve a support ticket with First Contact Resolution (FCR) tracking, KB article linkage, and optional resolution note
+- `POST /v2/servicedesk/tickets/{id}/close` to close a resolved support ticket
+- `GET|POST /v2/servicedesk/interactions` to browse omnichannel ticket conversation threads or log inbound, outbound, and internal note messages with automated first-response SLA timestamping
+- `GET|POST /v2/servicedesk/surveys` to list or submit post-resolution Customer Satisfaction (CSAT 1–5) and Net Promoter Score (NPS 0–10) surveys
+- `GET /v2/servicedesk/analytics?workspace_id={id}` for executive Service Desk posture reporting, open/resolved/closed ticket counts, First Contact Resolution (FCR) rate (%), average CSAT and NPS scores, channel and priority distributions, and composite Service Desk Health Index (0–100)
 
 ## Current limitations
 
