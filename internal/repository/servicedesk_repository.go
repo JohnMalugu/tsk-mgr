@@ -636,12 +636,97 @@ func (r *sqlServiceDeskRepository) ListInteractions(ctx context.Context, filter 
 	return interactions, total, nil
 }
 
-// Surveys stubs
+// CreateSurvey inserts a post-resolution CSAT/NPS customer survey
 func (r *sqlServiceDeskRepository) CreateSurvey(ctx context.Context, s *model.CSATSurvey) error {
-	return errors.New("not implemented")
+	if s.ID == "" {
+		s.ID = uuid.New().String()
+	}
+	if s.SubmittedAt.IsZero() {
+		s.SubmittedAt = time.Now().UTC()
+	}
+
+	query := `
+		INSERT INTO service_desk_surveys (
+			id, workspace_id, ticket_id, respondent_id, csat_score, nps_score, comment, submitted_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		s.ID, s.WorkspaceID, s.TicketID, s.RespondentID, s.CSATScore, s.NPSScore, s.Comment, s.SubmittedAt,
+	)
+	return err
 }
+
+// ListSurveys queries customer satisfaction surveys based on filter criteria
 func (r *sqlServiceDeskRepository) ListSurveys(ctx context.Context, filter model.CSATSurveyFilter) ([]model.CSATSurvey, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.TicketID != "" {
+		conditions = append(conditions, "ticket_id = ?")
+		args = append(args, filter.TicketID)
+	}
+	if filter.MinScore > 0 {
+		conditions = append(conditions, "csat_score >= ?")
+		args = append(args, filter.MinScore)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var total int
+	err := r.db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM service_desk_surveys %s", whereClause), args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, ticket_id, respondent_id, csat_score, nps_score, comment, submitted_at
+		FROM service_desk_surveys
+		%s
+		ORDER BY submitted_at DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	rows, err := r.db.QueryContext(ctx, selectQuery, append(args, limit, offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var surveys []model.CSATSurvey
+	for rows.Next() {
+		var s model.CSATSurvey
+		var comment sql.NullString
+		if err := rows.Scan(
+			&s.ID, &s.WorkspaceID, &s.TicketID, &s.RespondentID,
+			&s.CSATScore, &s.NPSScore, &comment, &s.SubmittedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		if comment.Valid {
+			s.Comment = comment.String
+		}
+		surveys = append(surveys, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return surveys, total, nil
 }
 
 // Analytics stub
