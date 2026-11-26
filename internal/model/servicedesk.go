@@ -184,3 +184,163 @@ type CSATSurvey struct {
 	Comment      string    `json:"comment,omitempty"`
 	SubmittedAt  time.Time `json:"submitted_at"`
 }
+
+// Request DTOs and validation rules for Service Desk Management API
+
+// CreateSDQueueRequest payload for creating a service desk routing queue
+type CreateSDQueueRequest struct {
+	WorkspaceID       string `json:"workspace_id"`
+	QueueCode         string `json:"queue_code"`
+	Name              string `json:"name"`
+	Description       string `json:"description,omitempty"`
+	Tier              string `json:"tier"`
+	DefaultSLAMinutes int    `json:"default_sla_minutes"`
+}
+
+func (r *CreateSDQueueRequest) Validate() error {
+	if strings.TrimSpace(r.Name) == "" {
+		return errors.New("name is required")
+	}
+	if r.Tier != "" && !IsValidSDTier(r.Tier) {
+		return errors.New("invalid tier")
+	}
+	if r.DefaultSLAMinutes < 0 {
+		return errors.New("default_sla_minutes cannot be negative")
+	}
+	return nil
+}
+
+// UpdateSDQueueRequest payload for updating a service desk routing queue
+type UpdateSDQueueRequest struct {
+	Name              *string `json:"name,omitempty"`
+	Description       *string `json:"description,omitempty"`
+	Tier              *string `json:"tier,omitempty"`
+	DefaultSLAMinutes *int    `json:"default_sla_minutes,omitempty"`
+	IsActive          *bool   `json:"is_active,omitempty"`
+}
+
+func (r *UpdateSDQueueRequest) Validate() error {
+	if r.Name != nil && strings.TrimSpace(*r.Name) == "" {
+		return errors.New("name cannot be empty")
+	}
+	if r.Tier != nil && !IsValidSDTier(*r.Tier) {
+		return errors.New("invalid tier")
+	}
+	if r.DefaultSLAMinutes != nil && *r.DefaultSLAMinutes < 0 {
+		return errors.New("default_sla_minutes cannot be negative")
+	}
+	return nil
+}
+
+// CreateSDTicketRequest payload for capturing a new omnichannel support ticket
+type CreateSDTicketRequest struct {
+	WorkspaceID       string `json:"workspace_id"`
+	TicketNumber      string `json:"ticket_number,omitempty"`
+	QueueID           string `json:"queue_id,omitempty"`
+	RequesterID       string `json:"requester_id"`
+	AssigneeID        string `json:"assignee_id,omitempty"`
+	Channel           string `json:"channel"`
+	TicketType        string `json:"ticket_type"`
+	Priority          string `json:"priority"`
+	Subject           string `json:"subject"`
+	Description       string `json:"description,omitempty"`
+	LinkedIncidentID  string `json:"linked_incident_id,omitempty"`
+	LinkedKBArticleID string `json:"linked_kb_article_id,omitempty"`
+}
+
+func (r *CreateSDTicketRequest) Validate() error {
+	if strings.TrimSpace(r.Subject) == "" {
+		return errors.New("subject is required")
+	}
+	if r.Channel != "" && !IsValidSDChannel(r.Channel) {
+		return errors.New("invalid channel")
+	}
+	if r.TicketType != "" && !IsValidSDTicketType(r.TicketType) {
+		return errors.New("invalid ticket_type")
+	}
+	if r.Priority != "" && !IsValidSDPriority(r.Priority) {
+		return errors.New("invalid priority")
+	}
+	return nil
+}
+
+// UpdateSDTicketRequest payload for triaging, assigning, or updating a ticket
+type UpdateSDTicketRequest struct {
+	QueueID           *string `json:"queue_id,omitempty"`
+	AssigneeID        *string `json:"assignee_id,omitempty"`
+	Priority          *string `json:"priority,omitempty"`
+	Status            *string `json:"status,omitempty"`
+	Subject           *string `json:"subject,omitempty"`
+	Description       *string `json:"description,omitempty"`
+	LinkedIncidentID  *string `json:"linked_incident_id,omitempty"`
+	LinkedKBArticleID *string `json:"linked_kb_article_id,omitempty"`
+}
+
+func (r *UpdateSDTicketRequest) Validate() error {
+	if r.Subject != nil && strings.TrimSpace(*r.Subject) == "" {
+		return errors.New("subject cannot be empty")
+	}
+	if r.Priority != nil && !IsValidSDPriority(*r.Priority) {
+		return errors.New("invalid priority")
+	}
+	if r.Status != nil && !IsValidSDTicketStatus(*r.Status) {
+		return errors.New("invalid status")
+	}
+	return nil
+}
+
+// ResolveSDTicketRequest payload for resolving a support ticket and flagging First Contact Resolution (FCR)
+type ResolveSDTicketRequest struct {
+	FirstContactResolved bool   `json:"first_contact_resolved"`
+	LinkedKBArticleID    string `json:"linked_kb_article_id,omitempty"`
+	ResolutionNote       string `json:"resolution_note,omitempty"`
+}
+
+// AddSDInteractionRequest payload for logging an omnichannel message or agent note on a ticket
+type AddSDInteractionRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+	TicketID    string `json:"ticket_id"`
+	AuthorID    string `json:"author_id"`
+	Channel     string `json:"channel"`
+	Direction   string `json:"direction"`
+	Body        string `json:"body"`
+}
+
+func (r *AddSDInteractionRequest) Validate() error {
+	if strings.TrimSpace(r.TicketID) == "" {
+		return errors.New("ticket_id is required")
+	}
+	if strings.TrimSpace(r.Body) == "" {
+		return errors.New("body is required")
+	}
+	if r.Channel != "" && !IsValidSDChannel(r.Channel) {
+		return errors.New("invalid channel")
+	}
+	if r.Direction != "" && !IsValidSDDirection(r.Direction) {
+		return errors.New("invalid direction")
+	}
+	return nil
+}
+
+// SubmitCSATSurveyRequest payload for submitting post-resolution CSAT/NPS feedback
+type SubmitCSATSurveyRequest struct {
+	WorkspaceID  string `json:"workspace_id"`
+	TicketID     string `json:"ticket_id"`
+	RespondentID string `json:"respondent_id"`
+	CSATScore    int    `json:"csat_score"`
+	NPSScore     int    `json:"nps_score"`
+	Comment      string `json:"comment,omitempty"`
+}
+
+func (r *SubmitCSATSurveyRequest) Validate() error {
+	if strings.TrimSpace(r.TicketID) == "" {
+		return errors.New("ticket_id is required")
+	}
+	if r.CSATScore < 1 || r.CSATScore > 5 {
+		return errors.New("csat_score must be between 1 and 5")
+	}
+	if r.NPSScore < 0 || r.NPSScore > 10 {
+		return errors.New("nps_score must be between 0 and 10")
+	}
+	return nil
+}
