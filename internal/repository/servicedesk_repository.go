@@ -541,12 +541,99 @@ func (r *sqlServiceDeskRepository) ListTickets(ctx context.Context, filter model
 	return tickets, total, nil
 }
 
-// Interactions stubs
+// CreateInteraction inserts a new omnichannel interaction message or note on a ticket
 func (r *sqlServiceDeskRepository) CreateInteraction(ctx context.Context, i *model.TicketInteraction) error {
-	return errors.New("not implemented")
+	if i.ID == "" {
+		i.ID = uuid.New().String()
+	}
+	if i.CreatedAt.IsZero() {
+		i.CreatedAt = time.Now().UTC()
+	}
+	if i.Channel == "" {
+		i.Channel = model.SDChannelPortal
+	}
+	if i.Direction == "" {
+		i.Direction = model.SDDirectionInbound
+	}
+
+	query := `
+		INSERT INTO service_desk_interactions (
+			id, workspace_id, ticket_id, author_id, channel, direction, body, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		i.ID, i.WorkspaceID, i.TicketID, i.AuthorID, i.Channel, i.Direction, i.Body, i.CreatedAt,
+	)
+	return err
 }
+
+// ListInteractions queries interaction messages for a ticket or workspace
 func (r *sqlServiceDeskRepository) ListInteractions(ctx context.Context, filter model.SDInteractionFilter) ([]model.TicketInteraction, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.TicketID != "" {
+		conditions = append(conditions, "ticket_id = ?")
+		args = append(args, filter.TicketID)
+	}
+	if filter.Direction != "" {
+		conditions = append(conditions, "direction = ?")
+		args = append(args, filter.Direction)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var total int
+	err := r.db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM service_desk_interactions %s", whereClause), args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, ticket_id, author_id, channel, direction, body, created_at
+		FROM service_desk_interactions
+		%s
+		ORDER BY created_at ASC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	rows, err := r.db.QueryContext(ctx, selectQuery, append(args, limit, offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var interactions []model.TicketInteraction
+	for rows.Next() {
+		var i model.TicketInteraction
+		if err := rows.Scan(
+			&i.ID, &i.WorkspaceID, &i.TicketID, &i.AuthorID,
+			&i.Channel, &i.Direction, &i.Body, &i.CreatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		interactions = append(interactions, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return interactions, total, nil
 }
 
 // Surveys stubs
