@@ -274,24 +274,271 @@ func (r *sqlServiceDeskRepository) ListQueues(ctx context.Context, filter model.
 	return queues, total, nil
 }
 
-// Tickets stubs
+// CreateTicket inserts a new omnichannel service desk ticket
 func (r *sqlServiceDeskRepository) CreateTicket(ctx context.Context, t *model.ServiceDeskTicket) error {
-	return errors.New("not implemented")
+	if t.ID == "" {
+		t.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if t.CreatedAt.IsZero() {
+		t.CreatedAt = now
+	}
+	t.UpdatedAt = now
+	if t.Channel == "" {
+		t.Channel = model.SDChannelPortal
+	}
+	if t.TicketType == "" {
+		t.TicketType = model.SDTicketTypeIncidentReport
+	}
+	if t.Priority == "" {
+		t.Priority = model.SDPriorityP3
+	}
+	if t.Status == "" {
+		t.Status = model.SDTicketStatusNew
+	}
+
+	var count int
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM service_desk_tickets WHERE workspace_id = ? AND ticket_number = ?", t.WorkspaceID, t.TicketNumber).Scan(&count)
+	if err == nil && count > 0 {
+		return ErrSDTicketNumberConflict
+	}
+
+	query := `
+		INSERT INTO service_desk_tickets (
+			id, workspace_id, ticket_number, queue_id, requester_id,
+			assignee_id, channel, ticket_type, priority, status,
+			subject, description, first_contact_resolved, first_response_at,
+			resolved_at, linked_incident_id, linked_kb_article_id, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err = r.db.ExecContext(ctx, query,
+		t.ID, t.WorkspaceID, t.TicketNumber, t.QueueID, t.RequesterID,
+		t.AssigneeID, t.Channel, t.TicketType, t.Priority, t.Status,
+		t.Subject, t.Description, t.FirstContactResolved, t.FirstResponseAt,
+		t.ResolvedAt, t.LinkedIncidentID, t.LinkedKBArticleID, t.CreatedAt, t.UpdatedAt,
+	)
+	return err
 }
+
+func scanServiceDeskTicket(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*model.ServiceDeskTicket, error) {
+	var t model.ServiceDeskTicket
+	var queueID, assigneeID, desc, linkedInc, linkedKB sql.NullString
+	var firstRespAt, resolvedAt sql.NullTime
+
+	err := scanner.Scan(
+		&t.ID, &t.WorkspaceID, &t.TicketNumber, &queueID, &t.RequesterID,
+		&assigneeID, &t.Channel, &t.TicketType, &t.Priority, &t.Status,
+		&t.Subject, &desc, &t.FirstContactResolved, &firstRespAt,
+		&resolvedAt, &linkedInc, &linkedKB, &t.CreatedAt, &t.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if queueID.Valid {
+		t.QueueID = queueID.String
+	}
+	if assigneeID.Valid {
+		t.AssigneeID = assigneeID.String
+	}
+	if desc.Valid {
+		t.Description = desc.String
+	}
+	if firstRespAt.Valid {
+		t.FirstResponseAt = &firstRespAt.Time
+	}
+	if resolvedAt.Valid {
+		t.ResolvedAt = &resolvedAt.Time
+	}
+	if linkedInc.Valid {
+		t.LinkedIncidentID = linkedInc.String
+	}
+	if linkedKB.Valid {
+		t.LinkedKBArticleID = linkedKB.String
+	}
+	return &t, nil
+}
+
+// GetTicketByID retrieves a service desk ticket by ID
 func (r *sqlServiceDeskRepository) GetTicketByID(ctx context.Context, id string) (*model.ServiceDeskTicket, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, ticket_number, queue_id, requester_id,
+		       assignee_id, channel, ticket_type, priority, status,
+		       subject, description, first_contact_resolved, first_response_at,
+		       resolved_at, linked_incident_id, linked_kb_article_id, created_at, updated_at
+		FROM service_desk_tickets
+		WHERE id = ?`
+
+	t, err := scanServiceDeskTicket(r.db.QueryRowContext(ctx, query, id))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrSDTicketNotFound
+		}
+		return nil, err
+	}
+	return t, nil
 }
+
+// GetTicketByNumber retrieves a service desk ticket by ticket_number within a workspace
 func (r *sqlServiceDeskRepository) GetTicketByNumber(ctx context.Context, workspaceID, number string) (*model.ServiceDeskTicket, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, ticket_number, queue_id, requester_id,
+		       assignee_id, channel, ticket_type, priority, status,
+		       subject, description, first_contact_resolved, first_response_at,
+		       resolved_at, linked_incident_id, linked_kb_article_id, created_at, updated_at
+		FROM service_desk_tickets
+		WHERE workspace_id = ? AND ticket_number = ?`
+
+	t, err := scanServiceDeskTicket(r.db.QueryRowContext(ctx, query, workspaceID, number))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrSDTicketNotFound
+		}
+		return nil, err
+	}
+	return t, nil
 }
+
+// UpdateTicket updates an existing service desk ticket
 func (r *sqlServiceDeskRepository) UpdateTicket(ctx context.Context, t *model.ServiceDeskTicket) error {
-	return errors.New("not implemented")
+	t.UpdatedAt = time.Now().UTC()
+
+	query := `
+		UPDATE service_desk_tickets
+		SET queue_id = ?, assignee_id = ?, priority = ?, status = ?,
+		    subject = ?, description = ?, first_contact_resolved = ?,
+		    first_response_at = ?, resolved_at = ?, linked_incident_id = ?,
+		    linked_kb_article_id = ?, updated_at = ?
+		WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		t.QueueID, t.AssigneeID, t.Priority, t.Status,
+		t.Subject, t.Description, t.FirstContactResolved,
+		t.FirstResponseAt, t.ResolvedAt, t.LinkedIncidentID,
+		t.LinkedKBArticleID, t.UpdatedAt, t.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrSDTicketNotFound
+	}
+	return nil
 }
+
+// DeleteTicket removes a service desk ticket
 func (r *sqlServiceDeskRepository) DeleteTicket(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	res, err := r.db.ExecContext(ctx, "DELETE FROM service_desk_tickets WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrSDTicketNotFound
+	}
+	return nil
 }
+
+// ListTickets queries service desk tickets based on filter criteria
 func (r *sqlServiceDeskRepository) ListTickets(ctx context.Context, filter model.SDTicketFilter) ([]model.ServiceDeskTicket, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.QueueID != "" {
+		conditions = append(conditions, "queue_id = ?")
+		args = append(args, filter.QueueID)
+	}
+	if filter.RequesterID != "" {
+		conditions = append(conditions, "requester_id = ?")
+		args = append(args, filter.RequesterID)
+	}
+	if filter.AssigneeID != "" {
+		conditions = append(conditions, "assignee_id = ?")
+		args = append(args, filter.AssigneeID)
+	}
+	if filter.Channel != "" {
+		conditions = append(conditions, "channel = ?")
+		args = append(args, filter.Channel)
+	}
+	if filter.TicketType != "" {
+		conditions = append(conditions, "ticket_type = ?")
+		args = append(args, filter.TicketType)
+	}
+	if filter.Priority != "" {
+		conditions = append(conditions, "priority = ?")
+		args = append(args, filter.Priority)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+	if filter.Search != "" {
+		conditions = append(conditions, "(subject LIKE ? OR ticket_number LIKE ? OR description LIKE ?)")
+		s := "%" + filter.Search + "%"
+		args = append(args, s, s, s)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var total int
+	err := r.db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM service_desk_tickets %s", whereClause), args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, ticket_number, queue_id, requester_id,
+		       assignee_id, channel, ticket_type, priority, status,
+		       subject, description, first_contact_resolved, first_response_at,
+		       resolved_at, linked_incident_id, linked_kb_article_id, created_at, updated_at
+		FROM service_desk_tickets
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	rows, err := r.db.QueryContext(ctx, selectQuery, append(args, limit, offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var tickets []model.ServiceDeskTicket
+	for rows.Next() {
+		t, err := scanServiceDeskTicket(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		tickets = append(tickets, *t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return tickets, total, nil
 }
 
 // Interactions stubs
