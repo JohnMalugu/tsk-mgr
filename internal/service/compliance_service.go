@@ -611,7 +611,10 @@ func (s *complianceService) ListFindings(ctx context.Context, filter model.GRCFi
 	return s.repo.ListFindings(ctx, filter)
 }
 
-// Analytics stub
+// GetComplianceAnalytics computes executive compliance coverage and GRC posture KPIs
 func (s *complianceService) GetComplianceAnalytics(ctx context.Context, workspaceID string) (*model.ComplianceAnalytics, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(workspaceID) == "" {
+		return nil, errors.New("workspace_id is required")
+	}
+	return s.repo.GetComplianceAnalytics(ctx, workspaceID)
 }
