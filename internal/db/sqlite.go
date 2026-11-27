@@ -3839,6 +3839,30 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	complianceAssessmentsQuery := `
+	CREATE TABLE IF NOT EXISTS compliance_assessments (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		framework_id TEXT NOT NULL,
+		assessment_code TEXT NOT NULL,
+		title TEXT NOT NULL,
+		auditor_name TEXT NOT NULL,
+		audit_type TEXT NOT NULL DEFAULT 'internal',
+		status TEXT NOT NULL DEFAULT 'planned',
+		start_date DATETIME NOT NULL,
+		end_date DATETIME,
+		overall_score REAL NOT NULL DEFAULT 0.0,
+		summary TEXT,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (framework_id) REFERENCES compliance_frameworks(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(complianceAssessmentsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
