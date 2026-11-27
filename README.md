@@ -512,6 +512,19 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET|POST /v2/servicedesk/interactions` to browse omnichannel ticket conversation threads or log inbound, outbound, and internal note messages with automated first-response SLA timestamping
 - `GET|POST /v2/servicedesk/surveys` to list or submit post-resolution Customer Satisfaction (CSAT 1–5) and Net Promoter Score (NPS 0–10) surveys
 - `GET /v2/servicedesk/analytics?workspace_id={id}` for executive Service Desk posture reporting, open/resolved/closed ticket counts, First Contact Resolution (FCR) rate (%), average CSAT and NPS scores, channel and priority distributions, and composite Service Desk Health Index (0–100)
+- `GET|POST /v2/compliance/frameworks` to list regulatory compliance frameworks (`workspace_id`, `standard_type`, `status`, `search`, `limit`, `offset`) or register standards (`soc2`, `iso27001`, `hipaa`, `pci_dss`, `gdpr`, `nist_csf`, `custom`)
+- `GET|PUT|DELETE /v2/compliance/frameworks/{id}` to inspect, update, or remove a compliance framework
+- `GET|POST /v2/compliance/controls` to browse or author security and operational controls across domains (`access_control`, `encryption`, `change_management`, `incident_response`, `business_continuity`, `vendor_risk`, `logging_monitoring`) with implementation status and automation level tracking
+- `GET|PUT|DELETE /v2/compliance/controls/{id}` to inspect, update, or remove a compliance control
+- `GET|POST /v2/compliance/evidence` to list or submit verifiable audit evidence artifacts (`screenshot`, `log_export`, `policy_doc`, `config_snapshot`, `pen_test_report`, `attestation`)
+- `GET|DELETE /v2/compliance/evidence/{id}` to fetch or delete an audit evidence artifact
+- `POST /v2/compliance/evidence/{id}/review` to approve or reject audit evidence with automated control `last_tested_at` timestamp updates
+- `GET|POST /v2/compliance/assessments` to list or schedule formal compliance audit assessments (`internal`, `external`, `certification`, `readiness`)
+- `GET|DELETE /v2/compliance/assessments/{id}` to inspect or remove a compliance assessment
+- `POST /v2/compliance/assessments/{id}/complete` to close an assessment with its overall compliance score and summary
+- `GET|POST /v2/compliance/findings` to list or log audit non-conformity findings with severity (`critical`, `high`, `medium`, `low`) and remediation plans
+- `GET|PUT|DELETE /v2/compliance/findings/{id}` to inspect, advance remediation status (`open`, `in_remediation`, `remediated`, `accepted_risk`), or remove a finding
+- `GET /v2/compliance/analytics?workspace_id={id}` for executive GRC & Compliance posture reporting, control coverage rate (%), approved evidence counts, open/critical findings, domain and severity distributions, and composite Compliance Health Index (0–100)
 
 ## Current limitations
 
