@@ -305,3 +305,236 @@ type ComplianceFinding struct {
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
+
+// Request DTOs and validation rules for Compliance & GRC Management API
+
+// CreateGRCFrameworkRequest payload for registering a regulatory compliance framework
+type CreateGRCFrameworkRequest struct {
+	WorkspaceID   string `json:"workspace_id"`
+	FrameworkCode string `json:"framework_code"`
+	Name          string `json:"name"`
+	StandardType  string `json:"standard_type"`
+	Version       string `json:"version"`
+	Description   string `json:"description,omitempty"`
+	OwnerID       string `json:"owner_id,omitempty"`
+}
+
+func (r *CreateGRCFrameworkRequest) Validate() error {
+	if strings.TrimSpace(r.Name) == "" {
+		return errors.New("name is required")
+	}
+	if r.StandardType != "" && !IsValidGRCStandard(r.StandardType) {
+		return errors.New("invalid standard_type")
+	}
+	return nil
+}
+
+// UpdateGRCFrameworkRequest payload for modifying a compliance framework
+type UpdateGRCFrameworkRequest struct {
+	Name        *string `json:"name,omitempty"`
+	Version     *string `json:"version,omitempty"`
+	Description *string `json:"description,omitempty"`
+	OwnerID     *string `json:"owner_id,omitempty"`
+	Status      *string `json:"status,omitempty"`
+}
+
+func (r *UpdateGRCFrameworkRequest) Validate() error {
+	if r.Name != nil && strings.TrimSpace(*r.Name) == "" {
+		return errors.New("name cannot be empty")
+	}
+	if r.Status != nil && !IsValidGRCFrameworkStatus(*r.Status) {
+		return errors.New("invalid status")
+	}
+	return nil
+}
+
+// CreateGRCControlRequest payload for adding a compliance control under a framework
+type CreateGRCControlRequest struct {
+	WorkspaceID          string `json:"workspace_id"`
+	FrameworkID          string `json:"framework_id"`
+	ControlCode          string `json:"control_code"`
+	Title                string `json:"title"`
+	Description          string `json:"description,omitempty"`
+	Domain               string `json:"domain"`
+	ImplementationStatus string `json:"implementation_status"`
+	AutomationLevel      string `json:"automation_level"`
+	OwnerID              string `json:"owner_id,omitempty"`
+	CIID                 string `json:"ci_id,omitempty"`
+}
+
+func (r *CreateGRCControlRequest) Validate() error {
+	if strings.TrimSpace(r.FrameworkID) == "" {
+		return errors.New("framework_id is required")
+	}
+	if strings.TrimSpace(r.Title) == "" {
+		return errors.New("title is required")
+	}
+	if r.Domain != "" && !IsValidGRCDomain(r.Domain) {
+		return errors.New("invalid domain")
+	}
+	if r.ImplementationStatus != "" && !IsValidGRCControlStatus(r.ImplementationStatus) {
+		return errors.New("invalid implementation_status")
+	}
+	if r.AutomationLevel != "" && !IsValidGRCAutomationLevel(r.AutomationLevel) {
+		return errors.New("invalid automation_level")
+	}
+	return nil
+}
+
+// UpdateGRCControlRequest payload for updating a compliance control
+type UpdateGRCControlRequest struct {
+	Title                *string `json:"title,omitempty"`
+	Description          *string `json:"description,omitempty"`
+	Domain               *string `json:"domain,omitempty"`
+	ImplementationStatus *string `json:"implementation_status,omitempty"`
+	AutomationLevel      *string `json:"automation_level,omitempty"`
+	OwnerID              *string `json:"owner_id,omitempty"`
+	CIID                 *string `json:"ci_id,omitempty"`
+}
+
+func (r *UpdateGRCControlRequest) Validate() error {
+	if r.Title != nil && strings.TrimSpace(*r.Title) == "" {
+		return errors.New("title cannot be empty")
+	}
+	if r.Domain != nil && !IsValidGRCDomain(*r.Domain) {
+		return errors.New("invalid domain")
+	}
+	if r.ImplementationStatus != nil && !IsValidGRCControlStatus(*r.ImplementationStatus) {
+		return errors.New("invalid implementation_status")
+	}
+	if r.AutomationLevel != nil && !IsValidGRCAutomationLevel(*r.AutomationLevel) {
+		return errors.New("invalid automation_level")
+	}
+	return nil
+}
+
+// SubmitGRCEvidenceRequest payload for attaching audit evidence to a control
+type SubmitGRCEvidenceRequest struct {
+	WorkspaceID  string     `json:"workspace_id"`
+	ControlID    string     `json:"control_id"`
+	Title        string     `json:"title"`
+	EvidenceType string     `json:"evidence_type"`
+	ArtifactURL  string     `json:"artifact_url"`
+	CollectedBy  string     `json:"collected_by"`
+	ValidFrom    *time.Time `json:"valid_from,omitempty"`
+	ValidUntil   *time.Time `json:"valid_until,omitempty"`
+}
+
+func (r *SubmitGRCEvidenceRequest) Validate() error {
+	if strings.TrimSpace(r.ControlID) == "" {
+		return errors.New("control_id is required")
+	}
+	if strings.TrimSpace(r.Title) == "" {
+		return errors.New("title is required")
+	}
+	if strings.TrimSpace(r.ArtifactURL) == "" {
+		return errors.New("artifact_url is required")
+	}
+	if r.EvidenceType != "" && !IsValidGRCEvidenceType(r.EvidenceType) {
+		return errors.New("invalid evidence_type")
+	}
+	return nil
+}
+
+// ReviewGRCEvidenceRequest payload for approving or rejecting audit evidence
+type ReviewGRCEvidenceRequest struct {
+	ReviewStatus string `json:"review_status"`
+	ReviewedBy   string `json:"reviewed_by"`
+}
+
+func (r *ReviewGRCEvidenceRequest) Validate() error {
+	if !IsValidGRCEvidenceStatus(r.ReviewStatus) {
+		return errors.New("invalid review_status")
+	}
+	if strings.TrimSpace(r.ReviewedBy) == "" {
+		return errors.New("reviewed_by is required")
+	}
+	return nil
+}
+
+// CreateGRCAssessmentRequest payload for scheduling a compliance audit assessment
+type CreateGRCAssessmentRequest struct {
+	WorkspaceID    string     `json:"workspace_id"`
+	FrameworkID    string     `json:"framework_id"`
+	AssessmentCode string     `json:"assessment_code,omitempty"`
+	Title          string     `json:"title"`
+	AuditorName    string     `json:"auditor_name"`
+	AuditType      string     `json:"audit_type"`
+	StartDate      *time.Time `json:"start_date,omitempty"`
+	Summary        string     `json:"summary,omitempty"`
+}
+
+func (r *CreateGRCAssessmentRequest) Validate() error {
+	if strings.TrimSpace(r.FrameworkID) == "" {
+		return errors.New("framework_id is required")
+	}
+	if strings.TrimSpace(r.Title) == "" {
+		return errors.New("title is required")
+	}
+	if r.AuditType != "" && !IsValidGRCAuditType(r.AuditType) {
+		return errors.New("invalid audit_type")
+	}
+	return nil
+}
+
+// CompleteGRCAssessmentRequest payload for closing an assessment with a final score
+type CompleteGRCAssessmentRequest struct {
+	OverallScore float64 `json:"overall_score"`
+	Summary      string  `json:"summary,omitempty"`
+}
+
+func (r *CompleteGRCAssessmentRequest) Validate() error {
+	if r.OverallScore < 0 || r.OverallScore > 100 {
+		return errors.New("overall_score must be between 0 and 100")
+	}
+	return nil
+}
+
+// CreateGRCFindingRequest payload for logging an audit non-conformity finding
+type CreateGRCFindingRequest struct {
+	WorkspaceID     string     `json:"workspace_id"`
+	AssessmentID    string     `json:"assessment_id"`
+	ControlID       string     `json:"control_id"`
+	FindingCode     string     `json:"finding_code,omitempty"`
+	Title           string     `json:"title"`
+	Description     string     `json:"description,omitempty"`
+	Severity        string     `json:"severity"`
+	RemediationPlan string     `json:"remediation_plan,omitempty"`
+	OwnerID         string     `json:"owner_id,omitempty"`
+	DueDate         *time.Time `json:"due_date,omitempty"`
+}
+
+func (r *CreateGRCFindingRequest) Validate() error {
+	if strings.TrimSpace(r.AssessmentID) == "" {
+		return errors.New("assessment_id is required")
+	}
+	if strings.TrimSpace(r.ControlID) == "" {
+		return errors.New("control_id is required")
+	}
+	if strings.TrimSpace(r.Title) == "" {
+		return errors.New("title is required")
+	}
+	if r.Severity != "" && !IsValidGRCFindingSeverity(r.Severity) {
+		return errors.New("invalid severity")
+	}
+	return nil
+}
+
+// UpdateGRCFindingRequest payload for advancing remediation on an audit finding
+type UpdateGRCFindingRequest struct {
+	Status          *string    `json:"status,omitempty"`
+	Severity        *string    `json:"severity,omitempty"`
+	RemediationPlan *string    `json:"remediation_plan,omitempty"`
+	OwnerID         *string    `json:"owner_id,omitempty"`
+	DueDate         *time.Time `json:"due_date,omitempty"`
+}
+
+func (r *UpdateGRCFindingRequest) Validate() error {
+	if r.Status != nil && !IsValidGRCFindingStatus(*r.Status) {
+		return errors.New("invalid status")
+	}
+	if r.Severity != nil && !IsValidGRCFindingSeverity(*r.Severity) {
+		return errors.New("invalid severity")
+	}
+	return nil
+}
