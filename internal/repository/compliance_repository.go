@@ -712,38 +712,398 @@ func (r *sqlComplianceRepository) ListEvidence(ctx context.Context, filter model
 	return evidence, total, nil
 }
 
-// Assessments stubs
+// CreateAssessment inserts a new compliance audit assessment
 func (r *sqlComplianceRepository) CreateAssessment(ctx context.Context, a *model.ComplianceAssessment) error {
-	return errors.New("not implemented")
-}
-func (r *sqlComplianceRepository) GetAssessmentByID(ctx context.Context, id string) (*model.ComplianceAssessment, error) {
-	return nil, errors.New("not implemented")
-}
-func (r *sqlComplianceRepository) UpdateAssessment(ctx context.Context, a *model.ComplianceAssessment) error {
-	return errors.New("not implemented")
-}
-func (r *sqlComplianceRepository) DeleteAssessment(ctx context.Context, id string) error {
-	return errors.New("not implemented")
-}
-func (r *sqlComplianceRepository) ListAssessments(ctx context.Context, filter model.GRCAssessmentFilter) ([]model.ComplianceAssessment, int, error) {
-	return nil, 0, errors.New("not implemented")
+	if a.ID == "" {
+		a.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if a.StartDate.IsZero() {
+		a.StartDate = now
+	}
+	if a.CreatedAt.IsZero() {
+		a.CreatedAt = now
+	}
+	a.UpdatedAt = now
+	if a.AuditType == "" {
+		a.AuditType = model.GRCAuditTypeInternal
+	}
+	if a.Status == "" {
+		a.Status = model.GRCAssessmentPlanned
+	}
+
+	query := `
+		INSERT INTO compliance_assessments (
+			id, workspace_id, framework_id, assessment_code, title,
+			auditor_name, audit_type, status, start_date, end_date,
+			overall_score, summary, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		a.ID, a.WorkspaceID, a.FrameworkID, a.AssessmentCode, a.Title,
+		a.AuditorName, a.AuditType, a.Status, a.StartDate, a.EndDate,
+		a.OverallScore, a.Summary, a.CreatedAt, a.UpdatedAt,
+	)
+	return err
 }
 
-// Findings stubs
+func scanGRCAssessment(scanner interface{ Scan(dest ...interface{}) error }) (*model.ComplianceAssessment, error) {
+	var a model.ComplianceAssessment
+	var endDate sql.NullTime
+	var summary sql.NullString
+	err := scanner.Scan(
+		&a.ID, &a.WorkspaceID, &a.FrameworkID, &a.AssessmentCode, &a.Title,
+		&a.AuditorName, &a.AuditType, &a.Status, &a.StartDate, &endDate,
+		&a.OverallScore, &summary, &a.CreatedAt, &a.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if endDate.Valid {
+		a.EndDate = &endDate.Time
+	}
+	if summary.Valid {
+		a.Summary = summary.String
+	}
+	return &a, nil
+}
+
+// GetAssessmentByID retrieves a compliance assessment by ID
+func (r *sqlComplianceRepository) GetAssessmentByID(ctx context.Context, id string) (*model.ComplianceAssessment, error) {
+	query := `
+		SELECT id, workspace_id, framework_id, assessment_code, title,
+		       auditor_name, audit_type, status, start_date, end_date,
+		       overall_score, summary, created_at, updated_at
+		FROM compliance_assessments
+		WHERE id = ?`
+
+	a, err := scanGRCAssessment(r.db.QueryRowContext(ctx, query, id))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrGRCAssessmentNotFound
+		}
+		return nil, err
+	}
+	return a, nil
+}
+
+// UpdateAssessment updates an existing compliance assessment
+func (r *sqlComplianceRepository) UpdateAssessment(ctx context.Context, a *model.ComplianceAssessment) error {
+	a.UpdatedAt = time.Now().UTC()
+
+	query := `
+		UPDATE compliance_assessments
+		SET title = ?, auditor_name = ?, audit_type = ?, status = ?,
+		    end_date = ?, overall_score = ?, summary = ?, updated_at = ?
+		WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		a.Title, a.AuditorName, a.AuditType, a.Status,
+		a.EndDate, a.OverallScore, a.Summary, a.UpdatedAt, a.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrGRCAssessmentNotFound
+	}
+	return nil
+}
+
+// DeleteAssessment removes a compliance assessment
+func (r *sqlComplianceRepository) DeleteAssessment(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, "DELETE FROM compliance_assessments WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrGRCAssessmentNotFound
+	}
+	return nil
+}
+
+// ListAssessments queries compliance assessments based on filter criteria
+func (r *sqlComplianceRepository) ListAssessments(ctx context.Context, filter model.GRCAssessmentFilter) ([]model.ComplianceAssessment, int, error) {
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.FrameworkID != "" {
+		conditions = append(conditions, "framework_id = ?")
+		args = append(args, filter.FrameworkID)
+	}
+	if filter.AuditType != "" {
+		conditions = append(conditions, "audit_type = ?")
+		args = append(args, filter.AuditType)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var total int
+	err := r.db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM compliance_assessments %s", whereClause), args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, framework_id, assessment_code, title,
+		       auditor_name, audit_type, status, start_date, end_date,
+		       overall_score, summary, created_at, updated_at
+		FROM compliance_assessments
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	rows, err := r.db.QueryContext(ctx, selectQuery, append(args, limit, offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var assessments []model.ComplianceAssessment
+	for rows.Next() {
+		a, err := scanGRCAssessment(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		assessments = append(assessments, *a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return assessments, total, nil
+}
+
+// CreateFinding inserts a new audit non-conformity finding
 func (r *sqlComplianceRepository) CreateFinding(ctx context.Context, f *model.ComplianceFinding) error {
-	return errors.New("not implemented")
+	if f.ID == "" {
+		f.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if f.CreatedAt.IsZero() {
+		f.CreatedAt = now
+	}
+	f.UpdatedAt = now
+	if f.Severity == "" {
+		f.Severity = model.GRCFindingSeverityMedium
+	}
+	if f.Status == "" {
+		f.Status = model.GRCFindingStatusOpen
+	}
+
+	query := `
+		INSERT INTO compliance_findings (
+			id, workspace_id, assessment_id, control_id, finding_code,
+			title, description, severity, status, remediation_plan,
+			owner_id, due_date, remediated_at, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		f.ID, f.WorkspaceID, f.AssessmentID, f.ControlID, f.FindingCode,
+		f.Title, f.Description, f.Severity, f.Status, f.RemediationPlan,
+		f.OwnerID, f.DueDate, f.RemediatedAt, f.CreatedAt, f.UpdatedAt,
+	)
+	return err
 }
+
+func scanGRCFinding(scanner interface{ Scan(dest ...interface{}) error }) (*model.ComplianceFinding, error) {
+	var f model.ComplianceFinding
+	var desc, remPlan, ownerID sql.NullString
+	var dueDate, remAt sql.NullTime
+	err := scanner.Scan(
+		&f.ID, &f.WorkspaceID, &f.AssessmentID, &f.ControlID, &f.FindingCode,
+		&f.Title, &desc, &f.Severity, &f.Status, &remPlan,
+		&ownerID, &dueDate, &remAt, &f.CreatedAt, &f.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if desc.Valid {
+		f.Description = desc.String
+	}
+	if remPlan.Valid {
+		f.RemediationPlan = remPlan.String
+	}
+	if ownerID.Valid {
+		f.OwnerID = ownerID.String
+	}
+	if dueDate.Valid {
+		f.DueDate = &dueDate.Time
+	}
+	if remAt.Valid {
+		f.RemediatedAt = &remAt.Time
+	}
+	return &f, nil
+}
+
+// GetFindingByID retrieves a compliance finding by ID
 func (r *sqlComplianceRepository) GetFindingByID(ctx context.Context, id string) (*model.ComplianceFinding, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, assessment_id, control_id, finding_code,
+		       title, description, severity, status, remediation_plan,
+		       owner_id, due_date, remediated_at, created_at, updated_at
+		FROM compliance_findings
+		WHERE id = ?`
+
+	f, err := scanGRCFinding(r.db.QueryRowContext(ctx, query, id))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrGRCFindingNotFound
+		}
+		return nil, err
+	}
+	return f, nil
 }
+
+// UpdateFinding updates a compliance finding's remediation status and metadata
 func (r *sqlComplianceRepository) UpdateFinding(ctx context.Context, f *model.ComplianceFinding) error {
-	return errors.New("not implemented")
+	f.UpdatedAt = time.Now().UTC()
+
+	query := `
+		UPDATE compliance_findings
+		SET severity = ?, status = ?, remediation_plan = ?, owner_id = ?,
+		    due_date = ?, remediated_at = ?, updated_at = ?
+		WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		f.Severity, f.Status, f.RemediationPlan, f.OwnerID,
+		f.DueDate, f.RemediatedAt, f.UpdatedAt, f.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrGRCFindingNotFound
+	}
+	return nil
 }
+
+// DeleteFinding removes a compliance finding
 func (r *sqlComplianceRepository) DeleteFinding(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	res, err := r.db.ExecContext(ctx, "DELETE FROM compliance_findings WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrGRCFindingNotFound
+	}
+	return nil
 }
+
+// ListFindings queries compliance findings based on filter criteria
 func (r *sqlComplianceRepository) ListFindings(ctx context.Context, filter model.GRCFindingFilter) ([]model.ComplianceFinding, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.AssessmentID != "" {
+		conditions = append(conditions, "assessment_id = ?")
+		args = append(args, filter.AssessmentID)
+	}
+	if filter.ControlID != "" {
+		conditions = append(conditions, "control_id = ?")
+		args = append(args, filter.ControlID)
+	}
+	if filter.Severity != "" {
+		conditions = append(conditions, "severity = ?")
+		args = append(args, filter.Severity)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+	if filter.OwnerID != "" {
+		conditions = append(conditions, "owner_id = ?")
+		args = append(args, filter.OwnerID)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var total int
+	err := r.db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM compliance_findings %s", whereClause), args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, assessment_id, control_id, finding_code,
+		       title, description, severity, status, remediation_plan,
+		       owner_id, due_date, remediated_at, created_at, updated_at
+		FROM compliance_findings
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	rows, err := r.db.QueryContext(ctx, selectQuery, append(args, limit, offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var findings []model.ComplianceFinding
+	for rows.Next() {
+		f, err := scanGRCFinding(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		findings = append(findings, *f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return findings, total, nil
 }
 
 // Analytics stub
