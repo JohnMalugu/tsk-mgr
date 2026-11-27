@@ -223,6 +223,10 @@ func main() {
 	serviceDeskSvc := service.NewServiceDeskService(serviceDeskRepo)
 	handler.InitServiceDeskHandler(serviceDeskSvc)
 
+	complianceRepo := repository.NewComplianceRepository(sqliteDB)
+	complianceSvc := service.NewComplianceService(complianceRepo)
+	handler.InitComplianceHandler(complianceSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
