@@ -307,21 +307,105 @@ func (s *complianceService) ListControls(ctx context.Context, filter model.GRCCo
 	return s.repo.ListControls(ctx, filter)
 }
 
-// Evidence stubs
+// SubmitEvidence attaches an audit evidence artifact to a compliance control
 func (s *complianceService) SubmitEvidence(ctx context.Context, workspaceID string, req model.SubmitGRCEvidenceRequest) (*model.ComplianceEvidence, error) {
-	return nil, errors.New("not implemented")
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = workspaceID
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	if _, err := s.repo.GetControlByID(ctx, req.ControlID); err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	validFrom := now
+	if req.ValidFrom != nil && !req.ValidFrom.IsZero() {
+		validFrom = req.ValidFrom.UTC()
+	}
+	evType := req.EvidenceType
+	if evType == "" {
+		evType = model.GRCEvidencePolicyDoc
+	}
+	collectedBy := strings.TrimSpace(req.CollectedBy)
+	if collectedBy == "" {
+		collectedBy = "user_1"
+	}
+
+	ev := &model.ComplianceEvidence{
+		WorkspaceID:  req.WorkspaceID,
+		ControlID:    req.ControlID,
+		Title:        req.Title,
+		EvidenceType: evType,
+		ArtifactURL:  req.ArtifactURL,
+		CollectedBy:  collectedBy,
+		ValidFrom:    validFrom,
+		ValidUntil:   req.ValidUntil,
+		ReviewStatus: model.GRCEvidenceStatusPending,
+		CreatedAt:    now,
+	}
+
+	if err := s.repo.CreateEvidence(ctx, ev); err != nil {
+		return nil, err
+	}
+	return ev, nil
 }
+
+// GetEvidenceByID retrieves an audit evidence record by ID
 func (s *complianceService) GetEvidenceByID(ctx context.Context, id string) (*model.ComplianceEvidence, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrGRCEvidenceNotFound
+	}
+	return s.repo.GetEvidenceByID(ctx, id)
 }
+
+// ReviewEvidence records an auditor's approval or rejection of collected evidence
 func (s *complianceService) ReviewEvidence(ctx context.Context, id string, req model.ReviewGRCEvidenceRequest) (*model.ComplianceEvidence, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrGRCEvidenceNotFound
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	ev, err := s.repo.GetEvidenceByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	ev.ReviewStatus = req.ReviewStatus
+	ev.ReviewedBy = req.ReviewedBy
+	ev.ReviewedAt = &now
+
+	if err := s.repo.UpdateEvidence(ctx, ev); err != nil {
+		return nil, err
+	}
+
+	// Update parent control's LastTestedAt when evidence is approved
+	if req.ReviewStatus == model.GRCEvidenceStatusApproved {
+		if ctrl, err := s.repo.GetControlByID(ctx, ev.ControlID); err == nil {
+			ctrl.LastTestedAt = &now
+			_ = s.repo.UpdateControl(ctx, ctrl)
+		}
+	}
+
+	return ev, nil
 }
+
+// DeleteEvidence deletes an audit evidence artifact by ID
 func (s *complianceService) DeleteEvidence(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return ErrGRCEvidenceNotFound
+	}
+	return s.repo.DeleteEvidence(ctx, id)
 }
+
+// ListEvidence queries audit evidence records matching filter criteria
 func (s *complianceService) ListEvidence(ctx context.Context, filter model.GRCEvidenceFilter) ([]model.ComplianceEvidence, int, error) {
-	return nil, 0, errors.New("not implemented")
+	return s.repo.ListEvidence(ctx, filter)
 }
 
 // Assessments stubs
