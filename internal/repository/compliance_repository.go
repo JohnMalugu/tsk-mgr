@@ -83,24 +83,211 @@ func NewComplianceRepository(db *sql.DB) ComplianceRepository {
 	return &sqlComplianceRepository{db: db}
 }
 
-// Frameworks stubs
+// CreateFramework inserts a new compliance framework
 func (r *sqlComplianceRepository) CreateFramework(ctx context.Context, f *model.ComplianceFramework) error {
-	return errors.New("not implemented")
+	if f.ID == "" {
+		f.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if f.CreatedAt.IsZero() {
+		f.CreatedAt = now
+	}
+	f.UpdatedAt = now
+	if f.StandardType == "" {
+		f.StandardType = model.GRCStandardCustom
+	}
+	if f.Version == "" {
+		f.Version = "1.0"
+	}
+	if f.Status == "" {
+		f.Status = model.GRCFrameworkStatusActive
+	}
+
+	var count int
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM compliance_frameworks WHERE workspace_id = ? AND framework_code = ?", f.WorkspaceID, f.FrameworkCode).Scan(&count)
+	if err == nil && count > 0 {
+		return ErrGRCFrameworkCodeConflict
+	}
+
+	query := `
+		INSERT INTO compliance_frameworks (
+			id, workspace_id, framework_code, name, standard_type,
+			version, description, owner_id, status, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err = r.db.ExecContext(ctx, query,
+		f.ID, f.WorkspaceID, f.FrameworkCode, f.Name, f.StandardType,
+		f.Version, f.Description, f.OwnerID, f.Status, f.CreatedAt, f.UpdatedAt,
+	)
+	return err
 }
+
+func scanGRCFramework(scanner interface{ Scan(dest ...interface{}) error }) (*model.ComplianceFramework, error) {
+	var f model.ComplianceFramework
+	var desc, ownerID sql.NullString
+	err := scanner.Scan(
+		&f.ID, &f.WorkspaceID, &f.FrameworkCode, &f.Name, &f.StandardType,
+		&f.Version, &desc, &ownerID, &f.Status, &f.CreatedAt, &f.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if desc.Valid {
+		f.Description = desc.String
+	}
+	if ownerID.Valid {
+		f.OwnerID = ownerID.String
+	}
+	return &f, nil
+}
+
+// GetFrameworkByID retrieves a compliance framework by ID
 func (r *sqlComplianceRepository) GetFrameworkByID(ctx context.Context, id string) (*model.ComplianceFramework, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, framework_code, name, standard_type,
+		       version, description, owner_id, status, created_at, updated_at
+		FROM compliance_frameworks
+		WHERE id = ?`
+
+	f, err := scanGRCFramework(r.db.QueryRowContext(ctx, query, id))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrGRCFrameworkNotFound
+		}
+		return nil, err
+	}
+	return f, nil
 }
+
+// GetFrameworkByCode retrieves a compliance framework by framework_code within a workspace
 func (r *sqlComplianceRepository) GetFrameworkByCode(ctx context.Context, workspaceID, code string) (*model.ComplianceFramework, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, framework_code, name, standard_type,
+		       version, description, owner_id, status, created_at, updated_at
+		FROM compliance_frameworks
+		WHERE workspace_id = ? AND framework_code = ?`
+
+	f, err := scanGRCFramework(r.db.QueryRowContext(ctx, query, workspaceID, code))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrGRCFrameworkNotFound
+		}
+		return nil, err
+	}
+	return f, nil
 }
+
+// UpdateFramework updates an existing compliance framework
 func (r *sqlComplianceRepository) UpdateFramework(ctx context.Context, f *model.ComplianceFramework) error {
-	return errors.New("not implemented")
+	f.UpdatedAt = time.Now().UTC()
+
+	query := `
+		UPDATE compliance_frameworks
+		SET name = ?, version = ?, description = ?, owner_id = ?, status = ?, updated_at = ?
+		WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		f.Name, f.Version, f.Description, f.OwnerID, f.Status, f.UpdatedAt, f.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrGRCFrameworkNotFound
+	}
+	return nil
 }
+
+// DeleteFramework removes a compliance framework
 func (r *sqlComplianceRepository) DeleteFramework(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	res, err := r.db.ExecContext(ctx, "DELETE FROM compliance_frameworks WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrGRCFrameworkNotFound
+	}
+	return nil
 }
+
+// ListFrameworks queries compliance frameworks based on filter criteria
 func (r *sqlComplianceRepository) ListFrameworks(ctx context.Context, filter model.GRCFrameworkFilter) ([]model.ComplianceFramework, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.StandardType != "" {
+		conditions = append(conditions, "standard_type = ?")
+		args = append(args, filter.StandardType)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+	if filter.Search != "" {
+		conditions = append(conditions, "(name LIKE ? OR framework_code LIKE ? OR description LIKE ?)")
+		s := "%" + filter.Search + "%"
+		args = append(args, s, s, s)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var total int
+	err := r.db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM compliance_frameworks %s", whereClause), args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, framework_code, name, standard_type,
+		       version, description, owner_id, status, created_at, updated_at
+		FROM compliance_frameworks
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	rows, err := r.db.QueryContext(ctx, selectQuery, append(args, limit, offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var frameworks []model.ComplianceFramework
+	for rows.Next() {
+		f, err := scanGRCFramework(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		frameworks = append(frameworks, *f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return frameworks, total, nil
 }
 
 // Controls stubs
