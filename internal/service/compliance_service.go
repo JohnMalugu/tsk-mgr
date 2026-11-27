@@ -408,38 +408,207 @@ func (s *complianceService) ListEvidence(ctx context.Context, filter model.GRCEv
 	return s.repo.ListEvidence(ctx, filter)
 }
 
-// Assessments stubs
+// CreateAssessment schedules a formal compliance audit assessment against a framework
 func (s *complianceService) CreateAssessment(ctx context.Context, workspaceID string, req model.CreateGRCAssessmentRequest) (*model.ComplianceAssessment, error) {
-	return nil, errors.New("not implemented")
-}
-func (s *complianceService) GetAssessmentByID(ctx context.Context, id string) (*model.ComplianceAssessment, error) {
-	return nil, errors.New("not implemented")
-}
-func (s *complianceService) CompleteAssessment(ctx context.Context, id string, req model.CompleteGRCAssessmentRequest) (*model.ComplianceAssessment, error) {
-	return nil, errors.New("not implemented")
-}
-func (s *complianceService) DeleteAssessment(ctx context.Context, id string) error {
-	return errors.New("not implemented")
-}
-func (s *complianceService) ListAssessments(ctx context.Context, filter model.GRCAssessmentFilter) ([]model.ComplianceAssessment, int, error) {
-	return nil, 0, errors.New("not implemented")
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = workspaceID
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	if _, err := s.repo.GetFrameworkByID(ctx, req.FrameworkID); err != nil {
+		return nil, err
+	}
+
+	code := strings.TrimSpace(req.AssessmentCode)
+	if code == "" {
+		code = fmt.Sprintf("AUD-%s", strings.ToUpper(uuid.New().String()[:8]))
+	}
+	auditor := strings.TrimSpace(req.AuditorName)
+	if auditor == "" {
+		auditor = "Internal Audit Team"
+	}
+	auditType := req.AuditType
+	if auditType == "" {
+		auditType = model.GRCAuditTypeInternal
+	}
+	startDate := time.Now().UTC()
+	if req.StartDate != nil && !req.StartDate.IsZero() {
+		startDate = req.StartDate.UTC()
+	}
+
+	assessment := &model.ComplianceAssessment{
+		WorkspaceID:    req.WorkspaceID,
+		FrameworkID:    req.FrameworkID,
+		AssessmentCode: code,
+		Title:          req.Title,
+		AuditorName:    auditor,
+		AuditType:      auditType,
+		Status:         model.GRCAssessmentInProgress,
+		StartDate:      startDate,
+		Summary:        req.Summary,
+	}
+
+	if err := s.repo.CreateAssessment(ctx, assessment); err != nil {
+		return nil, err
+	}
+	return assessment, nil
 }
 
-// Findings stubs
+// GetAssessmentByID retrieves a compliance assessment by ID
+func (s *complianceService) GetAssessmentByID(ctx context.Context, id string) (*model.ComplianceAssessment, error) {
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrGRCAssessmentNotFound
+	}
+	return s.repo.GetAssessmentByID(ctx, id)
+}
+
+// CompleteAssessment marks an assessment completed with its final score and summary
+func (s *complianceService) CompleteAssessment(ctx context.Context, id string, req model.CompleteGRCAssessmentRequest) (*model.ComplianceAssessment, error) {
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrGRCAssessmentNotFound
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	assessment, err := s.repo.GetAssessmentByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	assessment.Status = model.GRCAssessmentCompleted
+	assessment.OverallScore = req.OverallScore
+	assessment.EndDate = &now
+	if req.Summary != "" {
+		assessment.Summary = req.Summary
+	}
+
+	if err := s.repo.UpdateAssessment(ctx, assessment); err != nil {
+		return nil, err
+	}
+	return assessment, nil
+}
+
+// DeleteAssessment removes a compliance assessment by ID
+func (s *complianceService) DeleteAssessment(ctx context.Context, id string) error {
+	if strings.TrimSpace(id) == "" {
+		return ErrGRCAssessmentNotFound
+	}
+	return s.repo.DeleteAssessment(ctx, id)
+}
+
+// ListAssessments queries compliance assessments matching filter criteria
+func (s *complianceService) ListAssessments(ctx context.Context, filter model.GRCAssessmentFilter) ([]model.ComplianceAssessment, int, error) {
+	return s.repo.ListAssessments(ctx, filter)
+}
+
+// CreateFinding records a non-conformity finding discovered during an assessment
 func (s *complianceService) CreateFinding(ctx context.Context, workspaceID string, req model.CreateGRCFindingRequest) (*model.ComplianceFinding, error) {
-	return nil, errors.New("not implemented")
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = workspaceID
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	if _, err := s.repo.GetAssessmentByID(ctx, req.AssessmentID); err != nil {
+		return nil, err
+	}
+	if _, err := s.repo.GetControlByID(ctx, req.ControlID); err != nil {
+		return nil, err
+	}
+
+	code := strings.TrimSpace(req.FindingCode)
+	if code == "" {
+		code = fmt.Sprintf("FND-%s", strings.ToUpper(uuid.New().String()[:8]))
+	}
+	severity := req.Severity
+	if severity == "" {
+		severity = model.GRCFindingSeverityMedium
+	}
+
+	finding := &model.ComplianceFinding{
+		WorkspaceID:     req.WorkspaceID,
+		AssessmentID:    req.AssessmentID,
+		ControlID:       req.ControlID,
+		FindingCode:     code,
+		Title:           req.Title,
+		Description:     req.Description,
+		Severity:        severity,
+		Status:          model.GRCFindingStatusOpen,
+		RemediationPlan: req.RemediationPlan,
+		OwnerID:         req.OwnerID,
+		DueDate:         req.DueDate,
+	}
+
+	if err := s.repo.CreateFinding(ctx, finding); err != nil {
+		return nil, err
+	}
+	return finding, nil
 }
+
+// GetFindingByID retrieves a compliance finding by ID
 func (s *complianceService) GetFindingByID(ctx context.Context, id string) (*model.ComplianceFinding, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrGRCFindingNotFound
+	}
+	return s.repo.GetFindingByID(ctx, id)
 }
+
+// UpdateFinding updates a finding's remediation plan, owner, severity, or status
 func (s *complianceService) UpdateFinding(ctx context.Context, id string, req model.UpdateGRCFindingRequest) (*model.ComplianceFinding, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrGRCFindingNotFound
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	finding, err := s.repo.GetFindingByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Status != nil {
+		finding.Status = *req.Status
+		if *req.Status == model.GRCFindingStatusRemediated && finding.RemediatedAt == nil {
+			now := time.Now().UTC()
+			finding.RemediatedAt = &now
+		}
+	}
+	if req.Severity != nil {
+		finding.Severity = *req.Severity
+	}
+	if req.RemediationPlan != nil {
+		finding.RemediationPlan = *req.RemediationPlan
+	}
+	if req.OwnerID != nil {
+		finding.OwnerID = *req.OwnerID
+	}
+	if req.DueDate != nil {
+		finding.DueDate = req.DueDate
+	}
+
+	if err := s.repo.UpdateFinding(ctx, finding); err != nil {
+		return nil, err
+	}
+	return finding, nil
 }
+
+// DeleteFinding removes a compliance finding by ID
 func (s *complianceService) DeleteFinding(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return ErrGRCFindingNotFound
+	}
+	return s.repo.DeleteFinding(ctx, id)
 }
+
+// ListFindings queries compliance findings matching filter criteria
 func (s *complianceService) ListFindings(ctx context.Context, filter model.GRCFindingFilter) ([]model.ComplianceFinding, int, error) {
-	return nil, 0, errors.New("not implemented")
+	return s.repo.ListFindings(ctx, filter)
 }
 
 // Analytics stub
