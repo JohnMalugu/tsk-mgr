@@ -508,8 +508,179 @@ func (h *ComplianceHandler) DeleteFinding(w http.ResponseWriter, r *http.Request
 	writeGRCJSON(w, http.StatusOK, map[string]string{"message": "compliance finding deleted"})
 }
 
-// Analytics & ServeHTTP stubs
-func (h *ComplianceHandler) GetComplianceAnalytics(w http.ResponseWriter, r *http.Request) {}
+// GetComplianceAnalytics handles GET /v2/compliance/analytics
+func (h *ComplianceHandler) GetComplianceAnalytics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeGRCError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	analytics, err := h.svc.GetComplianceAnalytics(r.Context(), getGRCWorkspaceID(r))
+	if err != nil {
+		handleGRCError(w, err)
+		return
+	}
+	writeGRCJSON(w, http.StatusOK, analytics)
+}
+
+// ServeHTTP routes HTTP requests for ITIL GRC & Compliance Management (/v2/compliance)
 func (h *ComplianceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/compliance")
+	path = strings.TrimPrefix(path, "/compliance")
+	path = strings.TrimPrefix(path, "/")
+	if path == "" {
+		writeGRCError(w, http.StatusNotFound, "route not found")
+		return
+	}
+
+	parts := strings.Split(path, "/")
+	switch parts[0] {
+	case "analytics":
+		h.GetComplianceAnalytics(w, r)
+		return
+
+	case "frameworks":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListFrameworks(w, r)
+			case http.MethodPost:
+				h.CreateFramework(w, r)
+			default:
+				writeGRCError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetFrameworkByID(w, r, parts[1])
+			case http.MethodPut:
+				h.UpdateFramework(w, r, parts[1])
+			case http.MethodDelete:
+				h.DeleteFramework(w, r, parts[1])
+			default:
+				writeGRCError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+	case "controls":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListControls(w, r)
+			case http.MethodPost:
+				h.CreateControl(w, r)
+			default:
+				writeGRCError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetControlByID(w, r, parts[1])
+			case http.MethodPut:
+				h.UpdateControl(w, r, parts[1])
+			case http.MethodDelete:
+				h.DeleteControl(w, r, parts[1])
+			default:
+				writeGRCError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+	case "evidence":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListEvidence(w, r)
+			case http.MethodPost:
+				h.SubmitEvidence(w, r)
+			default:
+				writeGRCError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetEvidenceByID(w, r, parts[1])
+			case http.MethodDelete:
+				h.DeleteEvidence(w, r, parts[1])
+			default:
+				writeGRCError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 3 && parts[2] == "review" {
+			if r.Method == http.MethodPost {
+				h.ReviewEvidence(w, r, parts[1])
+			} else {
+				writeGRCError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+	case "assessments":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListAssessments(w, r)
+			case http.MethodPost:
+				h.CreateAssessment(w, r)
+			default:
+				writeGRCError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetAssessmentByID(w, r, parts[1])
+			case http.MethodDelete:
+				h.DeleteAssessment(w, r, parts[1])
+			default:
+				writeGRCError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 3 && parts[2] == "complete" {
+			if r.Method == http.MethodPost {
+				h.CompleteAssessment(w, r, parts[1])
+			} else {
+				writeGRCError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+	case "findings":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListFindings(w, r)
+			case http.MethodPost:
+				h.CreateFinding(w, r)
+			default:
+				writeGRCError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetFindingByID(w, r, parts[1])
+			case http.MethodPut:
+				h.UpdateFinding(w, r, parts[1])
+			case http.MethodDelete:
+				h.DeleteFinding(w, r, parts[1])
+			default:
+				writeGRCError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+	}
+
 	writeGRCError(w, http.StatusNotFound, "route not found")
 }
