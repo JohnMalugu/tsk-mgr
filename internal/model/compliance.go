@@ -538,3 +538,79 @@ func (r *UpdateGRCFindingRequest) Validate() error {
 	}
 	return nil
 }
+
+// Query filters and executive posture analytics models for Compliance & GRC Management
+
+// GRCFrameworkFilter defines query criteria for compliance frameworks
+type GRCFrameworkFilter struct {
+	WorkspaceID  string
+	StandardType string
+	Status       string
+	Search       string
+	Limit        int
+	Offset       int
+}
+
+// GRCControlFilter defines query criteria for compliance controls
+type GRCControlFilter struct {
+	WorkspaceID          string
+	FrameworkID          string
+	Domain               string
+	ImplementationStatus string
+	AutomationLevel      string
+	OwnerID              string
+	Search               string
+	Limit                int
+	Offset               int
+}
+
+// GRCEvidenceFilter defines query criteria for audit evidence artifacts
+type GRCEvidenceFilter struct {
+	WorkspaceID  string
+	ControlID    string
+	EvidenceType string
+	ReviewStatus string
+	Limit        int
+	Offset       int
+}
+
+// GRCAssessmentFilter defines query criteria for compliance assessments
+type GRCAssessmentFilter struct {
+	WorkspaceID string
+	FrameworkID string
+	AuditType   string
+	Status      string
+	Limit       int
+	Offset      int
+}
+
+// GRCFindingFilter defines query criteria for audit non-conformity findings
+type GRCFindingFilter struct {
+	WorkspaceID  string
+	AssessmentID string
+	ControlID    string
+	Severity     string
+	Status       string
+	OwnerID      string
+	Limit        int
+	Offset       int
+}
+
+// ComplianceAnalytics represents executive GRC compliance posture and control coverage KPIs
+type ComplianceAnalytics struct {
+	TotalFrameworks       int            `json:"total_frameworks"`
+	ActiveFrameworks      int            `json:"active_frameworks"`
+	TotalControls         int            `json:"total_controls"`
+	ImplementedControls   int            `json:"implemented_controls"`
+	ControlCoverageRate   float64        `json:"control_coverage_rate"`
+	TotalEvidence         int            `json:"total_evidence"`
+	ApprovedEvidence      int            `json:"approved_evidence"`
+	TotalAssessments      int            `json:"total_assessments"`
+	CompletedAssessments  int            `json:"completed_assessments"`
+	OpenFindings          int            `json:"open_findings"`
+	CriticalOpenFindings  int            `json:"critical_open_findings"`
+	RemediatedFindings    int            `json:"remediated_findings"`
+	DomainDistribution    map[string]int `json:"domain_distribution"`
+	SeverityDistribution  map[string]int `json:"severity_distribution"`
+	ComplianceHealthIndex float64        `json:"compliance_health_index"`
+}
