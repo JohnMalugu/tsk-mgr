@@ -1106,7 +1106,80 @@ func (r *sqlComplianceRepository) ListFindings(ctx context.Context, filter model
 	return findings, total, nil
 }
 
-// Analytics stub
+// GetComplianceAnalytics computes executive compliance coverage, evidence approval, and finding posture KPIs
 func (r *sqlComplianceRepository) GetComplianceAnalytics(ctx context.Context, workspaceID string) (*model.ComplianceAnalytics, error) {
-	return nil, errors.New("not implemented")
+	analytics := &model.ComplianceAnalytics{
+		DomainDistribution:   make(map[string]int),
+		SeverityDistribution: make(map[string]int),
+	}
+
+	// 1. Frameworks
+	if err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM compliance_frameworks WHERE workspace_id = ?", workspaceID).Scan(&analytics.TotalFrameworks); err != nil {
+		return nil, err
+	}
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM compliance_frameworks WHERE workspace_id = ? AND status = 'active'", workspaceID).Scan(&analytics.ActiveFrameworks)
+
+	// 2. Controls & coverage rate
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM compliance_controls WHERE workspace_id = ?", workspaceID).Scan(&analytics.TotalControls)
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM compliance_controls WHERE workspace_id = ? AND implementation_status = 'implemented'", workspaceID).Scan(&analytics.ImplementedControls)
+	var applicableControls int
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM compliance_controls WHERE workspace_id = ? AND implementation_status != 'not_applicable'", workspaceID).Scan(&applicableControls)
+	if applicableControls > 0 {
+		analytics.ControlCoverageRate = (float64(analytics.ImplementedControls) / float64(applicableControls)) * 100.0
+	} else {
+		analytics.ControlCoverageRate = 100.0
+	}
+
+	// 3. Evidence
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM compliance_evidence WHERE workspace_id = ?", workspaceID).Scan(&analytics.TotalEvidence)
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM compliance_evidence WHERE workspace_id = ? AND review_status = 'approved'", workspaceID).Scan(&analytics.ApprovedEvidence)
+
+	// 4. Assessments
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM compliance_assessments WHERE workspace_id = ?", workspaceID).Scan(&analytics.TotalAssessments)
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM compliance_assessments WHERE workspace_id = ? AND status = 'completed'", workspaceID).Scan(&analytics.CompletedAssessments)
+
+	// 5. Findings breakdown
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM compliance_findings WHERE workspace_id = ? AND status IN ('open', 'in_remediation')", workspaceID).Scan(&analytics.OpenFindings)
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM compliance_findings WHERE workspace_id = ? AND status IN ('open', 'in_remediation') AND severity = 'critical'", workspaceID).Scan(&analytics.CriticalOpenFindings)
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM compliance_findings WHERE workspace_id = ? AND status = 'remediated'", workspaceID).Scan(&analytics.RemediatedFindings)
+
+	// 6. Control domain distribution
+	domRows, err := r.db.QueryContext(ctx, "SELECT domain, COUNT(*) FROM compliance_controls WHERE workspace_id = ? GROUP BY domain", workspaceID)
+	if err == nil {
+		defer domRows.Close()
+		for domRows.Next() {
+			var dom string
+			var count int
+			if err := domRows.Scan(&dom, &count); err == nil {
+				analytics.DomainDistribution[dom] = count
+			}
+		}
+	}
+
+	// 7. Finding severity distribution
+	sevRows, err := r.db.QueryContext(ctx, "SELECT severity, COUNT(*) FROM compliance_findings WHERE workspace_id = ? GROUP BY severity", workspaceID)
+	if err == nil {
+		defer sevRows.Close()
+		for sevRows.Next() {
+			var sev string
+			var count int
+			if err := sevRows.Scan(&sev, &count); err == nil {
+				analytics.SeverityDistribution[sev] = count
+			}
+		}
+	}
+
+	// 8. Composite Compliance Health Index (0 - 100)
+	health := analytics.ControlCoverageRate
+	health -= float64(analytics.CriticalOpenFindings) * 10.0
+	health -= float64(analytics.OpenFindings-analytics.CriticalOpenFindings) * 3.0
+	if health < 0.0 {
+		health = 0.0
+	}
+	if health > 100.0 {
+		health = 100.0
+	}
+	analytics.ComplianceHealthIndex = health
+
+	return analytics, nil
 }
