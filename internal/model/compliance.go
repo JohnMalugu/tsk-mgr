@@ -250,3 +250,58 @@ type ComplianceAssessment struct {
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
+
+// Compliance finding severity ratings
+const (
+	GRCFindingSeverityCritical = "critical"
+	GRCFindingSeverityHigh     = "high"
+	GRCFindingSeverityMedium   = "medium"
+	GRCFindingSeverityLow      = "low"
+)
+
+// Compliance finding remediation statuses
+const (
+	GRCFindingStatusOpen          = "open"
+	GRCFindingStatusInRemediation = "in_remediation"
+	GRCFindingStatusRemediated    = "remediated"
+	GRCFindingStatusAcceptedRisk  = "accepted_risk"
+)
+
+// IsValidGRCFindingSeverity validates finding severity
+func IsValidGRCFindingSeverity(sev string) bool {
+	switch sev {
+	case GRCFindingSeverityCritical, GRCFindingSeverityHigh, GRCFindingSeverityMedium, GRCFindingSeverityLow:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsValidGRCFindingStatus validates finding remediation status
+func IsValidGRCFindingStatus(st string) bool {
+	switch st {
+	case GRCFindingStatusOpen, GRCFindingStatusInRemediation, GRCFindingStatusRemediated, GRCFindingStatusAcceptedRisk:
+		return true
+	default:
+		return false
+	}
+}
+
+// ComplianceFinding represents an audit non-conformity or control gap requiring remediation
+type ComplianceFinding struct {
+	ID              string     `json:"id"`
+	WorkspaceID     string     `json:"workspace_id"`
+	AssessmentID    string     `json:"assessment_id"`
+	ControlID       string     `json:"control_id"`
+	FindingCode     string     `json:"finding_code"`
+	Title           string     `json:"title"`
+	Description     string     `json:"description,omitempty"`
+	Severity        string     `json:"severity"`
+	Status          string     `json:"status"`
+	RemediationPlan string     `json:"remediation_plan,omitempty"`
+	OwnerID         string     `json:"owner_id,omitempty"`
+	DueDate         *time.Time `json:"due_date,omitempty"`
+	RemediatedAt    *time.Time `json:"remediated_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}
