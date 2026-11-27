@@ -171,12 +171,91 @@ func (h *ComplianceHandler) DeleteFramework(w http.ResponseWriter, r *http.Reque
 	writeGRCJSON(w, http.StatusOK, map[string]string{"message": "compliance framework deleted"})
 }
 
-// Controls stubs
-func (h *ComplianceHandler) ListControls(w http.ResponseWriter, r *http.Request) {}
-func (h *ComplianceHandler) CreateControl(w http.ResponseWriter, r *http.Request) {}
-func (h *ComplianceHandler) GetControlByID(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *ComplianceHandler) UpdateControl(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *ComplianceHandler) DeleteControl(w http.ResponseWriter, r *http.Request, id string) {}
+// ListControls handles GET /v2/compliance/controls
+func (h *ComplianceHandler) ListControls(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.GRCControlFilter{
+		WorkspaceID:          getGRCWorkspaceID(r),
+		FrameworkID:          q.Get("framework_id"),
+		Domain:               q.Get("domain"),
+		ImplementationStatus: q.Get("implementation_status"),
+		AutomationLevel:      q.Get("automation_level"),
+		OwnerID:              q.Get("owner_id"),
+		Search:               q.Get("search"),
+		Limit:                limit,
+		Offset:               offset,
+	}
+
+	controls, total, err := h.svc.ListControls(r.Context(), filter)
+	if err != nil {
+		handleGRCError(w, err)
+		return
+	}
+
+	writeGRCJSON(w, http.StatusOK, map[string]interface{}{
+		"controls": controls,
+		"total":    total,
+		"limit":    filter.Limit,
+		"offset":   filter.Offset,
+	})
+}
+
+// CreateControl handles POST /v2/compliance/controls
+func (h *ComplianceHandler) CreateControl(w http.ResponseWriter, r *http.Request) {
+	var req model.CreateGRCControlRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeGRCError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.OwnerID == "" {
+		req.OwnerID = getGRCUser(r)
+	}
+
+	ctrl, err := h.svc.CreateControl(r.Context(), getGRCWorkspaceID(r), req)
+	if err != nil {
+		handleGRCError(w, err)
+		return
+	}
+	writeGRCJSON(w, http.StatusCreated, ctrl)
+}
+
+// GetControlByID handles GET /v2/compliance/controls/{id}
+func (h *ComplianceHandler) GetControlByID(w http.ResponseWriter, r *http.Request, id string) {
+	ctrl, err := h.svc.GetControlByID(r.Context(), id)
+	if err != nil {
+		handleGRCError(w, err)
+		return
+	}
+	writeGRCJSON(w, http.StatusOK, ctrl)
+}
+
+// UpdateControl handles PUT /v2/compliance/controls/{id}
+func (h *ComplianceHandler) UpdateControl(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateGRCControlRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeGRCError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	ctrl, err := h.svc.UpdateControl(r.Context(), id, req)
+	if err != nil {
+		handleGRCError(w, err)
+		return
+	}
+	writeGRCJSON(w, http.StatusOK, ctrl)
+}
+
+// DeleteControl handles DELETE /v2/compliance/controls/{id}
+func (h *ComplianceHandler) DeleteControl(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteControl(r.Context(), id); err != nil {
+		handleGRCError(w, err)
+		return
+	}
+	writeGRCJSON(w, http.StatusOK, map[string]string{"message": "compliance control deleted"})
+}
 
 // Evidence stubs
 func (h *ComplianceHandler) ListEvidence(w http.ResponseWriter, r *http.Request) {}
