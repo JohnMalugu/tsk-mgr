@@ -524,21 +524,192 @@ func (r *sqlComplianceRepository) ListControls(ctx context.Context, filter model
 	return controls, total, nil
 }
 
-// Evidence stubs
+// CreateEvidence inserts a new audit evidence artifact for a control
 func (r *sqlComplianceRepository) CreateEvidence(ctx context.Context, e *model.ComplianceEvidence) error {
-	return errors.New("not implemented")
+	if e.ID == "" {
+		e.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if e.ValidFrom.IsZero() {
+		e.ValidFrom = now
+	}
+	if e.CreatedAt.IsZero() {
+		e.CreatedAt = now
+	}
+	if e.EvidenceType == "" {
+		e.EvidenceType = model.GRCEvidencePolicyDoc
+	}
+	if e.ReviewStatus == "" {
+		e.ReviewStatus = model.GRCEvidenceStatusPending
+	}
+
+	query := `
+		INSERT INTO compliance_evidence (
+			id, workspace_id, control_id, title, evidence_type,
+			artifact_url, collected_by, valid_from, valid_until,
+			review_status, reviewed_by, reviewed_at, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		e.ID, e.WorkspaceID, e.ControlID, e.Title, e.EvidenceType,
+		e.ArtifactURL, e.CollectedBy, e.ValidFrom, e.ValidUntil,
+		e.ReviewStatus, e.ReviewedBy, e.ReviewedAt, e.CreatedAt,
+	)
+	return err
 }
+
+func scanGRCEvidence(scanner interface{ Scan(dest ...interface{}) error }) (*model.ComplianceEvidence, error) {
+	var e model.ComplianceEvidence
+	var reviewedBy sql.NullString
+	var validUntil, reviewedAt sql.NullTime
+	err := scanner.Scan(
+		&e.ID, &e.WorkspaceID, &e.ControlID, &e.Title, &e.EvidenceType,
+		&e.ArtifactURL, &e.CollectedBy, &e.ValidFrom, &validUntil,
+		&e.ReviewStatus, &reviewedBy, &reviewedAt, &e.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if validUntil.Valid {
+		e.ValidUntil = &validUntil.Time
+	}
+	if reviewedBy.Valid {
+		e.ReviewedBy = reviewedBy.String
+	}
+	if reviewedAt.Valid {
+		e.ReviewedAt = &reviewedAt.Time
+	}
+	return &e, nil
+}
+
+// GetEvidenceByID retrieves an audit evidence record by ID
 func (r *sqlComplianceRepository) GetEvidenceByID(ctx context.Context, id string) (*model.ComplianceEvidence, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, control_id, title, evidence_type,
+		       artifact_url, collected_by, valid_from, valid_until,
+		       review_status, reviewed_by, reviewed_at, created_at
+		FROM compliance_evidence
+		WHERE id = ?`
+
+	e, err := scanGRCEvidence(r.db.QueryRowContext(ctx, query, id))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrGRCEvidenceNotFound
+		}
+		return nil, err
+	}
+	return e, nil
 }
+
+// UpdateEvidence updates review status and reviewer metadata on an evidence record
 func (r *sqlComplianceRepository) UpdateEvidence(ctx context.Context, e *model.ComplianceEvidence) error {
-	return errors.New("not implemented")
+	query := `
+		UPDATE compliance_evidence
+		SET review_status = ?, reviewed_by = ?, reviewed_at = ?, valid_until = ?
+		WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		e.ReviewStatus, e.ReviewedBy, e.ReviewedAt, e.ValidUntil, e.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrGRCEvidenceNotFound
+	}
+	return nil
 }
+
+// DeleteEvidence removes an audit evidence record
 func (r *sqlComplianceRepository) DeleteEvidence(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	res, err := r.db.ExecContext(ctx, "DELETE FROM compliance_evidence WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrGRCEvidenceNotFound
+	}
+	return nil
 }
+
+// ListEvidence queries audit evidence records based on filter criteria
 func (r *sqlComplianceRepository) ListEvidence(ctx context.Context, filter model.GRCEvidenceFilter) ([]model.ComplianceEvidence, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.ControlID != "" {
+		conditions = append(conditions, "control_id = ?")
+		args = append(args, filter.ControlID)
+	}
+	if filter.EvidenceType != "" {
+		conditions = append(conditions, "evidence_type = ?")
+		args = append(args, filter.EvidenceType)
+	}
+	if filter.ReviewStatus != "" {
+		conditions = append(conditions, "review_status = ?")
+		args = append(args, filter.ReviewStatus)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var total int
+	err := r.db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM compliance_evidence %s", whereClause), args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, control_id, title, evidence_type,
+		       artifact_url, collected_by, valid_from, valid_until,
+		       review_status, reviewed_by, reviewed_at, created_at
+		FROM compliance_evidence
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	rows, err := r.db.QueryContext(ctx, selectQuery, append(args, limit, offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var evidence []model.ComplianceEvidence
+	for rows.Next() {
+		e, err := scanGRCEvidence(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		evidence = append(evidence, *e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return evidence, total, nil
 }
 
 // Assessments stubs
