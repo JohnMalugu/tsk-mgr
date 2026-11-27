@@ -3863,6 +3863,32 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	complianceFindingsQuery := `
+	CREATE TABLE IF NOT EXISTS compliance_findings (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		assessment_id TEXT NOT NULL,
+		control_id TEXT NOT NULL,
+		finding_code TEXT NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT,
+		severity TEXT NOT NULL DEFAULT 'medium',
+		status TEXT NOT NULL DEFAULT 'open',
+		remediation_plan TEXT,
+		owner_id TEXT,
+		due_date DATETIME,
+		remediated_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (assessment_id) REFERENCES compliance_assessments(id) ON DELETE CASCADE,
+		FOREIGN KEY (control_id) REFERENCES compliance_controls(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(complianceFindingsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
