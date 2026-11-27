@@ -257,12 +257,91 @@ func (h *ComplianceHandler) DeleteControl(w http.ResponseWriter, r *http.Request
 	writeGRCJSON(w, http.StatusOK, map[string]string{"message": "compliance control deleted"})
 }
 
-// Evidence stubs
-func (h *ComplianceHandler) ListEvidence(w http.ResponseWriter, r *http.Request) {}
-func (h *ComplianceHandler) SubmitEvidence(w http.ResponseWriter, r *http.Request) {}
-func (h *ComplianceHandler) GetEvidenceByID(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *ComplianceHandler) ReviewEvidence(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *ComplianceHandler) DeleteEvidence(w http.ResponseWriter, r *http.Request, id string) {}
+// ListEvidence handles GET /v2/compliance/evidence
+func (h *ComplianceHandler) ListEvidence(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.GRCEvidenceFilter{
+		WorkspaceID:  getGRCWorkspaceID(r),
+		ControlID:    q.Get("control_id"),
+		EvidenceType: q.Get("evidence_type"),
+		ReviewStatus: q.Get("review_status"),
+		Limit:        limit,
+		Offset:       offset,
+	}
+
+	evidence, total, err := h.svc.ListEvidence(r.Context(), filter)
+	if err != nil {
+		handleGRCError(w, err)
+		return
+	}
+
+	writeGRCJSON(w, http.StatusOK, map[string]interface{}{
+		"evidence": evidence,
+		"total":    total,
+		"limit":    filter.Limit,
+		"offset":   filter.Offset,
+	})
+}
+
+// SubmitEvidence handles POST /v2/compliance/evidence
+func (h *ComplianceHandler) SubmitEvidence(w http.ResponseWriter, r *http.Request) {
+	var req model.SubmitGRCEvidenceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeGRCError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.CollectedBy == "" {
+		req.CollectedBy = getGRCUser(r)
+	}
+
+	ev, err := h.svc.SubmitEvidence(r.Context(), getGRCWorkspaceID(r), req)
+	if err != nil {
+		handleGRCError(w, err)
+		return
+	}
+	writeGRCJSON(w, http.StatusCreated, ev)
+}
+
+// GetEvidenceByID handles GET /v2/compliance/evidence/{id}
+func (h *ComplianceHandler) GetEvidenceByID(w http.ResponseWriter, r *http.Request, id string) {
+	ev, err := h.svc.GetEvidenceByID(r.Context(), id)
+	if err != nil {
+		handleGRCError(w, err)
+		return
+	}
+	writeGRCJSON(w, http.StatusOK, ev)
+}
+
+// ReviewEvidence handles POST /v2/compliance/evidence/{id}/review
+func (h *ComplianceHandler) ReviewEvidence(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.ReviewGRCEvidenceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeGRCError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.ReviewedBy == "" {
+		req.ReviewedBy = getGRCUser(r)
+	}
+
+	ev, err := h.svc.ReviewEvidence(r.Context(), id, req)
+	if err != nil {
+		handleGRCError(w, err)
+		return
+	}
+	writeGRCJSON(w, http.StatusOK, ev)
+}
+
+// DeleteEvidence handles DELETE /v2/compliance/evidence/{id}
+func (h *ComplianceHandler) DeleteEvidence(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteEvidence(r.Context(), id); err != nil {
+		handleGRCError(w, err)
+		return
+	}
+	writeGRCJSON(w, http.StatusOK, map[string]string{"message": "compliance evidence deleted"})
+}
 
 // Assessments & Findings stubs
 func (h *ComplianceHandler) ListAssessments(w http.ResponseWriter, r *http.Request) {}
