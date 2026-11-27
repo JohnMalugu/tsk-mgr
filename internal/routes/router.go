@@ -360,6 +360,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 ITIL GRC & Compliance Management
+	if strings.HasPrefix(r.URL.Path, "/v2/compliance") {
+		if handler.GlobalComplianceHandler == nil {
+			http.Error(w, "Compliance handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalComplianceHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return
