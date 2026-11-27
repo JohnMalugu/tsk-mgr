@@ -290,24 +290,238 @@ func (r *sqlComplianceRepository) ListFrameworks(ctx context.Context, filter mod
 	return frameworks, total, nil
 }
 
-// Controls stubs
+// CreateControl inserts a new compliance control under a framework
 func (r *sqlComplianceRepository) CreateControl(ctx context.Context, c *model.ComplianceControl) error {
-	return errors.New("not implemented")
+	if c.ID == "" {
+		c.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if c.CreatedAt.IsZero() {
+		c.CreatedAt = now
+	}
+	c.UpdatedAt = now
+	if c.Domain == "" {
+		c.Domain = model.GRCDomainAccessControl
+	}
+	if c.ImplementationStatus == "" {
+		c.ImplementationStatus = model.GRCControlNotImplemented
+	}
+	if c.AutomationLevel == "" {
+		c.AutomationLevel = model.GRCAutomationManual
+	}
+
+	var count int
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM compliance_controls WHERE workspace_id = ? AND control_code = ?", c.WorkspaceID, c.ControlCode).Scan(&count)
+	if err == nil && count > 0 {
+		return ErrGRCControlCodeConflict
+	}
+
+	query := `
+		INSERT INTO compliance_controls (
+			id, workspace_id, framework_id, control_code, title, description,
+			domain, implementation_status, automation_level, owner_id, ci_id,
+			last_tested_at, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err = r.db.ExecContext(ctx, query,
+		c.ID, c.WorkspaceID, c.FrameworkID, c.ControlCode, c.Title, c.Description,
+		c.Domain, c.ImplementationStatus, c.AutomationLevel, c.OwnerID, c.CIID,
+		c.LastTestedAt, c.CreatedAt, c.UpdatedAt,
+	)
+	return err
 }
+
+func scanGRCControl(scanner interface{ Scan(dest ...interface{}) error }) (*model.ComplianceControl, error) {
+	var c model.ComplianceControl
+	var desc, ownerID, ciID sql.NullString
+	var lastTestedAt sql.NullTime
+	err := scanner.Scan(
+		&c.ID, &c.WorkspaceID, &c.FrameworkID, &c.ControlCode, &c.Title, &desc,
+		&c.Domain, &c.ImplementationStatus, &c.AutomationLevel, &ownerID, &ciID,
+		&lastTestedAt, &c.CreatedAt, &c.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if desc.Valid {
+		c.Description = desc.String
+	}
+	if ownerID.Valid {
+		c.OwnerID = ownerID.String
+	}
+	if ciID.Valid {
+		c.CIID = ciID.String
+	}
+	if lastTestedAt.Valid {
+		c.LastTestedAt = &lastTestedAt.Time
+	}
+	return &c, nil
+}
+
+// GetControlByID retrieves a compliance control by ID
 func (r *sqlComplianceRepository) GetControlByID(ctx context.Context, id string) (*model.ComplianceControl, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, framework_id, control_code, title, description,
+		       domain, implementation_status, automation_level, owner_id, ci_id,
+		       last_tested_at, created_at, updated_at
+		FROM compliance_controls
+		WHERE id = ?`
+
+	c, err := scanGRCControl(r.db.QueryRowContext(ctx, query, id))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrGRCControlNotFound
+		}
+		return nil, err
+	}
+	return c, nil
 }
+
+// GetControlByCode retrieves a compliance control by control_code within a workspace
 func (r *sqlComplianceRepository) GetControlByCode(ctx context.Context, workspaceID, code string) (*model.ComplianceControl, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, framework_id, control_code, title, description,
+		       domain, implementation_status, automation_level, owner_id, ci_id,
+		       last_tested_at, created_at, updated_at
+		FROM compliance_controls
+		WHERE workspace_id = ? AND control_code = ?`
+
+	c, err := scanGRCControl(r.db.QueryRowContext(ctx, query, workspaceID, code))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrGRCControlNotFound
+		}
+		return nil, err
+	}
+	return c, nil
 }
+
+// UpdateControl updates an existing compliance control
 func (r *sqlComplianceRepository) UpdateControl(ctx context.Context, c *model.ComplianceControl) error {
-	return errors.New("not implemented")
+	c.UpdatedAt = time.Now().UTC()
+
+	query := `
+		UPDATE compliance_controls
+		SET title = ?, description = ?, domain = ?, implementation_status = ?,
+		    automation_level = ?, owner_id = ?, ci_id = ?, last_tested_at = ?, updated_at = ?
+		WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		c.Title, c.Description, c.Domain, c.ImplementationStatus,
+		c.AutomationLevel, c.OwnerID, c.CIID, c.LastTestedAt, c.UpdatedAt, c.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrGRCControlNotFound
+	}
+	return nil
 }
+
+// DeleteControl removes a compliance control
 func (r *sqlComplianceRepository) DeleteControl(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	res, err := r.db.ExecContext(ctx, "DELETE FROM compliance_controls WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrGRCControlNotFound
+	}
+	return nil
 }
+
+// ListControls queries compliance controls based on filter criteria
 func (r *sqlComplianceRepository) ListControls(ctx context.Context, filter model.GRCControlFilter) ([]model.ComplianceControl, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.FrameworkID != "" {
+		conditions = append(conditions, "framework_id = ?")
+		args = append(args, filter.FrameworkID)
+	}
+	if filter.Domain != "" {
+		conditions = append(conditions, "domain = ?")
+		args = append(args, filter.Domain)
+	}
+	if filter.ImplementationStatus != "" {
+		conditions = append(conditions, "implementation_status = ?")
+		args = append(args, filter.ImplementationStatus)
+	}
+	if filter.AutomationLevel != "" {
+		conditions = append(conditions, "automation_level = ?")
+		args = append(args, filter.AutomationLevel)
+	}
+	if filter.OwnerID != "" {
+		conditions = append(conditions, "owner_id = ?")
+		args = append(args, filter.OwnerID)
+	}
+	if filter.Search != "" {
+		conditions = append(conditions, "(title LIKE ? OR control_code LIKE ? OR description LIKE ?)")
+		s := "%" + filter.Search + "%"
+		args = append(args, s, s, s)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var total int
+	err := r.db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM compliance_controls %s", whereClause), args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, framework_id, control_code, title, description,
+		       domain, implementation_status, automation_level, owner_id, ci_id,
+		       last_tested_at, created_at, updated_at
+		FROM compliance_controls
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	rows, err := r.db.QueryContext(ctx, selectQuery, append(args, limit, offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var controls []model.ComplianceControl
+	for rows.Next() {
+		c, err := scanGRCControl(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		controls = append(controls, *c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return controls, total, nil
 }
 
 // Evidence stubs
