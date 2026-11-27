@@ -343,17 +343,170 @@ func (h *ComplianceHandler) DeleteEvidence(w http.ResponseWriter, r *http.Reques
 	writeGRCJSON(w, http.StatusOK, map[string]string{"message": "compliance evidence deleted"})
 }
 
-// Assessments & Findings stubs
-func (h *ComplianceHandler) ListAssessments(w http.ResponseWriter, r *http.Request) {}
-func (h *ComplianceHandler) CreateAssessment(w http.ResponseWriter, r *http.Request) {}
-func (h *ComplianceHandler) GetAssessmentByID(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *ComplianceHandler) CompleteAssessment(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *ComplianceHandler) DeleteAssessment(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *ComplianceHandler) ListFindings(w http.ResponseWriter, r *http.Request) {}
-func (h *ComplianceHandler) CreateFinding(w http.ResponseWriter, r *http.Request) {}
-func (h *ComplianceHandler) GetFindingByID(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *ComplianceHandler) UpdateFinding(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *ComplianceHandler) DeleteFinding(w http.ResponseWriter, r *http.Request, id string) {}
+// ListAssessments handles GET /v2/compliance/assessments
+func (h *ComplianceHandler) ListAssessments(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.GRCAssessmentFilter{
+		WorkspaceID: getGRCWorkspaceID(r),
+		FrameworkID: q.Get("framework_id"),
+		AuditType:   q.Get("audit_type"),
+		Status:      q.Get("status"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	assessments, total, err := h.svc.ListAssessments(r.Context(), filter)
+	if err != nil {
+		handleGRCError(w, err)
+		return
+	}
+
+	writeGRCJSON(w, http.StatusOK, map[string]interface{}{
+		"assessments": assessments,
+		"total":       total,
+		"limit":       filter.Limit,
+		"offset":      filter.Offset,
+	})
+}
+
+// CreateAssessment handles POST /v2/compliance/assessments
+func (h *ComplianceHandler) CreateAssessment(w http.ResponseWriter, r *http.Request) {
+	var req model.CreateGRCAssessmentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeGRCError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	assessment, err := h.svc.CreateAssessment(r.Context(), getGRCWorkspaceID(r), req)
+	if err != nil {
+		handleGRCError(w, err)
+		return
+	}
+	writeGRCJSON(w, http.StatusCreated, assessment)
+}
+
+// GetAssessmentByID handles GET /v2/compliance/assessments/{id}
+func (h *ComplianceHandler) GetAssessmentByID(w http.ResponseWriter, r *http.Request, id string) {
+	assessment, err := h.svc.GetAssessmentByID(r.Context(), id)
+	if err != nil {
+		handleGRCError(w, err)
+		return
+	}
+	writeGRCJSON(w, http.StatusOK, assessment)
+}
+
+// CompleteAssessment handles POST /v2/compliance/assessments/{id}/complete
+func (h *ComplianceHandler) CompleteAssessment(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.CompleteGRCAssessmentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeGRCError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	assessment, err := h.svc.CompleteAssessment(r.Context(), id, req)
+	if err != nil {
+		handleGRCError(w, err)
+		return
+	}
+	writeGRCJSON(w, http.StatusOK, assessment)
+}
+
+// DeleteAssessment handles DELETE /v2/compliance/assessments/{id}
+func (h *ComplianceHandler) DeleteAssessment(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteAssessment(r.Context(), id); err != nil {
+		handleGRCError(w, err)
+		return
+	}
+	writeGRCJSON(w, http.StatusOK, map[string]string{"message": "compliance assessment deleted"})
+}
+
+// ListFindings handles GET /v2/compliance/findings
+func (h *ComplianceHandler) ListFindings(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.GRCFindingFilter{
+		WorkspaceID:  getGRCWorkspaceID(r),
+		AssessmentID: q.Get("assessment_id"),
+		ControlID:    q.Get("control_id"),
+		Severity:     q.Get("severity"),
+		Status:       q.Get("status"),
+		OwnerID:      q.Get("owner_id"),
+		Limit:        limit,
+		Offset:       offset,
+	}
+
+	findings, total, err := h.svc.ListFindings(r.Context(), filter)
+	if err != nil {
+		handleGRCError(w, err)
+		return
+	}
+
+	writeGRCJSON(w, http.StatusOK, map[string]interface{}{
+		"findings": findings,
+		"total":    total,
+		"limit":    filter.Limit,
+		"offset":   filter.Offset,
+	})
+}
+
+// CreateFinding handles POST /v2/compliance/findings
+func (h *ComplianceHandler) CreateFinding(w http.ResponseWriter, r *http.Request) {
+	var req model.CreateGRCFindingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeGRCError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.OwnerID == "" {
+		req.OwnerID = getGRCUser(r)
+	}
+
+	finding, err := h.svc.CreateFinding(r.Context(), getGRCWorkspaceID(r), req)
+	if err != nil {
+		handleGRCError(w, err)
+		return
+	}
+	writeGRCJSON(w, http.StatusCreated, finding)
+}
+
+// GetFindingByID handles GET /v2/compliance/findings/{id}
+func (h *ComplianceHandler) GetFindingByID(w http.ResponseWriter, r *http.Request, id string) {
+	finding, err := h.svc.GetFindingByID(r.Context(), id)
+	if err != nil {
+		handleGRCError(w, err)
+		return
+	}
+	writeGRCJSON(w, http.StatusOK, finding)
+}
+
+// UpdateFinding handles PUT /v2/compliance/findings/{id}
+func (h *ComplianceHandler) UpdateFinding(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateGRCFindingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeGRCError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	finding, err := h.svc.UpdateFinding(r.Context(), id, req)
+	if err != nil {
+		handleGRCError(w, err)
+		return
+	}
+	writeGRCJSON(w, http.StatusOK, finding)
+}
+
+// DeleteFinding handles DELETE /v2/compliance/findings/{id}
+func (h *ComplianceHandler) DeleteFinding(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteFinding(r.Context(), id); err != nil {
+		handleGRCError(w, err)
+		return
+	}
+	writeGRCJSON(w, http.StatusOK, map[string]string{"message": "compliance finding deleted"})
+}
 
 // Analytics & ServeHTTP stubs
 func (h *ComplianceHandler) GetComplianceAnalytics(w http.ResponseWriter, r *http.Request) {}
