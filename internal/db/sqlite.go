@@ -4289,6 +4289,11 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_grc_controls_ws_domain ON compliance_controls(workspace_id, domain);
 	CREATE INDEX IF NOT EXISTS idx_grc_evidence_ctrl ON compliance_evidence(control_id);
 	CREATE INDEX IF NOT EXISTS idx_grc_evidence_ws_status ON compliance_evidence(workspace_id, review_status);
+	CREATE INDEX IF NOT EXISTS idx_grc_assessments_fw ON compliance_assessments(framework_id);
+	CREATE INDEX IF NOT EXISTS idx_grc_assessments_ws_status ON compliance_assessments(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_grc_findings_assess ON compliance_findings(assessment_id);
+	CREATE INDEX IF NOT EXISTS idx_grc_findings_ctrl ON compliance_findings(control_id);
+	CREATE INDEX IF NOT EXISTS idx_grc_findings_ws_status ON compliance_findings(workspace_id, status);
 	`
 
 	_, err = db.Exec(indexQuery)
