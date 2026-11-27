@@ -3816,6 +3816,29 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	complianceEvidenceQuery := `
+	CREATE TABLE IF NOT EXISTS compliance_evidence (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		control_id TEXT NOT NULL,
+		title TEXT NOT NULL,
+		evidence_type TEXT NOT NULL DEFAULT 'policy_doc',
+		artifact_url TEXT NOT NULL,
+		collected_by TEXT NOT NULL,
+		valid_from DATETIME NOT NULL,
+		valid_until DATETIME,
+		review_status TEXT NOT NULL DEFAULT 'pending',
+		reviewed_by TEXT,
+		reviewed_at DATETIME,
+		created_at DATETIME NOT NULL,
+		FOREIGN KEY (control_id) REFERENCES compliance_controls(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(complianceEvidenceQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
