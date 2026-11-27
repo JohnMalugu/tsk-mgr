@@ -196,3 +196,57 @@ type ComplianceEvidence struct {
 	ReviewedAt   *time.Time `json:"reviewed_at,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`
 }
+
+// Compliance audit type constants
+const (
+	GRCAuditTypeInternal      = "internal"
+	GRCAuditTypeExternal      = "external"
+	GRCAuditTypeCertification = "certification"
+	GRCAuditTypeReadiness     = "readiness"
+)
+
+// Compliance assessment lifecycle statuses
+const (
+	GRCAssessmentPlanned    = "planned"
+	GRCAssessmentInProgress = "in_progress"
+	GRCAssessmentCompleted  = "completed"
+	GRCAssessmentCancelled  = "cancelled"
+)
+
+// IsValidGRCAuditType validates audit type
+func IsValidGRCAuditType(at string) bool {
+	switch at {
+	case GRCAuditTypeInternal, GRCAuditTypeExternal, GRCAuditTypeCertification, GRCAuditTypeReadiness:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsValidGRCAssessmentStatus validates assessment status
+func IsValidGRCAssessmentStatus(st string) bool {
+	switch st {
+	case GRCAssessmentPlanned, GRCAssessmentInProgress, GRCAssessmentCompleted, GRCAssessmentCancelled:
+		return true
+	default:
+		return false
+	}
+}
+
+// ComplianceAssessment represents a formal compliance audit or readiness review against a framework
+type ComplianceAssessment struct {
+	ID             string     `json:"id"`
+	WorkspaceID    string     `json:"workspace_id"`
+	FrameworkID    string     `json:"framework_id"`
+	AssessmentCode string     `json:"assessment_code"`
+	Title          string     `json:"title"`
+	AuditorName    string     `json:"auditor_name"`
+	AuditType      string     `json:"audit_type"`
+	Status         string     `json:"status"`
+	StartDate      time.Time  `json:"start_date"`
+	EndDate        *time.Time `json:"end_date,omitempty"`
+	OverallScore   float64    `json:"overall_score"`
+	Summary        string     `json:"summary,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}
