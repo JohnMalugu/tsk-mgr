@@ -140,3 +140,59 @@ type ComplianceControl struct {
 	CreatedAt            time.Time  `json:"created_at"`
 	UpdatedAt            time.Time  `json:"updated_at"`
 }
+
+// Audit evidence artifact types
+const (
+	GRCEvidenceScreenshot     = "screenshot"
+	GRCEvidenceLogExport      = "log_export"
+	GRCEvidencePolicyDoc      = "policy_doc"
+	GRCEvidenceConfigSnapshot = "config_snapshot"
+	GRCEvidencePenTestReport  = "pen_test_report"
+	GRCEvidenceAttestation    = "attestation"
+)
+
+// Audit evidence review statuses
+const (
+	GRCEvidenceStatusPending  = "pending"
+	GRCEvidenceStatusApproved = "approved"
+	GRCEvidenceStatusRejected = "rejected"
+	GRCEvidenceStatusExpired  = "expired"
+)
+
+// IsValidGRCEvidenceType validates evidence artifact type
+func IsValidGRCEvidenceType(et string) bool {
+	switch et {
+	case GRCEvidenceScreenshot, GRCEvidenceLogExport, GRCEvidencePolicyDoc,
+		GRCEvidenceConfigSnapshot, GRCEvidencePenTestReport, GRCEvidenceAttestation:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsValidGRCEvidenceStatus validates evidence review status
+func IsValidGRCEvidenceStatus(st string) bool {
+	switch st {
+	case GRCEvidenceStatusPending, GRCEvidenceStatusApproved, GRCEvidenceStatusRejected, GRCEvidenceStatusExpired:
+		return true
+	default:
+		return false
+	}
+}
+
+// ComplianceEvidence represents verifiable audit proof collected for a compliance control
+type ComplianceEvidence struct {
+	ID           string     `json:"id"`
+	WorkspaceID  string     `json:"workspace_id"`
+	ControlID    string     `json:"control_id"`
+	Title        string     `json:"title"`
+	EvidenceType string     `json:"evidence_type"`
+	ArtifactURL  string     `json:"artifact_url"`
+	CollectedBy  string     `json:"collected_by"`
+	ValidFrom    time.Time  `json:"valid_from"`
+	ValidUntil   *time.Time `json:"valid_until,omitempty"`
+	ReviewStatus string     `json:"review_status"`
+	ReviewedBy   string     `json:"reviewed_by,omitempty"`
+	ReviewedAt   *time.Time `json:"reviewed_at,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+}
