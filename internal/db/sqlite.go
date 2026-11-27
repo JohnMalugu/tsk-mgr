@@ -3772,6 +3772,26 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	complianceFrameworksQuery := `
+	CREATE TABLE IF NOT EXISTS compliance_frameworks (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		framework_code TEXT NOT NULL,
+		name TEXT NOT NULL,
+		standard_type TEXT NOT NULL DEFAULT 'custom',
+		version TEXT NOT NULL DEFAULT '1.0',
+		description TEXT,
+		owner_id TEXT,
+		status TEXT NOT NULL DEFAULT 'active',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);`
+
+	_, err = db.Exec(complianceFrameworksQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
