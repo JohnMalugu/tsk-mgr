@@ -476,8 +476,164 @@ func (h *WorkforceHandler) DeleteTraining(w http.ResponseWriter, r *http.Request
 	writeWFJSON(w, http.StatusOK, map[string]string{"message": "training enrollment deleted"})
 }
 
-// Analytics & ServeHTTP stubs
-func (h *WorkforceHandler) GetWorkforceAnalytics(w http.ResponseWriter, r *http.Request) {}
+// GetWorkforceAnalytics handles GET /v2/workforce/analytics
+func (h *WorkforceHandler) GetWorkforceAnalytics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeWFError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	analytics, err := h.svc.GetWorkforceAnalytics(r.Context(), getWFWorkspaceID(r))
+	if err != nil {
+		handleWFError(w, err)
+		return
+	}
+	writeWFJSON(w, http.StatusOK, analytics)
+}
+
+// ServeHTTP routes HTTP requests for ITIL Workforce & Talent Management (/v2/workforce)
 func (h *WorkforceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v2/workforce")
+	path = strings.TrimPrefix(path, "/workforce")
+	path = strings.TrimPrefix(path, "/")
+	if path == "" {
+		writeWFError(w, http.StatusNotFound, "route not found")
+		return
+	}
+
+	parts := strings.Split(path, "/")
+	switch parts[0] {
+	case "analytics":
+		h.GetWorkforceAnalytics(w, r)
+		return
+
+	case "skills":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListSkills(w, r)
+			case http.MethodPost:
+				h.CreateSkill(w, r)
+			default:
+				writeWFError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetSkillByID(w, r, parts[1])
+			case http.MethodPut:
+				h.UpdateSkill(w, r, parts[1])
+			case http.MethodDelete:
+				h.DeleteSkill(w, r, parts[1])
+			default:
+				writeWFError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+	case "profiles":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListProfiles(w, r)
+			case http.MethodPost:
+				h.UpsertProfile(w, r)
+			default:
+				writeWFError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetProfileByID(w, r, parts[1])
+			case http.MethodDelete:
+				h.DeleteProfile(w, r, parts[1])
+			default:
+				writeWFError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 3 && parts[2] == "verify" {
+			if r.Method == http.MethodPost {
+				h.VerifyProfile(w, r, parts[1])
+			} else {
+				writeWFError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+	case "certifications":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListCertifications(w, r)
+			case http.MethodPost:
+				h.CreateCertification(w, r)
+			default:
+				writeWFError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetCertificationByID(w, r, parts[1])
+			case http.MethodPut:
+				h.UpdateCertification(w, r, parts[1])
+			case http.MethodDelete:
+				h.DeleteCertification(w, r, parts[1])
+			default:
+				writeWFError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+
+	case "roles":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListRoleCompetencies(w, r)
+			case http.MethodPost:
+				h.CreateRoleCompetency(w, r)
+			default:
+				writeWFError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 && r.Method == http.MethodDelete {
+			h.DeleteRoleCompetency(w, r, parts[1])
+			return
+		}
+
+	case "trainings":
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				h.ListTrainings(w, r)
+			case http.MethodPost:
+				h.CreateTraining(w, r)
+			default:
+				writeWFError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+		if len(parts) == 2 {
+			switch r.Method {
+			case http.MethodGet:
+				h.GetTrainingByID(w, r, parts[1])
+			case http.MethodPut:
+				h.UpdateTraining(w, r, parts[1])
+			case http.MethodDelete:
+				h.DeleteTraining(w, r, parts[1])
+			default:
+				writeWFError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+	}
+
 	writeWFError(w, http.StatusNotFound, "route not found")
 }
