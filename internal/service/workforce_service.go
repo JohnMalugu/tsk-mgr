@@ -371,35 +371,159 @@ func (s *workforceService) ListCertifications(ctx context.Context, filter model.
 	return s.repo.ListCertifications(ctx, filter)
 }
 
-// Role Competencies stubs
+// CreateRoleCompetency registers a skill proficiency requirement for an ITIL role
 func (s *workforceService) CreateRoleCompetency(ctx context.Context, workspaceID string, req model.CreateWFRoleCompetencyRequest) (*model.RoleCompetency, error) {
-	return nil, errors.New("not implemented")
-}
-func (s *workforceService) GetRoleCompetencyByID(ctx context.Context, id string) (*model.RoleCompetency, error) {
-	return nil, errors.New("not implemented")
-}
-func (s *workforceService) DeleteRoleCompetency(ctx context.Context, id string) error {
-	return errors.New("not implemented")
-}
-func (s *workforceService) ListRoleCompetencies(ctx context.Context, filter model.WFRoleCompetencyFilter) ([]model.RoleCompetency, int, error) {
-	return nil, 0, errors.New("not implemented")
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = workspaceID
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	if _, err := s.repo.GetSkillByID(ctx, req.SkillID); err != nil {
+		return nil, err
+	}
+
+	reqLvl := req.RequiredLevel
+	if reqLvl == "" {
+		reqLvl = model.WFProficiencyIntermediate
+	}
+	minHC := req.MinHeadcount
+	if minHC <= 0 {
+		minHC = 1
+	}
+	prio := req.Priority
+	if prio == "" {
+		prio = model.WFPriorityMedium
+	}
+
+	rc := &model.RoleCompetency{
+		WorkspaceID:   req.WorkspaceID,
+		RoleName:      req.RoleName,
+		SkillID:       req.SkillID,
+		RequiredLevel: reqLvl,
+		MinHeadcount:  minHC,
+		Priority:      prio,
+	}
+
+	if err := s.repo.CreateRoleCompetency(ctx, rc); err != nil {
+		return nil, err
+	}
+	return rc, nil
 }
 
-// Trainings stubs
+// GetRoleCompetencyByID retrieves a role competency by ID
+func (s *workforceService) GetRoleCompetencyByID(ctx context.Context, id string) (*model.RoleCompetency, error) {
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrWFRoleCompetencyNotFound
+	}
+	return s.repo.GetRoleCompetencyByID(ctx, id)
+}
+
+// DeleteRoleCompetency deletes a role competency by ID
+func (s *workforceService) DeleteRoleCompetency(ctx context.Context, id string) error {
+	if strings.TrimSpace(id) == "" {
+		return ErrWFRoleCompetencyNotFound
+	}
+	return s.repo.DeleteRoleCompetency(ctx, id)
+}
+
+// ListRoleCompetencies queries role competencies matching filter criteria
+func (s *workforceService) ListRoleCompetencies(ctx context.Context, filter model.WFRoleCompetencyFilter) ([]model.RoleCompetency, int, error) {
+	return s.repo.ListRoleCompetencies(ctx, filter)
+}
+
+// CreateTraining assigns an upskilling training course to a team member
 func (s *workforceService) CreateTraining(ctx context.Context, workspaceID string, req model.CreateWFTrainingRequest) (*model.TrainingEnrollment, error) {
-	return nil, errors.New("not implemented")
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = workspaceID
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	if _, err := s.repo.GetSkillByID(ctx, req.SkillID); err != nil {
+		return nil, err
+	}
+
+	training := &model.TrainingEnrollment{
+		WorkspaceID: req.WorkspaceID,
+		UserID:      req.UserID,
+		SkillID:     req.SkillID,
+		CourseTitle: req.CourseTitle,
+		Provider:    req.Provider,
+		Status:      model.WFTrainingAssigned,
+		ProgressPct: 0,
+		DueDate:     req.DueDate,
+	}
+
+	if err := s.repo.CreateTraining(ctx, training); err != nil {
+		return nil, err
+	}
+	return training, nil
 }
+
+// GetTrainingByID retrieves a training enrollment by ID
 func (s *workforceService) GetTrainingByID(ctx context.Context, id string) (*model.TrainingEnrollment, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrWFTrainingNotFound
+	}
+	return s.repo.GetTrainingByID(ctx, id)
 }
+
+// UpdateTraining advances progress or completes a training enrollment
 func (s *workforceService) UpdateTraining(ctx context.Context, id string, req model.UpdateWFTrainingRequest) (*model.TrainingEnrollment, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrWFTrainingNotFound
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	training, err := s.repo.GetTrainingByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.ProgressPct != nil {
+		training.ProgressPct = *req.ProgressPct
+		if *req.ProgressPct > 0 && *req.ProgressPct < 100 && training.Status == model.WFTrainingAssigned {
+			training.Status = model.WFTrainingInProgress
+		}
+		if *req.ProgressPct == 100 {
+			training.Status = model.WFTrainingCompleted
+			now := time.Now().UTC()
+			training.CompletedAt = &now
+		}
+	}
+	if req.Status != nil {
+		training.Status = *req.Status
+		if *req.Status == model.WFTrainingCompleted {
+			training.ProgressPct = 100
+			if training.CompletedAt == nil {
+				now := time.Now().UTC()
+				training.CompletedAt = &now
+			}
+		}
+	}
+
+	if err := s.repo.UpdateTraining(ctx, training); err != nil {
+		return nil, err
+	}
+	return training, nil
 }
+
+// DeleteTraining removes a training enrollment by ID
 func (s *workforceService) DeleteTraining(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return ErrWFTrainingNotFound
+	}
+	return s.repo.DeleteTraining(ctx, id)
 }
+
+// ListTrainings queries training enrollments matching filter criteria
 func (s *workforceService) ListTrainings(ctx context.Context, filter model.WFTrainingFilter) ([]model.TrainingEnrollment, int, error) {
-	return nil, 0, errors.New("not implemented")
+	return s.repo.ListTrainings(ctx, filter)
 }
 
 // Analytics stub
