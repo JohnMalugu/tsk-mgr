@@ -3928,6 +3928,27 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	workforceCertificationsQuery := `
+	CREATE TABLE IF NOT EXISTS workforce_certifications (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		user_id TEXT NOT NULL,
+		cert_code TEXT NOT NULL,
+		name TEXT NOT NULL,
+		issuer TEXT NOT NULL,
+		credential_id TEXT,
+		issued_at DATETIME NOT NULL,
+		expires_at DATETIME,
+		status TEXT NOT NULL DEFAULT 'active',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);`
+
+	_, err = db.Exec(workforceCertificationsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
