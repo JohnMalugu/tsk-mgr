@@ -81,24 +81,194 @@ func NewWorkforceRepository(db *sql.DB) WorkforceRepository {
 	return &sqlWorkforceRepository{db: db}
 }
 
-// Skills stubs
+// CreateSkill inserts a new cataloged skill
 func (r *sqlWorkforceRepository) CreateSkill(ctx context.Context, s *model.WorkforceSkill) error {
-	return errors.New("not implemented")
+	if s.ID == "" {
+		s.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if s.CreatedAt.IsZero() {
+		s.CreatedAt = now
+	}
+	s.UpdatedAt = now
+	if s.Category == "" {
+		s.Category = model.WFSkillCategorySoftwareEng
+	}
+
+	var count int
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM workforce_skills WHERE workspace_id = ? AND skill_code = ?", s.WorkspaceID, s.SkillCode).Scan(&count)
+	if err == nil && count > 0 {
+		return ErrWFSkillCodeConflict
+	}
+
+	query := `
+		INSERT INTO workforce_skills (
+			id, workspace_id, skill_code, name, category, description, is_critical, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err = r.db.ExecContext(ctx, query,
+		s.ID, s.WorkspaceID, s.SkillCode, s.Name, s.Category, s.Description, s.IsCritical, s.CreatedAt, s.UpdatedAt,
+	)
+	return err
 }
+
+func scanWFSkill(scanner interface{ Scan(dest ...interface{}) error }) (*model.WorkforceSkill, error) {
+	var s model.WorkforceSkill
+	var desc sql.NullString
+	err := scanner.Scan(
+		&s.ID, &s.WorkspaceID, &s.SkillCode, &s.Name, &s.Category, &desc, &s.IsCritical, &s.CreatedAt, &s.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if desc.Valid {
+		s.Description = desc.String
+	}
+	return &s, nil
+}
+
+// GetSkillByID retrieves a skill by ID
 func (r *sqlWorkforceRepository) GetSkillByID(ctx context.Context, id string) (*model.WorkforceSkill, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, skill_code, name, category, description, is_critical, created_at, updated_at
+		FROM workforce_skills
+		WHERE id = ?`
+
+	s, err := scanWFSkill(r.db.QueryRowContext(ctx, query, id))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrWFSkillNotFound
+		}
+		return nil, err
+	}
+	return s, nil
 }
+
+// GetSkillByCode retrieves a skill by skill_code within a workspace
 func (r *sqlWorkforceRepository) GetSkillByCode(ctx context.Context, workspaceID, code string) (*model.WorkforceSkill, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, skill_code, name, category, description, is_critical, created_at, updated_at
+		FROM workforce_skills
+		WHERE workspace_id = ? AND skill_code = ?`
+
+	s, err := scanWFSkill(r.db.QueryRowContext(ctx, query, workspaceID, code))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrWFSkillNotFound
+		}
+		return nil, err
+	}
+	return s, nil
 }
+
+// UpdateSkill updates an existing cataloged skill
 func (r *sqlWorkforceRepository) UpdateSkill(ctx context.Context, s *model.WorkforceSkill) error {
-	return errors.New("not implemented")
+	s.UpdatedAt = time.Now().UTC()
+
+	query := `
+		UPDATE workforce_skills
+		SET name = ?, category = ?, description = ?, is_critical = ?, updated_at = ?
+		WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query, s.Name, s.Category, s.Description, s.IsCritical, s.UpdatedAt, s.ID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrWFSkillNotFound
+	}
+	return nil
 }
+
+// DeleteSkill removes a skill from the catalog
 func (r *sqlWorkforceRepository) DeleteSkill(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	res, err := r.db.ExecContext(ctx, "DELETE FROM workforce_skills WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrWFSkillNotFound
+	}
+	return nil
 }
+
+// ListSkills queries skills based on filter criteria
 func (r *sqlWorkforceRepository) ListSkills(ctx context.Context, filter model.WFSkillFilter) ([]model.WorkforceSkill, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.Category != "" {
+		conditions = append(conditions, "category = ?")
+		args = append(args, filter.Category)
+	}
+	if filter.IsCritical != nil {
+		conditions = append(conditions, "is_critical = ?")
+		args = append(args, *filter.IsCritical)
+	}
+	if filter.Search != "" {
+		conditions = append(conditions, "(name LIKE ? OR skill_code LIKE ? OR description LIKE ?)")
+		s := "%" + filter.Search + "%"
+		args = append(args, s, s, s)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var total int
+	err := r.db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM workforce_skills %s", whereClause), args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, skill_code, name, category, description, is_critical, created_at, updated_at
+		FROM workforce_skills
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	rows, err := r.db.QueryContext(ctx, selectQuery, append(args, limit, offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var skills []model.WorkforceSkill
+	for rows.Next() {
+		s, err := scanWFSkill(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		skills = append(skills, *s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return skills, total, nil
 }
 
 // Profiles stubs
