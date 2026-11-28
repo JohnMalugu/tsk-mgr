@@ -227,6 +227,10 @@ func main() {
 	complianceSvc := service.NewComplianceService(complianceRepo)
 	handler.InitComplianceHandler(complianceSvc)
 
+	workforceRepo := repository.NewWorkforceRepository(sqliteDB)
+	workforceSvc := service.NewWorkforceService(workforceRepo)
+	handler.InitWorkforceHandler(workforceSvc)
+
 	// Register the router for all requests
 	http.HandleFunc("/", routes.Router)
 
