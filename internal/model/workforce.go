@@ -81,3 +81,37 @@ type MemberSkillProfile struct {
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
 }
+
+// Workforce certification status constants
+const (
+	WFCertStatusActive       = "active"
+	WFCertStatusExpiringSoon = "expiring_soon"
+	WFCertStatusExpired      = "expired"
+	WFCertStatusRevoked      = "revoked"
+)
+
+// IsValidWFCertStatus validates certification status
+func IsValidWFCertStatus(st string) bool {
+	switch st {
+	case WFCertStatusActive, WFCertStatusExpiringSoon, WFCertStatusExpired, WFCertStatusRevoked:
+		return true
+	default:
+		return false
+	}
+}
+
+// WorkforceCertification tracks professional credentials and expiration dates for staff
+type WorkforceCertification struct {
+	ID           string     `json:"id"`
+	WorkspaceID  string     `json:"workspace_id"`
+	UserID       string     `json:"user_id"`
+	CertCode     string     `json:"cert_code"`
+	Name         string     `json:"name"`
+	Issuer       string     `json:"issuer"`
+	CredentialID string     `json:"credential_id,omitempty"`
+	IssuedAt     time.Time  `json:"issued_at"`
+	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
+	Status       string     `json:"status"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+}
