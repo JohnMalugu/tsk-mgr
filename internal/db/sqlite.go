@@ -4401,6 +4401,10 @@ func createSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_wf_profiles_skill ON workforce_skill_profiles(skill_id);
 	CREATE INDEX IF NOT EXISTS idx_wf_certs_ws_user ON workforce_certifications(workspace_id, user_id);
 	CREATE INDEX IF NOT EXISTS idx_wf_certs_ws_status ON workforce_certifications(workspace_id, status);
+	CREATE INDEX IF NOT EXISTS idx_wf_roles_ws_name ON workforce_role_competencies(workspace_id, role_name);
+	CREATE INDEX IF NOT EXISTS idx_wf_roles_skill ON workforce_role_competencies(skill_id);
+	CREATE INDEX IF NOT EXISTS idx_wf_trainings_ws_user ON workforce_trainings(workspace_id, user_id);
+	CREATE INDEX IF NOT EXISTS idx_wf_trainings_ws_status ON workforce_trainings(workspace_id, status);
 	`
 
 	_, err = db.Exec(indexQuery)
