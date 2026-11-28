@@ -368,3 +368,74 @@ func (r *UpdateWFTrainingRequest) Validate() error {
 	}
 	return nil
 }
+
+// Query filters and executive readiness analytics models for Workforce & Talent Management
+
+// WFSkillFilter defines query criteria for the skill catalog
+type WFSkillFilter struct {
+	WorkspaceID string
+	Category    string
+	IsCritical  *bool
+	Search      string
+	Limit       int
+	Offset      int
+}
+
+// WFProfileFilter defines query criteria for member skill profiles
+type WFProfileFilter struct {
+	WorkspaceID      string
+	UserID           string
+	SkillID          string
+	ProficiencyLevel string
+	VerifiedOnly     bool
+	Limit            int
+	Offset           int
+}
+
+// WFCertFilter defines query criteria for professional certifications
+type WFCertFilter struct {
+	WorkspaceID string
+	UserID      string
+	Issuer      string
+	Status      string
+	Limit       int
+	Offset      int
+}
+
+// WFRoleCompetencyFilter defines query criteria for role competency requirements
+type WFRoleCompetencyFilter struct {
+	WorkspaceID string
+	RoleName    string
+	SkillID     string
+	Priority    string
+	Limit       int
+	Offset      int
+}
+
+// WFTrainingFilter defines query criteria for training enrollments
+type WFTrainingFilter struct {
+	WorkspaceID string
+	UserID      string
+	SkillID     string
+	Status      string
+	Limit       int
+	Offset      int
+}
+
+// WorkforceAnalytics represents executive Workforce Readiness, certification compliance, and skill coverage KPIs
+type WorkforceAnalytics struct {
+	TotalSkills             int            `json:"total_skills"`
+	CriticalSkills          int            `json:"critical_skills"`
+	TotalSkillProfiles      int            `json:"total_skill_profiles"`
+	VerifiedProfiles        int            `json:"verified_profiles"`
+	ActiveCertifications    int            `json:"active_certifications"`
+	ExpiringCertifications  int            `json:"expiring_certifications"`
+	ExpiredCertifications   int            `json:"expired_certifications"`
+	TotalRoleCompetencies   int            `json:"total_role_competencies"`
+	ActiveTrainings         int            `json:"active_trainings"`
+	CompletedTrainings      int            `json:"completed_trainings"`
+	TrainingCompletionRate  float64        `json:"training_completion_rate"`
+	CategoryDistribution    map[string]int `json:"category_distribution"`
+	ProficiencyDistribution map[string]int `json:"proficiency_distribution"`
+	WorkforceReadinessIndex float64        `json:"workforce_readiness_index"`
+}
