@@ -3949,6 +3949,25 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	workforceRoleCompetenciesQuery := `
+	CREATE TABLE IF NOT EXISTS workforce_role_competencies (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		role_name TEXT NOT NULL,
+		skill_id TEXT NOT NULL,
+		required_level TEXT NOT NULL DEFAULT 'intermediate',
+		min_headcount INTEGER NOT NULL DEFAULT 1,
+		priority TEXT NOT NULL DEFAULT 'medium',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (skill_id) REFERENCES workforce_skills(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(workforceRoleCompetenciesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
