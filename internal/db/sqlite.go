@@ -3907,6 +3907,27 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	workforceProfilesQuery := `
+	CREATE TABLE IF NOT EXISTS workforce_skill_profiles (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		user_id TEXT NOT NULL,
+		skill_id TEXT NOT NULL,
+		proficiency_level TEXT NOT NULL DEFAULT 'novice',
+		years_experience REAL NOT NULL DEFAULT 0.0,
+		verified_by TEXT,
+		verified_at DATETIME,
+		last_assessed_at DATETIME NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (skill_id) REFERENCES workforce_skills(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(workforceProfilesQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
