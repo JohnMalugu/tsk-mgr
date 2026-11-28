@@ -169,12 +169,92 @@ func (h *WorkforceHandler) DeleteSkill(w http.ResponseWriter, r *http.Request, i
 	writeWFJSON(w, http.StatusOK, map[string]string{"message": "workforce skill deleted"})
 }
 
-// Profiles stubs
-func (h *WorkforceHandler) ListProfiles(w http.ResponseWriter, r *http.Request) {}
-func (h *WorkforceHandler) UpsertProfile(w http.ResponseWriter, r *http.Request) {}
-func (h *WorkforceHandler) GetProfileByID(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *WorkforceHandler) VerifyProfile(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *WorkforceHandler) DeleteProfile(w http.ResponseWriter, r *http.Request, id string) {}
+// ListProfiles handles GET /v2/workforce/profiles
+func (h *WorkforceHandler) ListProfiles(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.WFProfileFilter{
+		WorkspaceID:      getWFWorkspaceID(r),
+		UserID:           q.Get("user_id"),
+		SkillID:          q.Get("skill_id"),
+		ProficiencyLevel: q.Get("proficiency_level"),
+		VerifiedOnly:     q.Get("verified_only") == "true" || q.Get("verified_only") == "1",
+		Limit:            limit,
+		Offset:           offset,
+	}
+
+	profiles, total, err := h.svc.ListProfiles(r.Context(), filter)
+	if err != nil {
+		handleWFError(w, err)
+		return
+	}
+
+	writeWFJSON(w, http.StatusOK, map[string]interface{}{
+		"profiles": profiles,
+		"total":    total,
+		"limit":    filter.Limit,
+		"offset":   filter.Offset,
+	})
+}
+
+// UpsertProfile handles POST /v2/workforce/profiles
+func (h *WorkforceHandler) UpsertProfile(w http.ResponseWriter, r *http.Request) {
+	var req model.UpsertWFProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeWFError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.UserID == "" {
+		req.UserID = getWFUser(r)
+	}
+
+	profile, err := h.svc.UpsertProfile(r.Context(), getWFWorkspaceID(r), req)
+	if err != nil {
+		handleWFError(w, err)
+		return
+	}
+	writeWFJSON(w, http.StatusCreated, profile)
+}
+
+// GetProfileByID handles GET /v2/workforce/profiles/{id}
+func (h *WorkforceHandler) GetProfileByID(w http.ResponseWriter, r *http.Request, id string) {
+	profile, err := h.svc.GetProfileByID(r.Context(), id)
+	if err != nil {
+		handleWFError(w, err)
+		return
+	}
+	writeWFJSON(w, http.StatusOK, profile)
+}
+
+// VerifyProfile handles POST /v2/workforce/profiles/{id}/verify
+func (h *WorkforceHandler) VerifyProfile(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.VerifyWFProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeWFError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.VerifiedBy == "" {
+		req.VerifiedBy = getWFUser(r)
+	}
+
+	profile, err := h.svc.VerifyProfile(r.Context(), id, req)
+	if err != nil {
+		handleWFError(w, err)
+		return
+	}
+	writeWFJSON(w, http.StatusOK, profile)
+}
+
+// DeleteProfile handles DELETE /v2/workforce/profiles/{id}
+func (h *WorkforceHandler) DeleteProfile(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteProfile(r.Context(), id); err != nil {
+		handleWFError(w, err)
+		return
+	}
+	writeWFJSON(w, http.StatusOK, map[string]string{"message": "member skill profile deleted"})
+}
 
 // Certifications stubs
 func (h *WorkforceHandler) ListCertifications(w http.ResponseWriter, r *http.Request) {}
