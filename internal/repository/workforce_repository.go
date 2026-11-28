@@ -474,21 +474,182 @@ func (r *sqlWorkforceRepository) ListProfiles(ctx context.Context, filter model.
 	return profiles, total, nil
 }
 
-// Certifications stubs
+// CreateCertification inserts a new workforce professional certification
 func (r *sqlWorkforceRepository) CreateCertification(ctx context.Context, c *model.WorkforceCertification) error {
-	return errors.New("not implemented")
+	if c.ID == "" {
+		c.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if c.IssuedAt.IsZero() {
+		c.IssuedAt = now
+	}
+	if c.CreatedAt.IsZero() {
+		c.CreatedAt = now
+	}
+	c.UpdatedAt = now
+	if c.Status == "" {
+		c.Status = model.WFCertStatusActive
+	}
+
+	query := `
+		INSERT INTO workforce_certifications (
+			id, workspace_id, user_id, cert_code, name, issuer,
+			credential_id, issued_at, expires_at, status, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		c.ID, c.WorkspaceID, c.UserID, c.CertCode, c.Name, c.Issuer,
+		c.CredentialID, c.IssuedAt, c.ExpiresAt, c.Status, c.CreatedAt, c.UpdatedAt,
+	)
+	return err
 }
+
+func scanWFCert(scanner interface{ Scan(dest ...interface{}) error }) (*model.WorkforceCertification, error) {
+	var c model.WorkforceCertification
+	var credID sql.NullString
+	var expiresAt sql.NullTime
+	err := scanner.Scan(
+		&c.ID, &c.WorkspaceID, &c.UserID, &c.CertCode, &c.Name, &c.Issuer,
+		&credID, &c.IssuedAt, &expiresAt, &c.Status, &c.CreatedAt, &c.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if credID.Valid {
+		c.CredentialID = credID.String
+	}
+	if expiresAt.Valid {
+		c.ExpiresAt = &expiresAt.Time
+	}
+	return &c, nil
+}
+
+// GetCertificationByID retrieves a certification by ID
 func (r *sqlWorkforceRepository) GetCertificationByID(ctx context.Context, id string) (*model.WorkforceCertification, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, user_id, cert_code, name, issuer,
+		       credential_id, issued_at, expires_at, status, created_at, updated_at
+		FROM workforce_certifications
+		WHERE id = ?`
+
+	c, err := scanWFCert(r.db.QueryRowContext(ctx, query, id))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrWFCertificationNotFound
+		}
+		return nil, err
+	}
+	return c, nil
 }
+
+// UpdateCertification updates credential details, expiry, or status on a certification
 func (r *sqlWorkforceRepository) UpdateCertification(ctx context.Context, c *model.WorkforceCertification) error {
-	return errors.New("not implemented")
+	c.UpdatedAt = time.Now().UTC()
+
+	query := `
+		UPDATE workforce_certifications
+		SET credential_id = ?, expires_at = ?, status = ?, updated_at = ?
+		WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query, c.CredentialID, c.ExpiresAt, c.Status, c.UpdatedAt, c.ID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrWFCertificationNotFound
+	}
+	return nil
 }
+
+// DeleteCertification removes a certification record
 func (r *sqlWorkforceRepository) DeleteCertification(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	res, err := r.db.ExecContext(ctx, "DELETE FROM workforce_certifications WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrWFCertificationNotFound
+	}
+	return nil
 }
+
+// ListCertifications queries certifications based on filter criteria
 func (r *sqlWorkforceRepository) ListCertifications(ctx context.Context, filter model.WFCertFilter) ([]model.WorkforceCertification, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.UserID != "" {
+		conditions = append(conditions, "user_id = ?")
+		args = append(args, filter.UserID)
+	}
+	if filter.Issuer != "" {
+		conditions = append(conditions, "issuer LIKE ?")
+		args = append(args, "%"+filter.Issuer+"%")
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var total int
+	err := r.db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM workforce_certifications %s", whereClause), args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, user_id, cert_code, name, issuer,
+		       credential_id, issued_at, expires_at, status, created_at, updated_at
+		FROM workforce_certifications
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	rows, err := r.db.QueryContext(ctx, selectQuery, append(args, limit, offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var certs []model.WorkforceCertification
+	for rows.Next() {
+		c, err := scanWFCert(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		certs = append(certs, *c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return certs, total, nil
 }
 
 // Role Competencies stubs
