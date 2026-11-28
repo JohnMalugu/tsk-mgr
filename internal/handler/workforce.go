@@ -339,15 +339,142 @@ func (h *WorkforceHandler) DeleteCertification(w http.ResponseWriter, r *http.Re
 	writeWFJSON(w, http.StatusOK, map[string]string{"message": "workforce certification deleted"})
 }
 
-// Roles & Trainings stubs
-func (h *WorkforceHandler) ListRoleCompetencies(w http.ResponseWriter, r *http.Request) {}
-func (h *WorkforceHandler) CreateRoleCompetency(w http.ResponseWriter, r *http.Request) {}
-func (h *WorkforceHandler) DeleteRoleCompetency(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *WorkforceHandler) ListTrainings(w http.ResponseWriter, r *http.Request) {}
-func (h *WorkforceHandler) CreateTraining(w http.ResponseWriter, r *http.Request) {}
-func (h *WorkforceHandler) GetTrainingByID(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *WorkforceHandler) UpdateTraining(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *WorkforceHandler) DeleteTraining(w http.ResponseWriter, r *http.Request, id string) {}
+// ListRoleCompetencies handles GET /v2/workforce/roles
+func (h *WorkforceHandler) ListRoleCompetencies(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.WFRoleCompetencyFilter{
+		WorkspaceID: getWFWorkspaceID(r),
+		RoleName:    q.Get("role_name"),
+		SkillID:     q.Get("skill_id"),
+		Priority:    q.Get("priority"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	roles, total, err := h.svc.ListRoleCompetencies(r.Context(), filter)
+	if err != nil {
+		handleWFError(w, err)
+		return
+	}
+
+	writeWFJSON(w, http.StatusOK, map[string]interface{}{
+		"role_competencies": roles,
+		"total":             total,
+		"limit":             filter.Limit,
+		"offset":            filter.Offset,
+	})
+}
+
+// CreateRoleCompetency handles POST /v2/workforce/roles
+func (h *WorkforceHandler) CreateRoleCompetency(w http.ResponseWriter, r *http.Request) {
+	var req model.CreateWFRoleCompetencyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeWFError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	rc, err := h.svc.CreateRoleCompetency(r.Context(), getWFWorkspaceID(r), req)
+	if err != nil {
+		handleWFError(w, err)
+		return
+	}
+	writeWFJSON(w, http.StatusCreated, rc)
+}
+
+// DeleteRoleCompetency handles DELETE /v2/workforce/roles/{id}
+func (h *WorkforceHandler) DeleteRoleCompetency(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteRoleCompetency(r.Context(), id); err != nil {
+		handleWFError(w, err)
+		return
+	}
+	writeWFJSON(w, http.StatusOK, map[string]string{"message": "role competency deleted"})
+}
+
+// ListTrainings handles GET /v2/workforce/trainings
+func (h *WorkforceHandler) ListTrainings(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.WFTrainingFilter{
+		WorkspaceID: getWFWorkspaceID(r),
+		UserID:      q.Get("user_id"),
+		SkillID:     q.Get("skill_id"),
+		Status:      q.Get("status"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	trainings, total, err := h.svc.ListTrainings(r.Context(), filter)
+	if err != nil {
+		handleWFError(w, err)
+		return
+	}
+
+	writeWFJSON(w, http.StatusOK, map[string]interface{}{
+		"trainings": trainings,
+		"total":     total,
+		"limit":     filter.Limit,
+		"offset":    filter.Offset,
+	})
+}
+
+// CreateTraining handles POST /v2/workforce/trainings
+func (h *WorkforceHandler) CreateTraining(w http.ResponseWriter, r *http.Request) {
+	var req model.CreateWFTrainingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeWFError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.UserID == "" {
+		req.UserID = getWFUser(r)
+	}
+
+	training, err := h.svc.CreateTraining(r.Context(), getWFWorkspaceID(r), req)
+	if err != nil {
+		handleWFError(w, err)
+		return
+	}
+	writeWFJSON(w, http.StatusCreated, training)
+}
+
+// GetTrainingByID handles GET /v2/workforce/trainings/{id}
+func (h *WorkforceHandler) GetTrainingByID(w http.ResponseWriter, r *http.Request, id string) {
+	training, err := h.svc.GetTrainingByID(r.Context(), id)
+	if err != nil {
+		handleWFError(w, err)
+		return
+	}
+	writeWFJSON(w, http.StatusOK, training)
+}
+
+// UpdateTraining handles PUT /v2/workforce/trainings/{id}
+func (h *WorkforceHandler) UpdateTraining(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateWFTrainingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeWFError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	training, err := h.svc.UpdateTraining(r.Context(), id, req)
+	if err != nil {
+		handleWFError(w, err)
+		return
+	}
+	writeWFJSON(w, http.StatusOK, training)
+}
+
+// DeleteTraining handles DELETE /v2/workforce/trainings/{id}
+func (h *WorkforceHandler) DeleteTraining(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteTraining(r.Context(), id); err != nil {
+		handleWFError(w, err)
+		return
+	}
+	writeWFJSON(w, http.StatusOK, map[string]string{"message": "training enrollment deleted"})
+}
 
 // Analytics & ServeHTTP stubs
 func (h *WorkforceHandler) GetWorkforceAnalytics(w http.ResponseWriter, r *http.Request) {}
