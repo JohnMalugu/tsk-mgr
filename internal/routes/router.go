@@ -370,6 +370,16 @@ func Router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// V2 ITIL Workforce & Talent Management
+	if strings.HasPrefix(r.URL.Path, "/v2/workforce") {
+		if handler.GlobalWorkforceHandler == nil {
+			http.Error(w, "Workforce handler not initialized", http.StatusInternalServerError)
+			return
+		}
+		handler.GlobalWorkforceHandler.ServeHTTP(w, r)
+		return
+	}
+
 	if r.URL.Path == "/v2/tasks" && r.Method == http.MethodPost {
 		handler.GlobalTaskDBHandler.HandleCreate(w, r)
 		return
