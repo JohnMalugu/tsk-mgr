@@ -146,3 +146,37 @@ type RoleCompetency struct {
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
+
+// Training enrollment lifecycle statuses
+const (
+	WFTrainingAssigned   = "assigned"
+	WFTrainingInProgress = "in_progress"
+	WFTrainingCompleted  = "completed"
+	WFTrainingDropped    = "dropped"
+)
+
+// IsValidWFTrainingStatus validates training enrollment status
+func IsValidWFTrainingStatus(st string) bool {
+	switch st {
+	case WFTrainingAssigned, WFTrainingInProgress, WFTrainingCompleted, WFTrainingDropped:
+		return true
+	default:
+		return false
+	}
+}
+
+// TrainingEnrollment tracks upskilling course assignments and completion progress
+type TrainingEnrollment struct {
+	ID          string     `json:"id"`
+	WorkspaceID string     `json:"workspace_id"`
+	UserID      string     `json:"user_id"`
+	SkillID     string     `json:"skill_id"`
+	CourseTitle string     `json:"course_title"`
+	Provider    string     `json:"provider,omitempty"`
+	Status      string     `json:"status"`
+	ProgressPct int        `json:"progress_pct"`
+	DueDate     *time.Time `json:"due_date,omitempty"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
