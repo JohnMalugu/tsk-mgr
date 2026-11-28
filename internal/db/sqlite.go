@@ -3968,6 +3968,28 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	workforceTrainingsQuery := `
+	CREATE TABLE IF NOT EXISTS workforce_trainings (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		user_id TEXT NOT NULL,
+		skill_id TEXT NOT NULL,
+		course_title TEXT NOT NULL,
+		provider TEXT,
+		status TEXT NOT NULL DEFAULT 'assigned',
+		progress_pct INTEGER NOT NULL DEFAULT 0,
+		due_date DATETIME,
+		completed_at DATETIME,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (skill_id) REFERENCES workforce_skills(id) ON DELETE CASCADE
+	);`
+
+	_, err = db.Exec(workforceTrainingsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
