@@ -271,24 +271,207 @@ func (r *sqlWorkforceRepository) ListSkills(ctx context.Context, filter model.WF
 	return skills, total, nil
 }
 
-// Profiles stubs
+// CreateProfile inserts a new member skill profile
 func (r *sqlWorkforceRepository) CreateProfile(ctx context.Context, p *model.MemberSkillProfile) error {
-	return errors.New("not implemented")
+	if p.ID == "" {
+		p.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if p.LastAssessedAt.IsZero() {
+		p.LastAssessedAt = now
+	}
+	if p.CreatedAt.IsZero() {
+		p.CreatedAt = now
+	}
+	p.UpdatedAt = now
+	if p.ProficiencyLevel == "" {
+		p.ProficiencyLevel = model.WFProficiencyNovice
+	}
+
+	query := `
+		INSERT INTO workforce_skill_profiles (
+			id, workspace_id, user_id, skill_id, proficiency_level,
+			years_experience, verified_by, verified_at, last_assessed_at, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		p.ID, p.WorkspaceID, p.UserID, p.SkillID, p.ProficiencyLevel,
+		p.YearsExperience, p.VerifiedBy, p.VerifiedAt, p.LastAssessedAt, p.CreatedAt, p.UpdatedAt,
+	)
+	return err
 }
+
+func scanWFProfile(scanner interface{ Scan(dest ...interface{}) error }) (*model.MemberSkillProfile, error) {
+	var p model.MemberSkillProfile
+	var verifiedBy sql.NullString
+	var verifiedAt sql.NullTime
+	err := scanner.Scan(
+		&p.ID, &p.WorkspaceID, &p.UserID, &p.SkillID, &p.ProficiencyLevel,
+		&p.YearsExperience, &verifiedBy, &verifiedAt, &p.LastAssessedAt, &p.CreatedAt, &p.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if verifiedBy.Valid {
+		p.VerifiedBy = verifiedBy.String
+	}
+	if verifiedAt.Valid {
+		p.VerifiedAt = &verifiedAt.Time
+	}
+	return &p, nil
+}
+
+// GetProfileByID retrieves a member skill profile by ID
 func (r *sqlWorkforceRepository) GetProfileByID(ctx context.Context, id string) (*model.MemberSkillProfile, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, user_id, skill_id, proficiency_level,
+		       years_experience, verified_by, verified_at, last_assessed_at, created_at, updated_at
+		FROM workforce_skill_profiles
+		WHERE id = ?`
+
+	p, err := scanWFProfile(r.db.QueryRowContext(ctx, query, id))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrWFProfileNotFound
+		}
+		return nil, err
+	}
+	return p, nil
 }
+
+// GetProfileByUserAndSkill retrieves a member's profile for a specific skill
 func (r *sqlWorkforceRepository) GetProfileByUserAndSkill(ctx context.Context, workspaceID, userID, skillID string) (*model.MemberSkillProfile, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, user_id, skill_id, proficiency_level,
+		       years_experience, verified_by, verified_at, last_assessed_at, created_at, updated_at
+		FROM workforce_skill_profiles
+		WHERE workspace_id = ? AND user_id = ? AND skill_id = ?`
+
+	p, err := scanWFProfile(r.db.QueryRowContext(ctx, query, workspaceID, userID, skillID))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrWFProfileNotFound
+		}
+		return nil, err
+	}
+	return p, nil
 }
+
+// UpdateProfile updates proficiency, verification, and assessment metadata on a profile
 func (r *sqlWorkforceRepository) UpdateProfile(ctx context.Context, p *model.MemberSkillProfile) error {
-	return errors.New("not implemented")
+	p.UpdatedAt = time.Now().UTC()
+
+	query := `
+		UPDATE workforce_skill_profiles
+		SET proficiency_level = ?, years_experience = ?, verified_by = ?,
+		    verified_at = ?, last_assessed_at = ?, updated_at = ?
+		WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query,
+		p.ProficiencyLevel, p.YearsExperience, p.VerifiedBy,
+		p.VerifiedAt, p.LastAssessedAt, p.UpdatedAt, p.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrWFProfileNotFound
+	}
+	return nil
 }
+
+// DeleteProfile removes a member skill profile
 func (r *sqlWorkforceRepository) DeleteProfile(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	res, err := r.db.ExecContext(ctx, "DELETE FROM workforce_skill_profiles WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrWFProfileNotFound
+	}
+	return nil
 }
+
+// ListProfiles queries member skill profiles based on filter criteria
 func (r *sqlWorkforceRepository) ListProfiles(ctx context.Context, filter model.WFProfileFilter) ([]model.MemberSkillProfile, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.UserID != "" {
+		conditions = append(conditions, "user_id = ?")
+		args = append(args, filter.UserID)
+	}
+	if filter.SkillID != "" {
+		conditions = append(conditions, "skill_id = ?")
+		args = append(args, filter.SkillID)
+	}
+	if filter.ProficiencyLevel != "" {
+		conditions = append(conditions, "proficiency_level = ?")
+		args = append(args, filter.ProficiencyLevel)
+	}
+	if filter.VerifiedOnly {
+		conditions = append(conditions, "verified_at IS NOT NULL")
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var total int
+	err := r.db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM workforce_skill_profiles %s", whereClause), args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, user_id, skill_id, proficiency_level,
+		       years_experience, verified_by, verified_at, last_assessed_at, created_at, updated_at
+		FROM workforce_skill_profiles
+		%s
+		ORDER BY updated_at DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	rows, err := r.db.QueryContext(ctx, selectQuery, append(args, limit, offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var profiles []model.MemberSkillProfile
+	for rows.Next() {
+		p, err := scanWFProfile(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		profiles = append(profiles, *p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return profiles, total, nil
 }
 
 // Certifications stubs
