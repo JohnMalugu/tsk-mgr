@@ -3889,6 +3889,24 @@ func createSchema(db *sql.DB) error {
 		return err
 	}
 
+	workforceSkillsQuery := `
+	CREATE TABLE IF NOT EXISTS workforce_skills (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		skill_code TEXT NOT NULL,
+		name TEXT NOT NULL,
+		category TEXT NOT NULL DEFAULT 'software_engineering',
+		description TEXT,
+		is_critical BOOLEAN NOT NULL DEFAULT 0,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);`
+
+	_, err = db.Exec(workforceSkillsQuery)
+	if err != nil {
+		return err
+	}
+
 	indexQuery := `
 
 
