@@ -969,7 +969,97 @@ func (r *sqlWorkforceRepository) ListTrainings(ctx context.Context, filter model
 	return trainings, total, nil
 }
 
-// Analytics stub
+// GetWorkforceAnalytics computes executive workforce readiness, certification health, and training KPIs
 func (r *sqlWorkforceRepository) GetWorkforceAnalytics(ctx context.Context, workspaceID string) (*model.WorkforceAnalytics, error) {
-	return nil, errors.New("not implemented")
+	analytics := &model.WorkforceAnalytics{
+		CategoryDistribution:    make(map[string]int),
+		ProficiencyDistribution: make(map[string]int),
+	}
+
+	// 1. Skills
+	if err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM workforce_skills WHERE workspace_id = ?", workspaceID).Scan(&analytics.TotalSkills); err != nil {
+		return nil, err
+	}
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM workforce_skills WHERE workspace_id = ? AND is_critical = 1", workspaceID).Scan(&analytics.CriticalSkills)
+
+	// 2. Profiles
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM workforce_skill_profiles WHERE workspace_id = ?", workspaceID).Scan(&analytics.TotalSkillProfiles)
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM workforce_skill_profiles WHERE workspace_id = ? AND verified_at IS NOT NULL", workspaceID).Scan(&analytics.VerifiedProfiles)
+
+	// 3. Certifications by status
+	certRows, err := r.db.QueryContext(ctx, "SELECT status, COUNT(*) FROM workforce_certifications WHERE workspace_id = ? GROUP BY status", workspaceID)
+	if err == nil {
+		defer certRows.Close()
+		for certRows.Next() {
+			var st string
+			var count int
+			if err := certRows.Scan(&st, &count); err == nil {
+				switch st {
+				case model.WFCertStatusActive:
+					analytics.ActiveCertifications = count
+				case model.WFCertStatusExpiringSoon:
+					analytics.ExpiringCertifications = count
+				case model.WFCertStatusExpired:
+					analytics.ExpiredCertifications = count
+				}
+			}
+		}
+	}
+
+	// 4. Role competencies
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM workforce_role_competencies WHERE workspace_id = ?", workspaceID).Scan(&analytics.TotalRoleCompetencies)
+
+	// 5. Trainings & completion rate
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM workforce_trainings WHERE workspace_id = ? AND status IN ('assigned', 'in_progress')", workspaceID).Scan(&analytics.ActiveTrainings)
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM workforce_trainings WHERE workspace_id = ? AND status = 'completed'", workspaceID).Scan(&analytics.CompletedTrainings)
+	totalTrackable := analytics.ActiveTrainings + analytics.CompletedTrainings
+	if totalTrackable > 0 {
+		analytics.TrainingCompletionRate = (float64(analytics.CompletedTrainings) / float64(totalTrackable)) * 100.0
+	} else {
+		analytics.TrainingCompletionRate = 100.0
+	}
+
+	// 6. Skill category distribution
+	catRows, err := r.db.QueryContext(ctx, "SELECT category, COUNT(*) FROM workforce_skills WHERE workspace_id = ? GROUP BY category", workspaceID)
+	if err == nil {
+		defer catRows.Close()
+		for catRows.Next() {
+			var cat string
+			var count int
+			if err := catRows.Scan(&cat, &count); err == nil {
+				analytics.CategoryDistribution[cat] = count
+			}
+		}
+	}
+
+	// 7. Proficiency level distribution
+	profRows, err := r.db.QueryContext(ctx, "SELECT proficiency_level, COUNT(*) FROM workforce_skill_profiles WHERE workspace_id = ? GROUP BY proficiency_level", workspaceID)
+	if err == nil {
+		defer profRows.Close()
+		for profRows.Next() {
+			var lvl string
+			var count int
+			if err := profRows.Scan(&lvl, &count); err == nil {
+				analytics.ProficiencyDistribution[lvl] = count
+			}
+		}
+	}
+
+	// 8. Composite Workforce Readiness Index (0 - 100)
+	verifiedRatio := 100.0
+	if analytics.TotalSkillProfiles > 0 {
+		verifiedRatio = (float64(analytics.VerifiedProfiles) / float64(analytics.TotalSkillProfiles)) * 100.0
+	}
+	readiness := (verifiedRatio * 0.5) + (analytics.TrainingCompletionRate * 0.5)
+	readiness -= float64(analytics.ExpiredCertifications) * 8.0
+	readiness -= float64(analytics.ExpiringCertifications) * 3.0
+	if readiness < 0.0 {
+		readiness = 0.0
+	}
+	if readiness > 100.0 {
+		readiness = 100.0
+	}
+	analytics.WorkforceReadinessIndex = readiness
+
+	return analytics, nil
 }
