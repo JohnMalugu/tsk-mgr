@@ -525,6 +525,18 @@ The API includes authenticated, multi-tenant SQLite persistence under `/v2` with
 - `GET|POST /v2/compliance/findings` to list or log audit non-conformity findings with severity (`critical`, `high`, `medium`, `low`) and remediation plans
 - `GET|PUT|DELETE /v2/compliance/findings/{id}` to inspect, advance remediation status (`open`, `in_remediation`, `remediated`, `accepted_risk`), or remove a finding
 - `GET /v2/compliance/analytics?workspace_id={id}` for executive GRC & Compliance posture reporting, control coverage rate (%), approved evidence counts, open/critical findings, domain and severity distributions, and composite Compliance Health Index (0–100)
+- `GET|POST /v2/workforce/skills` to list cataloged capabilities (`workspace_id`, `category`, `is_critical`, `search`, `limit`, `offset`) or register technical and leadership skills (`cloud`, `security`, `networking`, `database`, `devops`, `itsm`, `software_engineering`, `leadership`)
+- `GET|PUT|DELETE /v2/workforce/skills/{id}` to inspect, update, or remove a cataloged skill
+- `GET|POST /v2/workforce/profiles` to query member skill profiles (`user_id`, `skill_id`, `proficiency_level`, `verified_only`) or upsert a team member's proficiency (`novice`, `intermediate`, `advanced`, `expert`) and experience
+- `GET|DELETE /v2/workforce/profiles/{id}` to fetch or delete a member skill profile
+- `POST /v2/workforce/profiles/{id}/verify` to record manager/lead endorsement of a member's skill proficiency
+- `GET|POST /v2/workforce/certifications` to list or register professional certifications with automatic expiration status evaluation (`active`, `expiring_soon`, `expired`, `revoked`)
+- `GET|PUT|DELETE /v2/workforce/certifications/{id}` to inspect, renew/update, or remove a certification record
+- `GET|POST /v2/workforce/roles` to browse or define role competency benchmarks (`role_name`, `skill_id`, `required_level`, `min_headcount`, `priority`)
+- `DELETE /v2/workforce/roles/{id}` to remove a role competency requirement
+- `GET|POST /v2/workforce/trainings` to list or assign upskilling training enrollments
+- `GET|PUT|DELETE /v2/workforce/trainings/{id}` to inspect, advance progress percentage (with automatic completion at 100%), or remove a training enrollment
+- `GET /v2/workforce/analytics?workspace_id={id}` for executive Workforce Readiness reporting, critical skills, verified profiles, certification expiration posture, training completion rate (%), category/proficiency distributions, and composite Workforce Readiness Index (0–100)
 
 ## Current limitations
 
