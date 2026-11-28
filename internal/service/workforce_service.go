@@ -269,21 +269,106 @@ func (s *workforceService) ListProfiles(ctx context.Context, filter model.WFProf
 	return s.repo.ListProfiles(ctx, filter)
 }
 
-// Certifications stubs
+func evaluateCertStatus(expiresAt *time.Time, now time.Time) string {
+	if expiresAt == nil {
+		return model.WFCertStatusActive
+	}
+	if expiresAt.Before(now) {
+		return model.WFCertStatusExpired
+	}
+	if expiresAt.Before(now.Add(30 * 24 * time.Hour)) {
+		return model.WFCertStatusExpiringSoon
+	}
+	return model.WFCertStatusActive
+}
+
+// CreateCertification records a professional certification and evaluates its expiration status
 func (s *workforceService) CreateCertification(ctx context.Context, workspaceID string, req model.CreateWFCertRequest) (*model.WorkforceCertification, error) {
-	return nil, errors.New("not implemented")
+	if req.WorkspaceID == "" {
+		req.WorkspaceID = workspaceID
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	issuedAt := now
+	if req.IssuedAt != nil && !req.IssuedAt.IsZero() {
+		issuedAt = req.IssuedAt.UTC()
+	}
+	code := strings.TrimSpace(req.CertCode)
+	if code == "" {
+		code = fmt.Sprintf("CERT-%s", strings.ToUpper(uuid.New().String()[:8]))
+	}
+
+	cert := &model.WorkforceCertification{
+		WorkspaceID:  req.WorkspaceID,
+		UserID:       req.UserID,
+		CertCode:     code,
+		Name:         req.Name,
+		Issuer:       req.Issuer,
+		CredentialID: req.CredentialID,
+		IssuedAt:     issuedAt,
+		ExpiresAt:    req.ExpiresAt,
+		Status:       evaluateCertStatus(req.ExpiresAt, now),
+	}
+
+	if err := s.repo.CreateCertification(ctx, cert); err != nil {
+		return nil, err
+	}
+	return cert, nil
 }
+
+// GetCertificationByID retrieves a certification by ID
 func (s *workforceService) GetCertificationByID(ctx context.Context, id string) (*model.WorkforceCertification, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrWFCertificationNotFound
+	}
+	return s.repo.GetCertificationByID(ctx, id)
 }
+
+// UpdateCertification updates credential details, expiry, or status on a certification
 func (s *workforceService) UpdateCertification(ctx context.Context, id string, req model.UpdateWFCertRequest) (*model.WorkforceCertification, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrWFCertificationNotFound
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	cert, err := s.repo.GetCertificationByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.CredentialID != nil {
+		cert.CredentialID = *req.CredentialID
+	}
+	if req.ExpiresAt != nil {
+		cert.ExpiresAt = req.ExpiresAt
+		cert.Status = evaluateCertStatus(req.ExpiresAt, time.Now().UTC())
+	}
+	if req.Status != nil {
+		cert.Status = *req.Status
+	}
+
+	if err := s.repo.UpdateCertification(ctx, cert); err != nil {
+		return nil, err
+	}
+	return cert, nil
 }
+
+// DeleteCertification deletes a certification by ID
 func (s *workforceService) DeleteCertification(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	if strings.TrimSpace(id) == "" {
+		return ErrWFCertificationNotFound
+	}
+	return s.repo.DeleteCertification(ctx, id)
 }
+
+// ListCertifications queries certifications matching filter criteria
 func (s *workforceService) ListCertifications(ctx context.Context, filter model.WFCertFilter) ([]model.WorkforceCertification, int, error) {
-	return nil, 0, errors.New("not implemented")
+	return s.repo.ListCertifications(ctx, filter)
 }
 
 // Role Competencies stubs
