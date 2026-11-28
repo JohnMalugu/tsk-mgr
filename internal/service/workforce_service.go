@@ -526,7 +526,10 @@ func (s *workforceService) ListTrainings(ctx context.Context, filter model.WFTra
 	return s.repo.ListTrainings(ctx, filter)
 }
 
-// Analytics stub
+// GetWorkforceAnalytics computes executive workforce readiness and skill gap KPIs
 func (s *workforceService) GetWorkforceAnalytics(ctx context.Context, workspaceID string) (*model.WorkforceAnalytics, error) {
-	return nil, errors.New("not implemented")
+	if strings.TrimSpace(workspaceID) == "" {
+		return nil, errors.New("workspace_id is required")
+	}
+	return s.repo.GetWorkforceAnalytics(ctx, workspaceID)
 }
