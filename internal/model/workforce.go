@@ -115,3 +115,34 @@ type WorkforceCertification struct {
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 }
+
+// Role competency priority constants
+const (
+	WFPriorityCritical = "critical"
+	WFPriorityHigh     = "high"
+	WFPriorityMedium   = "medium"
+	WFPriorityLow      = "low"
+)
+
+// IsValidWFPriority validates role competency priority
+func IsValidWFPriority(p string) bool {
+	switch p {
+	case WFPriorityCritical, WFPriorityHigh, WFPriorityMedium, WFPriorityLow:
+		return true
+	default:
+		return false
+	}
+}
+
+// RoleCompetency defines required skill proficiency and headcount benchmarks for an ITIL role
+type RoleCompetency struct {
+	ID            string    `json:"id"`
+	WorkspaceID   string    `json:"workspace_id"`
+	RoleName      string    `json:"role_name"`
+	SkillID       string    `json:"skill_id"`
+	RequiredLevel string    `json:"required_level"`
+	MinHeadcount  int       `json:"min_headcount"`
+	Priority      string    `json:"priority"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
