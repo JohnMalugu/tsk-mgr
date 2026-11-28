@@ -256,12 +256,88 @@ func (h *WorkforceHandler) DeleteProfile(w http.ResponseWriter, r *http.Request,
 	writeWFJSON(w, http.StatusOK, map[string]string{"message": "member skill profile deleted"})
 }
 
-// Certifications stubs
-func (h *WorkforceHandler) ListCertifications(w http.ResponseWriter, r *http.Request) {}
-func (h *WorkforceHandler) CreateCertification(w http.ResponseWriter, r *http.Request) {}
-func (h *WorkforceHandler) GetCertificationByID(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *WorkforceHandler) UpdateCertification(w http.ResponseWriter, r *http.Request, id string) {}
-func (h *WorkforceHandler) DeleteCertification(w http.ResponseWriter, r *http.Request, id string) {}
+// ListCertifications handles GET /v2/workforce/certifications
+func (h *WorkforceHandler) ListCertifications(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+
+	filter := model.WFCertFilter{
+		WorkspaceID: getWFWorkspaceID(r),
+		UserID:      q.Get("user_id"),
+		Issuer:      q.Get("issuer"),
+		Status:      q.Get("status"),
+		Limit:       limit,
+		Offset:      offset,
+	}
+
+	certs, total, err := h.svc.ListCertifications(r.Context(), filter)
+	if err != nil {
+		handleWFError(w, err)
+		return
+	}
+
+	writeWFJSON(w, http.StatusOK, map[string]interface{}{
+		"certifications": certs,
+		"total":          total,
+		"limit":          filter.Limit,
+		"offset":         filter.Offset,
+	})
+}
+
+// CreateCertification handles POST /v2/workforce/certifications
+func (h *WorkforceHandler) CreateCertification(w http.ResponseWriter, r *http.Request) {
+	var req model.CreateWFCertRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeWFError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.UserID == "" {
+		req.UserID = getWFUser(r)
+	}
+
+	cert, err := h.svc.CreateCertification(r.Context(), getWFWorkspaceID(r), req)
+	if err != nil {
+		handleWFError(w, err)
+		return
+	}
+	writeWFJSON(w, http.StatusCreated, cert)
+}
+
+// GetCertificationByID handles GET /v2/workforce/certifications/{id}
+func (h *WorkforceHandler) GetCertificationByID(w http.ResponseWriter, r *http.Request, id string) {
+	cert, err := h.svc.GetCertificationByID(r.Context(), id)
+	if err != nil {
+		handleWFError(w, err)
+		return
+	}
+	writeWFJSON(w, http.StatusOK, cert)
+}
+
+// UpdateCertification handles PUT /v2/workforce/certifications/{id}
+func (h *WorkforceHandler) UpdateCertification(w http.ResponseWriter, r *http.Request, id string) {
+	var req model.UpdateWFCertRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeWFError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	cert, err := h.svc.UpdateCertification(r.Context(), id, req)
+	if err != nil {
+		handleWFError(w, err)
+		return
+	}
+	writeWFJSON(w, http.StatusOK, cert)
+}
+
+// DeleteCertification handles DELETE /v2/workforce/certifications/{id}
+func (h *WorkforceHandler) DeleteCertification(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.DeleteCertification(r.Context(), id); err != nil {
+		handleWFError(w, err)
+		return
+	}
+	writeWFJSON(w, http.StatusOK, map[string]string{"message": "workforce certification deleted"})
+}
 
 // Roles & Trainings stubs
 func (h *WorkforceHandler) ListRoleCompetencies(w http.ResponseWriter, r *http.Request) {}
