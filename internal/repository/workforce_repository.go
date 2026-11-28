@@ -652,35 +652,321 @@ func (r *sqlWorkforceRepository) ListCertifications(ctx context.Context, filter 
 	return certs, total, nil
 }
 
-// Role Competencies stubs
+// CreateRoleCompetency inserts a new role competency requirement
 func (r *sqlWorkforceRepository) CreateRoleCompetency(ctx context.Context, rc *model.RoleCompetency) error {
-	return errors.New("not implemented")
-}
-func (r *sqlWorkforceRepository) GetRoleCompetencyByID(ctx context.Context, id string) (*model.RoleCompetency, error) {
-	return nil, errors.New("not implemented")
-}
-func (r *sqlWorkforceRepository) DeleteRoleCompetency(ctx context.Context, id string) error {
-	return errors.New("not implemented")
-}
-func (r *sqlWorkforceRepository) ListRoleCompetencies(ctx context.Context, filter model.WFRoleCompetencyFilter) ([]model.RoleCompetency, int, error) {
-	return nil, 0, errors.New("not implemented")
+	if rc.ID == "" {
+		rc.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if rc.CreatedAt.IsZero() {
+		rc.CreatedAt = now
+	}
+	rc.UpdatedAt = now
+	if rc.RequiredLevel == "" {
+		rc.RequiredLevel = model.WFProficiencyIntermediate
+	}
+	if rc.MinHeadcount <= 0 {
+		rc.MinHeadcount = 1
+	}
+	if rc.Priority == "" {
+		rc.Priority = model.WFPriorityMedium
+	}
+
+	query := `
+		INSERT INTO workforce_role_competencies (
+			id, workspace_id, role_name, skill_id, required_level, min_headcount, priority, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		rc.ID, rc.WorkspaceID, rc.RoleName, rc.SkillID, rc.RequiredLevel, rc.MinHeadcount, rc.Priority, rc.CreatedAt, rc.UpdatedAt,
+	)
+	return err
 }
 
-// Trainings stubs
+// GetRoleCompetencyByID retrieves a role competency by ID
+func (r *sqlWorkforceRepository) GetRoleCompetencyByID(ctx context.Context, id string) (*model.RoleCompetency, error) {
+	query := `
+		SELECT id, workspace_id, role_name, skill_id, required_level, min_headcount, priority, created_at, updated_at
+		FROM workforce_role_competencies
+		WHERE id = ?`
+
+	var rc model.RoleCompetency
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&rc.ID, &rc.WorkspaceID, &rc.RoleName, &rc.SkillID, &rc.RequiredLevel, &rc.MinHeadcount, &rc.Priority, &rc.CreatedAt, &rc.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrWFRoleCompetencyNotFound
+		}
+		return nil, err
+	}
+	return &rc, nil
+}
+
+// DeleteRoleCompetency removes a role competency requirement
+func (r *sqlWorkforceRepository) DeleteRoleCompetency(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, "DELETE FROM workforce_role_competencies WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrWFRoleCompetencyNotFound
+	}
+	return nil
+}
+
+// ListRoleCompetencies queries role competencies based on filter criteria
+func (r *sqlWorkforceRepository) ListRoleCompetencies(ctx context.Context, filter model.WFRoleCompetencyFilter) ([]model.RoleCompetency, int, error) {
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.RoleName != "" {
+		conditions = append(conditions, "role_name LIKE ?")
+		args = append(args, "%"+filter.RoleName+"%")
+	}
+	if filter.SkillID != "" {
+		conditions = append(conditions, "skill_id = ?")
+		args = append(args, filter.SkillID)
+	}
+	if filter.Priority != "" {
+		conditions = append(conditions, "priority = ?")
+		args = append(args, filter.Priority)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var total int
+	err := r.db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM workforce_role_competencies %s", whereClause), args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, role_name, skill_id, required_level, min_headcount, priority, created_at, updated_at
+		FROM workforce_role_competencies
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	rows, err := r.db.QueryContext(ctx, selectQuery, append(args, limit, offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var roles []model.RoleCompetency
+	for rows.Next() {
+		var rc model.RoleCompetency
+		if err := rows.Scan(
+			&rc.ID, &rc.WorkspaceID, &rc.RoleName, &rc.SkillID, &rc.RequiredLevel, &rc.MinHeadcount, &rc.Priority, &rc.CreatedAt, &rc.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		roles = append(roles, rc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return roles, total, nil
+}
+
+// CreateTraining inserts a new training enrollment
 func (r *sqlWorkforceRepository) CreateTraining(ctx context.Context, t *model.TrainingEnrollment) error {
-	return errors.New("not implemented")
+	if t.ID == "" {
+		t.ID = uuid.New().String()
+	}
+	now := time.Now().UTC()
+	if t.CreatedAt.IsZero() {
+		t.CreatedAt = now
+	}
+	t.UpdatedAt = now
+	if t.Status == "" {
+		t.Status = model.WFTrainingAssigned
+	}
+
+	query := `
+		INSERT INTO workforce_trainings (
+			id, workspace_id, user_id, skill_id, course_title, provider,
+			status, progress_pct, due_date, completed_at, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		t.ID, t.WorkspaceID, t.UserID, t.SkillID, t.CourseTitle, t.Provider,
+		t.Status, t.ProgressPct, t.DueDate, t.CompletedAt, t.CreatedAt, t.UpdatedAt,
+	)
+	return err
 }
+
+func scanWFTraining(scanner interface{ Scan(dest ...interface{}) error }) (*model.TrainingEnrollment, error) {
+	var t model.TrainingEnrollment
+	var provider sql.NullString
+	var dueDate, completedAt sql.NullTime
+	err := scanner.Scan(
+		&t.ID, &t.WorkspaceID, &t.UserID, &t.SkillID, &t.CourseTitle, &provider,
+		&t.Status, &t.ProgressPct, &dueDate, &completedAt, &t.CreatedAt, &t.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if provider.Valid {
+		t.Provider = provider.String
+	}
+	if dueDate.Valid {
+		t.DueDate = &dueDate.Time
+	}
+	if completedAt.Valid {
+		t.CompletedAt = &completedAt.Time
+	}
+	return &t, nil
+}
+
+// GetTrainingByID retrieves a training enrollment by ID
 func (r *sqlWorkforceRepository) GetTrainingByID(ctx context.Context, id string) (*model.TrainingEnrollment, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT id, workspace_id, user_id, skill_id, course_title, provider,
+		       status, progress_pct, due_date, completed_at, created_at, updated_at
+		FROM workforce_trainings
+		WHERE id = ?`
+
+	t, err := scanWFTraining(r.db.QueryRowContext(ctx, query, id))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrWFTrainingNotFound
+		}
+		return nil, err
+	}
+	return t, nil
 }
+
+// UpdateTraining updates status, progress percentage, and completion timestamp on a training enrollment
 func (r *sqlWorkforceRepository) UpdateTraining(ctx context.Context, t *model.TrainingEnrollment) error {
-	return errors.New("not implemented")
+	t.UpdatedAt = time.Now().UTC()
+
+	query := `
+		UPDATE workforce_trainings
+		SET status = ?, progress_pct = ?, completed_at = ?, updated_at = ?
+		WHERE id = ?`
+
+	res, err := r.db.ExecContext(ctx, query, t.Status, t.ProgressPct, t.CompletedAt, t.UpdatedAt, t.ID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrWFTrainingNotFound
+	}
+	return nil
 }
+
+// DeleteTraining removes a training enrollment
 func (r *sqlWorkforceRepository) DeleteTraining(ctx context.Context, id string) error {
-	return errors.New("not implemented")
+	res, err := r.db.ExecContext(ctx, "DELETE FROM workforce_trainings WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrWFTrainingNotFound
+	}
+	return nil
 }
+
+// ListTrainings queries training enrollments based on filter criteria
 func (r *sqlWorkforceRepository) ListTrainings(ctx context.Context, filter model.WFTrainingFilter) ([]model.TrainingEnrollment, int, error) {
-	return nil, 0, errors.New("not implemented")
+	var conditions []string
+	var args []interface{}
+
+	if filter.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filter.WorkspaceID)
+	}
+	if filter.UserID != "" {
+		conditions = append(conditions, "user_id = ?")
+		args = append(args, filter.UserID)
+	}
+	if filter.SkillID != "" {
+		conditions = append(conditions, "skill_id = ?")
+		args = append(args, filter.SkillID)
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filter.Status)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var total int
+	err := r.db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM workforce_trainings %s", whereClause), args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, workspace_id, user_id, skill_id, course_title, provider,
+		       status, progress_pct, due_date, completed_at, created_at, updated_at
+		FROM workforce_trainings
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?`, whereClause)
+
+	rows, err := r.db.QueryContext(ctx, selectQuery, append(args, limit, offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var trainings []model.TrainingEnrollment
+	for rows.Next() {
+		t, err := scanWFTraining(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		trainings = append(trainings, *t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return trainings, total, nil
 }
 
 // Analytics stub
